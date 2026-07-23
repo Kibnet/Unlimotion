@@ -414,7 +414,7 @@ function Assert-EmulatorVersionProbeContract {
     Assert-Match $helper 'version probe failed \(exit \$status\): \$first_line' 'Android tool version probe must expose the first diagnostic line and exit code.'
 
     Assert-Match $Content 'EMULATOR_VERSION="\$\(resolve_tool_version "Android emulator" emulator -version\)"' 'Android emulator version must use the diagnostic-preserving probe.'
-    Assert-Match $Content 'ADB_VERSION="\$\(resolve_tool_version "adb" adb version\)"' 'adb version must use the diagnostic-preserving probe.'
+    Assert-Match $Content 'ADB_VERSION="\$\(resolve_tool_version "adb" run_adb_command version\)"' 'adb version must use the diagnostic-preserving bounded probe.'
     Assert-Match $Content 'AAPT_VERSION="\$\(resolve_tool_version "aapt" "\$AAPT" version\)"' 'aapt version must use the diagnostic-preserving probe.'
 }
 
@@ -427,7 +427,7 @@ function Assert-EmulatorAvdIsolationContract {
     Assert-Match $Content '(?m)^\[ -d "\$ANDROID_AVD_HOME" \] \|\| fail ' 'Android emulator validation must verify the isolated AVD root before creating an AVD.'
     Assert-Match $Content '(?ms)^cleanup_emulator_avd_root\(\) \{.*?rm -rf -- "\$EMULATOR_AVD_ROOT".*?^\}' 'Android emulator validation must remove its isolated AVD root during exit cleanup.'
     Assert-Match $Content "(?m)^trap 'cleanup_emulator; cleanup_emulator_avd_root' EXIT\s*$" 'Android emulator validation must combine per-AVD and isolated-root cleanup in its EXIT trap.'
-    Assert-Match $Content '(?ms)avdmanager create avd --force --name "\$AVD_NAME" --package "\$SYSTEM_IMAGE" --device pixel.*?\[ -f "\$ANDROID_AVD_HOME/\$\{AVD_NAME\}\.ini" \] \|\| fail .*?\[ -d "\$ANDROID_AVD_HOME/\$\{AVD_NAME\}\.avd" \] \|\| fail ' 'Android emulator validation must prove that avdmanager created the exact AVD descriptor and directory before emulator launch.'
+    Assert-Match $Content '(?ms)run_avdmanager_command create avd --force --name "\$AVD_NAME" --package "\$SYSTEM_IMAGE" --device pixel.*?\[ -f "\$ANDROID_AVD_HOME/\$\{AVD_NAME\}\.ini" \] \|\| fail .*?\[ -d "\$ANDROID_AVD_HOME/\$\{AVD_NAME\}\.avd" \] \|\| fail ' 'Android emulator validation must prove that avdmanager created the exact AVD descriptor and directory before emulator launch.'
 }
 
 $gitLink = (& git -C $rootDir ls-tree HEAD .native/libgit2-src) -join "`n"
@@ -907,6 +907,12 @@ if ($portableDynamicSymbolReads.Count -ne 2) {
 Assert-NotMatch $distributionTestScript '--dyn-symbols' 'Distribution Android validator must not use the LLVM-only --dyn-symbols spelling.'
 Assert-Match $distributionTestScript '23\|36\)' 'Distribution Android emulator validator must allow only API 23 and API 36.'
 Assert-Match $distributionTestScript 'for port in 5554 5556' 'Distribution Android emulator validator must perform at most two clean boot attempts.'
+Assert-Match $distributionTestScript 'EMULATOR_COMMAND_TIMEOUT_SECONDS="\$\{UNLIMOTION_ANDROID_EMULATOR_COMMAND_TIMEOUT_SECONDS:-30\}"' 'Android emulator validator must configure a bounded timeout for device commands.'
+Assert-Match $distributionTestScript 'timeout --foreground "\$EMULATOR_COMMAND_TIMEOUT_SECONDS" adb "\$@"' 'Android emulator validator must bound every adb command.'
+Assert-Match $distributionTestScript 'timeout --foreground "\$EMULATOR_COMMAND_TIMEOUT_SECONDS" avdmanager "\$@"' 'Android emulator validator must bound AVD manager cleanup and setup commands.'
+Assert-Match $distributionTestScript 'readiness poll: serial=%q adb_state=%q sys\.boot_completed=%q init\.svc\.bootanim=%q' 'Android emulator validator must retain observed ADB readiness state in each attempt log.'
+Assert-Match $distributionTestScript 'if \[ "\$boot_completed" = "1" \]; then' 'Android emulator readiness must accept the documented sys.boot_completed signal.'
+Assert-NotMatch $distributionTestScript 'if \[ "\$boot_completed" = "1" \] && \[ "\$boot_animation" = "stopped" \]' 'Android emulator readiness must not require the optional boot-animation service state.'
 Assert-Match $distributionTestScript 'ro\.build\.fingerprint' 'Android emulator evidence must record the exact device build fingerprint.'
 Assert-Match $distributionTestScript 'systemImageRevision' 'Android emulator evidence must record the installed system-image revision.'
 Assert-Match $distributionTestScript '"classification": "none" if int\(boot_attempts\) == 1 else "transient-emulator-boot"' 'Android emulator evidence must classify first-boot and retried-boot success precisely.'
@@ -1518,9 +1524,22 @@ try {
 if [ "${1:-}" = "version" ]; then
   echo "Android Debug Bridge version 1.0.41"
 elif [[ "$*" == *"getprop sys.boot_completed"* ]]; then
-  echo "0"
+  if [ "${FAKE_ADB_HANG_ON_BOOT:-false}" = "true" ]; then
+    exec sleep 60
+  fi
+  echo "${FAKE_ADB_BOOT_COMPLETED:-0}"
 elif [[ "$*" == *"getprop init.svc.bootanim"* ]]; then
-  echo "running"
+  echo "${FAKE_ADB_BOOT_ANIMATION:-running}"
+elif [[ "$*" == *"getprop ro.build.fingerprint"* ]]; then
+  echo "fixture/device/fingerprint"
+elif [[ "$*" == *"getprop ro.build.version.sdk"* ]]; then
+  echo "${FAKE_ADB_DEVICE_SDK:-23}"
+elif [[ "$*" == *"get-state"* ]]; then
+  echo "device"
+elif [[ "$*" == *"shell pidof"* ]]; then
+  echo "4242"
+elif [[ "$*" == *"logcat -d"* ]]; then
+  echo "fixture logcat: application started"
 fi
 '@.Replace("`r`n", "`n"))
     Write-Utf8Text (Join-Path $fakeBin 'emulator') (@'
@@ -1665,6 +1684,72 @@ fi
             (Get-FileHash -Algorithm SHA256 -LiteralPath $attemptLogPath).Hash.ToLowerInvariant() -cne [string]$attemptLog.sha256) {
             throw 'Android emulator failure log reference does not match exact preserved bytes.'
         }
+    }
+
+    $emulatorBoundedRoot = Join-Path $tempRoot 'emulator-bounded'
+    New-Item -ItemType Directory -Path $emulatorBoundedRoot | Out-Null
+    $emulatorBoundedEvidencePath = Join-Path $emulatorBoundedRoot 'evidence.json'
+    $emulatorBoundedCommand = 'cd {0} && env PATH={1} ANDROID_AVD_HOME={2} ANDROID_SDK_ROOT={3} ANDROID_BUILD_TOOLS=fixture ImageOS=fixture-os ImageVersion=fixture-version FAKE_ADB_HANG_ON_BOOT=true UNLIMOTION_ANDROID_EMULATOR_BOOT_TIMEOUT_SECONDS=1 UNLIMOTION_ANDROID_EMULATOR_BOOT_POLL_SECONDS=0.1 UNLIMOTION_ANDROID_EMULATOR_COMMAND_TIMEOUT_SECONDS=1 "$BASH" scripts/test-android-distribution.sh --mode emulator --identity {4} --input-dir {5} --api-level 23 --evidence {6}' -f @(
+        (Quote-Bash $rootBash),
+        (Quote-Bash $fixturePosixPath),
+        (Quote-Bash (Convert-ToBashPath $fakeAvdHome)),
+        (Quote-Bash (Convert-ToBashPath $fakeSdk)),
+        (Quote-Bash $identityBash),
+        (Quote-Bash (Convert-ToBashPath $emulatorInput)),
+        (Quote-Bash (Convert-ToBashPath $emulatorBoundedEvidencePath))
+    )
+    $emulatorBoundedStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+    $emulatorBoundedOutput = & $bashCommand -lc $emulatorBoundedCommand 2>&1
+    $emulatorBoundedStopwatch.Stop()
+    if ($LASTEXITCODE -eq 0) {
+        throw 'Hanging fake adb boot probe unexpectedly succeeded.'
+    }
+    if ($emulatorBoundedStopwatch.Elapsed.TotalSeconds -gt 12) {
+        throw "Hanging fake adb boot probe exceeded its bounded timeout: $([math]::Round($emulatorBoundedStopwatch.Elapsed.TotalSeconds, 2)) seconds."
+    }
+    if (-not (Test-Path -LiteralPath $emulatorBoundedEvidencePath -PathType Leaf)) {
+        throw "Hanging fake adb boot probe did not write failure evidence.`n$($emulatorBoundedOutput -join [Environment]::NewLine)"
+    }
+    $emulatorBoundedEvidence = Get-Content -Raw -LiteralPath $emulatorBoundedEvidencePath | ConvertFrom-Json
+    if ($emulatorBoundedEvidence.outcome -cne 'failed' -or
+        $emulatorBoundedEvidence.bootRetry.attempts -ne 2 -or
+        (@($emulatorBoundedEvidence.bootRetry.outcomes) -join '|') -cne 'failure|failure') {
+        throw 'Hanging fake adb boot probe produced incomplete bounded failure evidence.'
+    }
+
+    $emulatorReadyRoot = Join-Path $tempRoot 'emulator-ready'
+    New-Item -ItemType Directory -Path $emulatorReadyRoot | Out-Null
+    $emulatorReadyEvidencePath = Join-Path $emulatorReadyRoot 'evidence.json'
+    $emulatorReadyCommand = 'cd {0} && env PATH={1} ANDROID_AVD_HOME={2} ANDROID_SDK_ROOT={3} ANDROID_BUILD_TOOLS=fixture ImageOS=fixture-os ImageVersion=fixture-version FAKE_ADB_BOOT_COMPLETED=1 FAKE_ADB_BOOT_ANIMATION=running UNLIMOTION_ANDROID_EMULATOR_BOOT_TIMEOUT_SECONDS=1 UNLIMOTION_ANDROID_EMULATOR_BOOT_POLL_SECONDS=0.1 "$BASH" scripts/test-android-distribution.sh --mode emulator --identity {4} --input-dir {5} --api-level 23 --evidence {6}' -f @(
+        (Quote-Bash $rootBash),
+        (Quote-Bash $fixturePosixPath),
+        (Quote-Bash (Convert-ToBashPath $fakeAvdHome)),
+        (Quote-Bash (Convert-ToBashPath $fakeSdk)),
+        (Quote-Bash $identityBash),
+        (Quote-Bash (Convert-ToBashPath $emulatorInput)),
+        (Quote-Bash (Convert-ToBashPath $emulatorReadyEvidencePath))
+    )
+    $emulatorReadyOutput = & $bashCommand -lc $emulatorReadyCommand 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "Android emulator readiness fixture rejected sys.boot_completed=1 while bootanim remained running.`n$($emulatorReadyOutput -join [Environment]::NewLine)"
+    }
+    if (-not (Test-Path -LiteralPath $emulatorReadyEvidencePath -PathType Leaf)) {
+        throw 'Android emulator readiness fixture did not write success evidence.'
+    }
+    $emulatorReadyEvidence = Get-Content -Raw -LiteralPath $emulatorReadyEvidencePath | ConvertFrom-Json
+    if ($emulatorReadyEvidence.outcome -cne 'passed' -or
+        $emulatorReadyEvidence.supportLevel -cne 'launchVerified' -or
+        $emulatorReadyEvidence.runtime.apiLevel -ne 23 -or
+        $emulatorReadyEvidence.runtime.deviceSdk -ne 23 -or
+        [string]$emulatorReadyEvidence.runtime.processId -cne '4242' -or
+        $emulatorReadyEvidence.bootRetry.attempts -ne 1 -or
+        (@($emulatorReadyEvidence.bootRetry.outcomes) -join '|') -cne 'success') {
+        throw 'Android emulator readiness fixture produced incomplete success evidence.'
+    }
+    $emulatorReadyLogPath = Join-Path $emulatorReadyRoot 'android-api23-emulator.log'
+    if (-not (Test-Path -LiteralPath $emulatorReadyLogPath -PathType Leaf) -or
+        (Get-Content -Raw -LiteralPath $emulatorReadyLogPath) -cnotmatch 'readiness poll: .*sys\.boot_completed=1.*init\.svc\.bootanim=running') {
+        throw 'Android emulator readiness fixture did not retain the observed ADB readiness state.'
     }
 
     $emulatorSetupFailureEvidencePath = Join-Path $emulatorSetupFailureRoot 'evidence.json'

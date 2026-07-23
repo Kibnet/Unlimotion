@@ -732,13 +732,24 @@ esac
 
 EMULATOR_BOOT_TIMEOUT_SECONDS="${UNLIMOTION_ANDROID_EMULATOR_BOOT_TIMEOUT_SECONDS:-300}"
 EMULATOR_BOOT_POLL_SECONDS="${UNLIMOTION_ANDROID_EMULATOR_BOOT_POLL_SECONDS:-5}"
+EMULATOR_COMMAND_TIMEOUT_SECONDS="${UNLIMOTION_ANDROID_EMULATOR_COMMAND_TIMEOUT_SECONDS:-30}"
 [[ "$EMULATOR_BOOT_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]] || fail "Emulator boot timeout must be a positive integer"
 [[ "$EMULATOR_BOOT_POLL_SECONDS" =~ ^(0\.[0-9]+|[1-9][0-9]*(\.[0-9]+)?)$ ]] || fail "Emulator boot poll interval must be positive"
+[[ "$EMULATOR_COMMAND_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]] || fail "Emulator command timeout must be a positive integer"
 
 require_command adb
 require_command emulator
 require_command sdkmanager
 require_command avdmanager
+require_command timeout
+run_adb_command() {
+  timeout --foreground "$EMULATOR_COMMAND_TIMEOUT_SECONDS" adb "$@"
+}
+
+run_avdmanager_command() {
+  timeout --foreground "$EMULATOR_COMMAND_TIMEOUT_SECONDS" avdmanager "$@"
+}
+
 AAPT="$(find_build_tool aapt)"
 [ -x "$AAPT" ] || fail "aapt not found in Android build-tools"
 
@@ -784,7 +795,7 @@ print(".".join(parts))
 PY
 )"
 EMULATOR_VERSION="$(resolve_tool_version "Android emulator" emulator -version)"
-ADB_VERSION="$(resolve_tool_version "adb" adb version)"
+ADB_VERSION="$(resolve_tool_version "adb" run_adb_command version)"
 AAPT_VERSION="$(resolve_tool_version "aapt" "$AAPT" version)"
 RUNNER_IMAGE_OS="${ImageOS:-local-$(uname -s)}"
 RUNNER_IMAGE_VERSION="${ImageVersion:-notApplicable-local}"
@@ -803,14 +814,23 @@ EMULATOR_AVD_ROOT="$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/unlimotion-andro
 export ANDROID_AVD_HOME="$EMULATOR_AVD_ROOT"
 cleanup_emulator() {
   if [ -n "$SERIAL" ]; then
-    adb -s "$SERIAL" emu kill >/dev/null 2>&1 || true
+    run_adb_command -s "$SERIAL" emu kill >/dev/null 2>&1 || true
   fi
   if [ -n "$EMULATOR_PID" ]; then
-    kill "$EMULATOR_PID" >/dev/null 2>&1 || true
+    if kill -0 "$EMULATOR_PID" >/dev/null 2>&1; then
+      kill "$EMULATOR_PID" >/dev/null 2>&1 || true
+      cleanup_deadline=$((SECONDS + EMULATOR_COMMAND_TIMEOUT_SECONDS))
+      while kill -0 "$EMULATOR_PID" >/dev/null 2>&1 && [ "$SECONDS" -lt "$cleanup_deadline" ]; do
+        sleep 1
+      done
+      if kill -0 "$EMULATOR_PID" >/dev/null 2>&1; then
+        kill -9 "$EMULATOR_PID" >/dev/null 2>&1 || true
+      fi
+    fi
     wait "$EMULATOR_PID" >/dev/null 2>&1 || true
   fi
   if [ -n "$AVD_NAME" ]; then
-    avdmanager delete avd -n "$AVD_NAME" >/dev/null 2>&1 || true
+    run_avdmanager_command delete avd -n "$AVD_NAME" >/dev/null 2>&1 || true
   fi
 }
 
@@ -941,7 +961,7 @@ for port in 5554 5556; do
   EMULATOR_ATTEMPT_LOGS+=("$CURRENT_EMULATOR_LOG")
   : > "$CURRENT_EMULATOR_LOG"
   rm -rf -- "$ANDROID_AVD_HOME/${AVD_NAME}.avd" "$ANDROID_AVD_HOME/${AVD_NAME}.ini" >>"$CURRENT_EMULATOR_LOG" 2>&1
-  printf 'no\n' | avdmanager create avd --force --name "$AVD_NAME" --package "$SYSTEM_IMAGE" --device pixel >>"$CURRENT_EMULATOR_LOG" 2>&1
+  printf 'no\n' | run_avdmanager_command create avd --force --name "$AVD_NAME" --package "$SYSTEM_IMAGE" --device pixel >>"$CURRENT_EMULATOR_LOG" 2>&1
   [ -f "$ANDROID_AVD_HOME/${AVD_NAME}.ini" ] || fail "Android AVD descriptor was not created for $AVD_NAME"
   [ -d "$ANDROID_AVD_HOME/${AVD_NAME}.avd" ] || fail "Android AVD directory was not created for $AVD_NAME"
   emulator \
@@ -960,9 +980,12 @@ for port in 5554 5556; do
     if ! kill -0 "$EMULATOR_PID" >/dev/null 2>&1; then
       break
     fi
-    boot_completed="$(adb -s "$SERIAL" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
-    boot_animation="$(adb -s "$SERIAL" shell getprop init.svc.bootanim 2>/dev/null | tr -d '\r' || true)"
-    if [ "$boot_completed" = "1" ] && [ "$boot_animation" = "stopped" ]; then
+    adb_state="$(run_adb_command -s "$SERIAL" get-state 2>&1 | tr -d '\r' || true)"
+    boot_completed="$(run_adb_command -s "$SERIAL" shell getprop sys.boot_completed 2>&1 | tr -d '\r' || true)"
+    boot_animation="$(run_adb_command -s "$SERIAL" shell getprop init.svc.bootanim 2>&1 | tr -d '\r' || true)"
+    printf 'readiness poll: serial=%q adb_state=%q sys.boot_completed=%q init.svc.bootanim=%q\n' \
+      "$SERIAL" "$adb_state" "$boot_completed" "$boot_animation" >>"$CURRENT_EMULATOR_LOG"
+    if [ "$boot_completed" = "1" ]; then
       BOOT_SUCCEEDED="true"
       BOOT_OUTCOMES+=("success")
       break
@@ -977,25 +1000,25 @@ done
 
 [ "$BOOT_SUCCEEDED" = "true" ] || fail "Android API $API_LEVEL emulator failed to boot after two clean attempts"
 BOOT_OUTCOMES_CSV="$(IFS=,; printf '%s' "${BOOT_OUTCOMES[*]}")"
-DEVICE_FINGERPRINT="$(adb -s "$SERIAL" shell getprop ro.build.fingerprint 2>/dev/null | tr -d '\r')"
-DEVICE_SDK="$(adb -s "$SERIAL" shell getprop ro.build.version.sdk 2>/dev/null | tr -d '\r')"
+DEVICE_FINGERPRINT="$(run_adb_command -s "$SERIAL" shell getprop ro.build.fingerprint 2>/dev/null | tr -d '\r')"
+DEVICE_SDK="$(run_adb_command -s "$SERIAL" shell getprop ro.build.version.sdk 2>/dev/null | tr -d '\r')"
 [ -n "$DEVICE_FINGERPRINT" ] || fail "Android API $API_LEVEL emulator did not report ro.build.fingerprint"
 [ "$DEVICE_SDK" = "$API_LEVEL" ] || fail "Android emulator SDK mismatch: expected $API_LEVEL, got $DEVICE_SDK"
 
-adb -s "$SERIAL" logcat -c
-adb -s "$SERIAL" install -r "$APK_PATH" >/dev/null
-adb -s "$SERIAL" shell am force-stop "$EXPECTED_APPLICATION_ID"
-adb -s "$SERIAL" shell am start -W -n "$EXPECTED_APPLICATION_ID/$LAUNCHABLE_ACTIVITY" >/dev/null
+run_adb_command -s "$SERIAL" logcat -c
+run_adb_command -s "$SERIAL" install -r "$APK_PATH" >/dev/null
+run_adb_command -s "$SERIAL" shell am force-stop "$EXPECTED_APPLICATION_ID"
+run_adb_command -s "$SERIAL" shell am start -W -n "$EXPECTED_APPLICATION_ID/$LAUNCHABLE_ACTIVITY" >/dev/null
 sleep 15
 
-PROCESS_ID="$(adb -s "$SERIAL" shell pidof "$EXPECTED_APPLICATION_ID" 2>/dev/null | tr -d '\r' | awk '{print $1}' || true)"
+PROCESS_ID="$(run_adb_command -s "$SERIAL" shell pidof "$EXPECTED_APPLICATION_ID" 2>/dev/null | tr -d '\r' | awk '{print $1}' || true)"
 if [ -z "$PROCESS_ID" ]; then
-  PROCESS_ID="$(adb -s "$SERIAL" shell ps 2>/dev/null | tr -d '\r' | awk -v package="$EXPECTED_APPLICATION_ID" '$NF == package {print $2; exit}' || true)"
+  PROCESS_ID="$(run_adb_command -s "$SERIAL" shell ps 2>/dev/null | tr -d '\r' | awk -v package="$EXPECTED_APPLICATION_ID" '$NF == package {print $2; exit}' || true)"
 fi
 [ -n "$PROCESS_ID" ] || fail "Android application process is not running on API $API_LEVEL"
 
 LOGCAT_FILE="$(dirname "$EVIDENCE_PATH")/android-api${API_LEVEL}-logcat.txt"
-adb -s "$SERIAL" logcat -d > "$LOGCAT_FILE"
+run_adb_command -s "$SERIAL" logcat -d > "$LOGCAT_FILE"
 if grep -Eiq 'FATAL EXCEPTION|AndroidRuntime.*FATAL|UnsatisfiedLinkError|NoClassDefFoundError|Fatal signal|SIGABRT' "$LOGCAT_FILE"; then
   fail "Fatal Android runtime entry found in API $API_LEVEL logcat"
 fi
