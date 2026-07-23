@@ -918,6 +918,7 @@ Assert-Match $distributionTestScript 'if \[ "\$boot_completed" = "1" \]; then' '
 Assert-NotMatch $distributionTestScript 'if \[ "\$boot_completed" = "1" \] && \[ "\$boot_animation" = "stopped" \]' 'Android emulator readiness must not require the optional boot-animation service state.'
 Assert-Match $distributionTestScript 'run_adb_install_command -s "\$SERIAL" install -r "\$APK_PATH"' 'Android emulator validator must apply the separate bounded timeout only to APK installation.'
 Assert-Match $distributionTestScript 'run_adb_command -s "\$SERIAL" shell am start -n "\$EXPECTED_APPLICATION_ID/\$LAUNCHABLE_ACTIVITY"' 'Android emulator validator must request activity launch without waiting indefinitely for activity completion.'
+Assert-Match $distributionTestScript 'sleep 15[\s\S]*?LOGCAT_FILE=.*\r?\n\s*run_adb_command -s "\$SERIAL" logcat -d > "\$LOGCAT_FILE"[\s\S]*?PROCESS_ID=' 'Android emulator validator must capture logcat before it decides whether the launched process is running.'
 Assert-NotMatch $distributionTestScript 'shell am start -W ' 'Android emulator validator must not use the blocking am start -W mode.'
 Assert-Match $distributionTestScript 'ro\.build\.fingerprint' 'Android emulator evidence must record the exact device build fingerprint.'
 Assert-Match $distributionTestScript 'systemImageRevision' 'Android emulator evidence must record the installed system-image revision.'
@@ -1555,7 +1556,9 @@ elif [[ "$*" == *"emu kill"* ]]; then
     sleep "$FAKE_ADB_EMU_KILL_DELAY_SECONDS"
   fi
 elif [[ "$*" == *"shell pidof"* ]]; then
-  echo "4242"
+  if [ "${FAKE_ADB_NO_PROCESS:-false}" != "true" ]; then
+    echo "4242"
+  fi
 elif [[ "$*" == *"logcat -d"* ]]; then
   echo "fixture logcat: application started"
 elif [[ "$*" == *"shell am start -W"* ]]; then
@@ -1798,6 +1801,29 @@ fi
     $emulatorInstallDelayEvidence = Get-Content -Raw -LiteralPath $emulatorInstallDelayEvidencePath | ConvertFrom-Json
     if ($emulatorInstallDelayEvidence.outcome -cne 'passed' -or $emulatorInstallDelayEvidence.supportLevel -cne 'launchVerified') {
         throw 'Android emulator delayed-install fixture did not produce launch evidence.'
+    }
+
+    $emulatorNoProcessRoot = Join-Path $tempRoot 'emulator-no-process'
+    New-Item -ItemType Directory -Path $emulatorNoProcessRoot | Out-Null
+    $emulatorNoProcessEvidencePath = Join-Path $emulatorNoProcessRoot 'evidence.json'
+    $emulatorNoProcessCommand = 'cd {0} && env PATH={1} ANDROID_AVD_HOME={2} ANDROID_SDK_ROOT={3} ANDROID_BUILD_TOOLS=fixture ImageOS=fixture-os ImageVersion=fixture-version FAKE_ADB_BOOT_COMPLETED=1 FAKE_ADB_BOOT_ANIMATION=running FAKE_ADB_NO_PROCESS=true UNLIMOTION_ANDROID_EMULATOR_BOOT_TIMEOUT_SECONDS=1 UNLIMOTION_ANDROID_EMULATOR_BOOT_POLL_SECONDS=0.1 UNLIMOTION_ANDROID_EMULATOR_COMMAND_TIMEOUT_SECONDS=1 "$BASH" scripts/test-android-distribution.sh --mode emulator --identity {4} --input-dir {5} --api-level 23 --evidence {6}' -f @(
+        (Quote-Bash $rootBash),
+        (Quote-Bash $fixturePosixPath),
+        (Quote-Bash (Convert-ToBashPath $fakeAvdHome)),
+        (Quote-Bash (Convert-ToBashPath $fakeSdk)),
+        (Quote-Bash $identityBash),
+        (Quote-Bash (Convert-ToBashPath $emulatorInput)),
+        (Quote-Bash (Convert-ToBashPath $emulatorNoProcessEvidencePath))
+    )
+    $emulatorNoProcessOutput = & $bashCommand -lc $emulatorNoProcessCommand 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        throw 'Android emulator missing-process fixture unexpectedly succeeded.'
+    }
+    $emulatorNoProcessLogcatPath = Join-Path $emulatorNoProcessRoot 'android-api23-logcat.txt'
+    if (-not (Test-Path -LiteralPath $emulatorNoProcessEvidencePath -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $emulatorNoProcessLogcatPath -PathType Leaf) -or
+        (Get-Content -Raw -LiteralPath $emulatorNoProcessLogcatPath) -cnotmatch 'fixture logcat: application started') {
+        throw "Android emulator missing-process fixture did not preserve logcat before failure.`n$($emulatorNoProcessOutput -join [Environment]::NewLine)"
     }
 
     $emulatorInstallTimeoutRoot = Join-Path $tempRoot 'emulator-install-timeout'

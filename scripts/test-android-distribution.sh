@@ -1043,17 +1043,17 @@ run_adb_command -s "$SERIAL" shell am force-stop "$EXPECTED_APPLICATION_ID"
 run_adb_command -s "$SERIAL" shell am start -n "$EXPECTED_APPLICATION_ID/$LAUNCHABLE_ACTIVITY" >/dev/null
 sleep 15
 
-PROCESS_ID="$(run_adb_command -s "$SERIAL" shell pidof "$EXPECTED_APPLICATION_ID" 2>/dev/null | tr -d '\r' | awk '{print $1}' || true)"
-if [ -z "$PROCESS_ID" ]; then
-  PROCESS_ID="$(run_adb_command -s "$SERIAL" shell ps 2>/dev/null | tr -d '\r' | awk -v package="$EXPECTED_APPLICATION_ID" '$NF == package {print $2; exit}' || true)"
-fi
-[ -n "$PROCESS_ID" ] || fail "Android application process is not running on API $API_LEVEL"
-
 LOGCAT_FILE="$(dirname "$EVIDENCE_PATH")/android-api${API_LEVEL}-logcat.txt"
 run_adb_command -s "$SERIAL" logcat -d > "$LOGCAT_FILE"
 if grep -Eiq 'FATAL EXCEPTION|AndroidRuntime.*FATAL|UnsatisfiedLinkError|NoClassDefFoundError|Fatal signal|SIGABRT' "$LOGCAT_FILE"; then
   fail "Fatal Android runtime entry found in API $API_LEVEL logcat"
 fi
+
+PROCESS_ID="$(run_adb_command -s "$SERIAL" shell pidof "$EXPECTED_APPLICATION_ID" 2>/dev/null | tr -d '\r' | awk '{print $1}' || true)"
+if [ -z "$PROCESS_ID" ]; then
+  PROCESS_ID="$(run_adb_command -s "$SERIAL" shell ps 2>/dev/null | tr -d '\r' | awk -v package="$EXPECTED_APPLICATION_ID" '$NF == package {print $2; exit}' || true)"
+fi
+[ -n "$PROCESS_ID" ] || fail "Android application process is not running on API $API_LEVEL"
 
 APK_SHA_AFTER="$(sha256_file "$APK_PATH")"
 [ "$APK_SHA_AFTER" = "$APK_SHA_BEFORE" ] || fail "APK changed during API $API_LEVEL emulator validation"
