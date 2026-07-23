@@ -554,6 +554,79 @@ function Invoke-SignatureSanitizeWorker([Text.Json.JsonElement]$Payload, [Text.J
     }
 }
 
+function Get-RelativeForwardSlashPath([string]$Root, [string]$Path) {
+    return [IO.Path]::GetRelativePath($Root, $Path).Replace('\', '/')
+}
+
+function Get-ValidatedRawTUnitReports([string]$RawRunRoot) {
+    $root = [IO.Path]::GetFullPath($RawRunRoot)
+    Assert-True (Test-Path -LiteralPath $root -PathType Container) 'Raw TUnit report root is missing.'
+    Assert-True (-not (Get-Item -LiteralPath $root -Force).LinkType) 'Raw TUnit report root cannot be a link.'
+    $topFiles = @(Get-ChildItem -LiteralPath $root -Force -File | Sort-Object -Property Name)
+    Assert-True ($topFiles.Count -eq 2 -and $topFiles[0].Name -ceq 'results.html' -and $topFiles[1].Name -ceq 'results.trx') 'Raw TUnit report root must contain exactly results.html and results.trx.'
+    foreach ($file in $topFiles) {
+        Assert-True (-not $file.LinkType) 'Raw TUnit report file cannot be a link.'
+    }
+    $htmlPath = Join-Path $root 'results.html'
+    $trxPath = Join-Path $root 'results.trx'
+    Assert-True ((Get-Item -LiteralPath $htmlPath).Length -gt 0 -and (Get-Item -LiteralPath $htmlPath).Length -le 16MB) 'Raw TUnit HTML report size is invalid.'
+    Assert-True ((Get-Item -LiteralPath $trxPath).Length -gt 0 -and (Get-Item -LiteralPath $trxPath).Length -le 32MB) 'Raw TUnit TRX report size is invalid.'
+
+    $directories = @(Get-ChildItem -LiteralPath $root -Recurse -Directory -Force)
+    foreach ($directory in $directories) {
+        Assert-True (-not $directory.LinkType) 'Raw TUnit report directory cannot be a link.'
+    }
+    $sidecarFiles = @(Get-ChildItem -LiteralPath $root -Recurse -File -Force | Where-Object { $_.FullName -cne $htmlPath -and $_.FullName -cne $trxPath })
+    Assert-True ($directories.Count -eq 3 -and $sidecarFiles.Count -eq 1) 'Raw TUnit report root has an unexpected sidecar shape.'
+    $sidecar = $sidecarFiles[0]
+    Assert-True (-not $sidecar.LinkType -and $sidecar.Length -eq (Get-Item -LiteralPath $htmlPath).Length) 'Raw TUnit HTML shadow is invalid.'
+    $relativeDirectories = @($directories | ForEach-Object { Get-RelativeForwardSlashPath -Root $root -Path $_.FullName } | Sort-Object)
+    $runnerId = $relativeDirectories[0]
+    Assert-True ($runnerId -cmatch '^[A-Za-z0-9._-]+$' -and $relativeDirectories[1] -ceq "$runnerId/In" -and $relativeDirectories[2] -cmatch ('^{0}/In/[A-Za-z0-9._-]+$' -f [Regex]::Escape($runnerId))) 'Raw TUnit shadow directories are invalid.'
+    $sidecarRelativePath = Get-RelativeForwardSlashPath -Root $root -Path $sidecar.FullName
+    Assert-True ($sidecarRelativePath -cmatch ('^{0}/In/[A-Za-z0-9._-]+/results\.html$' -f [Regex]::Escape($runnerId))) 'Raw TUnit HTML shadow path is invalid.'
+    Assert-True ((Get-FileHash -LiteralPath $sidecar.FullName -Algorithm SHA256).Hash -ceq (Get-FileHash -LiteralPath $htmlPath -Algorithm SHA256).Hash) 'Raw TUnit HTML shadow bytes differ from the primary report.'
+    return [ordered]@{ trxPath = $trxPath; htmlPath = $htmlPath }
+}
+
+function ConvertTo-NonNegativeInt32([string]$Value, [string]$Name) {
+    $parsed = 0
+    Assert-True ($Value -cmatch '^(0|[1-9][0-9]*)$' -and [int]::TryParse($Value, [ref]$parsed) -and $parsed -ge 0) "$Name is invalid."
+    return $parsed
+}
+
+function Read-RawTUnitTrxSummary([string]$TrxPath) {
+    $settings = [Xml.XmlReaderSettings]::new()
+    $settings.DtdProcessing = [Xml.DtdProcessing]::Prohibit
+    $settings.XmlResolver = $null
+    $document = [Xml.XmlDocument]::new()
+    $document.XmlResolver = $null
+    $reader = [Xml.XmlReader]::Create($TrxPath, $settings)
+    try {
+        $document.Load($reader)
+    } finally {
+        $reader.Dispose()
+    }
+    $namespace = [Xml.XmlNamespaceManager]::new($document.NameTable)
+    $namespace.AddNamespace('t', 'http://microsoft.com/schemas/VisualStudio/TeamTest/2010')
+    $counters = $document.SelectSingleNode('/t:TestRun/t:ResultSummary/t:Counters', $namespace)
+    Assert-True ($null -ne $counters) 'Raw TUnit TRX counters are missing.'
+    $total = ConvertTo-NonNegativeInt32 -Value $counters.GetAttribute('total') -Name 'Raw TUnit total count'
+    $passed = ConvertTo-NonNegativeInt32 -Value $counters.GetAttribute('passed') -Name 'Raw TUnit passed count'
+    $failed = ConvertTo-NonNegativeInt32 -Value $counters.GetAttribute('failed') -Name 'Raw TUnit failed count'
+    $skipped = ConvertTo-NonNegativeInt32 -Value $counters.GetAttribute('notExecuted') -Name 'Raw TUnit skipped count'
+    Assert-True ($total -eq $passed + $failed + $skipped) 'Raw TUnit TRX counters do not add up.'
+    $results = @($document.SelectNodes('/t:TestRun/t:Results/t:UnitTestResult', $namespace))
+    Assert-True ($results.Count -eq $total) 'Raw TUnit TRX result cardinality is invalid.'
+    $duration = [TimeSpan]::Zero
+    foreach ($result in $results) {
+        $resultDuration = [TimeSpan]::Zero
+        Assert-True ([TimeSpan]::TryParse($result.GetAttribute('duration'), [ref]$resultDuration) -and $resultDuration -ge [TimeSpan]::Zero) 'Raw TUnit result duration is invalid.'
+        $duration += $resultDuration
+    }
+    return [ordered]@{ discovered = $total; passed = $passed; failed = $failed; skipped = $skipped; durationMs = [long][Math]::Round($duration.TotalMilliseconds, 0, [MidpointRounding]::AwayFromZero) }
+}
+
 function Invoke-RegressionSanitizeWorker([Text.Json.JsonElement]$Payload, [Text.Json.JsonElement[]]$SecretSeeds) {
     Assert-ExactJsonObjectProperties -Object $Payload -Expected @('candidateEvidenceRoot', 'sourceSha', 'runAttempt', 'phaseResults', 'runs') -Name 'RegressionSanitize payload'
     $candidateRoot = [IO.Path]::GetFullPath((Get-RequiredWorkerPayloadString -Payload $Payload -Name 'candidateEvidenceRoot'))
@@ -565,22 +638,99 @@ function Invoke-RegressionSanitizeWorker([Text.Json.JsonElement]$Payload, [Text.
     $runs = $Payload.GetProperty('runs')
     Assert-True ($phaseResults.ValueKind -eq [Text.Json.JsonValueKind]::Array -and $phaseResults.GetArrayLength() -ge 1) 'RegressionSanitize phase results are invalid.'
     Assert-True ($runs.ValueKind -eq [Text.Json.JsonValueKind]::Array -and $runs.GetArrayLength() -eq 3) 'RegressionSanitize run set is invalid.'
-    $expectedRuns = @('unit', 'headless-1', 'headless-2')
+    foreach ($phase in $phaseResults.EnumerateArray()) {
+        Assert-ExactJsonObjectProperties -Object $phase -Expected @('name', 'status', 'exitCode', 'failureCode') -Name 'RegressionSanitize phase'
+        $phaseName = $phase.GetProperty('name')
+        $phaseStatus = $phase.GetProperty('status')
+        $phaseExitCode = $phase.GetProperty('exitCode')
+        $phaseFailureCode = $phase.GetProperty('failureCode')
+        Assert-True ($phaseName.ValueKind -eq [Text.Json.JsonValueKind]::String -and $phaseName.GetString() -cmatch '^regression:(restore|build|test):') 'RegressionSanitize phase name is invalid.'
+        Assert-True ($phaseStatus.ValueKind -eq [Text.Json.JsonValueKind]::String -and $phaseStatus.GetString() -cin @('success', 'failure')) 'RegressionSanitize phase status is invalid.'
+        Assert-True ($phaseExitCode.ValueKind -eq [Text.Json.JsonValueKind]::Number) 'RegressionSanitize phase exit code is invalid.'
+        $phaseExit = $phaseExitCode.GetInt32()
+        Assert-True (($phaseStatus.GetString() -ceq 'success' -and $phaseExit -eq 0 -and $phaseFailureCode.ValueKind -eq [Text.Json.JsonValueKind]::Null) -or ($phaseStatus.GetString() -ceq 'failure' -and $phaseExit -ne 0 -and $phaseFailureCode.ValueKind -eq [Text.Json.JsonValueKind]::String -and -not [string]::IsNullOrWhiteSpace($phaseFailureCode.GetString()))) 'RegressionSanitize phase tuple is invalid.'
+    }
+    $expectedRuns = @(
+        [ordered]@{ runId = 'unit'; projectPath = 'src/Unlimotion.Test/Unlimotion.Test.csproj'; minimumDiscovered = 830 },
+        [ordered]@{ runId = 'headless-1'; projectPath = 'tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj'; minimumDiscovered = 36 },
+        [ordered]@{ runId = 'headless-2'; projectPath = 'tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj'; minimumDiscovered = 36 }
+    )
     $normalizedRuns = [System.Collections.Generic.List[object]]::new()
     for ($index = 0; $index -lt $expectedRuns.Count; $index++) {
         $run = $runs[$index]
-        Assert-ExactJsonObjectProperties -Object $run -Expected @('id', 'status', 'nativeExitCode') -Name 'RegressionSanitize run'
-        $id = $run.GetProperty('id')
-        $status = $run.GetProperty('status')
+        Assert-ExactJsonObjectProperties -Object $run -Expected @('runId', 'state', 'projectPath', 'configuration', 'nativeExitCode', 'failureCode', 'discovered', 'passed', 'failed', 'skipped', 'durationMs', 'skipReason') -Name 'RegressionSanitize run'
+        $runId = $run.GetProperty('runId')
+        $state = $run.GetProperty('state')
+        $projectPath = $run.GetProperty('projectPath')
+        $configuration = $run.GetProperty('configuration')
         $nativeExitCode = $run.GetProperty('nativeExitCode')
-        Assert-True ($id.ValueKind -eq [Text.Json.JsonValueKind]::String -and $id.GetString() -ceq $expectedRuns[$index]) 'RegressionSanitize run id is invalid.'
-        Assert-True ($status.ValueKind -eq [Text.Json.JsonValueKind]::String -and $status.GetString() -cin @('success', 'failure', 'not-attempted')) 'RegressionSanitize run status is invalid.'
-        Assert-True ($nativeExitCode.ValueKind -eq [Text.Json.JsonValueKind]::Number) 'RegressionSanitize native exit code is invalid.'
-        $normalizedRuns.Add([ordered]@{ id = $id.GetString(); status = $status.GetString(); nativeExitCode = $nativeExitCode.GetInt32() })
+        $failureCode = $run.GetProperty('failureCode')
+        $discovered = $run.GetProperty('discovered')
+        $passed = $run.GetProperty('passed')
+        $failed = $run.GetProperty('failed')
+        $skipped = $run.GetProperty('skipped')
+        $durationMs = $run.GetProperty('durationMs')
+        $skipReason = $run.GetProperty('skipReason')
+        $expected = $expectedRuns[$index]
+        Assert-True ($runId.ValueKind -eq [Text.Json.JsonValueKind]::String -and $runId.GetString() -ceq $expected.runId) 'RegressionSanitize run id is invalid.'
+        Assert-True ($state.ValueKind -eq [Text.Json.JsonValueKind]::String -and $state.GetString() -cin @('success', 'failure', 'not-attempted')) 'RegressionSanitize run state is invalid.'
+        Assert-True ($projectPath.ValueKind -eq [Text.Json.JsonValueKind]::String -and $projectPath.GetString() -ceq $expected.projectPath -and $configuration.ValueKind -eq [Text.Json.JsonValueKind]::String -and $configuration.GetString() -ceq 'Debug') 'RegressionSanitize run identity is invalid.'
+        Assert-True ($nativeExitCode.ValueKind -in @([Text.Json.JsonValueKind]::Number, [Text.Json.JsonValueKind]::Null)) 'RegressionSanitize native exit code is invalid.'
+        if ($nativeExitCode.ValueKind -eq [Text.Json.JsonValueKind]::Number) { [void]$nativeExitCode.GetInt32() }
+        $nullableNumbers = @($discovered, $passed, $failed, $skipped, $durationMs)
+        foreach ($number in $nullableNumbers) {
+            Assert-True ($number.ValueKind -in @([Text.Json.JsonValueKind]::Number, [Text.Json.JsonValueKind]::Null)) 'RegressionSanitize nullable number is invalid.'
+            if ($number.ValueKind -eq [Text.Json.JsonValueKind]::Number) { Assert-True ($number.GetInt64() -ge 0) 'RegressionSanitize number cannot be negative.' }
+        }
+        Assert-True ($failureCode.ValueKind -in @([Text.Json.JsonValueKind]::String, [Text.Json.JsonValueKind]::Null) -and $skipReason.ValueKind -in @([Text.Json.JsonValueKind]::String, [Text.Json.JsonValueKind]::Null)) 'RegressionSanitize nullable string is invalid.'
+        $normalized = [ordered]@{
+            runId = $runId.GetString()
+            state = $state.GetString()
+            projectPath = $projectPath.GetString()
+            configuration = 'Debug'
+            nativeExitCode = if ($nativeExitCode.ValueKind -eq [Text.Json.JsonValueKind]::Null) { $null } else { $nativeExitCode.GetInt32() }
+            failureCode = if ($failureCode.ValueKind -eq [Text.Json.JsonValueKind]::Null) { $null } else { $failureCode.GetString() }
+            discovered = if ($discovered.ValueKind -eq [Text.Json.JsonValueKind]::Null) { $null } else { $discovered.GetInt32() }
+            passed = if ($passed.ValueKind -eq [Text.Json.JsonValueKind]::Null) { $null } else { $passed.GetInt32() }
+            failed = if ($failed.ValueKind -eq [Text.Json.JsonValueKind]::Null) { $null } else { $failed.GetInt32() }
+            skipped = if ($skipped.ValueKind -eq [Text.Json.JsonValueKind]::Null) { $null } else { $skipped.GetInt32() }
+            durationMs = if ($durationMs.ValueKind -eq [Text.Json.JsonValueKind]::Null) { $null } else { $durationMs.GetInt64() }
+            trx = $null
+            html = $null
+            skipReason = if ($skipReason.ValueKind -eq [Text.Json.JsonValueKind]::Null) { $null } else { $skipReason.GetString() }
+        }
+        if ($normalized.state -ceq 'success') {
+            Assert-True ($normalized.nativeExitCode -eq 0 -and $null -eq $normalized.failureCode -and $null -eq $normalized.skipReason) 'RegressionSanitize successful run tuple is invalid.'
+            Assert-True ($null -ne $normalized.discovered -and $normalized.discovered -ge $expected.minimumDiscovered -and $normalized.passed -eq $normalized.discovered -and $normalized.failed -eq 0 -and $normalized.skipped -eq 0 -and $null -ne $normalized.durationMs) 'RegressionSanitize successful run counts are invalid.'
+        } elseif ($normalized.state -ceq 'failure') {
+            Assert-True ($null -ne $normalized.nativeExitCode -and $normalized.failureCode -is [string] -and -not [string]::IsNullOrWhiteSpace($normalized.failureCode) -and $null -eq $normalized.skipReason) 'RegressionSanitize failed run tuple is invalid.'
+        } else {
+            Assert-True ($null -eq $normalized.nativeExitCode -and $null -eq $normalized.failureCode -and $null -eq $normalized.discovered -and $null -eq $normalized.passed -and $null -eq $normalized.failed -and $null -eq $normalized.skipped -and $null -eq $normalized.durationMs -and $normalized.skipReason -ceq 'prerequisite-failed') 'RegressionSanitize skipped run tuple is invalid.'
+        }
+        $normalizedRuns.Add($normalized)
+    }
+    if ($normalizedRuns[1].state -ceq 'success' -and $normalizedRuns[2].state -ceq 'success') {
+        Assert-True ($normalizedRuns[1].discovered -eq $normalizedRuns[2].discovered -and $normalizedRuns[1].passed -eq $normalizedRuns[2].passed -and $normalizedRuns[1].failed -eq $normalizedRuns[2].failed -and $normalizedRuns[1].skipped -eq $normalizedRuns[2].skipped) 'RegressionSanitize headless runs have inconsistent counts.'
     }
     New-Item -ItemType Directory -Path $candidateRoot -ErrorAction Stop | Out-Null
     try {
         $hasFailedPhase = @($phaseResults.EnumerateArray() | Where-Object { $_.GetProperty('status').ValueKind -eq [Text.Json.JsonValueKind]::String -and $_.GetProperty('status').GetString() -ceq 'failure' }).Count -gt 0
+        Assert-True ($hasFailedPhase -or @($normalizedRuns | Where-Object { $_.state -cne 'success' }).Count -eq 0) 'RegressionSanitize non-success run requires a failed phase.'
+        foreach ($run in $normalizedRuns) {
+            if ($run.state -ceq 'success') {
+                $trx = "<?xml version=`"1.0`" encoding=`"utf-8`"?><TestRun xmlns=`"http://microsoft.com/schemas/VisualStudio/TeamTest/2010`"><ResultSummary outcome=`"Completed`"><Counters total=`"$($run.discovered)`" executed=`"$($run.discovered)`" passed=`"$($run.passed)`" failed=`"0`" notExecuted=`"0`" /></ResultSummary></TestRun>"
+                $html = "<!doctype html><html><head><meta charset=`"utf-8`"><title>Unlimotion regression $($run.runId)</title></head><body><h1>Unlimotion regression $($run.runId)</h1><dl><dt>discovered</dt><dd>$($run.discovered)</dd><dt>passed</dt><dd>$($run.passed)</dd><dt>failed</dt><dd>0</dd><dt>skipped</dt><dd>0</dd><dt>durationMs</dt><dd>$($run.durationMs)</dd></dl></body></html>"
+                $trxBytes = [Text.UTF8Encoding]::new($false).GetBytes($trx)
+                $htmlBytes = [Text.UTF8Encoding]::new($false).GetBytes($html)
+                try {
+                    $run.trx = Write-SanitizedCandidateFile -Root $candidateRoot -RelativePath "regression/$($run.runId).trx" -Bytes $trxBytes -SecretSeeds $SecretSeeds
+                    $run.html = Write-SanitizedCandidateFile -Root $candidateRoot -RelativePath "regression/$($run.runId).html" -Bytes $htmlBytes -SecretSeeds $SecretSeeds
+                } finally {
+                    [Array]::Clear($trxBytes, 0, $trxBytes.Length)
+                    [Array]::Clear($htmlBytes, 0, $htmlBytes.Length)
+                }
+            }
+        }
         $evidence = [ordered]@{
             schemaVersion = 1
             evidenceKind = if ($hasFailedPhase) { 'regression-failure' } else { 'regression-success' }
@@ -1031,6 +1181,146 @@ function Invoke-DotNet([string]$Phase, [string[]]$Arguments, [System.Collections
     throw "dotnet failed in $Phase with exit code $exitCode."
 }
 
+function New-RegressionRunRecord(
+    [string]$RunId,
+    [string]$ProjectPath,
+    [string]$State,
+    [Nullable[int]]$NativeExitCode,
+    [string]$FailureCode = $null,
+    [Nullable[int]]$Discovered = $null,
+    [Nullable[int]]$Passed = $null,
+    [Nullable[int]]$Failed = $null,
+    [Nullable[int]]$Skipped = $null,
+    [Nullable[long]]$DurationMs = $null,
+    [string]$SkipReason = $null
+) {
+    Assert-True ($RunId -cin @('unit', 'headless-1', 'headless-2') -and $ProjectPath -cin @('src/Unlimotion.Test/Unlimotion.Test.csproj', 'tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj') -and $State -cin @('success', 'failure', 'not-attempted')) 'Regression run record identity is invalid.'
+    return [ordered]@{
+        runId = $RunId
+        state = $State
+        projectPath = $ProjectPath
+        configuration = 'Debug'
+        nativeExitCode = if ($NativeExitCode.HasValue) { $NativeExitCode.Value } else { $null }
+        failureCode = $FailureCode
+        discovered = if ($Discovered.HasValue) { $Discovered.Value } else { $null }
+        passed = if ($Passed.HasValue) { $Passed.Value } else { $null }
+        failed = if ($Failed.HasValue) { $Failed.Value } else { $null }
+        skipped = if ($Skipped.HasValue) { $Skipped.Value } else { $null }
+        durationMs = if ($DurationMs.HasValue) { $DurationMs.Value } else { $null }
+        skipReason = $SkipReason
+    }
+}
+
+function Invoke-TestCommandAdapter(
+    [string]$RunId,
+    [string]$ProjectPath,
+    [string]$ProjectRelativePath,
+    [string]$RawRunRoot,
+    [int]$MinimumDiscovered,
+    [object[]]$SecretSeeds = @(),
+    [int]$TimeoutSeconds = 1200
+) {
+    Assert-True ($TimeoutSeconds -ge 1 -and $TimeoutSeconds -le 1200 -and $MinimumDiscovered -ge 1) 'Regression test adapter limits are invalid.'
+    $rawRoot = [IO.Path]::GetFullPath($RawRunRoot)
+    Assert-True ([IO.Path]::IsPathFullyQualified($ProjectPath) -and (Test-Path -LiteralPath $ProjectPath -PathType Leaf) -and -not (Test-Path -LiteralPath $rawRoot)) 'Regression test adapter paths are invalid.'
+    $process = $null
+    $stdout = [IO.MemoryStream]::new()
+    $stderr = [IO.MemoryStream]::new()
+    try {
+        New-Item -ItemType Directory -Path $rawRoot -ErrorAction Stop | Out-Null
+        $psi = [Diagnostics.ProcessStartInfo]::new()
+        $psi.FileName = Get-AbsoluteDotNetExecutable
+        $psi.WorkingDirectory = Get-CanonicalRepositoryRoot
+        $psi.UseShellExecute = $false
+        $psi.RedirectStandardOutput = $true
+        $psi.RedirectStandardError = $true
+        foreach ($argument in @(
+                'run', '--project', $ProjectPath, '-c', 'Debug', '--no-restore', '--no-build', '--',
+                '--maximum-parallel-tests', '1', '--report-trx', '--report-trx-filename', 'results.trx',
+                '--report-html-filename', (Join-Path $rawRoot 'results.html'), '--results-directory', $rawRoot
+            )) {
+            [void]$psi.ArgumentList.Add($argument)
+        }
+        $psi.Environment['TUNIT_DISABLE_GITHUB_REPORTER'] = 'true'
+        foreach ($name in @('GITHUB_OUTPUT', 'GITHUB_ENV', 'GITHUB_PATH', 'GITHUB_STATE', 'GITHUB_STEP_SUMMARY', 'ACTIONS_RUNTIME_TOKEN', 'ACTIONS_RESULTS_URL', 'ACTIONS_ID_TOKEN_REQUEST_TOKEN', 'ACTIONS_ID_TOKEN_REQUEST_URL')) {
+            [void]$psi.Environment.Remove($name)
+        }
+        foreach ($seed in $SecretSeeds) {
+            Assert-True ($seed -is [System.Collections.IDictionary] -and $seed['name'] -is [string]) 'Regression test adapter secret seed is invalid.'
+            [void]$psi.Environment.Remove($seed['name'])
+        }
+        $process = [Diagnostics.Process]::new()
+        $process.StartInfo = $psi
+        Assert-True $process.Start() 'Regression test process did not start.'
+        $stdoutBuffer = [byte[]]::new(8192)
+        $stderrBuffer = [byte[]]::new(8192)
+        $stdoutTask = $process.StandardOutput.BaseStream.ReadAsync($stdoutBuffer, 0, $stdoutBuffer.Length)
+        $stderrTask = $process.StandardError.BaseStream.ReadAsync($stderrBuffer, 0, $stderrBuffer.Length)
+        $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+        $timedOut = $false
+        $overflowed = $false
+        while ($null -ne $stdoutTask -or $null -ne $stderrTask) {
+            $tasks = [System.Collections.Generic.List[Threading.Tasks.Task]]::new()
+            if ($null -ne $stdoutTask) { $tasks.Add($stdoutTask) }
+            if ($null -ne $stderrTask) { $tasks.Add($stderrTask) }
+            [void][Threading.Tasks.Task]::WaitAny($tasks.ToArray(), 100)
+            foreach ($streamState in @(@{ task = $stdoutTask; buffer = $stdoutBuffer; target = $stdout; maximum = 4MB; kind = 'stdout' }, @{ task = $stderrTask; buffer = $stderrBuffer; target = $stderr; maximum = 4MB; kind = 'stderr' })) {
+                if ($null -eq $streamState.task -or -not $streamState.task.IsCompleted) { continue }
+                $read = $streamState.task.GetAwaiter().GetResult()
+                if ($streamState.kind -ceq 'stdout') { $stdoutTask = $null } else { $stderrTask = $null }
+                if ($read -le 0) { continue }
+                if ($streamState.target.Length + $read -gt $streamState.maximum -or $stdout.Length + $stderr.Length + $read -gt 8MB) {
+                    $overflowed = $true
+                    continue
+                }
+                $streamState.target.Write($streamState.buffer, 0, $read)
+                if ($streamState.kind -ceq 'stdout') {
+                    $stdoutTask = $process.StandardOutput.BaseStream.ReadAsync($stdoutBuffer, 0, $stdoutBuffer.Length)
+                } else {
+                    $stderrTask = $process.StandardError.BaseStream.ReadAsync($stderrBuffer, 0, $stderrBuffer.Length)
+                }
+            }
+            if (($overflowed -or [DateTime]::UtcNow -ge $deadline) -and -not $process.HasExited) {
+                $timedOut = -not $overflowed
+                if (-not (Stop-ClosedWorkerProcess -Process $process)) {
+                    return New-RegressionRunRecord -RunId $RunId -ProjectPath $ProjectRelativePath -State 'failure' -NativeExitCode (-1) -FailureCode 'native-command-termination-unproven'
+                }
+            }
+        }
+        if (-not $process.HasExited -and -not $process.WaitForExit(10000)) {
+            $terminationProven = Stop-ClosedWorkerProcess -Process $process
+            if ($terminationProven) {
+                return New-RegressionRunRecord -RunId $RunId -ProjectPath $ProjectRelativePath -State 'failure' -NativeExitCode (-1) -FailureCode 'native-command-timeout'
+            }
+            return New-RegressionRunRecord -RunId $RunId -ProjectPath $ProjectRelativePath -State 'failure' -NativeExitCode (-1) -FailureCode 'native-command-termination-unproven'
+        }
+        if ($overflowed) { return New-RegressionRunRecord -RunId $RunId -ProjectPath $ProjectRelativePath -State 'failure' -NativeExitCode (-3) -FailureCode 'native-output-limit-exceeded' }
+        if ($timedOut) { return New-RegressionRunRecord -RunId $RunId -ProjectPath $ProjectRelativePath -State 'failure' -NativeExitCode (-1) -FailureCode 'native-command-timeout' }
+        $nativeExitCode = [int]$process.ExitCode
+        if ($nativeExitCode -ne 0) { return New-RegressionRunRecord -RunId $RunId -ProjectPath $ProjectRelativePath -State 'failure' -NativeExitCode $nativeExitCode -FailureCode 'test-command-failed' }
+        try {
+            $reports = Get-ValidatedRawTUnitReports -RawRunRoot $rawRoot
+            $summary = Read-RawTUnitTrxSummary -TrxPath $reports.trxPath
+            Assert-True ($summary.discovered -ge $MinimumDiscovered -and $summary.passed -eq $summary.discovered -and $summary.failed -eq 0 -and $summary.skipped -eq 0) 'Raw TUnit report counts do not satisfy the regression contract.'
+            return New-RegressionRunRecord -RunId $RunId -ProjectPath $ProjectRelativePath -State 'success' -NativeExitCode 0 -Discovered $summary.discovered -Passed $summary.passed -Failed $summary.failed -Skipped $summary.skipped -DurationMs $summary.durationMs
+        } catch {
+            return New-RegressionRunRecord -RunId $RunId -ProjectPath $ProjectRelativePath -State 'failure' -NativeExitCode 0 -FailureCode 'test-evidence-failed'
+        }
+    } catch {
+        $terminationProven = $true
+        if ($null -ne $process) { $terminationProven = Stop-ClosedWorkerProcess -Process $process }
+        if ($terminationProven) {
+            return New-RegressionRunRecord -RunId $RunId -ProjectPath $ProjectRelativePath -State 'failure' -NativeExitCode (-2) -FailureCode 'native-command-threw'
+        }
+        return New-RegressionRunRecord -RunId $RunId -ProjectPath $ProjectRelativePath -State 'failure' -NativeExitCode (-2) -FailureCode 'native-command-termination-unproven'
+    } finally {
+        if (Test-Path -LiteralPath $rawRoot) { Remove-Item -LiteralPath $rawRoot -Recurse -Force -ErrorAction SilentlyContinue }
+        $stdout.Dispose()
+        $stderr.Dispose()
+        if ($null -ne $process) { $process.Dispose() }
+    }
+}
+
 function Get-PackageReceipt([string]$PackagesPath, [System.Collections.Generic.List[object]]$Phases) {
     $receipt = [System.Collections.Generic.List[object]]::new()
     foreach ($package in Get-ExpectedPackages) {
@@ -1328,6 +1618,35 @@ function Invoke-SignatureAttempt {
     }
 }
 
+function Invoke-RegressionDotNetPhase([string]$Phase, [string[]]$Arguments, [System.Collections.Generic.List[object]]$Phases) {
+    try {
+        & (Get-AbsoluteDotNetExecutable) @Arguments
+        $exitCode = [int]$LASTEXITCODE
+        if ($exitCode -eq 0) {
+            $Phases.Add([ordered]@{ name = $Phase; status = 'success'; exitCode = 0; failureCode = $null })
+            return $true
+        }
+        $Phases.Add([ordered]@{ name = $Phase; status = 'failure'; exitCode = $exitCode; failureCode = 'regression-command-failed' })
+        return $false
+    } catch {
+        $Phases.Add([ordered]@{ name = $Phase; status = 'failure'; exitCode = -2; failureCode = 'native-command-threw' })
+        return $false
+    }
+}
+
+function Add-RegressionTestPhase([System.Collections.Generic.List[object]]$Phases, [hashtable]$Run) {
+    Assert-True ($Run.state -cin @('success', 'failure')) 'Regression test phase requires an attempted run.'
+    $phase = "regression:test:$($Run.runId)"
+    if ($Run.state -ceq 'success') {
+        Assert-True ($Run.nativeExitCode -eq 0 -and $Run.failureCode -eq $null) 'Successful regression run cannot produce a failed phase.'
+        $Phases.Add([ordered]@{ name = $phase; status = 'success'; exitCode = 0; failureCode = $null })
+        return
+    }
+    $exitCode = if ($Run.nativeExitCode -eq 0) { 2 } else { [int]$Run.nativeExitCode }
+    Assert-True ($exitCode -ne 0 -and $Run.failureCode -is [string] -and -not [string]::IsNullOrWhiteSpace($Run.failureCode)) 'Failed regression run cannot produce a canonical phase.'
+    $Phases.Add([ordered]@{ name = $phase; status = 'failure'; exitCode = $exitCode; failureCode = $Run.failureCode })
+}
+
 function Invoke-RegressionAttempt {
     Assert-True ($Lane -ceq 'Regression') 'RunAttempt currently accepts only the Signature or Regression lane.'
     Assert-True ($env:DOTNET_NUGET_SIGNATURE_VERIFICATION -ceq 'true') 'DOTNET_NUGET_SIGNATURE_VERIFICATION must be exactly true.'
@@ -1339,52 +1658,91 @@ function Invoke-RegressionAttempt {
     $packagesPath = New-IsolatedPackagesRoot
     $evidencePath = Get-EvidenceRoot -Root $root -SourceSha $sourceSha -Attempt $attempt
     $phases = [System.Collections.Generic.List[object]]::new()
-    $packages = [System.Collections.Generic.List[object]]::new()
+    $secretSeeds = Get-ClosedSecretSeedSnapshot -Environment ([Environment]::GetEnvironmentVariables('Process'))
     $env:NUGET_PACKAGES = $packagesPath
 
     $unitProject = Join-Path $root 'src\Unlimotion.Test\Unlimotion.Test.csproj'
     $headlessProject = Join-Path $root 'tests\Unlimotion.UiTests.Headless\Unlimotion.UiTests.Headless.csproj'
-    try {
-        Invoke-DotNet -Phase 'regression:restore:unit' -Arguments @(
-            'restore', $unitProject, '--force', '--no-http-cache',
-            '--configfile', (Join-Path $root 'src\nuget.config'),
-            '-p:Configuration=Debug',
-            '-p:DisableImplicitLibraryPacksFolder=true',
-            '-p:DisableImplicitNuGetFallbackFolder=true',
-            '-p:RestoreFallbackFolders='
-        ) -Phases $phases
-        Invoke-DotNet -Phase 'regression:restore:headless' -Arguments @(
-            'restore', $headlessProject, '--force', '--no-http-cache',
-            '--configfile', (Join-Path $root 'src\nuget.config'),
-            '-p:Configuration=Debug',
-            '-p:DisableImplicitLibraryPacksFolder=true',
-            '-p:DisableImplicitNuGetFallbackFolder=true',
-            '-p:RestoreFallbackFolders='
-        ) -Phases $phases
-        Invoke-DotNet -Phase 'regression:build:unit' -Arguments @(
+    $rawReportsRoot = $evidencePath + '.raw'
+    $candidateEvidencePath = $evidencePath + '.candidate'
+    Assert-True (-not (Test-Path -LiteralPath $evidencePath) -and -not (Test-Path -LiteralPath $rawReportsRoot) -and -not (Test-Path -LiteralPath $candidateEvidencePath)) 'Regression evidence paths must be absent before the attempt.'
+    $unitRestored = Invoke-RegressionDotNetPhase -Phase 'regression:restore:unit' -Arguments @(
+        'restore', $unitProject, '--force', '--no-http-cache',
+        '--configfile', (Join-Path $root 'src\nuget.config'),
+        '-p:Configuration=Debug',
+        '-p:DisableImplicitLibraryPacksFolder=true',
+        '-p:DisableImplicitNuGetFallbackFolder=true',
+        '-p:RestoreFallbackFolders='
+    ) -Phases $phases
+    $headlessRestored = Invoke-RegressionDotNetPhase -Phase 'regression:restore:headless' -Arguments @(
+        'restore', $headlessProject, '--force', '--no-http-cache',
+        '--configfile', (Join-Path $root 'src\nuget.config'),
+        '-p:Configuration=Debug',
+        '-p:DisableImplicitLibraryPacksFolder=true',
+        '-p:DisableImplicitNuGetFallbackFolder=true',
+        '-p:RestoreFallbackFolders='
+    ) -Phases $phases
+    $unitBuilt = $false
+    if ($unitRestored) {
+        $unitBuilt = Invoke-RegressionDotNetPhase -Phase 'regression:build:unit' -Arguments @(
             'build', $unitProject, '-c', 'Debug', '--no-restore', '-p:UseSharedCompilation=false'
         ) -Phases $phases
-        Invoke-DotNet -Phase 'regression:build:headless' -Arguments @(
+    }
+    $headlessBuilt = $false
+    if ($headlessRestored) {
+        $headlessBuilt = Invoke-RegressionDotNetPhase -Phase 'regression:build:headless' -Arguments @(
             'build', $headlessProject, '-c', 'Debug', '--no-restore', '-p:UseSharedCompilation=false'
         ) -Phases $phases
-        Invoke-DotNet -Phase 'regression:test:unit' -Arguments @(
-            'run', '--project', $unitProject, '-c', 'Debug', '--no-restore', '--',
-            '--maximum-parallel-tests', '1', '--output', 'Detailed'
-        ) -Phases $phases
-        Invoke-DotNet -Phase 'regression:test:headless-1' -Arguments @(
-            'run', '--project', $headlessProject, '-c', 'Debug', '--no-restore', '--',
-            '--maximum-parallel-tests', '1', '--output', 'Detailed'
-        ) -Phases $phases
-        Invoke-DotNet -Phase 'regression:test:headless-2' -Arguments @(
-            'run', '--project', $headlessProject, '-c', 'Debug', '--no-restore', '--',
-            '--maximum-parallel-tests', '1', '--output', 'Detailed'
-        ) -Phases $phases
-
-        Write-AttemptReceipt -Root $evidencePath -AttemptLane 'Regression' -SourceSha $sourceSha -Attempt $attempt -Outcome 'success' -Phases $phases -Packages $packages -FailureCode $null
-        Write-Output "NuGet regression evidence: $evidencePath"
-    } catch {
-        Write-AttemptReceipt -Root $evidencePath -AttemptLane 'Regression' -SourceSha $sourceSha -Attempt $attempt -Outcome 'failure' -Phases $phases -Packages $packages -FailureCode 'attempt-failed'
-        throw
+    }
+    $runs = [System.Collections.Generic.List[object]]::new()
+    try {
+        if ($unitBuilt) {
+            $unitRun = Invoke-TestCommandAdapter -RunId 'unit' -ProjectPath $unitProject -ProjectRelativePath 'src/Unlimotion.Test/Unlimotion.Test.csproj' -RawRunRoot (Join-Path $rawReportsRoot 'unit') -MinimumDiscovered 830 -SecretSeeds $secretSeeds -TimeoutSeconds 1200
+            $runs.Add($unitRun)
+            Add-RegressionTestPhase -Phases $phases -Run $unitRun
+        } else {
+            $runs.Add((New-RegressionRunRecord -RunId 'unit' -ProjectPath 'src/Unlimotion.Test/Unlimotion.Test.csproj' -State 'not-attempted' -NativeExitCode $null -SkipReason 'prerequisite-failed'))
+        }
+        foreach ($headlessRunId in @('headless-1', 'headless-2')) {
+            if ($headlessBuilt) {
+                $headlessRun = Invoke-TestCommandAdapter -RunId $headlessRunId -ProjectPath $headlessProject -ProjectRelativePath 'tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj' -RawRunRoot (Join-Path $rawReportsRoot $headlessRunId) -MinimumDiscovered 36 -SecretSeeds $secretSeeds -TimeoutSeconds 600
+                $runs.Add($headlessRun)
+                Add-RegressionTestPhase -Phases $phases -Run $headlessRun
+            } else {
+                $runs.Add((New-RegressionRunRecord -RunId $headlessRunId -ProjectPath 'tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj' -State 'not-attempted' -NativeExitCode $null -SkipReason 'prerequisite-failed'))
+            }
+        }
+    } finally {
+        if (Test-Path -LiteralPath $rawReportsRoot) { Remove-Item -LiteralPath $rawReportsRoot -Recurse -Force -ErrorAction SilentlyContinue }
+    }
+    $sanitizerResult = Invoke-ClosedWorkerProcessAdapter -WorkerKind 'RegressionSanitize' -Payload ([ordered]@{
+            candidateEvidenceRoot = $candidateEvidencePath
+            sourceSha = $sourceSha
+            runAttempt = [string]$attempt
+            phaseResults = $phases.ToArray()
+            runs = $runs.ToArray()
+        }) -SecretSeeds $secretSeeds -TimeoutSeconds 300
+    $publicationPhases = [System.Collections.Generic.List[object]]::new()
+    foreach ($phase in $phases) { $publicationPhases.Add($phase) }
+    if ($sanitizerResult.Success -and $sanitizerResult.ExitCode -eq 0 -and $sanitizerResult.TerminationProven) {
+        $publicationPhases.Add([ordered]@{ name = 'regression:sanitize'; status = 'success'; exitCode = 0; failureCode = $null })
+    } else {
+        $sanitizerExitCode = if ($sanitizerResult.ExitCode -eq 0) { 2 } else { [int]$sanitizerResult.ExitCode }
+        $sanitizerFailureCode = if ($sanitizerResult.FailureCode -is [string] -and -not [string]::IsNullOrWhiteSpace($sanitizerResult.FailureCode)) { $sanitizerResult.FailureCode } else { 'regression-sanitizer-failed' }
+        $publicationPhases.Add([ordered]@{ name = 'regression:sanitize'; status = 'failure'; exitCode = $sanitizerExitCode; failureCode = $sanitizerFailureCode })
+    }
+    $finalizerResult = Invoke-ClosedWorkerProcessAdapter -WorkerKind 'PublicationFinalize' -Payload ([ordered]@{
+            candidateEvidenceRoot = $candidateEvidencePath
+            finalEvidenceRoot = $evidencePath
+            sourceSha = $sourceSha
+            runAttempt = [string]$attempt
+            lane = 'Regression'
+            phaseResults = $publicationPhases.ToArray()
+        }) -SecretSeeds $secretSeeds -TimeoutSeconds 300
+    Assert-True ($finalizerResult.Success -and $finalizerResult.ExitCode -eq 0 -and $finalizerResult.TerminationProven -and (Test-Path -LiteralPath $evidencePath -PathType Container)) 'Regression publication finalizer failed.'
+    Write-Output "NuGet regression evidence: $evidencePath"
+    if (@($publicationPhases | Where-Object { $_.status -ceq 'failure' }).Count -gt 0) {
+        throw 'NuGet regression attempt recorded failed phases.'
     }
 }
 
@@ -1461,6 +1819,37 @@ function Invoke-SelfTest {
         $manifestMutationRejected = $true
     }
     Assert-True $manifestMutationRejected 'Publication manifest comparison accepted a byte mutation.'
+
+    $rawReportRoot = Join-Path ([IO.Path]::GetTempPath()) ('unlimotion-raw-tunit-report-' + [Guid]::NewGuid().ToString('N'))
+    try {
+        New-Item -ItemType Directory -Path $rawReportRoot -ErrorAction Stop | Out-Null
+        $rawHtml = '<!doctype html><html><body>sanitized later</body></html>'
+        $rawTrx = @'
+<?xml version="1.0" encoding="utf-8"?>
+<TestRun xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Results><UnitTestResult executionId="00000000-0000-0000-0000-000000000001" testId="00000000-0000-0000-0000-000000000002" testName="Synthetic" computerName="synthetic" duration="00:00:00.1250000" startTime="2026-01-01T00:00:00.0000000+00:00" endTime="2026-01-01T00:00:00.1250000+00:00" testType="00000000-0000-0000-0000-000000000003" outcome="Passed" testListId="00000000-0000-0000-0000-000000000004" relativeResultsDirectory="one" /></Results>
+  <ResultSummary outcome="Completed"><Counters total="1" executed="1" passed="1" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="1" inProgress="0" pending="0" /></ResultSummary>
+</TestRun>
+'@
+        [IO.File]::WriteAllText((Join-Path $rawReportRoot 'results.html'), $rawHtml, [Text.UTF8Encoding]::new($false))
+        [IO.File]::WriteAllText((Join-Path $rawReportRoot 'results.trx'), $rawTrx, [Text.UTF8Encoding]::new($false))
+        $shadowRoot = Join-Path $rawReportRoot 'runner-1\In\machine-1'
+        New-Item -ItemType Directory -Path $shadowRoot -ErrorAction Stop | Out-Null
+        [IO.File]::WriteAllText((Join-Path $shadowRoot 'results.html'), $rawHtml, [Text.UTF8Encoding]::new($false))
+        $validatedRawReports = Get-ValidatedRawTUnitReports -RawRunRoot $rawReportRoot
+        $rawSummary = Read-RawTUnitTrxSummary -TrxPath $validatedRawReports.trxPath
+        Assert-True ($validatedRawReports.htmlPath -ceq (Join-Path $rawReportRoot 'results.html') -and $rawSummary.discovered -eq 1 -and $rawSummary.passed -eq 1 -and $rawSummary.failed -eq 0 -and $rawSummary.skipped -eq 0 -and $rawSummary.durationMs -eq 125) 'Raw TUnit report adapter did not preserve a valid report tuple.'
+        [IO.File]::WriteAllText((Join-Path $shadowRoot 'results.html'), $rawHtml + 'changed', [Text.UTF8Encoding]::new($false))
+        $mutatedShadowRejected = $false
+        try {
+            [void](Get-ValidatedRawTUnitReports -RawRunRoot $rawReportRoot)
+        } catch {
+            $mutatedShadowRejected = $true
+        }
+        Assert-True $mutatedShadowRejected 'Raw TUnit report adapter accepted a mutated shadow report.'
+    } finally {
+        if (Test-Path -LiteralPath $rawReportRoot) { Remove-Item -LiteralPath $rawReportRoot -Recurse -Force -ErrorAction SilentlyContinue }
+    }
 
     $workerJson = '{"schemaVersion":1,"workerKind":"SignatureVerify","payload":{},"secretSeeds":[{"name":"API_TOKEN","value":"example"}]}'
     $workerBody = [Text.UTF8Encoding]::new($false).GetBytes($workerJson)
@@ -1643,9 +2032,9 @@ function Invoke-SelfTest {
                     runAttempt = '1'
                     phaseResults = @([ordered]@{ name = 'regression:test:unit'; status = 'success'; exitCode = 0; failureCode = $null })
                     runs = @(
-                        [ordered]@{ id = 'unit'; status = 'success'; nativeExitCode = 0 },
-                        [ordered]@{ id = 'headless-1'; status = 'success'; nativeExitCode = 0 },
-                        [ordered]@{ id = 'headless-2'; status = 'success'; nativeExitCode = 0 }
+                        [ordered]@{ runId = 'unit'; state = 'success'; projectPath = 'src/Unlimotion.Test/Unlimotion.Test.csproj'; configuration = 'Debug'; nativeExitCode = 0; failureCode = $null; discovered = 830; passed = 830; failed = 0; skipped = 0; durationMs = 1; skipReason = $null },
+                        [ordered]@{ runId = 'headless-1'; state = 'success'; projectPath = 'tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj'; configuration = 'Debug'; nativeExitCode = 0; failureCode = $null; discovered = 36; passed = 36; failed = 0; skipped = 0; durationMs = 1; skipReason = $null },
+                        [ordered]@{ runId = 'headless-2'; state = 'success'; projectPath = 'tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj'; configuration = 'Debug'; nativeExitCode = 0; failureCode = $null; discovered = 36; passed = 36; failed = 0; skipped = 0; durationMs = 1; skipReason = $null }
                     )
                 }) -SecretSeeds $syntheticSeeds -TimeoutSeconds 10
             Assert-True ($regressionSanitizerResult.Success -eq $true -and $regressionSanitizerResult.ExitCode -eq 0) 'Regression sanitizer worker did not return a closed success tuple.'
@@ -1660,7 +2049,7 @@ function Invoke-SelfTest {
                 }) -SecretSeeds $syntheticSeeds -TimeoutSeconds 10
             Assert-True ($regressionFinalizerResult.Success -eq $true -and $regressionFinalizerResult.ExitCode -eq 0) 'Publication finalizer did not publish Regression candidate evidence.'
             $regressionEvidence = [IO.File]::ReadAllText((Join-Path $regressionFinalRoot 'regression\evidence.json'), [Text.UTF8Encoding]::new($false)) | ConvertFrom-Json -AsHashtable -Depth 16
-            Assert-True ($regressionEvidence.evidenceKind -ceq 'regression-success') 'Regression sanitizer evidence kind is invalid.'
+            Assert-True ($regressionEvidence.evidenceKind -ceq 'regression-success' -and (@($regressionEvidence.runs)).Count -eq 3 -and $regressionEvidence.runs[0].trx.path -ceq 'regression/unit.trx' -and $regressionEvidence.runs[2].html.path -ceq 'regression/headless-2.html') 'Regression sanitizer evidence shape is invalid.'
             & (Get-AbsolutePowerShellExecutable) -NoLogo -NoProfile -NonInteractive -File (Join-Path (Get-CanonicalRepositoryRoot) 'scripts\Test-NuGetEvidencePublication.ps1') -EvidenceRoot $regressionFinalRoot -ExpectedLane Regression -ExpectedSourceSha ('a' * 40) -ExpectedRunAttempt 1
             Assert-True ($LASTEXITCODE -eq 0) 'Independent validator rejected published Regression candidate evidence.'
             Remove-Item -LiteralPath $regressionFinalRoot -Recurse -Force -ErrorAction Stop

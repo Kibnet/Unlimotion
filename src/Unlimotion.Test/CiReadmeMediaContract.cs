@@ -46,8 +46,10 @@ internal static class CiReadmeMediaContract
         await Assert.That(workflow).Contains("Enforce Regression attempt verdict");
         await Assert.That(nugetSignatureScript).Contains("tests\\Unlimotion.UiTests.Headless\\Unlimotion.UiTests.Headless.csproj");
         await Assert.That(nugetSignatureScript).Contains("--maximum-parallel-tests");
-        await Assert.That(nugetSignatureScript).Contains("regression:test:headless-1");
-        await Assert.That(nugetSignatureScript).Contains("regression:test:headless-2");
+        await Assert.That(nugetSignatureScript).Contains("Invoke-TestCommandAdapter");
+        await Assert.That(nugetSignatureScript).Contains("'headless-1', 'headless-2'");
+        await Assert.That(nugetSignatureScript).Contains("--report-trx-filename");
+        await Assert.That(nugetSignatureScript).Contains("TUNIT_DISABLE_GITHUB_REPORTER");
         await Assert.That(nugetSignatureScript).Contains("GenerateBaseline");
         await Assert.That(nugetSignatureScript).Contains("ExpectedParentSha");
         await Assert.That(nugetSignatureScript).Contains("Get-CanonicalGraphHash");

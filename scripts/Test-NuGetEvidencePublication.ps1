@@ -52,6 +52,66 @@ function Test-PublicationPhases([object[]]$Phases, [hashtable]$Receipt) {
     }
 }
 
+function Test-RegressionEvidenceReference([hashtable]$Reference, [string]$ExpectedPath, [string]$Root) {
+    Assert-ExactKeys -Object $Reference -Expected @('path', 'sha256', 'byteLength') -Name 'published regression report reference'
+    Assert-True ($Reference.path -is [string] -and $Reference.path -ceq $ExpectedPath -and $Reference.sha256 -is [string] -and $Reference.sha256 -cmatch '^[0-9a-f]{64}$' -and $Reference.byteLength -is [long] -and $Reference.byteLength -gt 0) 'Published regression report reference is invalid.'
+    $path = [IO.Path]::GetFullPath((Join-Path $Root ($Reference.path -replace '/', [IO.Path]::DirectorySeparatorChar)))
+    Assert-True ([IO.Path]::GetRelativePath($Root, $path).Replace('\', '/') -ceq $Reference.path -and (Test-Path -LiteralPath $path -PathType Leaf)) 'Published regression report reference escaped its root.'
+    $file = Get-Item -LiteralPath $path -Force
+    Assert-True (-not $file.LinkType -and $file.Length -eq $Reference.byteLength -and (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant() -ceq $Reference.sha256) 'Published regression report reference hash is invalid.'
+}
+
+function Test-RegressionSanitizedReports([hashtable]$Run, [string]$Root) {
+    $trxPath = Join-Path $Root ($Run.trx.path -replace '/', [IO.Path]::DirectorySeparatorChar)
+    $htmlPath = Join-Path $Root ($Run.html.path -replace '/', [IO.Path]::DirectorySeparatorChar)
+    $expectedTrx = "<?xml version=`"1.0`" encoding=`"utf-8`"?><TestRun xmlns=`"http://microsoft.com/schemas/VisualStudio/TeamTest/2010`"><ResultSummary outcome=`"Completed`"><Counters total=`"$($Run.discovered)`" executed=`"$($Run.discovered)`" passed=`"$($Run.passed)`" failed=`"0`" notExecuted=`"0`" /></ResultSummary></TestRun>"
+    $expectedHtml = "<!doctype html><html><head><meta charset=`"utf-8`"><title>Unlimotion regression $($Run.runId)</title></head><body><h1>Unlimotion regression $($Run.runId)</h1><dl><dt>discovered</dt><dd>$($Run.discovered)</dd><dt>passed</dt><dd>$($Run.passed)</dd><dt>failed</dt><dd>0</dd><dt>skipped</dt><dd>0</dd><dt>durationMs</dt><dd>$($Run.durationMs)</dd></dl></body></html>"
+    Assert-True ([IO.File]::ReadAllText($trxPath, [Text.UTF8Encoding]::new($false)) -ceq $expectedTrx -and [IO.File]::ReadAllText($htmlPath, [Text.UTF8Encoding]::new($false)) -ceq $expectedHtml) 'Published regression reports are not the canonical sanitized projections.'
+}
+
+function Test-RegressionEvidence([hashtable]$Evidence, [hashtable]$Receipt, [string]$Root) {
+    Assert-ExactKeys -Object $Evidence -Expected @('schemaVersion', 'evidenceKind', 'sourceSha', 'runAttempt', 'lane', 'runtime', 'runs') -Name 'published regression evidence'
+    Assert-True ($Evidence.schemaVersion -is [long] -and $Evidence.schemaVersion -eq 1 -and $Evidence.sourceSha -ceq $Receipt.sourceSha -and $Evidence.runAttempt -eq $Receipt.runAttempt -and $Evidence.lane -ceq 'Regression') 'Published regression evidence identity is invalid.'
+    Assert-ExactKeys -Object $Evidence.runtime -Expected @('os', 'architecture', 'dotnetSdkVersion', 'executionContext', 'signatureVerification', 'revocationMode', 'signatureAuthoritative') -Name 'published regression runtime'
+    Assert-True ($Evidence.runtime.executionContext -ceq 'local' -and $Evidence.runtime.signatureVerification -eq $true -and $Evidence.runtime.signatureAuthoritative -eq $false -and $Evidence.runtime.revocationMode -eq $null) 'Published regression runtime authority is invalid.'
+    $expectedRuns = @(
+        @{ runId = 'unit'; projectPath = 'src/Unlimotion.Test/Unlimotion.Test.csproj'; minimumDiscovered = 830 },
+        @{ runId = 'headless-1'; projectPath = 'tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj'; minimumDiscovered = 36 },
+        @{ runId = 'headless-2'; projectPath = 'tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj'; minimumDiscovered = 36 }
+    )
+    $runs = @($Evidence.runs)
+    Assert-True ($runs.Count -eq $expectedRuns.Count) 'Published regression run count is invalid.'
+    $hasNonSuccessRun = $false
+    for ($index = 0; $index -lt $expectedRuns.Count; $index++) {
+        $run = $runs[$index]
+        $expected = $expectedRuns[$index]
+        Assert-True ($run -is [hashtable]) 'Published regression run is invalid.'
+        Assert-ExactKeys -Object $run -Expected @('runId', 'state', 'projectPath', 'configuration', 'nativeExitCode', 'failureCode', 'discovered', 'passed', 'failed', 'skipped', 'durationMs', 'trx', 'html', 'skipReason') -Name 'published regression run'
+        Assert-True ($run.runId -ceq $expected.runId -and $run.projectPath -ceq $expected.projectPath -and $run.configuration -ceq 'Debug' -and $run.state -cin @('success', 'failure', 'not-attempted')) 'Published regression run identity is invalid.'
+        foreach ($property in @('nativeExitCode', 'discovered', 'passed', 'failed', 'skipped', 'durationMs')) {
+            Assert-True ($run[$property] -eq $null -or $run[$property] -is [long]) "Published regression $property is invalid."
+        }
+        if ($run.state -ceq 'success') {
+            Assert-True ($run.nativeExitCode -eq 0 -and $run.failureCode -eq $null -and $run.skipReason -eq $null -and $run.discovered -ge $expected.minimumDiscovered -and $run.passed -eq $run.discovered -and $run.failed -eq 0 -and $run.skipped -eq 0 -and $run.durationMs -ge 0) 'Published successful regression run is invalid.'
+            Test-RegressionEvidenceReference -Reference $run.trx -ExpectedPath "regression/$($expected.runId).trx" -Root $Root
+            Test-RegressionEvidenceReference -Reference $run.html -ExpectedPath "regression/$($expected.runId).html" -Root $Root
+            Test-RegressionSanitizedReports -Run $run -Root $Root
+        } elseif ($run.state -ceq 'failure') {
+            $hasNonSuccessRun = $true
+            Assert-True ($run.nativeExitCode -is [long] -and $run.failureCode -is [string] -and -not [string]::IsNullOrWhiteSpace($run.failureCode) -and $run.skipReason -eq $null -and $run.trx -eq $null -and $run.html -eq $null) 'Published failed regression run is invalid.'
+        } else {
+            $hasNonSuccessRun = $true
+            Assert-True ($run.nativeExitCode -eq $null -and $run.failureCode -eq $null -and $run.discovered -eq $null -and $run.passed -eq $null -and $run.failed -eq $null -and $run.skipped -eq $null -and $run.durationMs -eq $null -and $run.trx -eq $null -and $run.html -eq $null -and $run.skipReason -ceq 'prerequisite-failed') 'Published skipped regression run is invalid.'
+        }
+    }
+    if ($runs[1].state -ceq 'success' -and $runs[2].state -ceq 'success') {
+        Assert-True ($runs[1].discovered -eq $runs[2].discovered -and $runs[1].passed -eq $runs[2].passed -and $runs[1].failed -eq $runs[2].failed -and $runs[1].skipped -eq $runs[2].skipped) 'Published regression headless run counts are inconsistent.'
+    }
+    $expectedKind = if ($hasNonSuccessRun) { 'regression-failure' } else { 'regression-success' }
+    $receiptExpectedKind = if ($Receipt.outcome -ceq 'success') { 'regression-success' } else { 'regression-failure' }
+    Assert-True ($Evidence.evidenceKind -ceq $expectedKind -and $Evidence.evidenceKind -ceq $receiptExpectedKind) 'Published regression evidence outcome is invalid.'
+}
+
 function Test-PublicationReceipt([string]$Root) {
     $receiptPath = Join-Path $Root 'attempt-receipt.json'
     Assert-True (Test-Path -LiteralPath $receiptPath -PathType Leaf) 'Published evidence receipt is missing.'
@@ -96,6 +156,7 @@ function Test-PublicationReceipt([string]$Root) {
     $evidence = [IO.File]::ReadAllText($evidencePath, [Text.UTF8Encoding]::new($false)) | ConvertFrom-Json -AsHashtable -Depth 32
     $expectedKind = if ($receipt.outcome -ceq 'success') { "$evidencePrefix-success" } else { "$evidencePrefix-failure" }
     Assert-True ($evidence.evidenceKind -ceq $expectedKind) 'Published lane evidence kind is inconsistent with receipt outcome.'
+    if ($ExpectedLane -ceq 'Regression') { Test-RegressionEvidence -Evidence $evidence -Receipt $receipt -Root $Root }
 }
 
 Assert-True ($ExpectedLane -ceq 'Signature' -or $ExpectedLane -ceq 'Regression') 'ExpectedLane must be exactly Signature or Regression.'
