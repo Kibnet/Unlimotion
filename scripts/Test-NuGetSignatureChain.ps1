@@ -1909,14 +1909,34 @@ function Publish-FullPrimaryEvidence(
     }
 }
 
-function Invoke-FullChildAttempt([string]$ChildLane, [string]$Root, [string]$SourceSha, [int]$Attempt, [string]$ChildEvidenceRoot, [string]$ChildPackagesRoot) {
-    New-Item -ItemType Directory -Path $ChildPackagesRoot -ErrorAction Stop | Out-Null
-    & (Get-AbsolutePowerShellExecutable) -NoLogo -NoProfile -NonInteractive -File $script:WorkerScriptPath `
-        -Mode RunAttempt -Lane $ChildLane -RepositoryRoot $Root -PackagesRoot $ChildPackagesRoot `
-        -ExpectedSourceSha $SourceSha -RunAttempt ([string]$Attempt) -EvidenceRoot $ChildEvidenceRoot -FullChild 2>$null | Out-Null
-    $childExitCode = [int]$LASTEXITCODE
-    $receipt = Read-ValidatedFullChildReceipt -ChildRoot $ChildEvidenceRoot -ChildLane $ChildLane -SourceSha $SourceSha -Attempt $Attempt
-    return [ordered]@{ exitCode = $childExitCode; receipt = $receipt }
+function Copy-FullChildEvidenceToCandidate([string]$ChildRoot, [string]$CandidateChildRoot) {
+    Assert-True ((Test-Path -LiteralPath $ChildRoot -PathType Container) -and -not (Test-Path -LiteralPath $CandidateChildRoot)) 'Full child copy roots are invalid.'
+    Copy-Item -LiteralPath $ChildRoot -Destination $CandidateChildRoot -Recurse -ErrorAction Stop
+    Assert-True (Test-Path -LiteralPath $CandidateChildRoot -PathType Container) 'Full child evidence copy was not created.'
+}
+
+function Invoke-FullChildAttempt([string]$ChildLane, [string]$Root, [string]$SourceSha, [int]$Attempt, [string]$ChildWorkRoot) {
+    $workRoot = [IO.Path]::GetFullPath($ChildWorkRoot)
+    $sourceRoot = Join-Path $workRoot 'source'
+    $childEvidenceRoot = Join-Path $workRoot 'final'
+    $childPackagesRoot = Join-Path $workRoot 'packages'
+    Assert-True (-not (Test-Path -LiteralPath $workRoot)) "Full $ChildLane child work root must be absent."
+    New-Item -ItemType Directory -Path $workRoot, $childPackagesRoot -Force -ErrorAction Stop | Out-Null
+    try {
+        & git -C $Root worktree add --detach --force $sourceRoot $SourceSha *> $null
+        Assert-True ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath $sourceRoot -PathType Container)) "Full $ChildLane child source worktree could not be created."
+        & (Get-AbsolutePowerShellExecutable) -NoLogo -NoProfile -NonInteractive -File $script:WorkerScriptPath `
+            -Mode RunAttempt -Lane $ChildLane -RepositoryRoot $sourceRoot -PackagesRoot $childPackagesRoot `
+            -ExpectedSourceSha $SourceSha -RunAttempt ([string]$Attempt) -EvidenceRoot $ChildEvidenceRoot -FullChild 2>$null | Out-Null
+        $childExitCode = [int]$LASTEXITCODE
+        $receipt = Read-ValidatedFullChildReceipt -ChildRoot $ChildEvidenceRoot -ChildLane $ChildLane -SourceSha $SourceSha -Attempt $Attempt
+        return [ordered]@{ exitCode = $childExitCode; evidenceRoot = $childEvidenceRoot; receipt = $receipt }
+    } finally {
+        if (Test-Path -LiteralPath $sourceRoot -PathType Container) {
+            & git -C $Root worktree remove --force $sourceRoot *> $null
+            Assert-True ($LASTEXITCODE -eq 0 -and -not (Test-Path -LiteralPath $sourceRoot)) "Full $ChildLane child source worktree could not be removed."
+        }
+    }
 }
 
 function Invoke-FullAttempt {
@@ -1928,6 +1948,9 @@ function Invoke-FullAttempt {
     $root = Get-CanonicalRepositoryRoot
     $sourceSha = Resolve-SourceSha -Root $root
     $attempt = Resolve-RunAttempt
+    $head = (& git -C $root rev-parse HEAD).Trim()
+    $sourceStatus = & git -C $root status --porcelain
+    Assert-True ($LASTEXITCODE -eq 0 -and $head -ceq $sourceSha -and [string]::IsNullOrWhiteSpace(($sourceStatus -join [Environment]::NewLine))) 'Full requires a clean checkout at the exact expected source SHA.'
     $evidencePath = Get-EvidenceRoot -Root $root -SourceSha $sourceSha -Attempt $attempt
     $candidateRoot = $evidencePath + '.candidate'
     $workRoot = $evidencePath + '.work'
@@ -1938,10 +1961,12 @@ function Invoke-FullAttempt {
     $signatureReceipt = $null
     $regressionReceipt = $null
     try {
-        $signature = Invoke-FullChildAttempt -ChildLane 'Signature' -Root $root -SourceSha $sourceSha -Attempt $attempt -ChildEvidenceRoot (Join-Path $candidateRoot 'signature') -ChildPackagesRoot (Join-Path $workRoot 'signature-packages')
+        $signature = Invoke-FullChildAttempt -ChildLane 'Signature' -Root $root -SourceSha $sourceSha -Attempt $attempt -ChildWorkRoot (Join-Path $workRoot 'signature')
         $signatureReceipt = $signature.receipt
-        $regression = Invoke-FullChildAttempt -ChildLane 'Regression' -Root $root -SourceSha $sourceSha -Attempt $attempt -ChildEvidenceRoot (Join-Path $candidateRoot 'regression') -ChildPackagesRoot (Join-Path $workRoot 'regression-packages')
+        Copy-FullChildEvidenceToCandidate -ChildRoot $signature.evidenceRoot -CandidateChildRoot (Join-Path $candidateRoot 'signature')
+        $regression = Invoke-FullChildAttempt -ChildLane 'Regression' -Root $root -SourceSha $sourceSha -Attempt $attempt -ChildWorkRoot (Join-Path $workRoot 'regression')
         $regressionReceipt = $regression.receipt
+        Copy-FullChildEvidenceToCandidate -ChildRoot $regression.evidenceRoot -CandidateChildRoot (Join-Path $candidateRoot 'regression')
         Publish-FullPrimaryEvidence -CandidateRoot $candidateRoot -EvidencePath $evidencePath -SourceSha $sourceSha -Attempt $attempt -SignatureReceipt $signatureReceipt -RegressionReceipt $regressionReceipt -SecretSeeds $secretSeeds
     } catch {
         if (Test-Path -LiteralPath $candidateRoot) { Remove-Item -LiteralPath $candidateRoot -Recurse -Force -ErrorAction SilentlyContinue }
@@ -2150,7 +2175,7 @@ function Invoke-SelfTest {
                     candidateEvidenceRoot = $sanitizerRoot
                     sourceSha = ('a' * 40)
                     runAttempt = '1'
-                    executionContext = 'local'
+                    executionContext = 'full-child'
                     projects = $sanitizerProjects
                     packages = $sanitizerPackages
                     phaseResults = @([ordered]@{ name = 'signature:verify:graph'; status = 'success'; exitCode = 0; failureCode = $null })
@@ -2174,7 +2199,6 @@ function Invoke-SelfTest {
             Assert-True ($finalFiles.Count -eq 8 -and $finalFiles[0] -ceq 'attempt-receipt.json') 'Publication finalizer tree has an invalid file set.'
             $finalReceipt = [IO.File]::ReadAllText((Join-Path $finalizerRoot 'attempt-receipt.json'), [Text.UTF8Encoding]::new($false)) | ConvertFrom-Json -AsHashtable -Depth 16
             Assert-True ($finalReceipt.failurePhase -eq $null -and $finalReceipt.failureCode -eq $null -and (@($finalReceipt.evidenceManifest)).Count -eq 7 -and (@($finalReceipt.evidenceManifest | Where-Object { $_.path -ceq 'attempt-receipt.json' })).Count -eq 0) 'Publication finalizer receipt self-hashed or lost candidate files.'
-            Remove-Item -LiteralPath $finalizerRoot -Recurse -Force -ErrorAction Stop
             $phaseFallbackRoot = $sanitizerRoot + '-phase-fallback'
             $phaseFallbackResult = Invoke-ClosedWorkerProcessAdapter -WorkerKind 'PublicationFinalize' -Payload ([ordered]@{
                     candidateEvidenceRoot = $sanitizerRoot
@@ -2292,7 +2316,7 @@ function Invoke-SelfTest {
                     candidateEvidenceRoot = $regressionFailureCandidateRoot
                     sourceSha = ('a' * 40)
                     runAttempt = '1'
-                    executionContext = 'local'
+                    executionContext = 'full-child'
                     phaseResults = @([ordered]@{ name = 'regression:test:unit'; status = 'failure'; exitCode = 2; failureCode = 'test-evidence-failed' })
                     runs = @(
                         [ordered]@{ runId = 'unit'; state = 'failure'; projectPath = 'src/Unlimotion.Test/Unlimotion.Test.csproj'; configuration = 'Debug'; nativeExitCode = 0; failureCode = 'test-evidence-failed'; discovered = $null; passed = $null; failed = $null; skipped = $null; durationMs = $null; skipReason = $null },
@@ -2314,10 +2338,22 @@ function Invoke-SelfTest {
             $regressionFailureEvidence = [IO.File]::ReadAllText((Join-Path $regressionFailureFinalRoot 'regression\evidence.json'), [Text.UTF8Encoding]::new($false)) | ConvertFrom-Json -AsHashtable -Depth 16
             $regressionFailureReceipt = [IO.File]::ReadAllText((Join-Path $regressionFailureFinalRoot 'attempt-receipt.json'), [Text.UTF8Encoding]::new($false)) | ConvertFrom-Json -AsHashtable -Depth 16
             Assert-True ($regressionFailureEvidence.evidenceKind -ceq 'regression-failure' -and $regressionFailureEvidence.runs[0].nativeExitCode -eq 0 -and $regressionFailureEvidence.runs[0].failureCode -ceq 'test-evidence-failed' -and $regressionFailureEvidence.runs[0].trx -eq $null -and $regressionFailureReceipt.outcome -ceq 'failure' -and $regressionFailureReceipt.failurePhase -ceq 'regression:test:unit' -and $regressionFailureReceipt.failureCode -ceq 'test-evidence-failed') 'Regression failure publication did not preserve the synthetic test-evidence failure tuple.'
-            & (Get-AbsolutePowerShellExecutable) -NoLogo -NoProfile -NonInteractive -File (Join-Path (Get-CanonicalRepositoryRoot) 'scripts\Test-NuGetEvidencePublication.ps1') -EvidenceRoot $regressionFailureFinalRoot -ExpectedLane Regression -ExpectedSourceSha ('a' * 40) -ExpectedRunAttempt 1
+            & (Get-AbsolutePowerShellExecutable) -NoLogo -NoProfile -NonInteractive -File (Join-Path (Get-CanonicalRepositoryRoot) 'scripts\Test-NuGetEvidencePublication.ps1') -EvidenceRoot $regressionFailureFinalRoot -ExpectedLane Regression -ExpectedSourceSha ('a' * 40) -ExpectedRunAttempt 1 -ExpectedExecutionContext full-child
             Assert-True ($LASTEXITCODE -eq 0) 'Independent validator rejected published Regression failure evidence.'
+            $regressionFailureFullCandidateRoot = $sanitizerRoot + '-full-regression-failure-candidate'
+            $regressionFailureFullEvidenceRoot = $sanitizerRoot + '-full-regression-failure-final'
+            New-Item -ItemType Directory -Path $regressionFailureFullCandidateRoot -ErrorAction Stop | Out-Null
+            Copy-Item -LiteralPath $finalizerRoot -Destination (Join-Path $regressionFailureFullCandidateRoot 'signature') -Recurse -ErrorAction Stop
+            Copy-Item -LiteralPath $regressionFailureFinalRoot -Destination (Join-Path $regressionFailureFullCandidateRoot 'regression') -Recurse -ErrorAction Stop
+            Publish-FullPrimaryEvidence -CandidateRoot $regressionFailureFullCandidateRoot -EvidencePath $regressionFailureFullEvidenceRoot -SourceSha ('a' * 40) -Attempt 1 -SignatureReceipt $finalReceipt -RegressionReceipt $regressionFailureReceipt -SecretSeeds $syntheticSeeds
+            & (Get-AbsolutePowerShellExecutable) -NoLogo -NoProfile -NonInteractive -File (Join-Path (Get-CanonicalRepositoryRoot) 'scripts\Test-NuGetEvidencePublication.ps1') -EvidenceRoot $regressionFailureFullEvidenceRoot -ExpectedLane Full -ExpectedSourceSha ('a' * 40) -ExpectedRunAttempt 1
+            Assert-True ($LASTEXITCODE -eq 0) 'Independent validator rejected Full evidence with a Regression child failure.'
+            $regressionFailureFullReceipt = [IO.File]::ReadAllText((Join-Path $regressionFailureFullEvidenceRoot 'attempt-receipt.json'), [Text.UTF8Encoding]::new($false)) | ConvertFrom-Json -AsHashtable -Depth 16
+            Assert-True ($regressionFailureFullReceipt.receiptKind -ceq 'full-primary' -and $regressionFailureFullReceipt.outcome -ceq 'failure' -and $regressionFailureFullReceipt.failureCode -ceq 'test-evidence-failed' -and $regressionFailureFullReceipt.childAttempts[0].outcome -ceq 'success' -and $regressionFailureFullReceipt.childAttempts[1].outcome -ceq 'failure') 'Full primary evidence did not preserve a Regression child failure.'
+            Remove-Item -LiteralPath $regressionFailureFullEvidenceRoot -Recurse -Force -ErrorAction Stop
             Remove-Item -LiteralPath $regressionFailureFinalRoot -Recurse -Force -ErrorAction Stop
             Remove-Item -LiteralPath $regressionFailureCandidateRoot -Recurse -Force -ErrorAction Stop
+            Remove-Item -LiteralPath $finalizerRoot -Recurse -Force -ErrorAction Stop
         } finally {
             if (Test-Path -LiteralPath $sanitizerRoot) { Remove-Item -LiteralPath $sanitizerRoot -Recurse -Force -ErrorAction SilentlyContinue }
         }

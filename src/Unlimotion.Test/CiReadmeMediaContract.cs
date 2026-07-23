@@ -81,6 +81,11 @@ internal static class CiReadmeMediaContract
         await Assert.That(nugetSignatureScript).Contains("SignatureVerify");
         await Assert.That(nugetSignatureScript).Contains("Invoke-FullAttempt");
         await Assert.That(nugetSignatureScript).Contains("Invoke-FullChildAttempt");
+        await Assert.That(nugetSignatureScript).Contains("Copy-FullChildEvidenceToCandidate");
+        await Assert.That(nugetSignatureScript).Contains("child work root must be absent");
+        await Assert.That(nugetSignatureScript).Contains("worktree add --detach --force");
+        await Assert.That(nugetSignatureScript).Contains("worktree remove --force");
+        await Assert.That(nugetSignatureScript).Contains("Full requires a clean checkout at the exact expected source SHA");
         await Assert.That(nugetSignatureScript).Contains("Publish-FullPrimaryEvidence");
         await Assert.That(nugetSignatureScript).Contains("full-primary");
         await Assert.That(nugetSignatureScript).Contains("full-child");
