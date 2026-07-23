@@ -126,6 +126,7 @@ function Get-PackageReceipt([string]$PackagesPath, [System.Collections.Generic.L
 
 function Write-AttemptReceipt(
     [string]$Root,
+    [string]$AttemptLane,
     [string]$SourceSha,
     [int]$Attempt,
     [string]$Outcome,
@@ -136,7 +137,7 @@ function Write-AttemptReceipt(
     New-Item -ItemType Directory -Path $Root -ErrorAction Stop | Out-Null
     $receipt = [ordered]@{
         schemaVersion = 1
-        lane = 'Signature'
+        lane = $AttemptLane
         sourceSha = $SourceSha
         runAttempt = $Attempt
         outcome = $Outcome
@@ -182,10 +183,70 @@ function Invoke-SignatureAttempt {
         }
 
         $packages = Get-PackageReceipt -PackagesPath $packagesPath -Phases $phases
-        Write-AttemptReceipt -Root $evidencePath -SourceSha $sourceSha -Attempt $attempt -Outcome 'success' -Phases $phases -Packages $packages -FailureCode $null
+        Write-AttemptReceipt -Root $evidencePath -AttemptLane 'Signature' -SourceSha $sourceSha -Attempt $attempt -Outcome 'success' -Phases $phases -Packages $packages -FailureCode $null
         Write-Output "NuGet signature evidence: $evidencePath"
     } catch {
-        Write-AttemptReceipt -Root $evidencePath -SourceSha $sourceSha -Attempt $attempt -Outcome 'failure' -Phases $phases -Packages $packages -FailureCode 'attempt-failed'
+        Write-AttemptReceipt -Root $evidencePath -AttemptLane 'Signature' -SourceSha $sourceSha -Attempt $attempt -Outcome 'failure' -Phases $phases -Packages $packages -FailureCode 'attempt-failed'
+        throw
+    }
+}
+
+function Invoke-RegressionAttempt {
+    Assert-True ($Lane -ceq 'Regression') 'RunAttempt currently accepts only the Signature or Regression lane.'
+    Assert-True ($env:DOTNET_NUGET_SIGNATURE_VERIFICATION -ceq 'true') 'DOTNET_NUGET_SIGNATURE_VERIFICATION must be exactly true.'
+    Assert-True ([string]::IsNullOrEmpty($env:NUGET_CERT_REVOCATION_MODE) -or $env:NUGET_CERT_REVOCATION_MODE -ceq 'online') 'NUGET_CERT_REVOCATION_MODE must be absent or exactly online.'
+
+    $root = Get-CanonicalRepositoryRoot
+    $sourceSha = Resolve-SourceSha -Root $root
+    $attempt = Resolve-RunAttempt
+    $packagesPath = New-IsolatedPackagesRoot
+    $evidencePath = Get-EvidenceRoot -Root $root -SourceSha $sourceSha -Attempt $attempt
+    $phases = [System.Collections.Generic.List[object]]::new()
+    $packages = [System.Collections.Generic.List[object]]::new()
+    $env:NUGET_PACKAGES = $packagesPath
+
+    $unitProject = Join-Path $root 'src\Unlimotion.Test\Unlimotion.Test.csproj'
+    $headlessProject = Join-Path $root 'tests\Unlimotion.UiTests.Headless\Unlimotion.UiTests.Headless.csproj'
+    try {
+        Invoke-DotNet -Phase 'regression:restore:unit' -Arguments @(
+            'restore', $unitProject, '--force', '--no-http-cache',
+            '--configfile', (Join-Path $root 'src\nuget.config'),
+            '-p:Configuration=Debug',
+            '-p:DisableImplicitLibraryPacksFolder=true',
+            '-p:DisableImplicitNuGetFallbackFolder=true',
+            '-p:RestoreFallbackFolders='
+        ) -Phases $phases
+        Invoke-DotNet -Phase 'regression:restore:headless' -Arguments @(
+            'restore', $headlessProject, '--force', '--no-http-cache',
+            '--configfile', (Join-Path $root 'src\nuget.config'),
+            '-p:Configuration=Debug',
+            '-p:DisableImplicitLibraryPacksFolder=true',
+            '-p:DisableImplicitNuGetFallbackFolder=true',
+            '-p:RestoreFallbackFolders='
+        ) -Phases $phases
+        Invoke-DotNet -Phase 'regression:build:unit' -Arguments @(
+            'build', $unitProject, '-c', 'Debug', '--no-restore', '-p:UseSharedCompilation=false'
+        ) -Phases $phases
+        Invoke-DotNet -Phase 'regression:build:headless' -Arguments @(
+            'build', $headlessProject, '-c', 'Debug', '--no-restore', '-p:UseSharedCompilation=false'
+        ) -Phases $phases
+        Invoke-DotNet -Phase 'regression:test:unit' -Arguments @(
+            'run', '--project', $unitProject, '-c', 'Debug', '--no-restore', '--',
+            '--maximum-parallel-tests', '1', '--output', 'Detailed'
+        ) -Phases $phases
+        Invoke-DotNet -Phase 'regression:test:headless-1' -Arguments @(
+            'run', '--project', $headlessProject, '-c', 'Debug', '--no-restore', '--',
+            '--maximum-parallel-tests', '1', '--output', 'Detailed'
+        ) -Phases $phases
+        Invoke-DotNet -Phase 'regression:test:headless-2' -Arguments @(
+            'run', '--project', $headlessProject, '-c', 'Debug', '--no-restore', '--',
+            '--maximum-parallel-tests', '1', '--output', 'Detailed'
+        ) -Phases $phases
+
+        Write-AttemptReceipt -Root $evidencePath -AttemptLane 'Regression' -SourceSha $sourceSha -Attempt $attempt -Outcome 'success' -Phases $phases -Packages $packages -FailureCode $null
+        Write-Output "NuGet regression evidence: $evidencePath"
+    } catch {
+        Write-AttemptReceipt -Root $evidencePath -AttemptLane 'Regression' -SourceSha $sourceSha -Attempt $attempt -Outcome 'failure' -Phases $phases -Packages $packages -FailureCode 'attempt-failed'
         throw
     }
 }
@@ -212,4 +273,8 @@ if ($Mode -eq 'SelfTest') {
     return
 }
 
-Invoke-SignatureAttempt
+switch -CaseSensitive ($Lane) {
+    'Signature' { Invoke-SignatureAttempt; break }
+    'Regression' { Invoke-RegressionAttempt; break }
+    default { throw 'RunAttempt lane must be exactly Signature or Regression.' }
+}

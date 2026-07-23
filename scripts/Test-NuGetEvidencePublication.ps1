@@ -28,7 +28,7 @@ function Assert-ExactKeys([hashtable]$Object, [string[]]$Expected, [string]$Name
     }
 }
 
-Assert-True ($ExpectedLane -ceq 'Signature') 'ExpectedLane must be exactly Signature.'
+Assert-True ($ExpectedLane -ceq 'Signature' -or $ExpectedLane -ceq 'Regression') 'ExpectedLane must be exactly Signature or Regression.'
 Assert-True ($ExpectedSourceSha -cmatch '^[0-9a-f]{40}$') 'ExpectedSourceSha must be a lowercase 40-hex Git SHA.'
 Assert-True ($ExpectedRunAttempt -cmatch '^[1-9][0-9]{0,9}$') 'ExpectedRunAttempt must be a canonical positive decimal integer.'
 
@@ -57,7 +57,8 @@ Assert-True ($phases.Count -ge 1) 'Receipt phases cannot be empty.'
 foreach ($phase in $phases) {
     Assert-True ($phase -is [hashtable]) 'Receipt phase must be an object.'
     Assert-ExactKeys -Object $phase -Expected @('name', 'status', 'exitCode') -Name 'receipt phase'
-    Assert-True ($phase.name -is [string] -and $phase.name -cmatch '^signature:(restore|verify):') 'Receipt phase name is invalid.'
+    $phasePattern = if ($ExpectedLane -ceq 'Signature') { '^signature:(restore|verify):' } else { '^regression:(restore|build|test):' }
+    Assert-True ($phase.name -is [string] -and $phase.name -cmatch $phasePattern) 'Receipt phase name is invalid.'
     Assert-True ($phase.status -is [string] -and ($phase.status -ceq 'success' -or $phase.status -ceq 'failure')) 'Receipt phase status is invalid.'
     Assert-True ($phase.exitCode -is [long]) 'Receipt phase exitCode is invalid.'
 }
@@ -75,20 +76,24 @@ $packages = @($receipt.packages)
 if ($receipt.outcome -ceq 'success') {
     Assert-True ($receipt.failureCode -eq $null) 'Successful receipt cannot have failureCode.'
     Assert-True ($phases.Where({ $_.status -cne 'success' }).Count -eq 0) 'Successful receipt contains a failed phase.'
-    Assert-True ($packages.Count -eq $expectedPackages.Count) 'Successful receipt has an unexpected package count.'
-    for ($index = 0; $index -lt $expectedPackages.Count; $index++) {
-        $package = $packages[$index]
-        Assert-True ($package -is [hashtable]) 'Receipt package must be an object.'
-        Assert-ExactKeys -Object $package -Expected @('id', 'version', 'nupkgSha512', 'authorCertificateSha256') -Name 'receipt package'
-        Assert-True ($package.id -is [string] -and $package.id -ceq $expectedPackages[$index].id) 'Receipt package id is invalid.'
-        Assert-True ($package.version -is [string] -and $package.version -ceq $expectedPackages[$index].version) 'Receipt package version is invalid.'
-        Assert-True ($package.nupkgSha512 -is [string] -and $package.nupkgSha512 -cmatch '^[0-9a-f]{128}$') 'Receipt package SHA-512 is invalid.'
-        Assert-True ($package.authorCertificateSha256 -is [string] -and $package.authorCertificateSha256 -ceq '4D2DDD563BC0ECF5C9B438E1CE32E3FCC69DAADAFC2D1BD9CF858FD9E755CFB9') 'Receipt package author certificate is invalid.'
+    $expectedPackageCount = if ($ExpectedLane -ceq 'Signature') { $expectedPackages.Count } else { 0 }
+    Assert-True ($packages.Count -eq $expectedPackageCount) 'Successful receipt has an unexpected package count.'
+    if ($ExpectedLane -ceq 'Signature') {
+        for ($index = 0; $index -lt $expectedPackages.Count; $index++) {
+            $package = $packages[$index]
+            Assert-True ($package -is [hashtable]) 'Receipt package must be an object.'
+            Assert-ExactKeys -Object $package -Expected @('id', 'version', 'nupkgSha512', 'authorCertificateSha256') -Name 'receipt package'
+            Assert-True ($package.id -is [string] -and $package.id -ceq $expectedPackages[$index].id) 'Receipt package id is invalid.'
+            Assert-True ($package.version -is [string] -and $package.version -ceq $expectedPackages[$index].version) 'Receipt package version is invalid.'
+            Assert-True ($package.nupkgSha512 -is [string] -and $package.nupkgSha512 -cmatch '^[0-9a-f]{128}$') 'Receipt package SHA-512 is invalid.'
+            Assert-True ($package.authorCertificateSha256 -is [string] -and $package.authorCertificateSha256 -ceq '4D2DDD563BC0ECF5C9B438E1CE32E3FCC69DAADAFC2D1BD9CF858FD9E755CFB9') 'Receipt package author certificate is invalid.'
+        }
     }
 } else {
     Assert-True ($receipt.failureCode -is [string] -and $receipt.failureCode -ceq 'attempt-failed') 'Failed receipt failureCode is invalid.'
     Assert-True ($phases.Where({ $_.status -ceq 'failure' }).Count -ge 1) 'Failed receipt does not contain a failed phase.'
-    Assert-True ($packages.Count -le $expectedPackages.Count) 'Failed receipt has too many packages.'
+    $maximumPackageCount = if ($ExpectedLane -ceq 'Signature') { $expectedPackages.Count } else { 0 }
+    Assert-True ($packages.Count -le $maximumPackageCount) 'Failed receipt has too many packages.'
 }
 
 Write-Output 'NuGet evidence receipt: valid'

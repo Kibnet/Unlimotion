@@ -13,6 +13,8 @@ internal static class CiReadmeMediaContract
             PlatformShellProjectContracts.GetRepositoryPath(".github/workflows/android-packaging.yml"));
         var debWorkflow = await File.ReadAllTextAsync(
             PlatformShellProjectContracts.GetRepositoryPath(".github/workflows/deb_packaging.yml"));
+        var nugetSignatureScript = await File.ReadAllTextAsync(
+            PlatformShellProjectContracts.GetRepositoryPath("scripts/Test-NuGetSignatureChain.ps1"));
         var mediaScript = await File.ReadAllTextAsync(
             PlatformShellProjectContracts.GetRepositoryPath("scripts/update-readme-media.ps1"));
         var mediaReadme = await File.ReadAllTextAsync(
@@ -32,10 +34,14 @@ internal static class CiReadmeMediaContract
         await Assert.That(workflow).Contains("Test-NuGetEvidencePublication.ps1");
         await Assert.That(workflow).Contains("safe_upload_verified");
         await Assert.That(workflow).Contains("Enforce Signature attempt verdict");
-        await Assert.That(workflow).Contains("tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj");
-        await Assert.That(workflow).Contains("Run Headless UI Tests");
-        await Assert.That(workflow).Contains("Run Headless UI Tests again");
-        await Assert.That(workflow).Contains("--maximum-parallel-tests 1");
+        await Assert.That(workflow).Contains("Run and validate Regression evidence");
+        await Assert.That(workflow).Contains("EXPECTED_LANE: Regression");
+        await Assert.That(workflow).Contains("Upload Regression evidence");
+        await Assert.That(workflow).Contains("Enforce Regression attempt verdict");
+        await Assert.That(nugetSignatureScript).Contains("tests\\Unlimotion.UiTests.Headless\\Unlimotion.UiTests.Headless.csproj");
+        await Assert.That(nugetSignatureScript).Contains("--maximum-parallel-tests");
+        await Assert.That(nugetSignatureScript).Contains("regression:test:headless-1");
+        await Assert.That(nugetSignatureScript).Contains("regression:test:headless-2");
 
         await Assert.That(androidWorkflow).Contains("android-build:");
         await Assert.That(androidWorkflow).Contains("android-release:");
