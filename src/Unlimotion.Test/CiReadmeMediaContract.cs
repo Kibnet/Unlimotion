@@ -64,12 +64,13 @@ internal static class CiReadmeMediaContract
         await Assert.That(nugetSignatureScript).Contains("Test-SecretEnvironmentName");
         await Assert.That(nugetSignatureScript).Contains("Invoke-SignatureSanitizeWorker");
         await Assert.That(nugetSignatureScript).Contains("Invoke-SignatureFailureSanitizeWorker");
+        await Assert.That(nugetSignatureScript).Contains("Invoke-RegressionSanitizeWorker");
         await Assert.That(nugetSignatureScript).Contains("Publish-SignatureFailureEvidence");
         await Assert.That(nugetSignatureScript).Contains("Get-CandidateEvidenceManifest");
         await Assert.That(nugetSignatureScript).Contains("Invoke-PublicationFinalizeWorker");
         await Assert.That(nugetSignatureScript).Contains("attempt-receipt.json");
         await Assert.That(nugetSignatureScript).Contains("safe-fallback");
-        await Assert.That(nugetSignatureScript).Contains("Get-SignatureCandidateEvidenceKind");
+        await Assert.That(nugetSignatureScript).Contains("Get-CandidateEvidenceKind");
         await Assert.That(nugetSignatureScript).Contains("evidence kind does not match phase outcome");
         await Assert.That(nugetSignatureScript).Contains("Assert-EquivalentEvidenceManifest");
         await Assert.That(nugetSignatureScript).Contains("signature-success");
@@ -79,6 +80,7 @@ internal static class CiReadmeMediaContract
         await Assert.That(nugetEvidenceValidator).Contains("Test-PublicationReceipt");
         await Assert.That(nugetEvidenceValidator).Contains("attempt-receipt.json");
         await Assert.That(nugetEvidenceValidator).Contains("safe-fallback");
+        await Assert.That(nugetEvidenceValidator).Contains("Published lane evidence");
         using var nugetBaselineDocument = JsonDocument.Parse(nugetBaselineFixture);
         var nugetBaseline = nugetBaselineDocument.RootElement;
         var baselineProjects = nugetBaseline.GetProperty("projects");

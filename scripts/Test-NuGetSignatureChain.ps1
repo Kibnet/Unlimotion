@@ -554,6 +554,56 @@ function Invoke-SignatureSanitizeWorker([Text.Json.JsonElement]$Payload, [Text.J
     }
 }
 
+function Invoke-RegressionSanitizeWorker([Text.Json.JsonElement]$Payload, [Text.Json.JsonElement[]]$SecretSeeds) {
+    Assert-ExactJsonObjectProperties -Object $Payload -Expected @('candidateEvidenceRoot', 'sourceSha', 'runAttempt', 'phaseResults', 'runs') -Name 'RegressionSanitize payload'
+    $candidateRoot = [IO.Path]::GetFullPath((Get-RequiredWorkerPayloadString -Payload $Payload -Name 'candidateEvidenceRoot'))
+    Assert-True (-not (Test-Path -LiteralPath $candidateRoot)) 'RegressionSanitize candidate root must be absent.'
+    $sourceSha = Get-RequiredWorkerPayloadString -Payload $Payload -Name 'sourceSha'
+    $runAttempt = Get-RequiredWorkerPayloadString -Payload $Payload -Name 'runAttempt'
+    Assert-True ($sourceSha -cmatch '^[0-9a-f]{40}$' -and $runAttempt -cmatch '^[1-9][0-9]{0,9}$') 'RegressionSanitize identity is invalid.'
+    $phaseResults = $Payload.GetProperty('phaseResults')
+    $runs = $Payload.GetProperty('runs')
+    Assert-True ($phaseResults.ValueKind -eq [Text.Json.JsonValueKind]::Array -and $phaseResults.GetArrayLength() -ge 1) 'RegressionSanitize phase results are invalid.'
+    Assert-True ($runs.ValueKind -eq [Text.Json.JsonValueKind]::Array -and $runs.GetArrayLength() -eq 3) 'RegressionSanitize run set is invalid.'
+    $expectedRuns = @('unit', 'headless-1', 'headless-2')
+    $normalizedRuns = [System.Collections.Generic.List[object]]::new()
+    for ($index = 0; $index -lt $expectedRuns.Count; $index++) {
+        $run = $runs[$index]
+        Assert-ExactJsonObjectProperties -Object $run -Expected @('id', 'status', 'nativeExitCode') -Name 'RegressionSanitize run'
+        $id = $run.GetProperty('id')
+        $status = $run.GetProperty('status')
+        $nativeExitCode = $run.GetProperty('nativeExitCode')
+        Assert-True ($id.ValueKind -eq [Text.Json.JsonValueKind]::String -and $id.GetString() -ceq $expectedRuns[$index]) 'RegressionSanitize run id is invalid.'
+        Assert-True ($status.ValueKind -eq [Text.Json.JsonValueKind]::String -and $status.GetString() -cin @('success', 'failure', 'not-attempted')) 'RegressionSanitize run status is invalid.'
+        Assert-True ($nativeExitCode.ValueKind -eq [Text.Json.JsonValueKind]::Number) 'RegressionSanitize native exit code is invalid.'
+        $normalizedRuns.Add([ordered]@{ id = $id.GetString(); status = $status.GetString(); nativeExitCode = $nativeExitCode.GetInt32() })
+    }
+    New-Item -ItemType Directory -Path $candidateRoot -ErrorAction Stop | Out-Null
+    try {
+        $hasFailedPhase = @($phaseResults.EnumerateArray() | Where-Object { $_.GetProperty('status').ValueKind -eq [Text.Json.JsonValueKind]::String -and $_.GetProperty('status').GetString() -ceq 'failure' }).Count -gt 0
+        $evidence = [ordered]@{
+            schemaVersion = 1
+            evidenceKind = if ($hasFailedPhase) { 'regression-failure' } else { 'regression-success' }
+            sourceSha = $sourceSha
+            runAttempt = [int]$runAttempt
+            lane = 'Regression'
+            runtime = [ordered]@{ os = [Environment]::OSVersion.Platform.ToString(); architecture = [Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString(); dotnetSdkVersion = (& (Get-AbsoluteDotNetExecutable) --version).Trim(); executionContext = 'local'; signatureVerification = $true; revocationMode = $null; signatureAuthoritative = $false }
+            runs = $normalizedRuns.ToArray()
+        }
+        Assert-True ($LASTEXITCODE -eq 0) 'RegressionSanitize could not determine the .NET SDK version.'
+        $evidenceBytes = [Text.UTF8Encoding]::new($false).GetBytes((ConvertTo-Json -InputObject $evidence -Depth 16 -Compress))
+        try {
+            [void](Write-SanitizedCandidateFile -Root $candidateRoot -RelativePath 'regression/evidence.json' -Bytes $evidenceBytes -SecretSeeds $SecretSeeds)
+        } finally {
+            [Array]::Clear($evidenceBytes, 0, $evidenceBytes.Length)
+        }
+        return [ordered]@{ success = $true; failureCode = $null; packages = @() }
+    } catch {
+        if (Test-Path -LiteralPath $candidateRoot) { Remove-Item -LiteralPath $candidateRoot -Recurse -Force -ErrorAction SilentlyContinue }
+        throw
+    }
+}
+
 function Get-CandidateEvidenceManifest([string]$CandidateRoot, [Text.Json.JsonElement[]]$SecretSeeds) {
     $root = [IO.Path]::GetFullPath($CandidateRoot)
     Assert-True ((Test-Path -LiteralPath $root -PathType Container) -and -not (Get-Item -LiteralPath $root -Force).LinkType) 'Candidate evidence root is invalid.'
@@ -592,17 +642,19 @@ function Assert-EquivalentEvidenceManifest([object[]]$Expected, [object[]]$Actua
     }
 }
 
-function Get-SignatureCandidateEvidenceKind([string]$CandidateRoot) {
-    $evidencePath = Join-Path $CandidateRoot 'signature\evidence.json'
-    Assert-True (Test-Path -LiteralPath $evidencePath -PathType Leaf) 'PublicationFinalize signature evidence is missing.'
+function Get-CandidateEvidenceKind([string]$CandidateRoot, [string]$Lane) {
+    Assert-True ($Lane -cin @('Signature', 'Regression')) 'PublicationFinalize lane is invalid.'
+    $prefix = $Lane.ToLowerInvariant()
+    $evidencePath = Join-Path $CandidateRoot "$prefix\evidence.json"
+    Assert-True (Test-Path -LiteralPath $evidencePath -PathType Leaf) 'PublicationFinalize lane evidence is missing.'
     $bytes = [IO.File]::ReadAllBytes($evidencePath)
     try {
         $document = [Text.Json.JsonDocument]::Parse([System.ReadOnlyMemory[byte]]::new($bytes))
         try {
             $root = $document.RootElement
-            Assert-True ($root.ValueKind -eq [Text.Json.JsonValueKind]::Object) 'PublicationFinalize signature evidence root is invalid.'
+            Assert-True ($root.ValueKind -eq [Text.Json.JsonValueKind]::Object) 'PublicationFinalize lane evidence root is invalid.'
             $kind = $root.GetProperty('evidenceKind')
-            Assert-True ($kind.ValueKind -eq [Text.Json.JsonValueKind]::String -and $kind.GetString() -cin @('signature-success', 'signature-failure')) 'PublicationFinalize signature evidence kind is invalid.'
+            Assert-True ($kind.ValueKind -eq [Text.Json.JsonValueKind]::String -and $kind.GetString() -cin @("$prefix-success", "$prefix-failure")) 'PublicationFinalize lane evidence kind is invalid.'
             return $kind.GetString()
         } finally {
             $document.Dispose()
@@ -619,12 +671,13 @@ function Invoke-PublicationFinalizeWorker([Text.Json.JsonElement]$Payload, [Text
     $sourceSha = Get-RequiredWorkerPayloadString -Payload $Payload -Name 'sourceSha'
     $runAttempt = Get-RequiredWorkerPayloadString -Payload $Payload -Name 'runAttempt'
     $lane = Get-RequiredWorkerPayloadString -Payload $Payload -Name 'lane'
-    Assert-True ($sourceSha -cmatch '^[0-9a-f]{40}$' -and $runAttempt -cmatch '^[1-9][0-9]{0,9}$' -and $lane -ceq 'Signature') 'PublicationFinalize identity is invalid.'
+    Assert-True ($sourceSha -cmatch '^[0-9a-f]{40}$' -and $runAttempt -cmatch '^[1-9][0-9]{0,9}$' -and $lane -cin @('Signature', 'Regression')) 'PublicationFinalize identity is invalid.'
     $phaseResults = $Payload.GetProperty('phaseResults')
     Assert-True ($phaseResults.ValueKind -eq [Text.Json.JsonValueKind]::Array -and $phaseResults.GetArrayLength() -ge 1) 'PublicationFinalize phase results are invalid.'
     foreach ($phase in $phaseResults.EnumerateArray()) {
         Assert-ExactJsonObjectProperties -Object $phase -Expected @('name', 'status', 'exitCode', 'failureCode') -Name 'PublicationFinalize phase'
-        Assert-True ($phase.GetProperty('name').ValueKind -eq [Text.Json.JsonValueKind]::String -and -not [string]::IsNullOrWhiteSpace($phase.GetProperty('name').GetString())) 'PublicationFinalize phase name is invalid.'
+        $phaseName = $phase.GetProperty('name')
+        Assert-True ($phaseName.ValueKind -eq [Text.Json.JsonValueKind]::String -and $phaseName.GetString() -cmatch ("^{0}:" -f $lane.ToLowerInvariant())) 'PublicationFinalize phase name is invalid.'
         Assert-True ($phase.GetProperty('status').ValueKind -eq [Text.Json.JsonValueKind]::String -and $phase.GetProperty('status').GetString() -cin @('success', 'failure')) 'PublicationFinalize phase status is invalid.'
         Assert-True ($phase.GetProperty('exitCode').ValueKind -eq [Text.Json.JsonValueKind]::Number) 'PublicationFinalize phase exit code is invalid.'
         $phaseExitCode = $phase.GetProperty('exitCode').GetInt32()
@@ -637,9 +690,10 @@ function Invoke-PublicationFinalizeWorker([Text.Json.JsonElement]$Payload, [Text
     try {
         $manifest = Get-CandidateEvidenceManifest -CandidateRoot $candidateRoot -SecretSeeds $SecretSeeds
         $failedPhases = @($phaseResults.EnumerateArray() | Where-Object { $_.GetProperty('status').GetString() -ceq 'failure' })
-        $evidenceKind = Get-SignatureCandidateEvidenceKind -CandidateRoot $candidateRoot
+        $evidenceKind = Get-CandidateEvidenceKind -CandidateRoot $candidateRoot -Lane $lane
         $isSuccess = $failedPhases.Count -eq 0
-        Assert-True (($isSuccess -and $evidenceKind -ceq 'signature-success') -or ((-not $isSuccess) -and $evidenceKind -ceq 'signature-failure')) 'PublicationFinalize evidence kind does not match phase outcome.'
+        $evidencePrefix = $lane.ToLowerInvariant()
+        Assert-True (($isSuccess -and $evidenceKind -ceq "$evidencePrefix-success") -or ((-not $isSuccess) -and $evidenceKind -ceq "$evidencePrefix-failure")) 'PublicationFinalize evidence kind does not match phase outcome.'
         Copy-Item -LiteralPath $candidateRoot -Destination $scratchRoot -Recurse -ErrorAction Stop
         $receipt = [ordered]@{
             schemaVersion = 1
@@ -706,6 +760,7 @@ function Invoke-ClosedWorkerCliMode([IO.Stream]$StandardInput, [IO.Stream]$Stand
         $workerResult = switch -CaseSensitive ($request.WorkerKind) {
             'SignatureVerify' { Invoke-SignatureVerifyWorker -Payload $request.Payload; break }
             'SignatureSanitize' { Invoke-SignatureSanitizeWorker -Payload $request.Payload -SecretSeeds $request.SecretSeeds; break }
+            'RegressionSanitize' { Invoke-RegressionSanitizeWorker -Payload $request.Payload -SecretSeeds $request.SecretSeeds; break }
             'PublicationFinalize' { Invoke-PublicationFinalizeWorker -Payload $request.Payload -SecretSeeds $request.SecretSeeds; break }
             default { [ordered]@{ success = $false; failureCode = 'worker-kind-not-implemented'; packages = @() } }
         }
@@ -1579,6 +1634,35 @@ function Invoke-SelfTest {
             Assert-True ($integratedFailureReceipt.receiptKind -ceq 'primary' -and $integratedFailureReceipt.outcome -ceq 'failure' -and $integratedFailureReceipt.failurePhase -ceq 'signature:verify:worker' -and $integratedFailureReceipt.failureCode -ceq 'native-command-threw') 'Signature attempt failure publication did not preserve the failed worker phase.'
             Remove-Item -LiteralPath $integratedFailureRoot -Recurse -Force -ErrorAction Stop
             Remove-Item -LiteralPath $integratedFailureCandidate -Recurse -Force -ErrorAction Stop
+            $regressionCandidateRoot = $sanitizerRoot + '-regression-candidate'
+            $regressionSanitizerResult = Invoke-ClosedWorkerProcessAdapter -WorkerKind 'RegressionSanitize' -Payload ([ordered]@{
+                    candidateEvidenceRoot = $regressionCandidateRoot
+                    sourceSha = ('a' * 40)
+                    runAttempt = '1'
+                    phaseResults = @([ordered]@{ name = 'regression:test:unit'; status = 'success'; exitCode = 0; failureCode = $null })
+                    runs = @(
+                        [ordered]@{ id = 'unit'; status = 'success'; nativeExitCode = 0 },
+                        [ordered]@{ id = 'headless-1'; status = 'success'; nativeExitCode = 0 },
+                        [ordered]@{ id = 'headless-2'; status = 'success'; nativeExitCode = 0 }
+                    )
+                }) -SecretSeeds $syntheticSeeds -TimeoutSeconds 10
+            Assert-True ($regressionSanitizerResult.Success -eq $true -and $regressionSanitizerResult.ExitCode -eq 0) 'Regression sanitizer worker did not return a closed success tuple.'
+            $regressionFinalRoot = $regressionCandidateRoot + '-final'
+            $regressionFinalizerResult = Invoke-ClosedWorkerProcessAdapter -WorkerKind 'PublicationFinalize' -Payload ([ordered]@{
+                    candidateEvidenceRoot = $regressionCandidateRoot
+                    finalEvidenceRoot = $regressionFinalRoot
+                    sourceSha = ('a' * 40)
+                    runAttempt = '1'
+                    lane = 'Regression'
+                    phaseResults = @([ordered]@{ name = 'regression:test:unit'; status = 'success'; exitCode = 0; failureCode = $null })
+                }) -SecretSeeds $syntheticSeeds -TimeoutSeconds 10
+            Assert-True ($regressionFinalizerResult.Success -eq $true -and $regressionFinalizerResult.ExitCode -eq 0) 'Publication finalizer did not publish Regression candidate evidence.'
+            $regressionEvidence = [IO.File]::ReadAllText((Join-Path $regressionFinalRoot 'regression\evidence.json'), [Text.UTF8Encoding]::new($false)) | ConvertFrom-Json -AsHashtable -Depth 16
+            Assert-True ($regressionEvidence.evidenceKind -ceq 'regression-success') 'Regression sanitizer evidence kind is invalid.'
+            & (Get-AbsolutePowerShellExecutable) -NoLogo -NoProfile -NonInteractive -File (Join-Path (Get-CanonicalRepositoryRoot) 'scripts\Test-NuGetEvidencePublication.ps1') -EvidenceRoot $regressionFinalRoot -ExpectedLane Regression -ExpectedSourceSha ('a' * 40) -ExpectedRunAttempt 1
+            Assert-True ($LASTEXITCODE -eq 0) 'Independent validator rejected published Regression candidate evidence.'
+            Remove-Item -LiteralPath $regressionFinalRoot -Recurse -Force -ErrorAction Stop
+            Remove-Item -LiteralPath $regressionCandidateRoot -Recurse -Force -ErrorAction Stop
         } finally {
             if (Test-Path -LiteralPath $sanitizerRoot) { Remove-Item -LiteralPath $sanitizerRoot -Recurse -Force -ErrorAction SilentlyContinue }
         }

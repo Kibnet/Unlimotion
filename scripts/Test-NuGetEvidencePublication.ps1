@@ -65,11 +65,12 @@ function Test-PublicationReceipt([string]$Root) {
         $file = Get-Item -LiteralPath $path -Force
         Assert-True ($file.Length -eq $entry.byteLength -and (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant() -ceq $entry.sha256) 'Published manifest file hash is invalid.'
     }
-    $evidencePath = Join-Path $Root 'signature\evidence.json'
-    Assert-True ($ExpectedLane -ceq 'Signature' -and (Test-Path -LiteralPath $evidencePath -PathType Leaf)) 'Published signature evidence is missing.'
+    $evidencePrefix = $ExpectedLane.ToLowerInvariant()
+    $evidencePath = Join-Path $Root "$evidencePrefix\evidence.json"
+    Assert-True (Test-Path -LiteralPath $evidencePath -PathType Leaf) 'Published lane evidence is missing.'
     $evidence = [IO.File]::ReadAllText($evidencePath, [Text.UTF8Encoding]::new($false)) | ConvertFrom-Json -AsHashtable -Depth 32
-    $expectedKind = if ($receipt.outcome -ceq 'success') { 'signature-success' } else { 'signature-failure' }
-    Assert-True ($evidence.evidenceKind -ceq $expectedKind) 'Published signature evidence kind is inconsistent with receipt outcome.'
+    $expectedKind = if ($receipt.outcome -ceq 'success') { "$evidencePrefix-success" } else { "$evidencePrefix-failure" }
+    Assert-True ($evidence.evidenceKind -ceq $expectedKind) 'Published lane evidence kind is inconsistent with receipt outcome.'
 }
 
 Assert-True ($ExpectedLane -ceq 'Signature' -or $ExpectedLane -ceq 'Regression') 'ExpectedLane must be exactly Signature or Regression.'
