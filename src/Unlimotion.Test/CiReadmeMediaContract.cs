@@ -43,6 +43,10 @@ internal static class CiReadmeMediaContract
         await Assert.That(nugetSignatureScript).Contains("--maximum-parallel-tests");
         await Assert.That(nugetSignatureScript).Contains("regression:test:headless-1");
         await Assert.That(nugetSignatureScript).Contains("regression:test:headless-2");
+        await Assert.That(nugetSignatureScript).Contains("GenerateBaseline");
+        await Assert.That(nugetSignatureScript).Contains("ExpectedParentSha");
+        await Assert.That(nugetSignatureScript).Contains("Get-CanonicalGraphHash");
+        await Assert.That(nugetSignatureScript).Contains("Worker mode is reserved");
 
         await Assert.That(androidWorkflow).Contains("android-build:");
         await Assert.That(androidWorkflow).Contains("android-release:");
