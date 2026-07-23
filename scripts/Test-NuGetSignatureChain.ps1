@@ -316,6 +316,7 @@ function Read-ClosedWorkerFrame([IO.Stream]$StandardInput) {
                 WorkerKind = $workerKind.GetString()
                 Payload = $payload.Clone()
                 SeedNameSha256 = Get-ClosedSeedNameHash -Seeds $root.GetProperty('secretSeeds')
+                SecretSeeds = @($root.GetProperty('secretSeeds').EnumerateArray() | ForEach-Object { $_.Clone() })
             }
         } finally {
             $document.Dispose()
@@ -409,11 +410,91 @@ function Invoke-SignatureVerifyWorker([Text.Json.JsonElement]$Payload) {
     return [ordered]@{ success = $true; failureCode = $null; packages = $packages.ToArray() }
 }
 
+function Assert-RelativeEvidencePath([string]$Path) {
+    Assert-True ($Path -cmatch '^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?(?:/[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?)*$') 'Sanitized evidence path is invalid.'
+    Assert-True (-not $Path.Contains('..') -and -not $Path.Contains('\') -and -not [IO.Path]::IsPathFullyQualified($Path)) 'Sanitized evidence path is unsafe.'
+}
+
+function Assert-SanitizedBytes([byte[]]$Bytes, [Text.Json.JsonElement[]]$SecretSeeds) {
+    Assert-True ($Bytes.Length -le 4194304) 'Sanitized candidate file exceeds the closed size limit.'
+    $text = [Text.UTF8Encoding]::new($false, $true).GetString($Bytes)
+    Assert-True ($text.IndexOf([char]0) -lt 0) 'Sanitized candidate file contains a NUL byte.'
+    Assert-True (-not $text.Contains($script:WorkerScriptPath, [StringComparison]::OrdinalIgnoreCase)) 'Sanitized candidate file contains an absolute worker path.'
+    foreach ($seed in $SecretSeeds) {
+        $value = $seed.GetProperty('value').GetString()
+        Assert-True (-not $text.Contains($value, [StringComparison]::Ordinal)) 'Sanitized candidate file contains a secret value.'
+    }
+}
+
+function Write-SanitizedCandidateFile([string]$Root, [string]$RelativePath, [byte[]]$Bytes, [Text.Json.JsonElement[]]$SecretSeeds) {
+    Assert-RelativeEvidencePath -Path $RelativePath
+    Assert-SanitizedBytes -Bytes $Bytes -SecretSeeds $SecretSeeds
+    $destination = [IO.Path]::GetFullPath((Join-Path $Root ($RelativePath -replace '/', [IO.Path]::DirectorySeparatorChar)))
+    $relative = [IO.Path]::GetRelativePath($Root, $destination) -replace '\\', '/'
+    Assert-True ($relative -ceq $RelativePath) 'Sanitized candidate destination escaped its root.'
+    New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force -ErrorAction Stop | Out-Null
+    [IO.File]::WriteAllBytes($destination, $Bytes)
+    return [ordered]@{ path = $RelativePath; sha256 = ([Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($Bytes))).ToLowerInvariant(); byteLength = [long]$Bytes.Length }
+}
+
+function Invoke-SignatureSanitizeWorker([Text.Json.JsonElement]$Payload, [Text.Json.JsonElement[]]$SecretSeeds) {
+    Assert-ExactJsonObjectProperties -Object $Payload -Expected @('candidateEvidenceRoot', 'sourceSha', 'runAttempt', 'projects', 'packages', 'phaseResults') -Name 'SignatureSanitize payload'
+    $candidateRoot = [IO.Path]::GetFullPath((Get-RequiredWorkerPayloadString -Payload $Payload -Name 'candidateEvidenceRoot'))
+    Assert-True (-not (Test-Path -LiteralPath $candidateRoot)) 'SignatureSanitize candidate root must be absent.'
+    $sourceSha = Get-RequiredWorkerPayloadString -Payload $Payload -Name 'sourceSha'
+    $runAttempt = Get-RequiredWorkerPayloadString -Payload $Payload -Name 'runAttempt'
+    Assert-True ($sourceSha -cmatch '^[0-9a-f]{40}$' -and $runAttempt -cmatch '^[1-9][0-9]{0,9}$') 'SignatureSanitize identity is invalid.'
+    $projects = $Payload.GetProperty('projects')
+    $packages = $Payload.GetProperty('packages')
+    $phases = $Payload.GetProperty('phaseResults')
+    Assert-True ($projects.ValueKind -eq [Text.Json.JsonValueKind]::Array -and $projects.GetArrayLength() -eq 3) 'SignatureSanitize projects are invalid.'
+    Assert-True ($packages.ValueKind -eq [Text.Json.JsonValueKind]::Array -and $packages.GetArrayLength() -eq 6) 'SignatureSanitize packages are invalid.'
+    Assert-True ($phases.ValueKind -eq [Text.Json.JsonValueKind]::Array -and $phases.GetArrayLength() -ge 1) 'SignatureSanitize phase results are invalid.'
+    New-Item -ItemType Directory -Path $candidateRoot -ErrorAction Stop | Out-Null
+    $logs = [System.Collections.Generic.List[object]]::new()
+    $normalizedPackages = [System.Collections.Generic.List[object]]::new()
+    try {
+        foreach ($package in $packages.EnumerateArray()) {
+            Assert-ExactJsonObjectProperties -Object $package -Expected @('id', 'version', 'nupkgSha512', 'authorCertificateSha256') -Name 'SignatureSanitize package'
+            $id = $package.GetProperty('id').GetString()
+            $version = $package.GetProperty('version').GetString()
+            $hash = $package.GetProperty('nupkgSha512').GetString()
+            Assert-True ($id -cmatch '^[A-Za-z0-9.]+$' -and $version -cmatch '^[0-9A-Za-z.-]+$' -and $hash -cmatch '^[0-9a-f]{128}$') 'SignatureSanitize package fields are invalid.'
+            $logPath = "signature/verify/$id.log"
+            $logBytes = [Text.UTF8Encoding]::new($false).GetBytes("package=$id`nversion=$version`nverifyExitCode=0`n")
+            $logReference = Write-SanitizedCandidateFile -Root $candidateRoot -RelativePath $logPath -Bytes $logBytes -SecretSeeds $SecretSeeds
+            $logs.Add([ordered]@{ phase = "signature:verify:$id"; path = $logReference.path; sha256 = $logReference.sha256; byteLength = $logReference.byteLength })
+            $normalizedPackages.Add([ordered]@{ id = $id; version = $version; nupkgSha512 = $hash; verifyExitCode = 0; verifyLog = $logReference.path })
+        }
+        $normalizedProjects = @($projects.EnumerateArray() | ForEach-Object { $_.Clone() })
+        $evidence = [ordered]@{
+            schemaVersion = 1
+            evidenceKind = 'signature-success'
+            sourceSha = $sourceSha
+            runAttempt = [int]$runAttempt
+            lane = 'Signature'
+            runtime = [ordered]@{ os = [Environment]::OSVersion.Platform.ToString(); architecture = [Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString(); dotnetSdkVersion = (& (Get-AbsoluteDotNetExecutable) --version).Trim(); executionContext = 'local'; signatureVerification = $true; revocationMode = $null; signatureAuthoritative = $true }
+            projects = $normalizedProjects
+            packages = $normalizedPackages.ToArray()
+            expectedAuthorFingerprint = Get-ExpectedAuthorFingerprint
+            sanitizedLogs = $logs.ToArray()
+        }
+        Assert-True ($LASTEXITCODE -eq 0) 'SignatureSanitize could not determine the .NET SDK version.'
+        $evidenceBytes = [Text.UTF8Encoding]::new($false).GetBytes((ConvertTo-Json -InputObject $evidence -Depth 16 -Compress))
+        [void](Write-SanitizedCandidateFile -Root $candidateRoot -RelativePath 'signature/evidence.json' -Bytes $evidenceBytes -SecretSeeds $SecretSeeds)
+        return [ordered]@{ success = $true; failureCode = $null; packages = @() }
+    } catch {
+        if (Test-Path -LiteralPath $candidateRoot) { Remove-Item -LiteralPath $candidateRoot -Recurse -Force -ErrorAction SilentlyContinue }
+        throw
+    }
+}
+
 function Invoke-ClosedWorkerCliMode([IO.Stream]$StandardInput, [IO.Stream]$StandardOutput) {
     $request = Read-ClosedWorkerFrame -StandardInput $StandardInput
     try {
         $workerResult = switch -CaseSensitive ($request.WorkerKind) {
             'SignatureVerify' { Invoke-SignatureVerifyWorker -Payload $request.Payload; break }
+            'SignatureSanitize' { Invoke-SignatureSanitizeWorker -Payload $request.Payload -SecretSeeds $request.SecretSeeds; break }
             default { [ordered]@{ success = $false; failureCode = 'worker-kind-not-implemented'; packages = @() } }
         }
     } catch {
@@ -1024,6 +1105,32 @@ function Invoke-SelfTest {
             [Array]::Clear($seedNameBytes, 0, $seedNameBytes.Length)
         }
         Assert-True ($adapterResult.SeedNameSha256 -ceq $expectedSeedNameHash) 'Closed worker adapter did not preserve the seed identity without exposing values.'
+        $sanitizerRoot = Join-Path ([IO.Path]::GetTempPath()) ('unlimotion-signature-sanitize-' + [Guid]::NewGuid().ToString('N'))
+        try {
+            $sanitizerProjects = @(
+                [ordered]@{ id = 'headless'; projectPath = 'tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj'; assetsCopyId = 'headless'; assetsSha256 = ('a' * 64); baselineGraphSha256 = ('b' * 64); targetGraphSha256 = ('c' * 64) },
+                [ordered]@{ id = 'desktop'; projectPath = 'src/Unlimotion.Desktop/Unlimotion.Desktop.csproj'; assetsCopyId = 'desktop'; assetsSha256 = ('d' * 64); baselineGraphSha256 = ('e' * 64); targetGraphSha256 = ('f' * 64) },
+                [ordered]@{ id = 'debian'; projectPath = 'src/Unlimotion.Desktop/Unlimotion.Desktop.ForDebianBuild.csproj'; assetsCopyId = 'debian'; assetsSha256 = ('1' * 64); baselineGraphSha256 = ('2' * 64); targetGraphSha256 = ('3' * 64) }
+            )
+            $sanitizerPackages = @(
+                Get-ExpectedPackages | ForEach-Object { [ordered]@{ id = $_.Id; version = $_.Version; nupkgSha512 = ('a' * 128); authorCertificateSha256 = Get-ExpectedAuthorFingerprint } }
+            )
+            $sanitizerResult = Invoke-ClosedWorkerProcessAdapter -WorkerKind 'SignatureSanitize' -Payload ([ordered]@{
+                    candidateEvidenceRoot = $sanitizerRoot
+                    sourceSha = ('a' * 40)
+                    runAttempt = '1'
+                    projects = $sanitizerProjects
+                    packages = $sanitizerPackages
+                    phaseResults = @([ordered]@{ name = 'signature:verify:graph'; status = 'success'; exitCode = 0 })
+                }) -SecretSeeds $syntheticSeeds -TimeoutSeconds 10
+            Assert-True ($sanitizerResult.Success -eq $true -and $sanitizerResult.ExitCode -eq 0 -and $sanitizerResult.TerminationProven -eq $true) 'Signature sanitizer worker did not return a closed success tuple.'
+            $candidateFiles = @(Get-ChildItem -LiteralPath $sanitizerRoot -Recurse -File | ForEach-Object { [IO.Path]::GetRelativePath($sanitizerRoot, $_.FullName) -replace '\\', '/' } | Sort-Object)
+            Assert-True ($candidateFiles.Count -eq 7 -and $candidateFiles[0] -ceq 'signature/evidence.json') 'Signature sanitizer candidate file set is invalid.'
+            $candidateText = [IO.File]::ReadAllText((Join-Path $sanitizerRoot 'signature\evidence.json'), [Text.UTF8Encoding]::new($false))
+            Assert-True (-not $candidateText.Contains('one', [StringComparison]::Ordinal) -and -not $candidateText.Contains('two', [StringComparison]::Ordinal)) 'Signature sanitizer exposed a secret seed in candidate evidence.'
+        } finally {
+            if (Test-Path -LiteralPath $sanitizerRoot) { Remove-Item -LiteralPath $sanitizerRoot -Recurse -Force -ErrorAction SilentlyContinue }
+        }
     } finally {
         $workerInput.Dispose()
         [Array]::Clear($workerHeader, 0, $workerHeader.Length)
