@@ -27,6 +27,11 @@ internal static class CiReadmeMediaContract
         await Assert.That(workflow).Contains("DOTNET_NUGET_SIGNATURE_VERIFICATION: \"true\"");
         await Assert.That(workflow).Contains("persist-credentials: false");
         await Assert.That(workflow).Contains("submodules: false");
+        await Assert.That(workflow).Contains("Run and validate Signature evidence");
+        await Assert.That(workflow).Contains("Export-VerifiedGitBlob");
+        await Assert.That(workflow).Contains("Test-NuGetEvidencePublication.ps1");
+        await Assert.That(workflow).Contains("safe_upload_verified");
+        await Assert.That(workflow).Contains("Enforce Signature attempt verdict");
         await Assert.That(workflow).Contains("tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj");
         await Assert.That(workflow).Contains("Run Headless UI Tests");
         await Assert.That(workflow).Contains("Run Headless UI Tests again");

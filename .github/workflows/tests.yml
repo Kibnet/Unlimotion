@@ -58,6 +58,7 @@ jobs:
 
         foreach ($project in $projects) {
           dotnet restore $project --force --no-http-cache --configfile src/nuget.config `
+            -p:Configuration=Debug `
             -p:DisableImplicitLibraryPacksFolder=true `
             -p:DisableImplicitNuGetFallbackFolder=true `
             -p:RestoreFallbackFolders=
@@ -125,6 +126,132 @@ jobs:
         New-Item -ItemType Directory -Path $packages | Out-Null
         "NUGET_PACKAGES=$packages" | Add-Content -LiteralPath $env:GITHUB_ENV -Encoding utf8
 
-    - name: Verify ReactiveUI signature chain
+    - name: Run and validate Signature evidence
+      id: nuget_wrapper
       shell: pwsh
-      run: ./scripts/Test-NuGetSignatureChain.ps1 -Mode RunAttempt -Lane Signature
+      env:
+        EXPECTED_SOURCE_SHA: ${{ github.sha }}
+        EXPECTED_RUN_ATTEMPT: ${{ github.run_attempt }}
+      run: |
+        $ErrorActionPreference = 'Stop'
+
+        function Set-WrapperOutput([string]$Name, [string]$Value) {
+          Add-Content -LiteralPath $script:OutputPath -Value "$Name=$Value" -Encoding utf8
+        }
+
+        function Export-VerifiedGitBlob([string]$RepositoryPath, [string]$DestinationPath) {
+          $objectId = (& git rev-parse "${env:EXPECTED_SOURCE_SHA}:$RepositoryPath").Trim()
+          if ($LASTEXITCODE -ne 0 -or $objectId -notmatch '^[0-9a-f]{40}$') {
+            throw "Could not resolve the expected Git blob for $RepositoryPath."
+          }
+
+          $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+          $startInfo.FileName = 'git'
+          $startInfo.ArgumentList.Add('cat-file')
+          $startInfo.ArgumentList.Add('blob')
+          $startInfo.ArgumentList.Add($objectId)
+          $startInfo.UseShellExecute = $false
+          $startInfo.RedirectStandardOutput = $true
+          $startInfo.RedirectStandardError = $true
+
+          $process = [System.Diagnostics.Process]::new()
+          $process.StartInfo = $startInfo
+          [void]$process.Start()
+          $file = [IO.File]::Open($DestinationPath, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+          try {
+            $process.StandardOutput.BaseStream.CopyTo($file)
+          } finally {
+            $file.Dispose()
+          }
+          $process.WaitForExit()
+          $standardError = $process.StandardError.ReadToEnd()
+          if ($process.ExitCode -ne 0) {
+            throw "Could not extract the expected Git blob for $RepositoryPath: $standardError"
+          }
+
+          $actualObjectId = (& git hash-object $DestinationPath).Trim()
+          if ($LASTEXITCODE -ne 0 -or $actualObjectId -cne $objectId) {
+            throw "Extracted Git blob hash mismatch for $RepositoryPath."
+          }
+
+          return $objectId
+        }
+
+        $script:OutputPath = $env:GITHUB_OUTPUT
+        Set-WrapperOutput 'safe_upload_ready' 'false'
+        Set-WrapperOutput 'safe_upload_verified' 'false'
+        Set-WrapperOutput 'validated_upload_root' ''
+        Set-WrapperOutput 'attempt_verdict' ''
+
+        try {
+          if ($env:DOTNET_NUGET_SIGNATURE_VERIFICATION -cne 'true' -or
+              $env:EXPECTED_SOURCE_SHA -notmatch '^[0-9a-f]{40}$' -or
+              $env:EXPECTED_RUN_ATTEMPT -notmatch '^[1-9][0-9]{0,9}$') {
+            throw 'Trusted wrapper preconditions are invalid.'
+          }
+          if ((& git rev-parse HEAD).Trim() -cne $env:EXPECTED_SOURCE_SHA) {
+            throw 'Checkout HEAD does not match the expected source SHA.'
+          }
+
+          $wrapperRoot = Join-Path $env:RUNNER_TEMP ('unlimotion-nuget-wrapper-' + [Guid]::NewGuid().ToString('N'))
+          $rawScriptsRoot = Join-Path $wrapperRoot 'raw-scripts'
+          $packagesRoot = Join-Path $wrapperRoot 'packages'
+          $evidenceRoot = Join-Path $wrapperRoot 'evidence'
+          New-Item -ItemType Directory -Path $rawScriptsRoot, $packagesRoot -ErrorAction Stop | Out-Null
+
+          $producer = Join-Path $rawScriptsRoot 'Test-NuGetSignatureChain.ps1'
+          $validator = Join-Path $rawScriptsRoot 'Test-NuGetEvidencePublication.ps1'
+          [void](Export-VerifiedGitBlob -RepositoryPath 'scripts/Test-NuGetSignatureChain.ps1' -DestinationPath $producer)
+          [void](Export-VerifiedGitBlob -RepositoryPath 'scripts/Test-NuGetEvidencePublication.ps1' -DestinationPath $validator)
+
+          $oldGithubOutput = $env:GITHUB_OUTPUT
+          $oldGithubEnv = $env:GITHUB_ENV
+          $oldGithubPath = $env:GITHUB_PATH
+          try {
+            Remove-Item Env:GITHUB_OUTPUT -ErrorAction SilentlyContinue
+            Remove-Item Env:GITHUB_ENV -ErrorAction SilentlyContinue
+            Remove-Item Env:GITHUB_PATH -ErrorAction SilentlyContinue
+
+            & pwsh -NoLogo -NoProfile -NonInteractive -File $producer `
+              -Mode RunAttempt -Lane Signature -RepositoryRoot $env:GITHUB_WORKSPACE `
+              -PackagesRoot $packagesRoot -ExpectedSourceSha $env:EXPECTED_SOURCE_SHA `
+              -RunAttempt $env:EXPECTED_RUN_ATTEMPT -EvidenceRoot $evidenceRoot
+            $attemptExitCode = $LASTEXITCODE
+
+            & pwsh -NoLogo -NoProfile -NonInteractive -File $validator `
+              -EvidenceRoot $evidenceRoot -ExpectedLane Signature `
+              -ExpectedSourceSha $env:EXPECTED_SOURCE_SHA -ExpectedRunAttempt $env:EXPECTED_RUN_ATTEMPT
+            if ($LASTEXITCODE -ne 0) {
+              throw 'Evidence validator rejected the Signature receipt.'
+            }
+          } finally {
+            $env:GITHUB_OUTPUT = $oldGithubOutput
+            $env:GITHUB_ENV = $oldGithubEnv
+            $env:GITHUB_PATH = $oldGithubPath
+          }
+
+          Set-WrapperOutput 'safe_upload_ready' 'true'
+          Set-WrapperOutput 'safe_upload_verified' 'true'
+          Set-WrapperOutput 'validated_upload_root' $evidenceRoot
+          Set-WrapperOutput 'attempt_verdict' $(if ($attemptExitCode -eq 0) { 'success' } else { 'failure' })
+        } catch {
+          throw 'Trusted Signature wrapper could not establish validated evidence.'
+        }
+
+    - name: Upload Signature evidence
+      if: ${{ always() && steps.nuget_wrapper.outcome == 'success' && steps.nuget_wrapper.outputs.safe_upload_ready == 'true' && steps.nuget_wrapper.outputs.safe_upload_verified == 'true' && (steps.nuget_wrapper.outputs.attempt_verdict == 'success' || steps.nuget_wrapper.outputs.attempt_verdict == 'failure') }}
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: nuget-signature-chain-${{ github.sha }}-attempt-${{ github.run_attempt }}
+        path: ${{ steps.nuget_wrapper.outputs.validated_upload_root }}
+        if-no-files-found: error
+        overwrite: false
+        retention-days: 14
+
+    - name: Enforce Signature attempt verdict
+      if: ${{ always() }}
+      shell: pwsh
+      run: |
+        if ('${{ steps.nuget_wrapper.outputs.attempt_verdict }}' -ne 'success') {
+          exit 1
+        }
