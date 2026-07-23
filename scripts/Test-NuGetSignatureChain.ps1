@@ -526,10 +526,21 @@ function Invoke-PublicationFinalizeWorker([Text.Json.JsonElement]$Payload, [Text
     $runAttempt = Get-RequiredWorkerPayloadString -Payload $Payload -Name 'runAttempt'
     $lane = Get-RequiredWorkerPayloadString -Payload $Payload -Name 'lane'
     Assert-True ($sourceSha -cmatch '^[0-9a-f]{40}$' -and $runAttempt -cmatch '^[1-9][0-9]{0,9}$' -and $lane -ceq 'Signature') 'PublicationFinalize identity is invalid.'
+    $phaseResults = $Payload.GetProperty('phaseResults')
+    Assert-True ($phaseResults.ValueKind -eq [Text.Json.JsonValueKind]::Array -and $phaseResults.GetArrayLength() -ge 1) 'PublicationFinalize phase results are invalid.'
+    foreach ($phase in $phaseResults.EnumerateArray()) {
+        Assert-ExactJsonObjectProperties -Object $phase -Expected @('name', 'status', 'exitCode') -Name 'PublicationFinalize phase'
+        Assert-True ($phase.GetProperty('name').ValueKind -eq [Text.Json.JsonValueKind]::String -and -not [string]::IsNullOrWhiteSpace($phase.GetProperty('name').GetString())) 'PublicationFinalize phase name is invalid.'
+        Assert-True ($phase.GetProperty('status').ValueKind -eq [Text.Json.JsonValueKind]::String -and $phase.GetProperty('status').GetString() -cin @('success', 'failure')) 'PublicationFinalize phase status is invalid.'
+        Assert-True ($phase.GetProperty('exitCode').ValueKind -eq [Text.Json.JsonValueKind]::Number) 'PublicationFinalize phase exit code is invalid.'
+        $phaseExitCode = $phase.GetProperty('exitCode').GetInt32()
+        Assert-True (($phase.GetProperty('status').GetString() -ceq 'success' -and $phaseExitCode -eq 0) -or ($phase.GetProperty('status').GetString() -ceq 'failure' -and $phaseExitCode -ne 0)) 'PublicationFinalize phase tuple is invalid.'
+    }
     Assert-True (-not (Test-Path -LiteralPath $finalRoot) -and (Split-Path -Parent $candidateRoot) -ceq (Split-Path -Parent $finalRoot)) 'PublicationFinalize final root is invalid.'
     $scratchRoot = $finalRoot + '.scratch-' + [Guid]::NewGuid().ToString('N')
     $publicationFailureCode = $null
     try {
+        Assert-True ((@($phaseResults.EnumerateArray() | Where-Object { $_.GetProperty('status').GetString() -cne 'success' })).Count -eq 0) 'PublicationFinalize cannot publish primary evidence after a failed phase.'
         $manifest = Get-CandidateEvidenceManifest -CandidateRoot $candidateRoot -SecretSeeds $SecretSeeds
         Copy-Item -LiteralPath $candidateRoot -Destination $scratchRoot -Recurse -ErrorAction Stop
         $receipt = [ordered]@{
@@ -541,7 +552,7 @@ function Invoke-PublicationFinalizeWorker([Text.Json.JsonElement]$Payload, [Text
             outcome = 'success'
             failurePhase = $null
             failureCode = $null
-            phases = @($Payload.GetProperty('phaseResults').EnumerateArray() | ForEach-Object { $_.Clone() })
+            phases = @($phaseResults.EnumerateArray() | ForEach-Object { $_.Clone() })
             evidenceManifest = $manifest
         }
         $receiptBytes = [Text.UTF8Encoding]::new($false).GetBytes((ConvertTo-Json -InputObject $receipt -Depth 16 -Compress))
@@ -1244,8 +1255,21 @@ function Invoke-SelfTest {
             $finalFiles = @(Get-ChildItem -LiteralPath $finalizerRoot -Recurse -File | ForEach-Object { [IO.Path]::GetRelativePath($finalizerRoot, $_.FullName) -replace '\\', '/' } | Sort-Object)
             Assert-True ($finalFiles.Count -eq 8 -and $finalFiles[0] -ceq 'attempt-receipt.json') 'Publication finalizer tree has an invalid file set.'
             $finalReceipt = [IO.File]::ReadAllText((Join-Path $finalizerRoot 'attempt-receipt.json'), [Text.UTF8Encoding]::new($false)) | ConvertFrom-Json -AsHashtable -Depth 16
-            Assert-True ((@($finalReceipt.evidenceManifest)).Count -eq 7 -and (@($finalReceipt.evidenceManifest | Where-Object { $_.path -ceq 'attempt-receipt.json' })).Count -eq 0) 'Publication finalizer receipt self-hashed or lost candidate files.'
+            Assert-True ($finalReceipt.failurePhase -eq $null -and $finalReceipt.failureCode -eq $null -and (@($finalReceipt.evidenceManifest)).Count -eq 7 -and (@($finalReceipt.evidenceManifest | Where-Object { $_.path -ceq 'attempt-receipt.json' })).Count -eq 0) 'Publication finalizer receipt self-hashed or lost candidate files.'
             Remove-Item -LiteralPath $finalizerRoot -Recurse -Force -ErrorAction Stop
+            $phaseFallbackRoot = $sanitizerRoot + '-phase-fallback'
+            $phaseFallbackResult = Invoke-ClosedWorkerProcessAdapter -WorkerKind 'PublicationFinalize' -Payload ([ordered]@{
+                    candidateEvidenceRoot = $sanitizerRoot
+                    finalEvidenceRoot = $phaseFallbackRoot
+                    sourceSha = ('a' * 40)
+                    runAttempt = '1'
+                    lane = 'Signature'
+                    phaseResults = @([ordered]@{ name = 'signature:verify:graph'; status = 'failure'; exitCode = 1 })
+                }) -SecretSeeds $syntheticSeeds -TimeoutSeconds 10
+            Assert-True ($phaseFallbackResult.Success -eq $true -and $phaseFallbackResult.ExitCode -eq 0 -and (Test-Path -LiteralPath $phaseFallbackRoot)) 'Publication finalizer worker did not convert a failed phase into fallback evidence.'
+            $phaseFallbackFiles = @(Get-ChildItem -LiteralPath $phaseFallbackRoot -Recurse -File | ForEach-Object { [IO.Path]::GetRelativePath($phaseFallbackRoot, $_.FullName) -replace '\\', '/' } | Sort-Object)
+            Assert-True ($phaseFallbackFiles.Count -eq 1 -and $phaseFallbackFiles[0] -ceq 'attempt-receipt.json') 'Publication finalizer phase fallback tree has an invalid file set.'
+            Remove-Item -LiteralPath $phaseFallbackRoot -Recurse -Force -ErrorAction Stop
             $fallbackRoot = $sanitizerRoot + '-fallback'
             $fallbackResult = Invoke-ClosedWorkerProcessAdapter -WorkerKind 'PublicationFinalize' -Payload ([ordered]@{
                     candidateEvidenceRoot = $sanitizerRoot + '-missing'
