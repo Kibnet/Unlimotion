@@ -2161,16 +2161,23 @@ function Invoke-FullAttempt {
 
     $signatureReceipt = $null
     $regressionReceipt = $null
+    $fullStage = 'signature-child'
     try {
         $signature = Invoke-FullChildAttempt -ChildLane 'Signature' -Root $root -SourceSha $sourceSha -Attempt $attempt -ChildWorkRoot (Join-Path $workRoot 'signature') -OuterDeadlineUtc $fullDeadlineUtc -ChildDeadlineMinutes 65 -ReserveMinutes 105
         $signatureReceipt = $signature.receipt
+        $fullStage = 'signature-copy'
         Copy-FullChildEvidenceToCandidate -ChildRoot $signature.evidenceRoot -CandidateChildRoot (Join-Path $candidateRoot 'signature')
+        $fullStage = 'regression-child'
         $regression = Invoke-FullChildAttempt -ChildLane 'Regression' -Root $root -SourceSha $sourceSha -Attempt $attempt -ChildWorkRoot (Join-Path $workRoot 'regression') -OuterDeadlineUtc $fullDeadlineUtc -ChildDeadlineMinutes 95 -ReserveMinutes 10
         $regressionReceipt = $regression.receipt
+        $fullStage = 'regression-copy'
         Copy-FullChildEvidenceToCandidate -ChildRoot $regression.evidenceRoot -CandidateChildRoot (Join-Path $candidateRoot 'regression')
+        $fullStage = 'aggregation-reserve'
         Assert-FullDeadlineBudget -DeadlineUtc $fullDeadlineUtc -RequiredMinutes 10 -Description 'outer aggregation and final validation'
+        $fullStage = 'publication'
         Publish-FullPrimaryEvidence -CandidateRoot $candidateRoot -EvidencePath $evidencePath -SourceSha $sourceSha -Attempt $attempt -SignatureReceipt $signatureReceipt -RegressionReceipt $regressionReceipt -SecretSeeds $secretSeeds
     } catch {
+        Write-Verbose "Full outer fallback stage: $fullStage."
         if (Test-Path -LiteralPath $candidateRoot) { Remove-Item -LiteralPath $candidateRoot -Recurse -Force -ErrorAction SilentlyContinue }
         if (-not (Test-Path -LiteralPath $evidencePath)) {
             Publish-FullSafeFallback -EvidencePath $evidencePath -SourceSha $sourceSha -Attempt $attempt -SecretSeeds $secretSeeds
