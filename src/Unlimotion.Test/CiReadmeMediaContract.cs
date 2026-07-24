@@ -132,6 +132,13 @@ internal static class CiReadmeMediaContract
         await Assert.That(androidWorkflow).Contains("actions: read");
         await Assert.That(androidWorkflow).Contains("contents: write");
         await Assert.That(androidWorkflow).Contains("APK artifact archive digest mismatch.");
+        await Assert.That(androidWorkflow).Contains("android-artifact-manifest.json");
+        await Assert.That(androidWorkflow).Contains("apk_artifact_name");
+        await Assert.That(androidWorkflow).Contains("APK artifact metadata does not match build outputs.");
+        await Assert.That(androidWorkflow).Contains("APK artifact manifest does not match extracted files.");
+        await Assert.That(androidWorkflow).Contains("ANDROID_ARM64_APK_PATH");
+        await Assert.That(androidWorkflow).Contains("softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65");
+        await Assert.That(androidWorkflow).Contains("overwrite_files: false");
         await Assert.That(androidWorkflow).Contains("/actions/artifacts/$ARTIFACT_ID/zip");
 
         await Assert.That(debWorkflow).Contains("deb-build:");
