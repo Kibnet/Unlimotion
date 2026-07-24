@@ -5,6 +5,7 @@ using AppAutomation.TUnit;
 using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Definitions;
 using FlaUI.Core.Input;
+using FlaUI.Core.Tools;
 using FlaUI.Core.WindowsAPI;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
@@ -46,6 +47,21 @@ public sealed class MainWindowFlaUiTests
         if (isStatusContract)
         {
             Mouse.MoveTo(0, 0);
+        }
+        else
+        {
+            var readiness = Retry.WhileNull(
+                () => session.MainWindow.FindFirstDescendant(
+                    session.ConditionFactory.ByAutomationId("CurrentTaskTitleTextBox")),
+                timeout: TimeSpan.FromSeconds(30),
+                interval: TimeSpan.FromMilliseconds(200),
+                throwOnTimeout: false);
+            if (!readiness.Success)
+            {
+                session.Dispose();
+                throw new TimeoutException(
+                    "The main task card did not become ready within 30 seconds.");
+            }
         }
 
         return new FlaUiRuntimeSession(session);

@@ -5,5 +5,6 @@ public enum UnlimotionAutomationScenario
     Smoke,
     ReadmeDemo,
     GitRemoteSwitch,
-    StatusContract
+    StatusContract,
+    TaskSpaces
 }

@@ -85,6 +85,68 @@
             <TextBlock Classes="SectionHint"
                        Text="{DynamicResource SettingsIntro}" />
 
+            <Border Classes="SettingsSection"
+                    AutomationProperties.AutomationId="TaskSpacesSection">
+                <StackPanel IsEnabled="{Binding !IsTaskSpaceSwitching}">
+                    <TextBlock Classes="SectionTitle" Text="{DynamicResource TaskSpacesTitle}" />
+                    <TextBlock Classes="SectionHint" Text="{DynamicResource TaskSpacesHint}" />
+
+                    <StackPanel Classes="FieldGroup">
+                        <TextBlock Classes="FieldLabel" Text="{DynamicResource TaskSpacesCurrent}" />
+                        <ComboBox ItemsSource="{Binding TaskSpaces}"
+                                  SelectedItem="{Binding SelectedTaskSpace, Mode=TwoWay}"
+                                  AutomationProperties.AutomationId="TaskSpacesList">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate DataType="viewModel:TaskSpaceOptionViewModel">
+                                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                                        <TextBlock Text="{Binding ActiveMarker}"
+                                                   VerticalAlignment="Center"/>
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock Text="{Binding DisplayName}"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Text="{Binding SourceSummary}"
+                                                       Opacity="0.65"
+                                                       FontSize="11"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </StackPanel>
+
+                    <StackPanel Classes="FieldGroup">
+                        <TextBlock Classes="FieldLabel" Text="{DynamicResource TaskSpacesName}" />
+                        <TextBox Text="{Binding SelectedTaskSpace.DisplayName, Mode=TwoWay}"
+                                 AutomationProperties.AutomationId="TaskSpaceNameTextBox" />
+                    </StackPanel>
+
+                    <StackPanel Classes="FieldGroup">
+                        <TextBlock Classes="FieldLabel" Text="{DynamicResource TaskSpacesNewName}" />
+                        <TextBox Text="{Binding NewTaskSpaceName, Mode=TwoWay}"
+                                 AutomationProperties.AutomationId="NewTaskSpaceNameTextBox" />
+                    </StackPanel>
+
+                    <WrapPanel Classes="ActionButtons">
+                        <Button Content="{DynamicResource TaskSpacesAdd}"
+                                Command="{Binding AddTaskSpaceCommand}"
+                                AutomationProperties.AutomationId="AddTaskSpaceButton" />
+                        <Button Content="{DynamicResource TaskSpacesSwitch}"
+                                Command="{Binding SwitchTaskSpaceCommand}"
+                                CommandParameter="{Binding SelectedTaskSpace}"
+                                IsEnabled="{Binding !SelectedTaskSpace.IsActive}"
+                                AutomationProperties.AutomationId="SwitchTaskSpaceButton" />
+                        <Button Content="{DynamicResource TaskSpacesRename}"
+                                Command="{Binding RenameTaskSpaceCommand}"
+                                AutomationProperties.AutomationId="RenameTaskSpaceButton" />
+                        <Button Content="{DynamicResource TaskSpacesRemove}"
+                                Command="{Binding RemoveTaskSpaceCommand}"
+                                IsEnabled="{Binding CanRemoveTaskSpace}"
+                                AutomationProperties.AutomationId="RemoveTaskSpaceButton" />
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
+
             <Border Classes="SettingsSection">
                 <StackPanel>
                     <TextBlock Classes="SectionTitle" Text="{DynamicResource HotkeyPanelTitle}" />
@@ -228,7 +290,8 @@
                 </StackPanel>
             </Border>
 
-            <Border Classes="SettingsSection">
+            <Border Classes="SettingsSection"
+                    IsEnabled="{Binding !IsTaskSpaceSwitching}">
                 <StackPanel>
                     <TextBlock Classes="SectionTitle" Text="{DynamicResource StorageTitle}" />
                     <TextBlock Classes="SectionHint" Text="{DynamicResource StorageHint}" />
@@ -299,7 +362,8 @@
                 </StackPanel>
             </Border>
 
-            <Border Classes="SettingsSection">
+            <Border Classes="SettingsSection"
+                    IsEnabled="{Binding !IsTaskSpaceSwitching}">
                 <StackPanel>
                     <TextBlock Classes="SectionTitle" Text="{DynamicResource BackupTitle}" />
                     <TextBlock Classes="SectionHint" Text="{DynamicResource BackupHint}" />
@@ -469,7 +533,8 @@
                 </StackPanel>
             </Border>
 
-            <Border Classes="SettingsSection">
+            <Border Classes="SettingsSection"
+                    IsEnabled="{Binding !IsTaskSpaceSwitching}">
                 <StackPanel>
                     <ToggleButton IsChecked="{Binding ShowAdvancedBackupSettings}"
                                   Content="{DynamicResource ShowAdvancedBackupSettings}" />
@@ -515,7 +580,8 @@
                 </StackPanel>
             </Border>
 
-            <Border Classes="SettingsSection">
+            <Border Classes="SettingsSection"
+                    IsEnabled="{Binding !IsTaskSpaceSwitching}">
                 <StackPanel>
                     <ToggleButton IsChecked="{Binding ShowServiceActions}"
                                   Content="{DynamicResource ShowServiceActions}" />

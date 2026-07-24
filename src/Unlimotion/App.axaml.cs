@@ -7,6 +7,7 @@ using System.IO;
 using System.Linq;
 using System.Reactive;
 using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using AutoMapper;
 using Avalonia;
@@ -43,6 +44,9 @@ public class App : Application
     private const string AutomationOpenedTaskIdsEnvironmentVariable = "UNLIMOTION_AUTOMATION_OPENED_TASK_IDS";
     private const string AutomationWindowTitleEnvironmentVariable = "UNLIMOTION_AUTOMATION_WINDOW_TITLE";
     private const string AutomationExpandAllTaskTreesEnvironmentVariable = "UNLIMOTION_AUTOMATION_EXPAND_ALL_TASK_TREES";
+    private const string AutomationDesktopMonitorEnvironmentVariable = "UNLIMOTION_AUTOMATION_DESKTOP_MONITOR";
+    private const string AutomationWindowWidthEnvironmentVariable = "UNLIMOTION_AUTOMATION_WINDOW_WIDTH";
+    private const string AutomationWindowHeightEnvironmentVariable = "UNLIMOTION_AUTOMATION_WINDOW_HEIGHT";
     private const string AppFontSizeResourceKey = "AppFontSize";
     private const string AppSmallFontSizeResourceKey = "AppSmallFontSize";
     private const string AppTabFontSizeResourceKey = "AppTabFontSize";
@@ -67,6 +71,10 @@ public class App : Application
     private IAppNameDefinitionService? _appNameService;
     private ITaskStorageFactory? _storageFactory;
     private TaskMoveService? _taskMoveService;
+    private readonly ITaskSpaceOperationRunner _taskSpaceOperationRunner = new TaskSpaceOperationRunner();
+    private IActiveTaskSpaceConfiguration? _activeTaskSpaceConfiguration;
+    private ITaskSpaceSettingsPersistenceQueue? _taskSpaceSettingsQueue;
+    private TaskSpaceCoordinator? _taskSpaceCoordinator;
     private UnlimotionClientOptions _clientOptions = new();
     private string? _configPath;
     private IScheduler? _scheduler;
@@ -146,6 +154,7 @@ public class App : Application
             _backupService,
             GetCurrentThemeIsDark(),
             ResolveDefaultTaskStoragePath);
+        settingsViewModel.UseDeferredTaskSpaceSettingsPersistence();
         settingsViewModel.ConfigureUpdateService(_applicationUpdateService);
 
         // Create GraphViewModel
@@ -167,13 +176,53 @@ public class App : Application
             MoveTaskTreeToFileStorageAsync = MoveTaskTreeViaServiceAsync
         };
 
+        if (_storageFactory != null && _taskSpaceSettingsQueue != null)
+        {
+            _taskSpaceCoordinator = new TaskSpaceCoordinator(
+                _storageFactory.SourceManager,
+                _taskSpaceOperationRunner,
+                _taskSpaceSettingsQueue,
+                async runtime =>
+                {
+                    runtime.TaskContext.MainWindow = _mainWindowViewModel;
+                    await RunOnUiThreadAsync(
+                        () => _mainWindowViewModel.BindInitializedStorage(runtime.Storage));
+                },
+                () => RunOnUiThreadAsync(_mainWindowViewModel.ClearTaskSpaceSurface),
+                PauseTaskSpaceSchedulerAsync,
+                ApplyActiveTaskSpaceSchedulerAsync);
+        }
+
         // Set up commands on SettingsViewModel
         SetupSettingsCommands(settingsViewModel);
+        RefreshTaskSpaces(settingsViewModel);
         WireSettingsToActiveStorage(settingsViewModel);
         SetupAutomaticUpdateTimer(settingsViewModel);
         WireActiveTaskContext();
 
         return _mainWindowViewModel;
+    }
+
+    private static async Task RunOnUiThreadAsync(Action action)
+    {
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            action();
+            return;
+        }
+
+        await Dispatcher.UIThread.InvokeAsync(action);
+    }
+
+    private static async Task RunOnUiThreadAsync(Func<Task> action)
+    {
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            await action().ConfigureAwait(true);
+            return;
+        }
+
+        await Dispatcher.UIThread.InvokeAsync(action);
     }
 
     public static bool TryHandleTaskCardBackGesture()
@@ -197,6 +246,128 @@ public class App : Application
 
     private void SetupSettingsCommands(SettingsViewModel settings)
     {
+        settings.AddTaskSpaceCommand = ReactiveCommand.CreateFromTask(async () =>
+        {
+            await AddTaskSpaceAsync(settings).ConfigureAwait(true);
+        });
+
+        settings.SwitchTaskSpaceCommand = ReactiveCommand.CreateFromTask<TaskSpaceOptionViewModel?>(async selected =>
+        {
+            if (selected != null)
+            {
+                await SwitchTaskSpaceAsync(settings, selected.SourceId).ConfigureAwait(true);
+            }
+        });
+
+        settings.RenameTaskSpaceCommand = ReactiveCommand.CreateFromTask(async () =>
+        {
+            var selected = settings.SelectedTaskSpace;
+            if (selected == null || string.IsNullOrWhiteSpace(selected.DisplayName))
+            {
+                return;
+            }
+
+            if (_taskSpaceCoordinator == null)
+            {
+                return;
+            }
+
+            settings.IsTaskSpaceSwitching = true;
+            try
+            {
+                await _taskSpaceCoordinator
+                    .RenameAsync(selected.SourceId, selected.DisplayName)
+                    .ConfigureAwait(true);
+            }
+            finally
+            {
+                RefreshTaskSpaces(settings);
+                settings.IsTaskSpaceSwitching = false;
+            }
+        });
+
+        settings.RemoveTaskSpaceCommand = ReactiveCommand.Create(() =>
+        {
+            var selected = settings.SelectedTaskSpace;
+            var manager = _storageFactory?.SourceManager;
+            if (selected == null || manager == null || manager.ConfiguredSources.Count <= 1)
+            {
+                return;
+            }
+
+            ConfirmAndRun(
+                L10n.Get("TaskSpaceRemoveConfirmTitle"),
+                L10n.Format("TaskSpaceRemoveConfirmMessage", selected.DisplayName),
+                async () =>
+                {
+                    if (_taskSpaceCoordinator == null)
+                    {
+                        return;
+                    }
+
+                    settings.IsTaskSpaceSwitching = true;
+                    try
+                    {
+                        await _taskSpaceCoordinator
+                            .RemoveAsync(selected.SourceId)
+                            .ConfigureAwait(true);
+                    }
+                    catch (TaskSpaceRecoveryException ex)
+                    {
+                        SetTaskSpaceRecoveryState(settings, ex);
+                    }
+                    finally
+                    {
+                        settings.ReloadActiveTaskSpaceSettings();
+                        WireSettingsToActiveStorage(settings);
+                        RefreshTaskSpaces(settings);
+                        settings.IsTaskSpaceSwitching = false;
+                    }
+                },
+                ex => _notificationManager?.ErrorToast(ex.Message));
+        });
+
+        settings.ObservableForProperty(m => m.TaskStoragePath, false, true)
+            .Subscribe(_ => EnqueueActiveTaskSpaceSettings(settings));
+        settings.ObservableForProperty(m => m.TaskStorageURL, false, true)
+            .Subscribe(_ => EnqueueActiveTaskSpaceSettings(settings));
+        settings.ObservableForProperty(m => m.Login, false, true)
+            .Subscribe(_ => EnqueueActiveTaskSpaceSettings(settings));
+        settings.ObservableForProperty(m => m.Password, false, true)
+            .Subscribe(_ => EnqueueActiveTaskSpaceSettings(settings));
+        settings.ObservableForProperty(m => m.IsServerMode, false, true)
+            .Subscribe(_ => EnqueueActiveTaskSpaceSettings(settings));
+        settings.ObservableForProperty(m => m.GitBackupEnabled, false, true)
+            .Subscribe(_ => EnqueueActiveTaskSpaceSettings(settings));
+        settings.ObservableForProperty(m => m.GitShowStatusToasts, false, true)
+            .Subscribe(_ => EnqueueActiveTaskSpaceSettings(settings));
+        settings.ObservableForProperty(m => m.GitRemoteUrl, false, true)
+            .Subscribe(_ => EnqueueActiveTaskSpaceSettings(settings));
+        settings.ObservableForProperty(m => m.GitBranch, false, true)
+            .Subscribe(_ => EnqueueActiveTaskSpaceSettings(settings));
+        settings.ObservableForProperty(m => m.GitUserName, false, true)
+            .Subscribe(_ => EnqueueActiveTaskSpaceSettings(settings));
+        settings.ObservableForProperty(m => m.GitPassword, false, true)
+            .Subscribe(_ => EnqueueActiveTaskSpaceSettings(settings));
+        settings.ObservableForProperty(m => m.GitPullIntervalSeconds, false, true)
+            .Subscribe(_ => EnqueueActiveTaskSpaceSettings(settings));
+        settings.ObservableForProperty(m => m.GitPushIntervalSeconds, false, true)
+            .Subscribe(_ => EnqueueActiveTaskSpaceSettings(settings));
+        settings.ObservableForProperty(m => m.GitRemoteName, false, true)
+            .Subscribe(_ => EnqueueActiveTaskSpaceSettings(settings));
+        settings.ObservableForProperty(m => m.GitPushRefSpec, false, true)
+            .Subscribe(_ => EnqueueActiveTaskSpaceSettings(settings));
+        settings.ObservableForProperty(m => m.GitCommitterName, false, true)
+            .Subscribe(_ => EnqueueActiveTaskSpaceSettings(settings));
+        settings.ObservableForProperty(m => m.GitCommitterEmail, false, true)
+            .Subscribe(_ => EnqueueActiveTaskSpaceSettings(settings));
+        settings.ObservableForProperty(m => m.GitSshPrivateKeyPath, false, true)
+            .Subscribe(_ => EnqueueActiveTaskSpaceSettings(settings));
+        settings.ObservableForProperty(m => m.GitSshPublicKeyPath, false, true)
+            .Subscribe(_ => EnqueueActiveTaskSpaceSettings(settings));
+        settings.ObservableForProperty(m => m.SshKeyStoragePath, false, true)
+            .Subscribe(_ => EnqueueActiveTaskSpaceSettings(settings));
+
         settings.ConnectCommand = ReactiveCommand.CreateFromTask(async () =>
         {
             settings.SetStorageConnectionState(SettingsConnectionState.Connecting);
@@ -209,26 +380,33 @@ public class App : Application
                         _backupService,
                         GetCurrentLocalStoragePath(),
                         PrepareFileStoragePathAsync,
-                        EnterConflictResolutionMode);
+                        EnterConflictResolutionMode,
+                        operation => RunBackupOperationAsync("PrepareLocalGitRepository", operation));
                     if (!shouldContinue)
                     {
                         return;
                     }
                 }
 
-                if (_storageFactory != null)
+                if (_taskSpaceCoordinator != null)
                 {
+                    await _taskSpaceCoordinator.ReconnectActiveAsync().ConfigureAwait(true);
+                }
+                else if (_storageFactory != null && _configuration != null)
+                {
+                    // Preserve the pre-task-spaces composition contract used by lightweight
+                    // hosts that provide a storage factory without constructing the coordinator.
                     await _storageFactory.SourceManager
-                        .SwitchStorageAsync(settings.IsServerMode, _configuration!)
+                        .SwitchStorageAsync(settings.IsServerMode, _configuration)
                         .ConfigureAwait(true);
+                    WireActiveTaskContext();
+                    if (_mainWindowViewModel != null)
+                    {
+                        await _mainWindowViewModel.Connect().ConfigureAwait(true);
+                    }
                 }
 
-                WireActiveTaskContext();
                 WireSettingsToActiveStorage(settings);
-                if (_mainWindowViewModel != null)
-                {
-                    await _mainWindowViewModel.Connect();
-                }
 
                 if (!settings.IsServerMode || settings.StorageConnectionState == SettingsConnectionState.Connecting)
                 {
@@ -242,6 +420,12 @@ public class App : Application
             }
             catch (Exception ex)
             {
+                if (ex is TaskSpaceRecoveryException recoveryError)
+                {
+                    SetTaskSpaceRecoveryState(settings, recoveryError);
+                    return;
+                }
+
                 settings.SetStorageConnectionState(SettingsConnectionState.Error);
                 var hint = OperatingSystem.IsAndroid() ? L10n.Get("AndroidAllFilesHint") : string.Empty;
                 _notificationManager?.ErrorToast(L10n.Format("ConnectStorageFailed", ex.Message, hint));
@@ -266,7 +450,7 @@ public class App : Application
             settings.SetBackupConnectionState(BackupStatusState.Syncing, L10n.Get("SyncingRepository"));
             try
             {
-                await Task.Run(() =>
+                await RunBackupOperationAsync("ManualGitSync", () =>
                 {
                     _backupService?.Pull();
                     if (_backupService?.GetConflictStatus().IsInProgress != true)
@@ -299,18 +483,6 @@ public class App : Application
             }
         });
 
-        settings.ObservableForProperty(m => m.GitBackupEnabled, false, true)
-            .Subscribe(c =>
-            {
-                EnsureScheduler();
-                if (_scheduler == null) return;
-
-                if (c.Value)
-                    _scheduler.ResumeAll();
-                else
-                    _scheduler.PauseAll();
-            });
-
         settings.ObservableForProperty(m => m.ThemeMode, false, true)
             .Subscribe(c => RequestedThemeVariant = c.Value switch
             {
@@ -321,30 +493,6 @@ public class App : Application
 
         settings.ObservableForProperty(m => m.FontSize, false, true)
             .Subscribe(c => ApplyFontSize(c.Value));
-
-        settings.ObservableForProperty(m => m.GitPullIntervalSeconds, false, true)
-            .Subscribe(c =>
-            {
-                if (c.Value == 0) return;
-
-                EnsureScheduler();
-                if (_scheduler == null) return;
-
-                var triggerKey = new TriggerKey("PullTrigger", "GitPullJob");
-                _scheduler.RescheduleJob(triggerKey, GenerateTriggerBySecondsInterval("PullTrigger", "GitPullJob", c.Value));
-            });
-
-        settings.ObservableForProperty(m => m.GitPushIntervalSeconds, false, true)
-            .Subscribe(c =>
-            {
-                if (c.Value == 0) return;
-
-                EnsureScheduler();
-                if (_scheduler == null) return;
-
-                var triggerKey = new TriggerKey("PushTrigger", "GitPushJob");
-                _scheduler.RescheduleJob(triggerKey, GenerateTriggerBySecondsInterval("PushTrigger", "GitPushJob", c.Value));
-            });
 
         settings.MigrateCommand = ReactiveCommand.CreateFromTask(async () =>
         {
@@ -460,7 +608,9 @@ public class App : Application
         {
             try
             {
-                var preview = await Task.Run(() => _backupService?.PreviewConnectRepository());
+                var preview = await RunBackupOperationAsync(
+                    "PreviewGitRepositoryConnection",
+                    () => _backupService?.PreviewConnectRepository());
                 if (preview?.RequiresConfirmation == true)
                 {
                     settings.SetBackupConnectionState(
@@ -502,7 +652,7 @@ public class App : Application
             settings.SetBackupConnectionState(BackupStatusState.Syncing, L10n.Get("PullingChanges"));
             try
             {
-                await Task.Run(() => _backupService?.Pull());
+                await RunBackupOperationAsync("ManualGitPull", () => _backupService?.Pull());
                 settings.ReloadGitMetadata();
                 if (settings.IsConflictResolutionMode)
                 {
@@ -532,7 +682,7 @@ public class App : Application
             settings.SetBackupConnectionState(BackupStatusState.Syncing, L10n.Get("PushingChanges"));
             try
             {
-                await Task.Run(() => _backupService?.Push("Manual backup"));
+                await RunBackupOperationAsync("ManualGitPush", () => _backupService?.Push("Manual backup"));
                 settings.ReloadGitMetadata();
                 settings.SetBackupConnectionState(BackupStatusState.Connected, L10n.Get("PushedChanges"));
                 ShowBackupSuccessToast(settings, L10n.Get("PushedChanges"));
@@ -576,7 +726,7 @@ public class App : Application
             settings.SetBackupConnectionState(BackupStatusState.Syncing, L10n.Get("CommittingConflictResolution"));
             try
             {
-                await Task.Run(() =>
+                await RunBackupOperationAsync("CommitGitConflictResolution", () =>
                 {
                     _backupService?.CommitResolvedConflicts(L10n.Get("ResolveSyncConflictsCommitMessage"));
                 });
@@ -651,7 +801,9 @@ public class App : Application
 
             try
             {
-                var publicKeyPath = await Task.Run(() =>
+                var publicKeyPath = await RunBackupOperationAsync(
+                    "GenerateGitSshKey",
+                    () =>
                     _backupService.GenerateSshKey(settings.NewSshKeyName ?? string.Empty));
                 settings.ReloadSshPublicKeys(publicKeyPath);
                 settings.ReloadGitMetadata();
@@ -790,7 +942,9 @@ public class App : Application
         settings.SetBackupConnectionState(BackupStatusState.Syncing, L10n.Get("ResolvingConflict"));
         try
         {
-            await Task.Run(() => _backupService?.ResolveConflictFields(targetConflict.Path, selections));
+            await RunBackupOperationAsync(
+                "ResolveGitConflictFields",
+                () => _backupService?.ResolveConflictFields(targetConflict.Path, selections));
             settings.ReloadGitMetadata();
             if (!settings.IsConflictResolutionMode)
             {
@@ -831,7 +985,9 @@ public class App : Application
         settings.SetBackupConnectionState(BackupStatusState.Syncing, L10n.Get("ResolvingConflict"));
         try
         {
-            await Task.Run(() => _backupService?.ResolveConflict(targetConflict.Path, resolution));
+            await RunBackupOperationAsync(
+                "ResolveGitConflict",
+                () => _backupService?.ResolveConflict(targetConflict.Path, resolution));
             settings.ReloadGitMetadata();
             if (!settings.IsConflictResolutionMode)
             {
@@ -856,6 +1012,157 @@ public class App : Application
         }
     }
 
+    private void RefreshTaskSpaces(SettingsViewModel settings)
+    {
+        var manager = _storageFactory?.SourceManager;
+        if (manager?.ActiveSource == null)
+        {
+            return;
+        }
+
+        settings.ReloadTaskSpaces(manager.ConfiguredSources, manager.ActiveSource.Descriptor.Id);
+    }
+
+    private void EnqueueActiveTaskSpaceSettings(SettingsViewModel settings)
+    {
+        if (settings.IsTaskSpaceSwitching)
+        {
+            return;
+        }
+
+        var sourceId = _storageFactory?.SourceManager.ActiveSource?.Descriptor.Id;
+        if (string.IsNullOrWhiteSpace(sourceId))
+        {
+            return;
+        }
+
+        try
+        {
+            if (_taskSpaceSettingsQueue != null)
+            {
+                _taskSpaceSettingsQueue.Enqueue(settings.CreateTaskSpaceSettingsDraft(sourceId));
+            }
+            else
+            {
+                _storageFactory?.SourceManager.PersistActiveSourceSettings();
+            }
+        }
+        catch (NotSupportedException)
+        {
+            // Test doubles that predate task spaces do not persist per-space settings.
+        }
+    }
+
+    private async Task<bool> SwitchTaskSpaceAsync(SettingsViewModel settings, string sourceId)
+    {
+        var manager = _storageFactory?.SourceManager;
+        if (manager == null || string.Equals(manager.ActiveSource?.Descriptor.Id, sourceId, StringComparison.Ordinal))
+        {
+            RefreshTaskSpaces(settings);
+            return false;
+        }
+
+        if (settings.IsConflictResolutionMode)
+        {
+            RefreshTaskSpaces(settings);
+            _notificationManager?.ErrorToast(L10n.Get("TaskSpaceSwitchBlockedByConflict"));
+            return false;
+        }
+
+        settings.IsTaskSpaceSwitching = true;
+        try
+        {
+            var descriptor = manager.ConfiguredSources.FirstOrDefault(source =>
+                string.Equals(source.Id, sourceId, StringComparison.Ordinal));
+            if (descriptor?.Kind == TaskSourceKind.File)
+            {
+                await PrepareFileStoragePathAsync(descriptor.Path).ConfigureAwait(true);
+            }
+
+            if (_taskSpaceCoordinator == null)
+            {
+                throw new InvalidOperationException("Task-space coordinator is not initialized.");
+            }
+
+            await _taskSpaceCoordinator.SwitchAsync(sourceId).ConfigureAwait(true);
+            settings.IsTaskSpaceRecoveryRequired = false;
+            settings.TaskSpaceRecoveryMessage = string.Empty;
+            settings.ReloadActiveTaskSpaceSettings();
+            WireSettingsToActiveStorage(settings);
+            settings.SetStorageConnectionState(SettingsConnectionState.Connected);
+            RefreshTaskSpaces(settings);
+            return true;
+        }
+        catch (TaskSpaceRecoveryException ex)
+        {
+            settings.IsTaskSpaceRecoveryRequired = true;
+            settings.TaskSpaceRecoveryMessage = L10n.Format(
+                "TaskSpaceRecoveryRequired",
+                ex.ActivationError.Message,
+                ex.RestorationError.Message);
+            settings.SetStorageConnectionState(SettingsConnectionState.Error);
+            RefreshTaskSpaces(settings);
+            _notificationManager?.ErrorToast(settings.TaskSpaceRecoveryMessage);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            RefreshTaskSpaces(settings);
+            _notificationManager?.ErrorToast(L10n.Format("ConnectStorageFailed", ex.Message, string.Empty));
+            return false;
+        }
+        finally
+        {
+            settings.IsTaskSpaceSwitching = false;
+        }
+    }
+
+    private async Task AddTaskSpaceAsync(SettingsViewModel settings)
+    {
+        if (_taskSpaceCoordinator == null)
+        {
+            return;
+        }
+
+        if (settings.IsConflictResolutionMode)
+        {
+            _notificationManager?.ErrorToast(L10n.Get("TaskSpaceSwitchBlockedByConflict"));
+            return;
+        }
+
+        settings.IsTaskSpaceSwitching = true;
+        try
+        {
+            await _taskSpaceCoordinator.AddLocalAsync(settings.NewTaskSpaceName).ConfigureAwait(true);
+            settings.IsTaskSpaceRecoveryRequired = false;
+            settings.TaskSpaceRecoveryMessage = string.Empty;
+            settings.ReloadActiveTaskSpaceSettings();
+            WireSettingsToActiveStorage(settings);
+            settings.SetStorageConnectionState(SettingsConnectionState.Connected);
+            RefreshTaskSpaces(settings);
+        }
+        catch (TaskSpaceRecoveryException ex)
+        {
+            settings.IsTaskSpaceRecoveryRequired = true;
+            settings.TaskSpaceRecoveryMessage = L10n.Format(
+                "TaskSpaceRecoveryRequired",
+                ex.ActivationError.Message,
+                ex.RestorationError.Message);
+            settings.SetStorageConnectionState(SettingsConnectionState.Error);
+            RefreshTaskSpaces(settings);
+            _notificationManager?.ErrorToast(settings.TaskSpaceRecoveryMessage);
+        }
+        catch (Exception ex)
+        {
+            RefreshTaskSpaces(settings);
+            _notificationManager?.ErrorToast(L10n.Format("ConnectStorageFailed", ex.Message, string.Empty));
+        }
+        finally
+        {
+            settings.IsTaskSpaceSwitching = false;
+        }
+    }
+
     private async Task ConnectBackupRepositoryAsync(
         SettingsViewModel settings,
         bool allowMergeWithNonEmptyRemote)
@@ -863,7 +1170,9 @@ public class App : Application
         settings.SetBackupConnectionState(BackupStatusState.Connecting, L10n.Get("ConnectingRepository"));
         try
         {
-            await Task.Run(() => _backupService?.ConnectRepository(allowMergeWithNonEmptyRemote));
+            await RunBackupOperationAsync(
+                "ConnectGitRepository",
+                () => _backupService?.ConnectRepository(allowMergeWithNonEmptyRemote));
             settings.ReloadGitMetadata();
             if (settings.IsConflictResolutionMode)
             {
@@ -891,16 +1200,24 @@ public class App : Application
 
     private async Task ReloadCurrentTaskStorageAsync(SettingsViewModel settings)
     {
-        if (_storageFactory == null || _configuration == null || _mainWindowViewModel == null || settings.IsServerMode)
+        if (_storageFactory == null || _configuration == null || _mainWindowViewModel == null ||
+            _taskSpaceCoordinator == null || settings.IsServerMode)
         {
             return;
         }
 
         await PrepareFileStoragePathAsync(settings.TaskStoragePath);
-        await _storageFactory.SourceManager.SwitchStorageAsync(isServerMode: false, _configuration);
-        WireActiveTaskContext();
+        try
+        {
+            await _taskSpaceCoordinator.ReconnectActiveAsync();
+        }
+        catch (TaskSpaceRecoveryException ex)
+        {
+            SetTaskSpaceRecoveryState(settings, ex);
+            throw;
+        }
+
         WireSettingsToActiveStorage(settings);
-        await _mainWindowViewModel.Connect();
         settings.SetStorageConnectionState(SettingsConnectionState.Connected);
     }
 
@@ -909,7 +1226,8 @@ public class App : Application
         IRemoteBackupService? backupService,
         string? currentLocalStoragePath,
         Func<string?, Task> prepareFileStoragePathAsync,
-        Action<SettingsViewModel> enterConflictResolutionMode)
+        Action<SettingsViewModel> enterConflictResolutionMode,
+        Func<Action, Task>? runBackupOperationAsync = null)
     {
         await prepareFileStoragePathAsync(settings.TaskStoragePath);
 
@@ -920,7 +1238,15 @@ public class App : Application
 
         try
         {
-            await Task.Run(() => backupService?.PullExistingRepository());
+            var pullOperation = () => backupService?.PullExistingRepository();
+            if (runBackupOperationAsync != null)
+            {
+                await runBackupOperationAsync(pullOperation);
+            }
+            else
+            {
+                await Task.Run(pullOperation);
+            }
         }
         catch (Exception ex)
         {
@@ -1046,6 +1372,66 @@ public class App : Application
         }
     }
 
+    private Task RunBackupOperationAsync(string operationName, Action operation) =>
+        _taskSpaceOperationRunner.RunExclusiveAsync(
+            operationName,
+            _storageFactory?.SourceManager.ActiveSource?.Descriptor.Id,
+            async context =>
+            {
+                using var backupScope =
+                    (_backupService as ITaskSpaceBackupOperationScope)?.BeginTaskSpaceOperation(context);
+                try
+                {
+                    await Task.Run(operation).ConfigureAwait(false);
+                }
+                finally
+                {
+                    PersistActiveProjectionCore(context);
+                }
+            });
+
+    private Task<T> RunBackupOperationAsync<T>(string operationName, Func<T> operation) =>
+        _taskSpaceOperationRunner.RunExclusiveAsync(
+            operationName,
+            _storageFactory?.SourceManager.ActiveSource?.Descriptor.Id,
+            async context =>
+            {
+                using var backupScope =
+                    (_backupService as ITaskSpaceBackupOperationScope)?.BeginTaskSpaceOperation(context);
+                try
+                {
+                    return await Task.Run(operation).ConfigureAwait(false);
+                }
+                finally
+                {
+                    PersistActiveProjectionCore(context);
+                }
+            });
+
+    private void PersistActiveProjectionCore(TaskSpaceOperationContext context)
+    {
+        var sourceId = _storageFactory?.SourceManager.ActiveSource?.Descriptor.Id;
+        if (!string.IsNullOrWhiteSpace(sourceId) && _activeTaskSpaceConfiguration != null)
+        {
+            _activeTaskSpaceConfiguration.PersistCore(
+                context,
+                _activeTaskSpaceConfiguration.CaptureActiveProjection(sourceId));
+        }
+    }
+
+    private void SetTaskSpaceRecoveryState(
+        SettingsViewModel settings,
+        TaskSpaceRecoveryException error)
+    {
+        settings.IsTaskSpaceRecoveryRequired = true;
+        settings.TaskSpaceRecoveryMessage = L10n.Format(
+            "TaskSpaceRecoveryRequired",
+            error.ActivationError.Message,
+            error.RestorationError.Message);
+        settings.SetStorageConnectionState(SettingsConnectionState.Error);
+        _notificationManager?.ErrorToast(settings.TaskSpaceRecoveryMessage);
+    }
+
     private void WireSettingsToActiveStorage(SettingsViewModel settings)
     {
         if (_wiredServerStorage != null)
@@ -1130,6 +1516,17 @@ public class App : Application
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
+            desktop.Exit += (_, __) =>
+            {
+                try
+                {
+                    _taskSpaceSettingsQueue?.DrainAsync().GetAwaiter().GetResult();
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Task-space settings drain failed during shutdown: {ex}");
+                }
+            };
 #if LIVE
                 if (Debugger.IsAttached && !IsProduction())
                 {
@@ -1153,11 +1550,17 @@ public class App : Application
                 {
                     DataContext = vm
                 };
+                ApplyAutomationWindowSize(window);
+                ApplyAutomationWindowPlacement(window);
 
                 desktop.MainWindow = window;
 
                 // Когда окно загрузится — вызовем инициализацию
-                window.Opened += (_, __) => _ = InitializeStartupViewModelAsync(vm);
+                window.Opened += (_, __) =>
+                {
+                    ApplyAutomationWindowPlacement(window);
+                    _ = InitializeStartupViewModelAsync(vm);
+                };
             }
         }
         else if (ApplicationLifetime is ISingleViewApplicationLifetime singleViewPlatform)
@@ -1247,6 +1650,81 @@ public class App : Application
         {
             vm.Title = title;
         }
+    }
+
+    private static void ApplyAutomationWindowSize(MainWindow window)
+    {
+        if (TryReadAutomationWindowDimension(AutomationWindowWidthEnvironmentVariable, out var width))
+        {
+            window.Width = width;
+        }
+
+        if (TryReadAutomationWindowDimension(AutomationWindowHeightEnvironmentVariable, out var height))
+        {
+            window.Height = height;
+        }
+    }
+
+    private static bool TryReadAutomationWindowDimension(string environmentVariable, out double dimension)
+    {
+        var configured = Environment.GetEnvironmentVariable(environmentVariable);
+        return double.TryParse(
+                   configured,
+                   NumberStyles.Float,
+                   CultureInfo.InvariantCulture,
+                   out dimension) &&
+               double.IsFinite(dimension) &&
+               dimension > 0;
+    }
+
+    private static void ApplyAutomationWindowPlacement(MainWindow window)
+    {
+        var configured = Environment.GetEnvironmentVariable(AutomationDesktopMonitorEnvironmentVariable);
+        if (string.IsNullOrWhiteSpace(configured))
+        {
+            return;
+        }
+
+        var screens = window.Screens.All
+            .OrderByDescending(screen => screen.IsPrimary)
+            .ThenBy(screen => screen.Bounds.Y)
+            .ThenBy(screen => screen.Bounds.X)
+            .ThenBy(screen => screen.Bounds.Bottom)
+            .ThenBy(screen => screen.Bounds.Right)
+            .ToArray();
+        if (screens.Length == 0)
+        {
+            return;
+        }
+
+        var selector = configured.Trim();
+        var target = selector switch
+        {
+            var value when string.Equals(value, "primary", StringComparison.OrdinalIgnoreCase) =>
+                screens.FirstOrDefault(screen => screen.IsPrimary),
+            var value when string.Equals(value, "right", StringComparison.OrdinalIgnoreCase) ||
+                           string.Equals(value, "last", StringComparison.OrdinalIgnoreCase) =>
+                screens[^1],
+            var value when int.TryParse(value, out var index) && index >= 0 && index < screens.Length =>
+                screens[index],
+            var value => screens.FirstOrDefault(
+                screen => string.Equals(screen.DisplayName, value, StringComparison.OrdinalIgnoreCase))
+        };
+        if (target == null)
+        {
+            return;
+        }
+
+        var area = target.WorkingArea;
+        var width = double.IsFinite(window.Width) && window.Width > 0 ? window.Width : 1000;
+        var height = double.IsFinite(window.Height) && window.Height > 0 ? window.Height : 500;
+        var pixelWidth = Math.Min(area.Width, (int)Math.Ceiling(width * target.Scaling));
+        var pixelHeight = Math.Min(area.Height, (int)Math.Ceiling(height * target.Scaling));
+
+        window.WindowStartupLocation = Avalonia.Controls.WindowStartupLocation.Manual;
+        window.Position = new PixelPoint(
+            area.X + Math.Max(0, (area.Width - pixelWidth) / 2),
+            area.Y + Math.Max(0, (area.Height - pixelHeight) / 2));
     }
 
     private static void ApplyAutomationTreeExpansion(MainWindowViewModel vm)
@@ -1642,6 +2120,83 @@ public class App : Application
         Debug.WriteLine($"[App.Init] {DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} {message}");
     }
 
+    private async Task PauseTaskSpaceSchedulerAsync()
+    {
+        if (_scheduler != null)
+        {
+            await _scheduler.PauseAll().ConfigureAwait(false);
+        }
+    }
+
+    private async Task ApplyActiveTaskSpaceSchedulerAsync(TaskSourceRuntime? runtime)
+    {
+        EnsureScheduler();
+        if (_scheduler == null)
+        {
+            return;
+        }
+
+        await _scheduler.PauseAll().ConfigureAwait(false);
+        var git = _configuration?.Get<GitSettings>("Git") ?? new GitSettings();
+        if (runtime?.Storage.TaskTreeManager.Storage is not FileStorage || !git.BackupEnabled)
+        {
+            return;
+        }
+
+        var pullJobKey = new JobKey("GitPullJob", "Git");
+        if (!await _scheduler.CheckExists(pullJobKey).ConfigureAwait(false))
+        {
+            var pullJob = JobBuilder.Create<GitPullJob>()
+                .WithIdentity(pullJobKey)
+                .Build();
+            await _scheduler.ScheduleJob(
+                pullJob,
+                GenerateTriggerBySecondsInterval(
+                    "PullTrigger",
+                    "GitPullJob",
+                    Math.Max(1, git.PullIntervalSeconds))).ConfigureAwait(false);
+        }
+        else
+        {
+            await _scheduler.RescheduleJob(
+                new TriggerKey("PullTrigger", "GitPullJob"),
+                GenerateTriggerBySecondsInterval(
+                    "PullTrigger",
+                    "GitPullJob",
+                    Math.Max(1, git.PullIntervalSeconds))).ConfigureAwait(false);
+        }
+
+        var pushJobKey = new JobKey("GitPushJob", "Git");
+        if (!await _scheduler.CheckExists(pushJobKey).ConfigureAwait(false))
+        {
+            var pushJob = JobBuilder.Create<GitPushJob>()
+                .WithIdentity(pushJobKey)
+                .Build();
+            await _scheduler.ScheduleJob(
+                pushJob,
+                GenerateTriggerBySecondsInterval(
+                    "PushTrigger",
+                    "GitPushJob",
+                    Math.Max(1, git.PushIntervalSeconds))).ConfigureAwait(false);
+        }
+        else
+        {
+            await _scheduler.RescheduleJob(
+                new TriggerKey("PushTrigger", "GitPushJob"),
+                GenerateTriggerBySecondsInterval(
+                    "PushTrigger",
+                    "GitPushJob",
+                    Math.Max(1, git.PushIntervalSeconds))).ConfigureAwait(false);
+        }
+
+        if (!_scheduler.IsStarted)
+        {
+            await _scheduler.Start().ConfigureAwait(false);
+        }
+
+        await _scheduler.ResumeAll().ConfigureAwait(false);
+    }
+
     private void EnsureScheduler()
     {
         if (_scheduler != null)
@@ -1656,7 +2211,12 @@ public class App : Application
 
         var schedulerFactory = new StdSchedulerFactory();
         _scheduler = schedulerFactory.GetScheduler().Result;
-        _scheduler.JobFactory = new DependencyInjectionJobFactory(_configuration, _backupService);
+        _scheduler.JobFactory = new DependencyInjectionJobFactory(
+            _configuration,
+            _backupService,
+            _taskSpaceOperationRunner,
+            () => _storageFactory?.SourceManager.ActiveSource?.Descriptor.Id,
+            _activeTaskSpaceConfiguration);
         Log("[App.Init] Scheduler created lazily");
         Log("[App.Init] Scheduler job factory set");
     }
@@ -1682,7 +2242,13 @@ public class App : Application
             _configPath = configPath;
 
             // Create configuration
-            _configuration = WritableJsonConfigurationFabric.Create(configPath);
+            // This provider persists every Set via ReadAllText + File.WriteAllText.
+            // Watching its own writes can reload a transient file between the staged
+            // task-space mutation writes, so the application owns a stable in-memory
+            // view and persists changes explicitly instead.
+            _configuration = WritableJsonConfigurationFabric.Create(
+                configPath,
+                reloadOnChange: false);
             Log("[App.Init] Configuration created");
 
             LocalizationService.Current = new LocalizationService(new DefaultLocalizationSystemCultureProvider());
@@ -1731,8 +2297,47 @@ public class App : Application
                 _configuration,
                 _mapper,
                 _notificationManager,
-                ResolveDefaultTaskStoragePath);
+                ResolveDefaultTaskStoragePath,
+                _taskSpaceOperationRunner);
             _taskMoveService = new TaskMoveService(_storageFactory);
+            _activeTaskSpaceConfiguration = new ActiveTaskSpaceConfiguration(
+                _configuration,
+                _storageFactory.SourceManager,
+                _taskSpaceOperationRunner);
+            _taskSpaceSettingsQueue = new TaskSpaceSettingsPersistenceQueue(
+                _activeTaskSpaceConfiguration,
+                _taskSpaceOperationRunner,
+                async draft =>
+                {
+                    if (string.Equals(
+                            _storageFactory.SourceManager.ActiveSource?.Descriptor.Id,
+                            draft.SourceId,
+                            StringComparison.Ordinal))
+                    {
+                        var activeRuntime = _storageFactory.SourceManager.ActiveSource;
+                        if (activeRuntime == null ||
+                            activeRuntime.Descriptor.Kind !=
+                            (draft.Storage.IsServerMode
+                                ? TaskSourceKind.Server
+                                : TaskSourceKind.File) ||
+                            !string.Equals(
+                                activeRuntime.Descriptor.Path,
+                                draft.Storage.Path,
+                                StringComparison.Ordinal) ||
+                            !string.Equals(
+                                activeRuntime.Descriptor.Url,
+                                draft.Storage.URL,
+                                StringComparison.Ordinal))
+                        {
+                            await PauseTaskSpaceSchedulerAsync().ConfigureAwait(false);
+                            return;
+                        }
+
+                        await ApplyActiveTaskSpaceSchedulerAsync(
+                                activeRuntime)
+                            .ConfigureAwait(false);
+                    }
+                });
             Log("[App.Init] Storage factory created");
 
             // Create backup service
@@ -1740,7 +2345,10 @@ public class App : Application
                 _configuration,
                 _notificationManager,
                 _storageFactory,
-                _clientOptions.GetAbsolutePath ?? GetDefaultAbsolutePath);
+                _clientOptions.GetAbsolutePath ?? GetDefaultAbsolutePath,
+                _taskSpaceOperationRunner,
+                () => _storageFactory?.SourceManager.ActiveSource?.Descriptor.Id,
+                _activeTaskSpaceConfiguration);
             Log("[App.Init] Backup service created");
 
             // Create initial storage
@@ -1780,39 +2388,10 @@ public class App : Application
             var taskRepository = _storageFactory.SourceManager.ActiveStorage;
             if (taskRepository?.TaskTreeManager.Storage is FileStorage)
             {
-                taskRepository.Initiated += (sender, eventArgs) =>
+                taskRepository.Initiated += async (_, _) =>
                 {
-                    EnsureScheduler();
-                    if (_scheduler == null)
-                    {
-                        return;
-                    }
-
-                    var currentGitSettings = _configuration?.Get<GitSettings>("Git");
-                    if (currentGitSettings?.BackupEnabled != true)
-                    {
-                        return;
-                    }
-
-                    var pullJob = JobBuilder.Create<GitPullJob>()
-                        .WithIdentity("GitPullJob", "Git")
-                        .Build();
-                    var pushJob = JobBuilder.Create<GitPushJob>()
-                        .WithIdentity("GitPushJob", "Git")
-                        .Build();
-
-                    var pullTrigger = GenerateTriggerBySecondsInterval("PullTrigger", "GitPullJob",
-                        currentGitSettings.PullIntervalSeconds);
-                    var pushTrigger = GenerateTriggerBySecondsInterval("PushTrigger", "GitPushJob",
-                        currentGitSettings.PushIntervalSeconds);
-
-                    _scheduler.ScheduleJob(pullJob, pullTrigger);
-                    _scheduler.ScheduleJob(pushJob, pushTrigger);
-
-                    if (currentGitSettings.BackupEnabled)
-                    {
-                        _scheduler.Start();
-                    }
+                    await ApplyActiveTaskSpaceSchedulerAsync(
+                        _storageFactory.SourceManager.ActiveSource).ConfigureAwait(false);
                 };
             }
             Log("[App.Init] Completed successfully");

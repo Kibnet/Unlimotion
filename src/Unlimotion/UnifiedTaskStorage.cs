@@ -153,6 +153,7 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
 
     public async Task<TaskItemViewModel> Add(TaskItemViewModel? currentTask = null, bool isBlocked = false)
     {
+        EnsureTasksBelongToActiveSpace(currentTask);
         var createdTask = new TaskItem();
         var taskItemList = (await TaskTreeManager.AddTask(
             createdTask,
@@ -171,6 +172,7 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
 
     public async Task<TaskItemViewModel> AddChild(TaskItemViewModel currentTask)
     {
+        EnsureTasksBelongToActiveSpace(currentTask);
         var createdTask = new TaskItem();
         var taskItemList = (await TaskTreeManager.AddChildTask(
                 createdTask,
@@ -189,6 +191,7 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
 
     public async Task<bool> Delete(TaskItemViewModel change, bool deleteInStorage = true)
     {
+        EnsureTasksBelongToActiveSpace(change);
         var deletedTaskIds = deleteInStorage
             ? GetTaskAndContainedTaskIds(change)
             : new List<string> { change.Id };
@@ -241,6 +244,7 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
 
     public async Task<bool> Delete(TaskItemViewModel change, TaskItemViewModel parent)
     {
+        EnsureTasksBelongToActiveSpace(change, parent);
         var connItemList = await TaskTreeManager.DeleteParentChildRelation(parent.Model, change.Model);
 
         foreach (var task in connItemList) UpdateCache(task);
@@ -250,6 +254,7 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
 
     public async Task<TaskItemViewModel> Update(TaskItemViewModel change)
     { 
+        EnsureTasksBelongToActiveSpace(change);
         return await Update(change.Model);
     }
 
@@ -467,6 +472,7 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
 
     public async Task<TaskItemViewModel> Clone(TaskItemViewModel change, params TaskItemViewModel[]? additionalParents)
     {
+        EnsureTasksBelongToActiveSpace([change, .. additionalParents ?? []]);
         var additionalItemParents = new List<TaskItem>();
         foreach (var newParent in additionalParents ?? []) additionalItemParents.Add(newParent.Model);
 
@@ -484,6 +490,7 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
 
     public async Task<bool> CopyInto(TaskItemViewModel change, TaskItemViewModel[]? additionalParents)
     {
+        EnsureTasksBelongToActiveSpace([change, .. additionalParents ?? []]);
         var additionalParent = additionalParents?.FirstOrDefault()
             ?? throw new ArgumentException("At least one additional parent is required.", nameof(additionalParents));
 
@@ -500,6 +507,7 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
     public async Task<bool> MoveInto(TaskItemViewModel change, TaskItemViewModel[] additionalParents,
         TaskItemViewModel? currentTask)
     {
+        EnsureTasksBelongToActiveSpace([change, currentTask, .. additionalParents]);
         var newParent = additionalParents.FirstOrDefault()
             ?? throw new ArgumentException("At least one new parent is required.", nameof(additionalParents));
 
@@ -516,6 +524,7 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
 
     public async Task<bool> Unblock(TaskItemViewModel taskToUnblock, TaskItemViewModel blockingTask)
     {
+        EnsureTasksBelongToActiveSpace(taskToUnblock, blockingTask);
         var taskItemList = await TaskTreeManager.UnblockTask(
             taskToUnblock.Model,
             blockingTask.Model);
@@ -528,6 +537,7 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
 
     public async Task<bool> Block(TaskItemViewModel change, TaskItemViewModel currentTask)
     {
+        EnsureTasksBelongToActiveSpace(change, currentTask);
         var taskItemList = await TaskTreeManager.BlockTask(
             change.Model,
             currentTask.Model);
@@ -540,12 +550,37 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
 
     public async Task RemoveParentChildConnection(TaskItemViewModel parent, TaskItemViewModel child)
     {
+        EnsureTasksBelongToActiveSpace(parent, child);
         var taskItemList = await TaskTreeManager.DeleteParentChildRelation(
             parent.Model,
             child.Model);
 
         taskItemList.ForEach(UpdateCache);
         RefreshRelations();
+    }
+
+    private void EnsureTasksBelongToActiveSpace(params TaskItemViewModel?[] tasks)
+    {
+        if (taskContext == null)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(taskContext.SourceId))
+        {
+            throw new InvalidOperationException(
+                "The executing task storage does not identify its task space.");
+        }
+
+        foreach (var task in tasks)
+        {
+            if (task != null &&
+                (string.IsNullOrWhiteSpace(task.SourceId) ||
+                 !string.Equals(task.SourceId, taskContext.SourceId, StringComparison.Ordinal)))
+            {
+                throw new InvalidOperationException("Tasks from different task spaces cannot be related or changed together.");
+            }
+        }
     }
 
     private static async Task<bool> MigrateTaskStatusModel(FileStorage fileStorage)

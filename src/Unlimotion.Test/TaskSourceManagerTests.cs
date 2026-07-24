@@ -286,7 +286,7 @@ public sealed class TaskSourceManagerTests : IDisposable
             await Assert.That(second.TaskContext.SourceId).IsEqualTo("local-b");
             await Assert.That(first.TaskContext.NotificationManager).IsSameReferenceAs(notificationManager);
             await Assert.That(manager.ActiveSource).IsSameReferenceAs(second);
-            await Assert.That(manager.Sources.Count).IsEqualTo(2);
+            await Assert.That(manager.Sources.Count).IsEqualTo(1);
         }
         finally
         {
@@ -354,6 +354,75 @@ public sealed class TaskSourceManagerTests : IDisposable
         await Assert.That(firstTask.SourceId).IsEqualTo("source-a");
         await Assert.That(firstStorage.SavedTaskIds.Contains("task-a")).IsTrue();
         await Assert.That(secondStorage.SavedTaskIds).IsEmpty();
+    }
+
+    [Test]
+    public async Task TaskStorage_RejectsRelationsBetweenDifferentTaskSpaces()
+    {
+        var firstRepository = new UnifiedTaskStorage(
+            new TaskTreeManager(new RecordingStorage()),
+            new TaskItemViewModelContext { SourceId = "source-a" });
+        var secondRepository = new UnifiedTaskStorage(
+            new TaskTreeManager(new RecordingStorage()),
+            new TaskItemViewModelContext { SourceId = "source-b" });
+        var firstTask = new TaskItemViewModel(
+            new TaskItem { Id = "task-a", Title = "Task A" },
+            firstRepository,
+            () => false,
+            new TaskItemViewModelContext { SourceId = "source-a" });
+        var secondTask = new TaskItemViewModel(
+            new TaskItem { Id = "task-b", Title = "Task B" },
+            secondRepository,
+            () => false,
+            new TaskItemViewModelContext { SourceId = "source-b" });
+
+        await Assert.That(async () => await firstRepository.Block(firstTask, secondTask))
+            .Throws<InvalidOperationException>();
+    }
+
+    [Test]
+    public async Task TaskStorage_RejectsSameSourceOperandsWhenExecutingStorageOwnsAnotherSpace()
+    {
+        var executingRepository = new UnifiedTaskStorage(
+            new TaskTreeManager(new RecordingStorage()),
+            new TaskItemViewModelContext { SourceId = "source-b" });
+        var owningRepository = new UnifiedTaskStorage(
+            new TaskTreeManager(new RecordingStorage()),
+            new TaskItemViewModelContext { SourceId = "source-a" });
+        var firstTask = new TaskItemViewModel(
+            new TaskItem { Id = "task-a", Title = "Task A" },
+            owningRepository,
+            () => false,
+            new TaskItemViewModelContext { SourceId = "source-a" });
+        var secondTask = new TaskItemViewModel(
+            new TaskItem { Id = "task-b", Title = "Task B" },
+            owningRepository,
+            () => false,
+            new TaskItemViewModelContext { SourceId = "source-a" });
+
+        await Assert.That(async () => await executingRepository.Block(firstTask, secondTask))
+            .Throws<InvalidOperationException>();
+    }
+
+    [Test]
+    public async Task TaskStorage_RejectsRelationOperandWithoutSourceIdentity()
+    {
+        var repository = new UnifiedTaskStorage(
+            new TaskTreeManager(new RecordingStorage()),
+            new TaskItemViewModelContext { SourceId = "source-a" });
+        var identifiedTask = new TaskItemViewModel(
+            new TaskItem { Id = "identified", Title = "Identified" },
+            repository,
+            () => false,
+            new TaskItemViewModelContext { SourceId = "source-a" });
+        var unidentifiedTask = new TaskItemViewModel(
+            new TaskItem { Id = "unidentified", Title = "Unidentified" },
+            repository,
+            () => false,
+            new TaskItemViewModelContext { SourceId = string.Empty });
+
+        await Assert.That(async () => await repository.Block(identifiedTask, unidentifiedTask))
+            .Throws<InvalidOperationException>();
     }
 
     [Test]
@@ -432,6 +501,143 @@ public sealed class TaskSourceManagerTests : IDisposable
         await Assert.That(persistCalls).IsEqualTo(0);
     }
 
+    [Test]
+    public async Task SyncProfiles_ProjectOnlyTheActiveSpaceIntoLegacyGitSettings()
+    {
+        var configuration = CreateConfiguration();
+        var settings = new TaskSourcesSettings
+        {
+            ActiveSourceId = "personal",
+            Sources =
+            [
+                new TaskSourceDescriptor { Id = "personal", Kind = TaskSourceKind.File, Path = Path.Combine(_rootPath, "personal") },
+                new TaskSourceDescriptor { Id = "work", Kind = TaskSourceKind.File, Path = Path.Combine(_rootPath, "work") }
+            ],
+            SyncSettings =
+            [
+                new TaskSourceSyncSettings { SourceId = "personal", Git = new GitSettings { RemoteUrl = "https://example.test/personal.git", Branch = "personal" } },
+                new TaskSourceSyncSettings { SourceId = "work", Git = new GitSettings { RemoteUrl = "https://example.test/work.git", Branch = "work" } }
+            ]
+        };
+
+        TaskSourceSettingsAdapter.Save(configuration, settings);
+        TaskSourceSettingsAdapter.SyncLegacy(configuration, settings, settings.Sources[0]);
+        var personalLegacy = configuration.Get<GitSettings>("Git");
+
+        settings.ActiveSourceId = "work";
+        TaskSourceSettingsAdapter.SyncLegacy(configuration, settings, settings.Sources[1]);
+        var workLegacy = configuration.Get<GitSettings>("Git");
+        var reloaded = TaskSourceSettingsAdapter.LoadOrCreate(configuration, Path.Combine(_rootPath, "fallback"));
+
+        await Assert.That(personalLegacy?.RemoteUrl).IsEqualTo("https://example.test/personal.git");
+        await Assert.That(workLegacy?.RemoteUrl).IsEqualTo("https://example.test/work.git");
+        await Assert.That(reloaded.SyncSettings.Single(sync => sync.SourceId == "personal").Git.Branch)
+            .IsEqualTo("personal");
+        await Assert.That(reloaded.SyncSettings.Single(sync => sync.SourceId == "work").Git.Branch)
+            .IsEqualTo("work");
+    }
+
+    [Test]
+    public async Task SourceManager_AddRenameActivateAndRemoveSpace_PreservesOtherProfiles()
+    {
+        var configuration = CreateConfiguration();
+        var defaultPath = Path.Combine(_rootPath, "default");
+        var manager = new TaskSourceManager(
+            configuration,
+            new RecordingTaskStorageBuilder(),
+            defaultStoragePathProvider: () => defaultPath);
+        manager.ActivateConfiguredSource();
+
+        var created = manager.AddConfiguredLocalSource("Work", Path.Combine(_rootPath, "work"));
+        manager.RenameConfiguredSource(created.Id, "Work tasks");
+        await manager.ActivateSourceByIdAsync(created.Id);
+        var activeGit = configuration.Get<GitSettings>("Git");
+
+        await manager.ActivateSourceByIdAsync(TaskSourceDescriptor.DefaultSourceId);
+        manager.RemoveConfiguredSource(created.Id);
+        var persisted = TaskSourceSettingsAdapter.LoadOrCreate(configuration, defaultPath);
+
+        await Assert.That(activeGit).IsNotNull();
+        await Assert.That(manager.ActiveSource?.Descriptor.Id).IsEqualTo(TaskSourceDescriptor.DefaultSourceId);
+        await Assert.That(persisted.Sources.Select(source => source.Id)).DoesNotContain(created.Id);
+        await Assert.That(persisted.SyncSettings.Select(sync => sync.SourceId)).DoesNotContain(created.Id);
+        await Assert.That(persisted.Sources.Single().Id).IsEqualTo(TaskSourceDescriptor.DefaultSourceId);
+    }
+
+    [Test]
+    public async Task SourceManager_AddLocalSpaceRejectsNormalizedAliasOfExistingDirectory()
+    {
+        var configuration = CreateConfiguration();
+        var defaultPath = Path.Combine(_rootPath, "default");
+        Directory.CreateDirectory(defaultPath);
+        var manager = new TaskSourceManager(
+            configuration,
+            new RecordingTaskStorageBuilder(),
+            defaultStoragePathProvider: () => defaultPath);
+        var normalizedAlias = Path.Combine(defaultPath, "..", Path.GetFileName(defaultPath));
+
+        await Assert.That(() => manager.AddConfiguredLocalSource("Alias", normalizedAlias))
+            .Throws<InvalidOperationException>();
+        await Assert.That(manager.ConfiguredSources.Select(source => source.Id))
+            .IsEquivalentTo([TaskSourceDescriptor.DefaultSourceId]);
+    }
+
+    [Test]
+    public async Task SourceManager_LocalPathIdentityUsesPlatformCaseSemantics()
+    {
+        var configuration = CreateConfiguration();
+        var defaultPath = Path.Combine(_rootPath, "case-sensitive");
+        Directory.CreateDirectory(defaultPath);
+        var manager = new TaskSourceManager(
+            configuration,
+            new RecordingTaskStorageBuilder(),
+            defaultStoragePathProvider: () => defaultPath);
+        var alternateCasePath = Path.Combine(_rootPath, "CASE-SENSITIVE");
+
+        if (OperatingSystem.IsWindows())
+        {
+            await Assert.That(() => manager.AddConfiguredLocalSource("Alias", alternateCasePath))
+                .Throws<InvalidOperationException>();
+            return;
+        }
+
+        var created = manager.AddConfiguredLocalSource("Distinct", alternateCasePath);
+
+        await Assert.That(manager.ConfiguredSources.Select(source => source.Id)).Contains(created.Id);
+        await Assert.That(Directory.Exists(alternateCasePath)).IsTrue();
+    }
+
+    [Test]
+    public async Task SourceManager_ServerOwnershipRejectsSameNormalizedUrlAndLogin()
+    {
+        var configuration = CreateConfiguration();
+        var manager = new TaskSourceManager(
+            configuration,
+            new RecordingTaskStorageBuilder(),
+            defaultStoragePathProvider: () => Path.Combine(_rootPath, "default"));
+        var first = manager.AddConfiguredLocalSource("Server one", Path.Combine(_rootPath, "server-one"));
+        var second = manager.AddConfiguredLocalSource("Server two", Path.Combine(_rootPath, "server-two"));
+
+        manager.PersistSourceSettings(CreateServerDraft(
+            first.Id,
+            "https://tasks.example/",
+            "ExampleUser"));
+
+        await Assert.That(() => manager.PersistSourceSettings(CreateServerDraft(
+                second.Id,
+                " HTTPS://TASKS.EXAMPLE ",
+                " exampleuser ")))
+            .Throws<InvalidOperationException>();
+
+        manager.PersistSourceSettings(CreateServerDraft(
+            second.Id,
+            "https://tasks.example",
+            "another-user"));
+
+        await Assert.That(manager.GetSourceSettings(second.Id).Storage.IsServerMode).IsTrue();
+        await Assert.That(manager.GetSourceSettings(second.Id).Storage.Login).IsEqualTo("another-user");
+    }
+
     public void Dispose()
     {
         foreach (var disposable in _disposables)
@@ -457,6 +663,23 @@ public sealed class TaskSourceManagerTests : IDisposable
 
         return configuration;
     }
+
+    private static TaskSpaceSettingsDraft CreateServerDraft(
+        string sourceId,
+        string url,
+        string login) =>
+        new()
+        {
+            SourceId = sourceId,
+            Storage = new TaskStorageSettings
+            {
+                IsServerMode = true,
+                URL = url,
+                Login = login,
+                Password = "password"
+            },
+            Git = new GitSettings()
+        };
 
     private sealed class RecordingStorage : IStorage
     {

@@ -15,7 +15,8 @@ public class TaskStorageFactory : ITaskStorageFactory
         IConfiguration configuration,
         IMapper mapper,
         INotificationManagerWrapper? notificationManager = null,
-        Func<string?>? defaultStoragePathProvider = null)
+        Func<string?>? defaultStoragePathProvider = null,
+        ITaskSpaceOperationRunner? taskSpaceOperationRunner = null)
     {
         _configuration = configuration;
         _defaultStoragePathProvider = defaultStoragePathProvider ?? (() => string.Empty);
@@ -28,7 +29,8 @@ public class TaskStorageFactory : ITaskStorageFactory
             configuration,
             _storageBuilder,
             notificationManager,
-            _defaultStoragePathProvider);
+            _defaultStoragePathProvider,
+            taskSpaceOperationRunner);
     }
 
     public ITaskSourceManager SourceManager { get; }

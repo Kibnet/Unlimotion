@@ -693,7 +693,49 @@ namespace Unlimotion.ViewModel
                     return (Func<TaskItemViewModel, bool>)Predicate;
                 });
 
-        public async Task Connect()
+        public Task Connect() => ConnectCore(null, storageAlreadyInitialized: false);
+
+        public Task BindInitializedStorage(ITaskStorage storage)
+        {
+            ArgumentNullException.ThrowIfNull(storage);
+            ResetTaskSpaceSelection();
+            DetailsAreOpen = false;
+            Search.SearchText = string.Empty;
+            LastOpenedSource.Clear();
+            CurrentRelationEditor.Close();
+            return ConnectCore(storage, storageAlreadyInitialized: true);
+        }
+
+        public void ClearTaskSpaceSurface()
+        {
+            IsInitialized = false;
+            ResetTaskSpaceSelection();
+            DetailsAreOpen = false;
+            Search.SearchText = string.Empty;
+            LastOpenedSource.Clear();
+            CurrentRelationEditor.Close();
+            connectionDisposableList.Dispose();
+            connectionDisposableList.Disposables.Clear();
+            taskRepository = null;
+        }
+
+        private void ResetTaskSpaceSelection()
+        {
+            CurrentTaskItem = null;
+            LastTaskItem = null!;
+            CurrentAllTasksItem = null;
+            CurrentUnlockedItem = null;
+            CurrentInProgressItem = null;
+            CurrentCompletedItem = null;
+            CurrentArchivedItem = null;
+            CurrentLastCreated = null;
+            CurrentLastUpdated = null;
+            CurrentGraphItem = null;
+            CurrentLastOpenedItem = null;
+            _lastSelectedAllTasksItem = null;
+        }
+
+        private async Task ConnectCore(ITaskStorage? suppliedStorage, bool storageAlreadyInitialized)
         {
             IsTasksLoading = true;
             await Task.Yield();
@@ -731,7 +773,7 @@ namespace Unlimotion.ViewModel
                 var lastOpenedStatusFilter = CreateStatusFilter(LastOpenedStatusFilters);
                 var roadmapStatusFilter = CreateStatusFilter(RoadmapStatusFilters);
 
-                var taskStorage = _getTaskStorage?.Invoke();
+                var taskStorage = suppliedStorage ?? _getTaskStorage?.Invoke();
 
                 if (taskStorage == null)
                 {
@@ -748,7 +790,14 @@ namespace Unlimotion.ViewModel
                 Disposable.Create(() => storage.OnConnectionError -= connectionErrorHandler)
                     .AddToDispose(connectionDisposableList);
 
-                await storage.Connect();
+                if (!storageAlreadyInitialized)
+                {
+                    var connected = await storage.Connect();
+                    if (!connected)
+                    {
+                        throw new InvalidOperationException("The task storage rejected the connection.");
+                    }
+                }
                 taskRepository = taskStorage;
 
                 //Если из коллекции пропадает итем, то очищаем выделенный итем.
@@ -1774,7 +1823,10 @@ namespace Unlimotion.ViewModel
                 .Subscribe(_ => CurrentRelationEditor.Close())
                 .AddToDispose(connectionDisposableList);
 
-                await taskStorage.Init();
+                if (!storageAlreadyInitialized)
+                {
+                    await taskStorage.Init();
+                }
                 NotifyTaskStatusMigrationIfNeeded(taskStorage);
                 foreach (var taskItem in taskRepository.Tasks.Items)
                 {

@@ -8,8 +8,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="AppAutomation.Abstractions" Version="1.5.7" />
-    <PackageReference Include="AppAutomation.Authoring" Version="1.5.7" />
+    <PackageReference Include="AppAutomation.Abstractions" Version="1.6.0" />
+    <PackageReference Include="AppAutomation.Authoring" Version="1.6.0" />
     <PackageReference Include="TUnit.Assertions" Version="1.44.0" />
     <PackageReference Include="TUnit.Core" Version="1.44.0" />
   </ItemGroup>

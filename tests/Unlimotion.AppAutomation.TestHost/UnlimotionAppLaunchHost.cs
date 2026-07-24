@@ -2,6 +2,7 @@ using AppAutomation.Session.Contracts;
 using AppAutomation.TestHost.Avalonia;
 using Avalonia;
 using Avalonia.Styling;
+using Avalonia.Threading;
 using Microsoft.Extensions.Configuration;
 using ReactiveUI;
 using ReactiveUI.Avalonia;
@@ -22,6 +23,9 @@ public static class UnlimotionAppLaunchHost
     public const string AutomationOpenedTaskIdsEnvironmentVariable = "UNLIMOTION_AUTOMATION_OPENED_TASK_IDS";
     public const string AutomationWindowTitleEnvironmentVariable = "UNLIMOTION_AUTOMATION_WINDOW_TITLE";
     public const string AutomationExpandAllTaskTreesEnvironmentVariable = "UNLIMOTION_AUTOMATION_EXPAND_ALL_TASK_TREES";
+    public const string AutomationDesktopMonitorEnvironmentVariable = "UNLIMOTION_AUTOMATION_DESKTOP_MONITOR";
+    public const string AutomationWindowWidthEnvironmentVariable = "UNLIMOTION_AUTOMATION_WINDOW_WIDTH";
+    public const string AutomationWindowHeightEnvironmentVariable = "UNLIMOTION_AUTOMATION_WINDOW_HEIGHT";
     public const string CurrentTaskId = UnlimotionAutomationScenarioData.SmokeCurrentTaskId;
     public const string CurrentTaskTitle = UnlimotionAutomationScenarioData.SmokeCurrentTaskTitle;
 
@@ -50,7 +54,8 @@ public static class UnlimotionAppLaunchHost
         TimeSpan? buildTimeout = null,
         TimeSpan? mainWindowTimeout = null,
         TimeSpan? pollInterval = null,
-        string? theme = null)
+        string? theme = null,
+        DesktopWindowPlacement? windowPlacement = null)
     {
         var launchData = UnlimotionAutomationLaunchData.Create(scenario, language, currentTaskId, theme);
         var environmentVariables = CreateEnvironmentVariables(launchData);
@@ -68,9 +73,7 @@ public static class UnlimotionAppLaunchHost
                     MainWindowTimeout = mainWindowTimeout ?? TimeSpan.FromSeconds(30),
                     PollInterval = pollInterval ?? TimeSpan.FromMilliseconds(200),
                     UseIsolatedBuildOutput = buildBeforeLaunch,
-                    WindowPlacement = scenario == UnlimotionAutomationScenario.StatusContract
-                        ? DesktopWindowPlacement.Centered(1280, 800)
-                        : null,
+                    WindowPlacement = ResolveDesktopWindowPlacement(scenario, windowPlacement),
                     Arguments = [$"--config={launchData.ConfigPath}"],
                     EnvironmentVariables = environmentVariables
                 },
@@ -232,7 +235,7 @@ public static class UnlimotionAppLaunchHost
             mapper,
             notificationManager,
             () => launchData.TasksPath);
-        lifetime.RegisterStorage(storageFactory.CreateFileStorage(launchData.TasksPath));
+        lifetime.RegisterStorage(storageFactory.CreateConfiguredStorage());
 
         var backupService = new BackupViaGitService(configuration, notificationManager, storageFactory);
         var settingsViewModel = new SettingsViewModel(configuration, backupService);
@@ -254,7 +257,137 @@ public static class UnlimotionAppLaunchHost
             activeSource.TaskContext.MainWindow = vm;
         }
 
+        ConfigureHeadlessTaskSpaces(
+            vm,
+            settingsViewModel,
+            storageFactory.SourceManager,
+            configuration,
+            lifetime);
+
         return vm;
+    }
+
+    private static void ConfigureHeadlessTaskSpaces(
+        MainWindowViewModel vm,
+        SettingsViewModel settings,
+        ITaskSourceManager sourceManager,
+        IConfiguration configuration,
+        HeadlessSessionLifetime lifetime)
+    {
+        var runner = lifetime.RegisterOperationRunner(new TaskSpaceOperationRunner());
+        var activeConfiguration = new ActiveTaskSpaceConfiguration(configuration, sourceManager, runner);
+        var queue = new TaskSpaceSettingsPersistenceQueue(activeConfiguration, runner);
+
+        async Task RunOnUiThread(Action action)
+        {
+            if (Dispatcher.UIThread.CheckAccess())
+            {
+                action();
+                return;
+            }
+
+            await Dispatcher.UIThread.InvokeAsync(action);
+        }
+
+        async Task BindRuntime(TaskSourceRuntime runtime)
+        {
+            runtime.TaskContext.MainWindow = vm;
+            await Dispatcher.UIThread.InvokeAsync(
+                () => vm.BindInitializedStorage(runtime.Storage));
+        }
+
+        var coordinator = new TaskSpaceCoordinator(
+            sourceManager,
+            runner,
+            queue,
+            BindRuntime,
+            () => RunOnUiThread(vm.ClearTaskSpaceSurface),
+            () => Task.CompletedTask,
+            _ => Task.CompletedTask);
+
+        void Refresh()
+        {
+            settings.ReloadTaskSpaces(
+                sourceManager.ConfiguredSources,
+                sourceManager.ActiveSource?.Descriptor.Id ?? string.Empty);
+        }
+
+        async Task Activate(TaskSpaceOptionViewModel target)
+        {
+            await RunOnUiThread(() => settings.IsTaskSpaceSwitching = true);
+            try
+            {
+                await coordinator.SwitchAsync(target.SourceId);
+                await RunOnUiThread(() =>
+                {
+                    settings.ReloadActiveTaskSpaceSettings();
+                    Refresh();
+                });
+            }
+            finally
+            {
+                await RunOnUiThread(() => settings.IsTaskSpaceSwitching = false);
+            }
+        }
+
+        settings.UseDeferredTaskSpaceSettingsPersistence();
+        settings.SwitchTaskSpaceCommand = new AutomationAsyncCommand<TaskSpaceOptionViewModel>(Activate);
+        settings.AddTaskSpaceCommand = new AutomationAsyncCommand(async () =>
+        {
+            await RunOnUiThread(() => settings.IsTaskSpaceSwitching = true);
+            try
+            {
+                await coordinator.AddLocalAsync(settings.NewTaskSpaceName);
+                await RunOnUiThread(() =>
+                {
+                    settings.ReloadActiveTaskSpaceSettings();
+                    Refresh();
+                });
+            }
+            finally
+            {
+                await RunOnUiThread(() => settings.IsTaskSpaceSwitching = false);
+            }
+        });
+        settings.RenameTaskSpaceCommand = new AutomationAsyncCommand(async () =>
+        {
+            var selected = settings.SelectedTaskSpace;
+            if (selected == null)
+            {
+                return;
+            }
+
+            await queue.DrainAsync();
+            await runner.RunExclusiveAsync(
+                "RenameTaskSpace",
+                selected.SourceId,
+                _ =>
+                {
+                    sourceManager.RenameConfiguredSource(selected.SourceId, selected.DisplayName);
+                    return Task.CompletedTask;
+                });
+            await RunOnUiThread(Refresh);
+        });
+        settings.RemoveTaskSpaceCommand = new AutomationAsyncCommand(async () =>
+        {
+            var selected = settings.SelectedTaskSpace;
+            if (selected == null || selected.IsActive)
+            {
+                return;
+            }
+
+            await queue.DrainAsync();
+            await runner.RunExclusiveAsync(
+                "RemoveTaskSpace",
+                selected.SourceId,
+                _ =>
+                {
+                    sourceManager.RemoveConfiguredSource(selected.SourceId);
+                    return Task.CompletedTask;
+                });
+            await RunOnUiThread(Refresh);
+        });
+        Refresh();
     }
 
     private static void EnsureReactiveUiInitialized()
@@ -329,7 +462,53 @@ public static class UnlimotionAppLaunchHost
             environmentVariables[AutomationExpandAllTaskTreesEnvironmentVariable] = bool.TrueString;
         }
 
+        var configuredMonitor = Environment.GetEnvironmentVariable(
+            AutomationDesktopMonitorEnvironmentVariable);
+        if (!string.IsNullOrWhiteSpace(configuredMonitor))
+        {
+            environmentVariables[AutomationDesktopMonitorEnvironmentVariable] = configuredMonitor;
+            environmentVariables[AutomationWindowWidthEnvironmentVariable] = "800";
+            environmentVariables[AutomationWindowHeightEnvironmentVariable] = "400";
+        }
+
         return environmentVariables;
+    }
+
+    private static DesktopWindowPlacement? ResolveDesktopWindowPlacement(
+        UnlimotionAutomationScenario scenario,
+        DesktopWindowPlacement? requestedPlacement)
+    {
+        if (requestedPlacement is not null)
+        {
+            return requestedPlacement;
+        }
+
+        var configuredMonitor = Environment.GetEnvironmentVariable(
+            AutomationDesktopMonitorEnvironmentVariable);
+        if (string.IsNullOrWhiteSpace(configuredMonitor))
+        {
+            return scenario == UnlimotionAutomationScenario.StatusContract
+                ? DesktopWindowPlacement.Centered(1280, 800)
+                : null;
+        }
+
+        var selector = configuredMonitor.Trim() switch
+        {
+            var value when string.Equals(value, "primary", StringComparison.OrdinalIgnoreCase) =>
+                DesktopMonitorSelector.Primary,
+            var value when string.Equals(value, "right", StringComparison.OrdinalIgnoreCase) ||
+                           string.Equals(value, "last", StringComparison.OrdinalIgnoreCase) =>
+                DesktopMonitorSelector.LastAvailable,
+            var value when int.TryParse(value, out var index) =>
+                DesktopMonitorSelector.FromIndex(index),
+            var value => DesktopMonitorSelector.FromDeviceName(value)
+        };
+
+        return new DesktopWindowPlacement
+        {
+            Monitor = selector,
+            Anchor = DesktopWindowAnchor.Center
+        };
     }
 
     private static void ExpandAllTaskTrees(MainWindowViewModel vm)
@@ -418,6 +597,7 @@ public static class UnlimotionAppLaunchHost
         private IConfigurationRoot? _configuration;
         private ITaskStorage? _storage;
         private MainWindowViewModel? _viewModel;
+        private TaskSpaceOperationRunner? _operationRunner;
         private UnlimotionAutomationLaunchData? _launchData;
         private int _disposed;
 
@@ -447,6 +627,12 @@ public static class UnlimotionAppLaunchHost
             return viewModel;
         }
 
+        public TaskSpaceOperationRunner RegisterOperationRunner(TaskSpaceOperationRunner operationRunner)
+        {
+            _operationRunner = operationRunner;
+            return operationRunner;
+        }
+
         public void Dispose()
         {
             if (Interlocked.Exchange(ref _disposed, 1) != 0)
@@ -461,6 +647,9 @@ public static class UnlimotionAppLaunchHost
 
             CaptureDispose(failures, _storage);
             _storage = null;
+
+            CaptureDispose(failures, _operationRunner);
+            _operationRunner = null;
 
             CaptureDispose(failures, _configuration);
             _configuration = null;

@@ -36,11 +36,13 @@
                             <Button Grid.Column="0"
 									HorizontalAlignment="Stretch"
 									HorizontalContentAlignment="Center"
+									AutomationProperties.AutomationId="AskYesButton"
 									Command="{Binding YesCommand}"
 									Content="{DynamicResource DialogYes}"/>
                             <Button Grid.Column="1"
 									HorizontalAlignment="Stretch"
 									HorizontalContentAlignment="Center"
+									AutomationProperties.AutomationId="AskNoButton"
 									Command="{Binding NoCommand}"
 									Content="{DynamicResource DialogNo}"/>
                         </Grid>
