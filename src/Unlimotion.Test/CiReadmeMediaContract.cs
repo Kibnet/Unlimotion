@@ -95,6 +95,8 @@ internal static class CiReadmeMediaContract
         await Assert.That(nugetSignatureScript).Contains("Full child work root grammar is invalid.");
         await Assert.That(nugetSignatureScript).Contains("Assert-FullPrimaryChildReceipts");
         await Assert.That(nugetSignatureScript).Contains("child exit code does not match its receipt outcome");
+        await Assert.That(nugetSignatureScript).Contains("CopyToAsync([IO.Stream]::Null)");
+        await Assert.That(nugetSignatureScript).Contains("child stream drain was not proven");
         await Assert.That(nugetSignatureScript).Contains("reordered Full child receipt list");
         await Assert.That(nugetSignatureScript).Contains("Full child receipt manifest mismatch");
         await Assert.That(nugetSignatureScript).Contains("ChildDeadlineMinutes 65");

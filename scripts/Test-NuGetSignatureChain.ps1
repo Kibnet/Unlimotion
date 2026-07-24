@@ -2090,17 +2090,21 @@ function Invoke-FullChildProcess(
         }
         $process = [Diagnostics.Process]::new()
         $process.StartInfo = $startInfo
-        [void]$process.add_OutputDataReceived([Diagnostics.DataReceivedEventHandler]{ param($sender, $eventArgs) })
-        [void]$process.add_ErrorDataReceived([Diagnostics.DataReceivedEventHandler]{ param($sender, $eventArgs) })
         Assert-True $process.Start() "Full $ChildLane child process did not start."
-        $process.BeginOutputReadLine()
-        $process.BeginErrorReadLine()
+        $stdoutDrain = $process.StandardOutput.BaseStream.CopyToAsync([IO.Stream]::Null)
+        $stderrDrain = $process.StandardError.BaseStream.CopyToAsync([IO.Stream]::Null)
         if (-not $process.WaitForExit($timeoutMilliseconds)) {
             $process.Kill($true)
             Assert-True $process.WaitForExit(10000) "Full $ChildLane child process termination was not proven."
+            Assert-True ($stdoutDrain.Wait(10000) -and $stderrDrain.Wait(10000)) "Full $ChildLane child stream drain was not proven."
+            $stdoutDrain.GetAwaiter().GetResult()
+            $stderrDrain.GetAwaiter().GetResult()
             throw "Full $ChildLane child exceeded its declared deadline."
         }
         $process.WaitForExit()
+        Assert-True ($stdoutDrain.Wait(10000) -and $stderrDrain.Wait(10000)) "Full $ChildLane child stream drain was not proven."
+        $stdoutDrain.GetAwaiter().GetResult()
+        $stderrDrain.GetAwaiter().GetResult()
         return [int]$process.ExitCode
     } finally {
         if ($null -ne $process) { $process.Dispose() }
