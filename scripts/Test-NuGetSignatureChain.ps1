@@ -2100,14 +2100,14 @@ function Invoke-FullChildProcess(
             $process.Kill($true)
             Assert-True $process.WaitForExit(10000) "Full $ChildLane child process termination was not proven."
             Assert-True ($stdoutDrain.Wait(10000) -and $stderrDrain.Wait(10000)) "Full $ChildLane child stream drain was not proven."
-            $stdoutDrain.GetAwaiter().GetResult()
-            $stderrDrain.GetAwaiter().GetResult()
+            [void]$stdoutDrain.GetAwaiter().GetResult()
+            [void]$stderrDrain.GetAwaiter().GetResult()
             throw "Full $ChildLane child exceeded its declared deadline."
         }
         [void]$process.WaitForExit()
         Assert-True ($stdoutDrain.Wait(10000) -and $stderrDrain.Wait(10000)) "Full $ChildLane child stream drain was not proven."
-        $stdoutDrain.GetAwaiter().GetResult()
-        $stderrDrain.GetAwaiter().GetResult()
+        [void]$stdoutDrain.GetAwaiter().GetResult()
+        [void]$stderrDrain.GetAwaiter().GetResult()
         return [int]$process.ExitCode
     } finally {
         if ($null -ne $process) { $process.Dispose() }

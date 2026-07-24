@@ -98,6 +98,7 @@ internal static class CiReadmeMediaContract
         await Assert.That(nugetSignatureScript).Contains("CopyToAsync([IO.Stream]::Null)");
         await Assert.That(nugetSignatureScript).Contains("child stream drain was not proven");
         await Assert.That(nugetSignatureScript).Contains("[void]$process.WaitForExit()");
+        await Assert.That(nugetSignatureScript).Contains("[void]$stdoutDrain.GetAwaiter().GetResult()");
         await Assert.That(nugetSignatureScript).Contains("Full outer fallback stage:");
         await Assert.That(nugetSignatureScript).Contains("child receipt: native identity.");
         await Assert.That(nugetSignatureScript).Contains("reordered Full child receipt list");
