@@ -88,6 +88,11 @@ internal static class CiReadmeMediaContract
         await Assert.That(nugetSignatureScript).Contains("source worktree root is invalid");
         await Assert.That(nugetSignatureScript).Contains("Full requires a clean checkout at the exact expected source SHA");
         await Assert.That(nugetSignatureScript).Contains("Assert-FullDeadlineBudget");
+        await Assert.That(nugetSignatureScript).Contains("Assert-FullRootsDoNotOverlap");
+        await Assert.That(nugetSignatureScript).Contains("Get-FullTreeNativeFileIdentityMap");
+        await Assert.That(nugetSignatureScript).Contains("Full tree file link count must be exactly one.");
+        await Assert.That(nugetSignatureScript).Contains("Full trees share a native file identity.");
+        await Assert.That(nugetSignatureScript).Contains("Full child work root grammar is invalid.");
         await Assert.That(nugetSignatureScript).Contains("ChildDeadlineMinutes 65");
         await Assert.That(nugetSignatureScript).Contains("ChildDeadlineMinutes 95");
         await Assert.That(nugetSignatureScript).Contains("outer aggregation and final validation");

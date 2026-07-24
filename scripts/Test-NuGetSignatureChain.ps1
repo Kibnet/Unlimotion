@@ -127,6 +127,134 @@ function Get-Sha256([string]$Path) {
     return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
 }
 
+function Initialize-WindowsNativeFileIdentity {
+    Assert-True $IsWindows 'Native Full file identity is available only on Windows.'
+    if ($null -ne ('Unlimotion.NuGetEvidence.NativeFileIdentity' -as [type])) { return }
+
+    Add-Type -TypeDefinition @'
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
+
+namespace Unlimotion.NuGetEvidence
+{
+    public static class NativeFileIdentity
+    {
+        [StructLayout(LayoutKind.Sequential)]
+        private struct ByHandleFileInformation
+        {
+            public uint FileAttributes;
+            public System.Runtime.InteropServices.ComTypes.FILETIME CreationTime;
+            public System.Runtime.InteropServices.ComTypes.FILETIME LastAccessTime;
+            public System.Runtime.InteropServices.ComTypes.FILETIME LastWriteTime;
+            public uint VolumeSerialNumber;
+            public uint FileSizeHigh;
+            public uint FileSizeLow;
+            public uint NumberOfLinks;
+            public uint FileIndexHigh;
+            public uint FileIndexLow;
+        }
+
+        public sealed class Result
+        {
+            public uint VolumeSerialNumber { get; private set; }
+            public uint NumberOfLinks { get; private set; }
+            public ulong FileIndex { get; private set; }
+
+            public Result(uint volumeSerialNumber, uint numberOfLinks, ulong fileIndex)
+            {
+                VolumeSerialNumber = volumeSerialNumber;
+                NumberOfLinks = numberOfLinks;
+                FileIndex = fileIndex;
+            }
+        }
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool GetFileInformationByHandle(
+            SafeFileHandle file,
+            out ByHandleFileInformation fileInformation);
+
+        public static Result Read(SafeFileHandle file)
+        {
+            ByHandleFileInformation information;
+            if (!GetFileInformationByHandle(file, out information))
+            {
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            }
+
+            ulong fileIndex = ((ulong)information.FileIndexHigh << 32) | information.FileIndexLow;
+            return new Result(information.VolumeSerialNumber, information.NumberOfLinks, fileIndex);
+        }
+    }
+}
+'@ -ErrorAction Stop
+}
+
+function Get-WindowsNativeFileIdentity([string]$Path) {
+    Initialize-WindowsNativeFileIdentity
+    $item = Get-Item -LiteralPath $Path -Force
+    Assert-True (-not $item.PSIsContainer -and -not $item.LinkType) 'Full native file identity requires a regular non-link file.'
+    $stream = $null
+    try {
+        $stream = [IO.FileStream]::new($item.FullName, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+        return [Unlimotion.NuGetEvidence.NativeFileIdentity]::Read($stream.SafeFileHandle)
+    } finally {
+        if ($null -ne $stream) { $stream.Dispose() }
+    }
+}
+
+function Test-PathIsSameOrDescendant([string]$Root, [string]$Candidate) {
+    $canonicalRoot = [IO.Path]::GetFullPath($Root)
+    $canonicalCandidate = [IO.Path]::GetFullPath($Candidate)
+    $relative = [IO.Path]::GetRelativePath($canonicalRoot, $canonicalCandidate)
+    return $relative -ceq '.' -or (-not [IO.Path]::IsPathFullyQualified($relative) -and $relative -cne '..' -and -not $relative.StartsWith('..' + [IO.Path]::DirectorySeparatorChar, [StringComparison]::Ordinal))
+}
+
+function Assert-FullRootsDoNotOverlap([hashtable]$Roots) {
+    $names = @($Roots.Keys | Sort-Object)
+    Assert-True ($names.Count -ge 2) 'Full root layout requires at least two roots.'
+    foreach ($name in $names) {
+        Assert-True ($Roots[$name] -is [string] -and [IO.Path]::IsPathFullyQualified($Roots[$name])) "Full $name root is not absolute."
+    }
+    for ($leftIndex = 0; $leftIndex -lt $names.Count; $leftIndex++) {
+        for ($rightIndex = $leftIndex + 1; $rightIndex -lt $names.Count; $rightIndex++) {
+            $leftName = $names[$leftIndex]
+            $rightName = $names[$rightIndex]
+            Assert-True (-not (Test-PathIsSameOrDescendant -Root $Roots[$leftName] -Candidate $Roots[$rightName]) -and -not (Test-PathIsSameOrDescendant -Root $Roots[$rightName] -Candidate $Roots[$leftName])) "Full roots $leftName and $rightName overlap."
+        }
+    }
+}
+
+function Get-FullTreeNativeFileIdentityMap([string]$TreeRoot) {
+    $root = [IO.Path]::GetFullPath($TreeRoot)
+    $rootItem = Get-Item -LiteralPath $root -Force
+    Assert-True ($rootItem.PSIsContainer -and -not $rootItem.LinkType) 'Full tree root is invalid.'
+    foreach ($directory in @(Get-ChildItem -LiteralPath $root -Recurse -Directory -Force)) {
+        Assert-True (-not $directory.LinkType) 'Full tree directory cannot be a link.'
+    }
+    $identities = [System.Collections.Generic.Dictionary[string, string]]::new([StringComparer]::Ordinal)
+    foreach ($file in @(Get-ChildItem -LiteralPath $root -Recurse -File -Force)) {
+        Assert-True (-not $file.LinkType) 'Full tree file cannot be a link.'
+        $identity = Get-WindowsNativeFileIdentity -Path $file.FullName
+        Assert-True ($identity.NumberOfLinks -eq 1) 'Full tree file link count must be exactly one.'
+        $key = ('{0:x8}:{1:x16}' -f $identity.VolumeSerialNumber, $identity.FileIndex)
+        Assert-True (-not $identities.ContainsKey($key)) 'Full tree contains duplicate native file identity.'
+        $identities.Add($key, $file.FullName)
+    }
+    return $identities
+}
+
+function Assert-FullTreesHaveDistinctFileIdentity([string]$LeftRoot, [string]$RightRoot) {
+    Assert-FullRootsDoNotOverlap -Roots @{ left = [IO.Path]::GetFullPath($LeftRoot); right = [IO.Path]::GetFullPath($RightRoot) }
+    $left = Get-FullTreeNativeFileIdentityMap -TreeRoot $LeftRoot
+    $right = Get-FullTreeNativeFileIdentityMap -TreeRoot $RightRoot
+    foreach ($identity in $left.Keys) {
+        Assert-True (-not $right.ContainsKey($identity)) 'Full trees share a native file identity.'
+    }
+}
+
 function Get-CanonicalGraphHash([object[]]$Packages) {
     $lines = [System.Collections.Generic.List[string]]::new()
     foreach ($package in $Packages) {
@@ -1807,6 +1935,7 @@ function Invoke-RegressionAttempt {
 function Read-ValidatedFullChildReceipt([string]$ChildRoot, [string]$ChildLane, [string]$SourceSha, [int]$Attempt) {
     $root = [IO.Path]::GetFullPath($ChildRoot)
     Assert-True ((Test-Path -LiteralPath $root -PathType Container) -and -not (Get-Item -LiteralPath $root -Force).LinkType) "Full $ChildLane child evidence root is missing."
+    [void](Get-FullTreeNativeFileIdentityMap -TreeRoot $root)
     $validatorPath = Join-Path $PSScriptRoot 'Test-NuGetEvidencePublication.ps1'
     & (Get-AbsolutePowerShellExecutable) -NoLogo -NoProfile -NonInteractive -File $validatorPath -EvidenceRoot $root -ExpectedLane $ChildLane -ExpectedSourceSha $SourceSha -ExpectedRunAttempt ([string]$Attempt) -ExpectedExecutionContext 'full-child' 2>$null | Out-Null
     Assert-True ($LASTEXITCODE -eq 0) "Full $ChildLane child evidence failed independent validation."
@@ -1855,10 +1984,12 @@ function Publish-FullPrimaryEvidence(
     [hashtable]$RegressionReceipt,
     [object[]]$SecretSeeds
 ) {
+    Assert-FullRootsDoNotOverlap -Roots @{ candidate = [IO.Path]::GetFullPath($CandidateRoot); final = [IO.Path]::GetFullPath($EvidencePath) }
     Assert-True ((Test-Path -LiteralPath $CandidateRoot -PathType Container) -and -not (Test-Path -LiteralPath $EvidencePath)) 'Full publication roots are invalid.'
     $seedElements = ConvertTo-SecretSeedElements -SecretSeeds $SecretSeeds
     try {
         $manifest = Get-CandidateEvidenceManifest -CandidateRoot $CandidateRoot -SecretSeeds $seedElements
+        [void](Get-FullTreeNativeFileIdentityMap -TreeRoot $CandidateRoot)
         foreach ($entry in $manifest) {
             Assert-True ($entry.path -cmatch '^(signature|regression)/') 'Full candidate has an unexpected evidence path.'
         }
@@ -1910,9 +2041,12 @@ function Publish-FullPrimaryEvidence(
 }
 
 function Copy-FullChildEvidenceToCandidate([string]$ChildRoot, [string]$CandidateChildRoot) {
+    Assert-FullRootsDoNotOverlap -Roots @{ child = [IO.Path]::GetFullPath($ChildRoot); candidate = [IO.Path]::GetFullPath($CandidateChildRoot) }
     Assert-True ((Test-Path -LiteralPath $ChildRoot -PathType Container) -and -not (Test-Path -LiteralPath $CandidateChildRoot)) 'Full child copy roots are invalid.'
+    [void](Get-FullTreeNativeFileIdentityMap -TreeRoot $ChildRoot)
     Copy-Item -LiteralPath $ChildRoot -Destination $CandidateChildRoot -Recurse -ErrorAction Stop
     Assert-True (Test-Path -LiteralPath $CandidateChildRoot -PathType Container) 'Full child evidence copy was not created.'
+    Assert-FullTreesHaveDistinctFileIdentity -LeftRoot $ChildRoot -RightRoot $CandidateChildRoot
 }
 
 function Assert-FullDeadlineBudget([DateTimeOffset]$DeadlineUtc, [int]$RequiredMinutes, [string]$Description) {
@@ -1972,12 +2106,14 @@ function Invoke-FullChildAttempt([string]$ChildLane, [string]$Root, [string]$Sou
     $sourceRoot = Join-Path $sourceParentRoot ([Guid]::NewGuid().ToString('N'))
     $childEvidenceRoot = Join-Path $workRoot 'final'
     $childPackagesRoot = Join-Path $workRoot 'packages'
+    Assert-True ($ChildLane -cin @('Signature', 'Regression') -and [IO.Path]::GetFileName($workRoot) -ceq $ChildLane.ToLowerInvariant()) 'Full child work root grammar is invalid.'
+    Assert-FullRootsDoNotOverlap -Roots @{ repository = [IO.Path]::GetFullPath($Root); source = [IO.Path]::GetFullPath($sourceRoot); evidence = [IO.Path]::GetFullPath($childEvidenceRoot); packages = [IO.Path]::GetFullPath($childPackagesRoot) }
     Assert-True (-not (Test-Path -LiteralPath $workRoot)) "Full $ChildLane child work root must be absent."
     New-Item -ItemType Directory -Path $workRoot, $childPackagesRoot, $sourceParentRoot -Force -ErrorAction Stop | Out-Null
-    Assert-True (-not (Get-Item -LiteralPath $sourceParentRoot -Force).LinkType -and -not (Test-Path -LiteralPath $sourceRoot)) "Full $ChildLane source worktree root is invalid."
+    Assert-True (-not (Get-Item -LiteralPath $workRoot -Force).LinkType -and -not (Get-Item -LiteralPath $childPackagesRoot -Force).LinkType -and -not (Get-Item -LiteralPath $sourceParentRoot -Force).LinkType -and -not (Test-Path -LiteralPath $childEvidenceRoot) -and -not (Test-Path -LiteralPath $sourceRoot)) "Full $ChildLane source worktree root is invalid."
     try {
         & git -C $Root worktree add --detach --force $sourceRoot $SourceSha *> $null
-        Assert-True ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath $sourceRoot -PathType Container)) "Full $ChildLane child source worktree could not be created."
+        Assert-True ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath $sourceRoot -PathType Container) -and -not (Get-Item -LiteralPath $sourceRoot -Force).LinkType) "Full $ChildLane child source worktree could not be created."
         $childExitCode = Invoke-FullChildProcess -ChildLane $ChildLane -Root $sourceRoot -SourceSha $SourceSha -Attempt $Attempt -ChildEvidenceRoot $childEvidenceRoot -ChildPackagesRoot $childPackagesRoot -OuterDeadlineUtc $OuterDeadlineUtc -ChildDeadlineMinutes $ChildDeadlineMinutes -ReserveMinutes $ReserveMinutes
         $receipt = Read-ValidatedFullChildReceipt -ChildRoot $ChildEvidenceRoot -ChildLane $ChildLane -SourceSha $SourceSha -Attempt $Attempt
         return [ordered]@{ exitCode = $childExitCode; evidenceRoot = $childEvidenceRoot; receipt = $receipt }
@@ -2004,9 +2140,11 @@ function Invoke-FullAttempt {
     $evidencePath = Get-EvidenceRoot -Root $root -SourceSha $sourceSha -Attempt $attempt
     $candidateRoot = $evidencePath + '.candidate'
     $workRoot = $evidencePath + '.work'
+    Assert-FullRootsDoNotOverlap -Roots @{ repository = $root; final = [IO.Path]::GetFullPath($evidencePath); candidate = [IO.Path]::GetFullPath($candidateRoot); work = [IO.Path]::GetFullPath($workRoot) }
     Assert-True (-not (Test-Path -LiteralPath $evidencePath) -and -not (Test-Path -LiteralPath $candidateRoot) -and -not (Test-Path -LiteralPath $workRoot)) 'Full evidence roots must be absent before the attempt.'
     $secretSeeds = Get-ClosedSecretSeedSnapshot -Environment ([Environment]::GetEnvironmentVariables('Process'))
     New-Item -ItemType Directory -Path $candidateRoot, $workRoot -ErrorAction Stop | Out-Null
+    Assert-True (-not (Get-Item -LiteralPath $candidateRoot -Force).LinkType -and -not (Get-Item -LiteralPath $workRoot -Force).LinkType) 'Full outer work roots cannot be links.'
     $fullDeadlineUtc = [DateTimeOffset]::UtcNow.AddMinutes(175)
 
     $signatureReceipt = $null
@@ -2202,6 +2340,35 @@ function Invoke-SelfTest {
             $deadlineRejected = $true
         }
         Assert-True $deadlineRejected 'Full deadline budget accepted an expired reserve.'
+        $overlappingRootsRejected = $false
+        $rootLayoutFixture = Join-Path ([IO.Path]::GetTempPath()) ('unlimotion-full-layout-' + [Guid]::NewGuid().ToString('N'))
+        try {
+            Assert-FullRootsDoNotOverlap -Roots @{ outer = $rootLayoutFixture; nested = (Join-Path $rootLayoutFixture 'nested') }
+        } catch {
+            $overlappingRootsRejected = $true
+        }
+        Assert-True $overlappingRootsRejected 'Full root layout accepted an overlapping child root.'
+        if ($IsWindows) {
+            $nativeIdentityFixture = Join-Path ([IO.Path]::GetTempPath()) ('unlimotion-full-identity-' + [Guid]::NewGuid().ToString('N'))
+            try {
+                $leftRoot = Join-Path $nativeIdentityFixture 'left'
+                $rightRoot = Join-Path $nativeIdentityFixture 'right'
+                New-Item -ItemType Directory -Path $leftRoot, $rightRoot -ErrorAction Stop | Out-Null
+                [IO.File]::WriteAllText((Join-Path $leftRoot 'one.txt'), 'one', [Text.UTF8Encoding]::new($false))
+                [IO.File]::WriteAllText((Join-Path $rightRoot 'two.txt'), 'two', [Text.UTF8Encoding]::new($false))
+                Assert-FullTreesHaveDistinctFileIdentity -LeftRoot $leftRoot -RightRoot $rightRoot
+                New-Item -ItemType HardLink -Path (Join-Path $leftRoot 'two.txt') -Target (Join-Path $leftRoot 'one.txt') -ErrorAction Stop | Out-Null
+                $hardLinkRejected = $false
+                try {
+                    [void](Get-FullTreeNativeFileIdentityMap -TreeRoot $leftRoot)
+                } catch {
+                    $hardLinkRejected = $true
+                }
+                Assert-True $hardLinkRejected 'Full native identity accepted a hard-linked file.'
+            } finally {
+                if (Test-Path -LiteralPath $nativeIdentityFixture) { Remove-Item -LiteralPath $nativeIdentityFixture -Recurse -Force -ErrorAction SilentlyContinue }
+            }
+        }
         $adapterResult = Invoke-ClosedWorkerProcessAdapter -WorkerKind 'SignatureVerify' -Payload ([ordered]@{
                 dotnetExecutable = (Get-Command dotnet -ErrorAction Stop).Source
                 repositoryRoot = Get-CanonicalRepositoryRoot
