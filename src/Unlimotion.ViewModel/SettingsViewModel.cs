@@ -179,6 +179,7 @@ public class SettingsViewModel
     public ICommand? SwitchTaskSpaceCommand { get; set; }
     public ICommand? RenameTaskSpaceCommand { get; set; }
     public ICommand? RemoveTaskSpaceCommand { get; set; }
+    public ICommand? RetryTaskSpaceSettingsPersistenceCommand { get; set; }
 
     public ObservableCollection<TaskSpaceOptionViewModel> TaskSpaces { get; } = new();
 
@@ -212,6 +213,9 @@ public class SettingsViewModel
     public bool IsTaskSpaceRecoveryRequired { get; set; }
     public string TaskSpaceRecoveryMessage { get; set; } = string.Empty;
     public bool CanRemoveTaskSpace { get; set; }
+    public bool IsTaskSpaceSettingsPersistenceStatusVisible { get; set; }
+    public bool IsTaskSpaceSettingsPersistenceError { get; set; }
+    public string TaskSpaceSettingsPersistenceStatus { get; set; } = string.Empty;
 
     public void ReloadTaskSpaces(IEnumerable<TaskSourceDescriptor> sources, string activeSourceId)
     {

@@ -31,7 +31,10 @@ public sealed class TaskSourceManager : ITaskSourceManager
         _notificationManager = notificationManager;
         _defaultStoragePathProvider = defaultStoragePathProvider;
         _operationRunner = operationRunner;
-        _settings = TaskSourceSettingsAdapter.LoadOrCreate(_configuration, _defaultStoragePathProvider?.Invoke());
+        _settings = TaskSourceSettingsAdapter.LoadOrCreate(
+            _configuration,
+            _defaultStoragePathProvider?.Invoke(),
+            ValidateConfiguredSourceOwnership);
         ValidateConfiguredSourceOwnership(_settings);
     }
 
@@ -195,8 +198,12 @@ public sealed class TaskSourceManager : ITaskSourceManager
         var nextSettings = CloneSettings(_settings);
         var descriptor = CloneDescriptor(current);
         descriptor.Kind = draft.Storage.IsServerMode ? TaskSourceKind.Server : TaskSourceKind.File;
-        descriptor.Path = draft.Storage.Path ?? string.Empty;
-        descriptor.Url = draft.Storage.URL ?? string.Empty;
+        descriptor.Path = descriptor.Kind == TaskSourceKind.File
+            ? NormalizeLocalStoragePath(draft.Storage.Path, descriptor.Id)
+            : draft.Storage.Path ?? string.Empty;
+        descriptor.Url = descriptor.Kind == TaskSourceKind.Server
+            ? NormalizeServerUrl(draft.Storage.URL, descriptor.Id)
+            : draft.Storage.URL ?? string.Empty;
         ValidateUniqueDescriptor(
             descriptor,
             nextSettings.Sources.Where(source =>
@@ -221,7 +228,7 @@ public sealed class TaskSourceManager : ITaskSourceManager
                 server.UserId = string.Empty;
             }
 
-            server.Login = draft.Storage.Login ?? string.Empty;
+            server.Login = NormalizeServerLogin(draft.Storage.Login);
             server.Password = draft.Storage.Password ?? string.Empty;
             UpsertServerSettings(nextSettings, server);
         }
@@ -724,27 +731,32 @@ public sealed class TaskSourceManager : ITaskSourceManager
         IEnumerable<TaskSourceServerSettings>? serverSettings = null,
         string? candidateServerLogin = null)
     {
+        ValidateRequiredDescriptorSettings(candidate);
         foreach (var source in existing)
         {
+            ValidateRequiredDescriptorSettings(source);
             if (string.Equals(source.Id, candidate.Id, StringComparison.Ordinal))
             {
-                throw new InvalidOperationException($"Task space id '{candidate.Id}' already exists.");
+                throw new TaskSpaceCatalogException(
+                    TaskSpaceCatalogIssue.DuplicateOrEmptySourceId,
+                    [candidate.Id],
+                    $"Task space id '{candidate.Id}' already exists.");
             }
 
             if (candidate.Kind == TaskSourceKind.File && source.Kind == TaskSourceKind.File &&
-                !string.IsNullOrWhiteSpace(candidate.Path) &&
                 PathsReferToSameDirectory(candidate.Path, source.Path))
             {
-                throw new InvalidOperationException("Two task spaces cannot use the same local folder.");
+                throw new TaskSpaceCatalogException(
+                    TaskSpaceCatalogIssue.ConflictingSourceOwnership,
+                    [candidate.Id, source.Id],
+                    "Two task spaces cannot use the same local folder.");
             }
 
-            var candidateServerUrl = NormalizeServerUrl(candidate.Url);
             if (candidate.Kind == TaskSourceKind.Server && source.Kind == TaskSourceKind.Server &&
-                !string.IsNullOrWhiteSpace(candidateServerUrl) &&
                 string.Equals(
-                    candidateServerUrl,
-                    NormalizeServerUrl(source.Url),
-                    StringComparison.OrdinalIgnoreCase))
+                    NormalizeServerUrl(candidate.Url, candidate.Id),
+                    NormalizeServerUrl(source.Url, source.Id),
+                    StringComparison.Ordinal))
             {
                 var existingLogin = serverSettings?.FirstOrDefault(server =>
                     string.Equals(server.SourceId, source.Id, StringComparison.Ordinal))?.Login;
@@ -753,7 +765,9 @@ public sealed class TaskSourceManager : ITaskSourceManager
                         NormalizeServerLogin(existingLogin),
                         StringComparison.OrdinalIgnoreCase))
                 {
-                    throw new InvalidOperationException(
+                    throw new TaskSpaceCatalogException(
+                        TaskSpaceCatalogIssue.ConflictingSourceOwnership,
+                        [candidate.Id, source.Id],
                         "Two task spaces cannot use the same server URL and login.");
                 }
             }
@@ -772,8 +786,109 @@ public sealed class TaskSourceManager : ITaskSourceManager
         }
     }
 
-    private static string NormalizeServerUrl(string? url) =>
-        string.IsNullOrWhiteSpace(url) ? string.Empty : url.Trim().TrimEnd('/');
+    private static void ValidateRequiredDescriptorSettings(TaskSourceDescriptor descriptor)
+    {
+        if (string.IsNullOrWhiteSpace(descriptor.Id))
+        {
+            throw new TaskSpaceCatalogException(
+                TaskSpaceCatalogIssue.DuplicateOrEmptySourceId,
+                [descriptor.Id],
+                "A task space id is required.");
+        }
+
+        if (descriptor.Kind is not TaskSourceKind.File and not TaskSourceKind.Server)
+        {
+            throw new TaskSpaceCatalogException(
+                TaskSpaceCatalogIssue.InvalidSourceConfiguration,
+                [descriptor.Id],
+                $"Task space '{descriptor.Id}' has unsupported source kind '{descriptor.Kind}'.");
+        }
+
+        if (descriptor.Kind == TaskSourceKind.File)
+        {
+            _ = NormalizeLocalStoragePath(descriptor.Path, descriptor.Id);
+        }
+
+        if (descriptor.Kind == TaskSourceKind.Server)
+        {
+            _ = NormalizeServerUrl(descriptor.Url, descriptor.Id);
+        }
+    }
+
+    private static string NormalizeLocalStoragePath(string? path, string sourceId)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            throw new TaskSpaceCatalogException(
+                TaskSpaceCatalogIssue.InvalidSourceConfiguration,
+                [sourceId],
+                $"Local task space '{sourceId}' requires a storage folder.");
+        }
+
+        try
+        {
+            return Path.GetFullPath(path.Trim());
+        }
+        catch (Exception error) when (
+            error is ArgumentException or
+            NotSupportedException or
+            PathTooLongException)
+        {
+            throw new TaskSpaceCatalogException(
+                TaskSpaceCatalogIssue.InvalidSourceConfiguration,
+                [sourceId],
+                $"Local task space '{sourceId}' has an invalid storage folder.",
+                error);
+        }
+    }
+
+    private static string NormalizeServerUrl(string? url, string sourceId)
+    {
+        if (string.IsNullOrWhiteSpace(url) ||
+            !Uri.TryCreate(url.Trim(), UriKind.Absolute, out var endpoint) ||
+            (endpoint.Scheme != Uri.UriSchemeHttp && endpoint.Scheme != Uri.UriSchemeHttps) ||
+            string.IsNullOrWhiteSpace(endpoint.Host) ||
+            !string.IsNullOrEmpty(endpoint.UserInfo) ||
+            !string.IsNullOrEmpty(endpoint.Query) ||
+            !string.IsNullOrEmpty(endpoint.Fragment))
+        {
+            throw new TaskSpaceCatalogException(
+                TaskSpaceCatalogIssue.InvalidSourceConfiguration,
+                [sourceId],
+                $"Server task space '{sourceId}' requires an absolute HTTP or HTTPS endpoint without credentials, query, or fragment.");
+        }
+
+        var canonicalHost = endpoint.IdnHost.TrimEnd('.').ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(canonicalHost) ||
+            Uri.CheckHostName(canonicalHost) == UriHostNameType.Unknown)
+        {
+            throw new TaskSpaceCatalogException(
+                TaskSpaceCatalogIssue.InvalidSourceConfiguration,
+                [sourceId],
+                $"Server task space '{sourceId}' requires a valid DNS name or IP address.");
+        }
+
+        var builder = new UriBuilder(endpoint)
+        {
+            Scheme = endpoint.Scheme.ToLowerInvariant(),
+            Host = canonicalHost,
+            Query = string.Empty,
+            Fragment = string.Empty,
+            Path = endpoint.AbsolutePath == "/"
+                ? string.Empty
+                : endpoint.AbsolutePath.TrimEnd('/')
+        };
+        if (endpoint.IsDefaultPort)
+        {
+            builder.Port = -1;
+        }
+
+        return builder.Uri
+            .GetComponents(
+                UriComponents.SchemeAndServer | UriComponents.Path,
+                UriFormat.UriEscaped)
+            .TrimEnd('/');
+    }
 
     private static string NormalizeServerLogin(string? login) =>
         string.IsNullOrWhiteSpace(login) ? string.Empty : login.Trim();

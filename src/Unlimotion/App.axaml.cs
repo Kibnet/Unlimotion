@@ -93,6 +93,8 @@ public class App : Application
     private IDisposable? _updateCheckIntervalSubscription;
     private IDisposable? _updateStateSubscription;
     private bool _isAutomaticUpdateCheckRunning;
+    private TaskSpaceCatalogException? _startupTaskSpaceCatalogError;
+    private Exception? _lastReportedTaskSpaceSettingsPersistenceError;
     
     public override void Initialize()
     {
@@ -156,6 +158,7 @@ public class App : Application
             ResolveDefaultTaskStoragePath);
         settingsViewModel.UseDeferredTaskSpaceSettingsPersistence();
         settingsViewModel.ConfigureUpdateService(_applicationUpdateService);
+        ApplyStartupTaskSpaceRecoveryState(settingsViewModel);
 
         // Create GraphViewModel
         var graphViewModel = new GraphViewModel();
@@ -195,6 +198,7 @@ public class App : Application
 
         // Set up commands on SettingsViewModel
         SetupSettingsCommands(settingsViewModel);
+        WireTaskSpaceSettingsPersistenceState(settingsViewModel);
         RefreshTaskSpaces(settingsViewModel);
         WireSettingsToActiveStorage(settingsViewModel);
         SetupAutomaticUpdateTimer(settingsViewModel);
@@ -325,6 +329,23 @@ public class App : Application
                     }
                 },
                 ex => _notificationManager?.ErrorToast(ex.Message));
+        });
+
+        settings.RetryTaskSpaceSettingsPersistenceCommand = ReactiveCommand.CreateFromTask(async () =>
+        {
+            if (_taskSpaceSettingsQueue == null)
+            {
+                return;
+            }
+
+            try
+            {
+                await _taskSpaceSettingsQueue.RetryAsync().ConfigureAwait(true);
+            }
+            catch
+            {
+                // StateChanged already exposes the persisted error and keeps the draft pending.
+            }
         });
 
         settings.ObservableForProperty(m => m.TaskStoragePath, false, true)
@@ -1432,6 +1453,64 @@ public class App : Application
         _notificationManager?.ErrorToast(settings.TaskSpaceRecoveryMessage);
     }
 
+    private void ApplyStartupTaskSpaceRecoveryState(SettingsViewModel settings)
+    {
+        if (_startupTaskSpaceCatalogError == null)
+        {
+            return;
+        }
+
+        settings.IsTaskSpaceRecoveryRequired = true;
+        settings.TaskSpaceRecoveryMessage = L10n.Format(
+            "TaskSpaceStartupRecoveryRequired",
+            string.Join(", ", _startupTaskSpaceCatalogError.ProblemSourceIds));
+        settings.SetStorageConnectionState(SettingsConnectionState.Error);
+    }
+
+    private void WireTaskSpaceSettingsPersistenceState(SettingsViewModel settings)
+    {
+        if (_taskSpaceSettingsQueue == null)
+        {
+            return;
+        }
+
+        _taskSpaceSettingsQueue.StateChanged += (_, state) =>
+        {
+            _ = RunOnUiThreadAsync(() =>
+                ApplyTaskSpaceSettingsPersistenceState(settings, state));
+        };
+        ApplyTaskSpaceSettingsPersistenceState(
+            settings,
+            new TaskSpaceSettingsPersistenceStateChangedEventArgs(
+                _taskSpaceSettingsQueue.HasPendingChanges,
+                _taskSpaceSettingsQueue.LastError));
+    }
+
+    private void ApplyTaskSpaceSettingsPersistenceState(
+        SettingsViewModel settings,
+        TaskSpaceSettingsPersistenceStateChangedEventArgs state)
+    {
+        settings.IsTaskSpaceSettingsPersistenceError = state.LastError != null;
+        settings.IsTaskSpaceSettingsPersistenceStatusVisible =
+            state.HasPendingChanges || state.LastError != null;
+        settings.TaskSpaceSettingsPersistenceStatus = state.LastError != null
+            ? L10n.Format("TaskSpaceSettingsSaveFailed", state.LastError.Message)
+            : state.HasPendingChanges
+                ? L10n.Get("TaskSpaceSettingsSaving")
+                : string.Empty;
+
+        if (state.LastError != null &&
+            !ReferenceEquals(_lastReportedTaskSpaceSettingsPersistenceError, state.LastError))
+        {
+            _lastReportedTaskSpaceSettingsPersistenceError = state.LastError;
+            _notificationManager?.ErrorToast(settings.TaskSpaceSettingsPersistenceStatus);
+        }
+        else if (state.LastError == null)
+        {
+            _lastReportedTaskSpaceSettingsPersistenceError = null;
+        }
+    }
+
     private void WireSettingsToActiveStorage(SettingsViewModel settings)
     {
         if (_wiredServerStorage != null)
@@ -1516,7 +1595,7 @@ public class App : Application
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            desktop.Exit += (_, __) =>
+            desktop.ShutdownRequested += (_, args) =>
             {
                 try
                 {
@@ -1524,7 +1603,16 @@ public class App : Application
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"Task-space settings drain failed during shutdown: {ex}");
+                    args.Cancel = true;
+                    Debug.WriteLine($"Task-space settings drain blocked shutdown: {ex}");
+                    if (_mainWindowViewModel?.Settings is { } settings)
+                    {
+                        ApplyTaskSpaceSettingsPersistenceState(
+                            settings,
+                            new TaskSpaceSettingsPersistenceStateChangedEventArgs(
+                                hasPendingChanges: true,
+                                _taskSpaceSettingsQueue?.LastError ?? ex));
+                    }
                 }
             };
 #if LIVE
@@ -1586,7 +1674,12 @@ public class App : Application
         try
         {
             ApplyAutomationTaskWrapperDefaults();
-            if (!vm.IsInitialized || vm.taskRepository == null)
+            if (_startupTaskSpaceCatalogError != null)
+            {
+                vm.ClearTaskSpaceSurface();
+                ApplyStartupTaskSpaceRecoveryState(vm.Settings);
+            }
+            else if (!vm.IsInitialized || vm.taskRepository == null)
             {
                 await vm.Connect();
             }
@@ -2236,6 +2329,7 @@ public class App : Application
     {
         try
         {
+            _startupTaskSpaceCatalogError = null;
             _clientOptions = clientOptions;
             _applicationUpdateService = _pendingUpdateService;
             Log($"[App.Init] Starting with configPath: {configPath}");
@@ -2279,14 +2373,10 @@ public class App : Application
             if (taskStorageSettings == null)
             {
                 taskStorageSettings = new TaskStorageSettings();
-                _configuration.Set("TaskStorage", taskStorageSettings);
             }
             Log($"[App.Init] Storage settings: Path={taskStorageSettings.Path}, IsServerMode={taskStorageSettings.IsServerMode}");
 
             var isServerMode = taskStorageSettings.IsServerMode;
-
-            EnsureDefaultTaskStoragePath(_configuration, ResolveDefaultTaskStoragePath());
-            taskStorageSettings = _configuration.Get<TaskStorageSettings>("TaskStorage") ?? taskStorageSettings;
 
             // Create storage factory
             _clientOptions.DefaultTaskStoragePath = string.IsNullOrWhiteSpace(taskStorageSettings.Path)
@@ -2395,6 +2485,17 @@ public class App : Application
                 };
             }
             Log("[App.Init] Completed successfully");
+        }
+        catch (TaskSpaceCatalogException ex)
+        {
+            _startupTaskSpaceCatalogError = ex;
+            _storageFactory = null;
+            _taskMoveService = null;
+            _backupService = null;
+            _activeTaskSpaceConfiguration = null;
+            _taskSpaceSettingsQueue = null;
+            _taskSpaceCoordinator = null;
+            Log($"[App.Init] TASK SPACE RECOVERY: {ex}");
         }
         catch (Exception ex)
         {

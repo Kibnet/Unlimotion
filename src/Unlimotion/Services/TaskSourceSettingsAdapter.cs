@@ -17,9 +17,12 @@ public static class TaskSourceSettingsAdapter
     private const string MutationJournalSectionName = "TaskSourceMutationJournal";
     private const int ProfileSchemaVersion = 1;
 
-    public static TaskSourcesSettings LoadOrCreate(IConfiguration configuration, string? defaultStoragePath)
+    public static TaskSourcesSettings LoadOrCreate(
+        IConfiguration configuration,
+        string? defaultStoragePath,
+        Action<TaskSourcesSettings>? validateBeforePersistence = null)
     {
-        RecoverMutationJournal(configuration);
+        RecoverMutationJournal(configuration, validateBeforePersistence);
         var settings = Read(configuration);
         RecoverInterruptedFirstMigrationCatalog(configuration, settings);
         ValidateCatalog(settings);
@@ -82,6 +85,7 @@ public static class TaskSourceSettingsAdapter
             EnsureSyncSettings(settings, source.Id);
         }
 
+        validateBeforePersistence?.Invoke(settings);
         Save(configuration, settings);
         SyncLegacy(configuration, settings, activeSource);
         ValidateCatalog(settings);
@@ -396,7 +400,9 @@ public static class TaskSourceSettingsAdapter
         configuration.Set(SyncProfilesSectionName, JsonSerializer.Serialize(profiles));
     }
 
-    private static void RecoverMutationJournal(IConfiguration configuration)
+    private static void RecoverMutationJournal(
+        IConfiguration configuration,
+        Action<TaskSourcesSettings>? validateBeforePersistence)
     {
         var journal = configuration.GetSection(MutationJournalSectionName);
         var state = journal.GetSection("State").Get<string>();
@@ -410,15 +416,32 @@ public static class TaskSourceSettingsAdapter
             ? "AfterSnapshot"
             : "BeforeSnapshot";
         var snapshotJson = journal.GetSection(snapshotKey).Get<string>();
-        var snapshot = string.IsNullOrWhiteSpace(snapshotJson)
-            ? null
-            : JsonSerializer.Deserialize<TaskSourcesSettings>(snapshotJson);
+        TaskSourcesSettings? snapshot;
+        try
+        {
+            snapshot = string.IsNullOrWhiteSpace(snapshotJson)
+                ? null
+                : JsonSerializer.Deserialize<TaskSourcesSettings>(snapshotJson);
+        }
+        catch (Exception error) when (error is JsonException or NotSupportedException)
+        {
+            throw new TaskSpaceCatalogException(
+                TaskSpaceCatalogIssue.InvalidSourceConfiguration,
+                [MutationJournalSectionName],
+                "The task-space mutation journal is corrupt and requires manual recovery.",
+                error);
+        }
+
         if (snapshot == null)
         {
-            throw new InvalidOperationException("The task-space mutation journal is corrupt and requires manual recovery.");
+            throw new TaskSpaceCatalogException(
+                TaskSpaceCatalogIssue.InvalidSourceConfiguration,
+                [MutationJournalSectionName],
+                "The task-space mutation journal is corrupt and requires manual recovery.");
         }
 
         ValidateCatalog(snapshot);
+        validateBeforePersistence?.Invoke(snapshot);
         Save(configuration, snapshot);
         var persisted = Read(configuration);
         if (!string.Equals(CatalogFingerprint(persisted), CatalogFingerprint(snapshot), StringComparison.Ordinal))
@@ -479,7 +502,10 @@ public static class TaskSourceSettingsAdapter
         {
             if (string.IsNullOrWhiteSpace(source.Id) || !sourceIds.Add(source.Id))
             {
-                throw new InvalidOperationException($"Duplicate or empty task-space id '{source.Id}'.");
+                throw new TaskSpaceCatalogException(
+                    TaskSpaceCatalogIssue.DuplicateOrEmptySourceId,
+                    [source.Id],
+                    $"Duplicate or empty task-space id '{source.Id}'.");
             }
         }
 
@@ -495,7 +521,9 @@ public static class TaskSourceSettingsAdapter
         if (settings.Sources.Count > 0 &&
             (string.IsNullOrWhiteSpace(settings.ActiveSourceId) || !sourceIds.Contains(settings.ActiveSourceId)))
         {
-            throw new InvalidOperationException(
+            throw new TaskSpaceCatalogException(
+                TaskSpaceCatalogIssue.MissingActiveSource,
+                [settings.ActiveSourceId],
                 $"Active task-space id '{settings.ActiveSourceId}' is not present in the catalog.");
         }
     }
@@ -510,7 +538,9 @@ public static class TaskSourceSettingsAdapter
         {
             if (string.IsNullOrWhiteSpace(sourceId) || !unique.Add(sourceId) || !sourceIds.Contains(sourceId))
             {
-                throw new InvalidOperationException(
+                throw new TaskSpaceCatalogException(
+                    TaskSpaceCatalogIssue.OrphanScopedSettings,
+                    [sourceId],
                     $"Duplicate, empty, or orphan task-space id '{sourceId}' in {scope}.");
             }
         }
@@ -935,9 +965,13 @@ public static class TaskSourceSettingsAdapter
                     return settings;
                 }
             }
-            catch (JsonException)
+            catch (JsonException error)
             {
-                // A pre-release map form is handled below.
+                throw new TaskSpaceCatalogException(
+                    TaskSpaceCatalogIssue.InvalidSourceConfiguration,
+                    [SyncProfilesSectionName],
+                    "The persisted task-space synchronization profiles are corrupt.",
+                    error);
             }
         }
 
@@ -984,7 +1018,9 @@ public static class TaskSourceSettingsAdapter
         }
         catch (JsonException ex)
         {
-            throw new InvalidOperationException(
+            throw new TaskSpaceCatalogException(
+                TaskSpaceCatalogIssue.InvalidSourceConfiguration,
+                [typeof(T).Name],
                 $"The persisted task-space slot for '{typeof(T).Name}' is corrupt.",
                 ex);
         }

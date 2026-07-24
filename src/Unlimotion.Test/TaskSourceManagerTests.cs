@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reactive.Threading.Tasks;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Unlimotion.Domain;
@@ -636,6 +637,296 @@ public sealed class TaskSourceManagerTests : IDisposable
 
         await Assert.That(manager.GetSourceSettings(second.Id).Storage.IsServerMode).IsTrue();
         await Assert.That(manager.GetSourceSettings(second.Id).Storage.Login).IsEqualTo("another-user");
+    }
+
+    [Test]
+    public async Task SourceManager_PersistLocalSettingsRejectsEmptyPathBeforeMutation()
+    {
+        var configuration = CreateConfiguration();
+        var defaultPath = Path.Combine(_rootPath, "default");
+        var manager = new TaskSourceManager(
+            configuration,
+            new RecordingTaskStorageBuilder(),
+            defaultStoragePathProvider: () => defaultPath);
+        var workPath = Path.Combine(_rootPath, "work");
+        var work = manager.AddConfiguredLocalSource("Work", workPath);
+
+        await Assert.That(() => manager.PersistSourceSettings(new TaskSpaceSettingsDraft
+            {
+                SourceId = work.Id,
+                Storage = new TaskStorageSettings
+                {
+                    IsServerMode = false,
+                    Path = " "
+                },
+                Git = new GitSettings()
+            }))
+            .Throws<InvalidOperationException>();
+
+        await Assert.That(manager.GetSourceSettings(work.Id).Storage.Path).IsEqualTo(workPath);
+        await Assert.That(manager.ConfiguredSources.Single(source => source.Id == work.Id).Path)
+            .IsEqualTo(workPath);
+    }
+
+    [Test]
+    [Arguments("https://tasks.example/api/", "https://TASKS.example:443/api")]
+    [Arguments("https://tasks.example./api", "https://tasks.example/api")]
+    public async Task SourceManager_ServerOwnershipRejectsCanonicalUrlAliases(
+        string firstUrl,
+        string secondUrl)
+    {
+        var configuration = CreateConfiguration();
+        var manager = new TaskSourceManager(
+            configuration,
+            new RecordingTaskStorageBuilder(),
+            defaultStoragePathProvider: () => Path.Combine(_rootPath, "default"));
+        var first = manager.AddConfiguredLocalSource("Server one", Path.Combine(_rootPath, "server-one"));
+        var second = manager.AddConfiguredLocalSource("Server two", Path.Combine(_rootPath, "server-two"));
+
+        manager.PersistSourceSettings(CreateServerDraft(
+            first.Id,
+            firstUrl,
+            "example-user"));
+
+        await Assert.That(() => manager.PersistSourceSettings(CreateServerDraft(
+                second.Id,
+                secondUrl,
+                " example-user ")))
+            .Throws<InvalidOperationException>();
+    }
+
+    [Test]
+    public async Task SourceManager_ServerOwnershipPreservesCaseSensitiveEndpointPaths()
+    {
+        var configuration = CreateConfiguration();
+        var manager = new TaskSourceManager(
+            configuration,
+            new RecordingTaskStorageBuilder(),
+            defaultStoragePathProvider: () => Path.Combine(_rootPath, "default"));
+        var first = manager.AddConfiguredLocalSource("Server one", Path.Combine(_rootPath, "server-one"));
+        var second = manager.AddConfiguredLocalSource("Server two", Path.Combine(_rootPath, "server-two"));
+
+        manager.PersistSourceSettings(CreateServerDraft(
+            first.Id,
+            "https://tasks.example/API",
+            "example-user"));
+        manager.PersistSourceSettings(CreateServerDraft(
+            second.Id,
+            "https://TASKS.EXAMPLE/api",
+            "example-user"));
+
+        await Assert.That(manager.GetSourceSettings(first.Id).Storage.URL)
+            .IsEqualTo("https://tasks.example/API");
+        await Assert.That(manager.GetSourceSettings(second.Id).Storage.URL)
+            .IsEqualTo("https://tasks.example/api");
+    }
+
+    [Test]
+    public async Task SourceManager_InvalidCatalogFailsBeforeConfigurationPersistence()
+    {
+        var path = Path.Combine(_rootPath, $"{Guid.NewGuid():N}.json");
+        File.WriteAllText(path, "{}");
+        var configuration = WritableJsonConfigurationFabric.Create(path, reloadOnChange: false);
+        if (configuration is IDisposable disposable)
+        {
+            _disposables.Add(disposable);
+        }
+
+        var defaultPath = Path.Combine(_rootPath, "default");
+        var settings = TaskSourceSettingsAdapter.LoadOrCreate(configuration, defaultPath);
+        settings.Sources.Add(new TaskSourceDescriptor
+        {
+            Id = "duplicate-folder",
+            DisplayName = "Duplicate folder",
+            Kind = TaskSourceKind.File,
+            Path = defaultPath,
+            IsEnabled = true
+        });
+        TaskSourceSettingsAdapter.EnsureSyncSettings(settings, "duplicate-folder");
+        TaskSourceSettingsAdapter.Save(configuration, settings);
+        var persistedBeforeValidation = File.ReadAllText(path);
+
+        await Assert.That(() => new TaskSourceManager(
+                configuration,
+                new RecordingTaskStorageBuilder(),
+                defaultStoragePathProvider: () => defaultPath))
+            .Throws<TaskSpaceCatalogException>();
+
+        await Assert.That(File.ReadAllText(path)).IsEqualTo(persistedBeforeValidation);
+    }
+
+    [Test]
+    public async Task SourceManager_InvalidConfiguredFilePathFailsAsCatalogErrorBeforePersistence()
+    {
+        var path = Path.Combine(_rootPath, $"{Guid.NewGuid():N}.json");
+        File.WriteAllText(path, "{}");
+        var configuration = WritableJsonConfigurationFabric.Create(path, reloadOnChange: false);
+        if (configuration is IDisposable disposable)
+        {
+            _disposables.Add(disposable);
+        }
+
+        var settings = TaskSourceSettingsAdapter.LoadOrCreate(
+            configuration,
+            Path.Combine(_rootPath, "default"));
+        settings.Sources[0].Path = $"invalid{'\0'}path";
+        TaskSourceSettingsAdapter.Save(configuration, settings);
+        var persistedBeforeValidation = File.ReadAllText(path);
+
+        await Assert.That(() => new TaskSourceManager(
+                configuration,
+                new RecordingTaskStorageBuilder(),
+                defaultStoragePathProvider: () => Path.Combine(_rootPath, "default")))
+            .Throws<TaskSpaceCatalogException>();
+
+        await Assert.That(File.ReadAllText(path)).IsEqualTo(persistedBeforeValidation);
+    }
+
+    [Test]
+    public async Task SourceManager_UnsupportedConfiguredSourceKindFailsAsCatalogErrorBeforePersistence()
+    {
+        var path = Path.Combine(_rootPath, $"{Guid.NewGuid():N}.json");
+        File.WriteAllText(path, "{}");
+        var configuration = WritableJsonConfigurationFabric.Create(path, reloadOnChange: false);
+        if (configuration is IDisposable disposable)
+        {
+            _disposables.Add(disposable);
+        }
+
+        var settings = TaskSourceSettingsAdapter.LoadOrCreate(
+            configuration,
+            Path.Combine(_rootPath, "default"));
+        settings.Sources[0].Kind = (TaskSourceKind)int.MaxValue;
+        TaskSourceSettingsAdapter.Save(configuration, settings);
+        var persistedBeforeValidation = File.ReadAllText(path);
+
+        await Assert.That(() => new TaskSourceManager(
+                configuration,
+                new RecordingTaskStorageBuilder(),
+                defaultStoragePathProvider: () => Path.Combine(_rootPath, "default")))
+            .Throws<TaskSpaceCatalogException>();
+
+        await Assert.That(File.ReadAllText(path)).IsEqualTo(persistedBeforeValidation);
+    }
+
+    [Test]
+    public async Task SourceManager_InvalidPreparedJournalSnapshotFailsBeforeConfigurationPersistence()
+    {
+        var path = Path.Combine(_rootPath, $"{Guid.NewGuid():N}.json");
+        File.WriteAllText(path, "{}");
+        var configuration = WritableJsonConfigurationFabric.Create(path, reloadOnChange: false);
+        if (configuration is IDisposable disposable)
+        {
+            _disposables.Add(disposable);
+        }
+
+        var defaultPath = Path.Combine(_rootPath, "default");
+        var current = TaskSourceSettingsAdapter.LoadOrCreate(configuration, defaultPath);
+        var corruptBefore = JsonSerializer.Deserialize<TaskSourcesSettings>(
+                                JsonSerializer.Serialize(current))
+                            ?? throw new InvalidOperationException("Could not clone task-space settings.");
+        corruptBefore.Sources.Add(new TaskSourceDescriptor
+        {
+            Id = "journal-duplicate-folder",
+            DisplayName = "Journal duplicate folder",
+            Kind = TaskSourceKind.File,
+            Path = defaultPath,
+            IsEnabled = true
+        });
+        TaskSourceSettingsAdapter.EnsureSyncSettings(corruptBefore, "journal-duplicate-folder");
+
+        var journal = configuration.GetSection("TaskSourceMutationJournal");
+        journal.GetSection("MutationId").Set("invalid-snapshot");
+        journal.GetSection("Operation").Set("Add");
+        journal.GetSection("BeforeSnapshot").Set(JsonSerializer.Serialize(corruptBefore));
+        journal.GetSection("AfterSnapshot").Set(JsonSerializer.Serialize(current));
+        journal.GetSection("State").Set("Prepared");
+        var persistedBeforeValidation = File.ReadAllText(path);
+
+        await Assert.That(() => new TaskSourceManager(
+                configuration,
+                new RecordingTaskStorageBuilder(),
+                defaultStoragePathProvider: () => defaultPath))
+            .Throws<TaskSpaceCatalogException>();
+
+        await Assert.That(File.ReadAllText(path)).IsEqualTo(persistedBeforeValidation);
+    }
+
+    [Test]
+    public async Task SourceManager_CorruptDescriptorSlotFailsAsCatalogErrorBeforePersistence()
+    {
+        var path = Path.Combine(_rootPath, $"{Guid.NewGuid():N}.json");
+        File.WriteAllText(path, "{}");
+        var configuration = WritableJsonConfigurationFabric.Create(path, reloadOnChange: false);
+        if (configuration is IDisposable disposable)
+        {
+            _disposables.Add(disposable);
+        }
+
+        var defaultPath = Path.Combine(_rootPath, "default");
+        _ = TaskSourceSettingsAdapter.LoadOrCreate(configuration, defaultPath);
+        configuration.GetSection(TaskSourcesSettings.SectionName)
+            .GetSection("SourceEntry0")
+            .Set("{not-json");
+        var persistedBeforeValidation = File.ReadAllText(path);
+
+        await Assert.That(() => new TaskSourceManager(
+                configuration,
+                new RecordingTaskStorageBuilder(),
+                defaultStoragePathProvider: () => defaultPath))
+            .Throws<TaskSpaceCatalogException>();
+
+        await Assert.That(File.ReadAllText(path)).IsEqualTo(persistedBeforeValidation);
+    }
+
+    [Test]
+    public async Task SourceManager_CorruptSyncProfilesFailAsCatalogErrorBeforePersistence()
+    {
+        var path = Path.Combine(_rootPath, $"{Guid.NewGuid():N}.json");
+        File.WriteAllText(path, "{}");
+        var configuration = WritableJsonConfigurationFabric.Create(path, reloadOnChange: false);
+        if (configuration is IDisposable disposable)
+        {
+            _disposables.Add(disposable);
+        }
+
+        var defaultPath = Path.Combine(_rootPath, "default");
+        _ = TaskSourceSettingsAdapter.LoadOrCreate(configuration, defaultPath);
+        configuration.Set("TaskSourceSyncProfiles", "{not-json");
+        var persistedBeforeValidation = File.ReadAllText(path);
+
+        await Assert.That(() => new TaskSourceManager(
+                configuration,
+                new RecordingTaskStorageBuilder(),
+                defaultStoragePathProvider: () => defaultPath))
+            .Throws<TaskSpaceCatalogException>();
+
+        await Assert.That(File.ReadAllText(path)).IsEqualTo(persistedBeforeValidation);
+    }
+
+    [Test]
+    [Arguments("")]
+    [Arguments("   ")]
+    [Arguments("not-a-url")]
+    [Arguments("ftp://tasks.example")]
+    [Arguments("https:///missing-host")]
+    [Arguments("https://example..com")]
+    public async Task SourceManager_ServerSettingsRejectInvalidEndpoint(string url)
+    {
+        var configuration = CreateConfiguration();
+        var manager = new TaskSourceManager(
+            configuration,
+            new RecordingTaskStorageBuilder(),
+            defaultStoragePathProvider: () => Path.Combine(_rootPath, "default"));
+        var server = manager.AddConfiguredLocalSource("Server", Path.Combine(_rootPath, "server"));
+
+        await Assert.That(() => manager.PersistSourceSettings(CreateServerDraft(
+                server.Id,
+                url,
+                "example-user")))
+            .Throws<InvalidOperationException>();
+
+        await Assert.That(manager.GetSourceSettings(server.Id).Storage.IsServerMode).IsFalse();
     }
 
     public void Dispose()

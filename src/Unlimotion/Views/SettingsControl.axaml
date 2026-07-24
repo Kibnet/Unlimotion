@@ -144,6 +144,25 @@
                                 IsEnabled="{Binding CanRemoveTaskSpace}"
                                 AutomationProperties.AutomationId="RemoveTaskSpaceButton" />
                     </WrapPanel>
+
+                    <Border Margin="0,8,0,0"
+                            Padding="10"
+                            BorderThickness="1"
+                            BorderBrush="{DynamicResource ThemeControlMidBrush}"
+                            CornerRadius="6"
+                            IsVisible="{Binding IsTaskSpaceSettingsPersistenceStatusVisible}"
+                            AutomationProperties.AutomationId="TaskSpaceSettingsPersistenceStatus">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="{Binding TaskSpaceSettingsPersistenceStatus}"
+                                       TextWrapping="Wrap"
+                                       AutomationProperties.AutomationId="TaskSpaceSettingsPersistenceStatusText" />
+                            <Button Content="{DynamicResource TaskSpaceSettingsRetry}"
+                                    Command="{Binding RetryTaskSpaceSettingsPersistenceCommand}"
+                                    IsVisible="{Binding IsTaskSpaceSettingsPersistenceError}"
+                                    HorizontalAlignment="Left"
+                                    AutomationProperties.AutomationId="RetryTaskSpaceSettingsPersistenceButton" />
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
             </Border>
 

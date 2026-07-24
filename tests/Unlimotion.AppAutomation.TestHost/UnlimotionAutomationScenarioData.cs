@@ -58,7 +58,9 @@ public static class UnlimotionAutomationScenarioData
                 ? ReadmeDemoCurrentTaskIdRu
                 : ReadmeDemoCurrentTaskId,
             UnlimotionAutomationScenario.StatusContract => StatusContractTerminalTaskId,
-            UnlimotionAutomationScenario.TaskSpaces => TaskSpacesTaskId,
+            UnlimotionAutomationScenario.TaskSpaces or
+                UnlimotionAutomationScenario.TaskSpacesDuplicateCatalogRecovery or
+                UnlimotionAutomationScenario.TaskSpacesOrphanCatalogRecovery => TaskSpacesTaskId,
             _ => SmokeCurrentTaskId
         };
     }
@@ -110,7 +112,9 @@ public static class UnlimotionAutomationScenarioData
                 StatusContractBlockerTaskId => StatusContractBlockerTaskTitle,
                 _ => StatusContractTerminalTaskTitle
             },
-            UnlimotionAutomationScenario.TaskSpaces => TaskSpacesSpaceATitle,
+            UnlimotionAutomationScenario.TaskSpaces or
+                UnlimotionAutomationScenario.TaskSpacesDuplicateCatalogRecovery or
+                UnlimotionAutomationScenario.TaskSpacesOrphanCatalogRecovery => TaskSpacesSpaceATitle,
             _ => SmokeCurrentTaskTitle
         };
     }
@@ -146,7 +150,9 @@ public static class UnlimotionAutomationScenarioData
                 ? ReadmeDemoWindowTitleRu
                 : ReadmeDemoWindowTitle,
             UnlimotionAutomationScenario.StatusContract => StatusContractWindowTitle,
-            UnlimotionAutomationScenario.TaskSpaces => TaskSpacesWindowTitle,
+            UnlimotionAutomationScenario.TaskSpaces or
+                UnlimotionAutomationScenario.TaskSpacesDuplicateCatalogRecovery or
+                UnlimotionAutomationScenario.TaskSpacesOrphanCatalogRecovery => TaskSpacesWindowTitle,
             _ => null
         };
     }
@@ -170,6 +176,8 @@ public static class UnlimotionAutomationScenarioData
                 SeedStatusContractTasks(tasksPath);
                 break;
             case UnlimotionAutomationScenario.TaskSpaces:
+            case UnlimotionAutomationScenario.TaskSpacesDuplicateCatalogRecovery:
+            case UnlimotionAutomationScenario.TaskSpacesOrphanCatalogRecovery:
                 SeedTaskSpaces(tasksPath);
                 break;
             default:
@@ -198,6 +206,12 @@ public static class UnlimotionAutomationScenarioData
                 break;
             case UnlimotionAutomationScenario.TaskSpaces:
                 WriteTaskSpacesConfig(configPath, tasksPath);
+                break;
+            case UnlimotionAutomationScenario.TaskSpacesDuplicateCatalogRecovery:
+                WriteCorruptTaskSpacesConfig(configPath, tasksPath, duplicateSource: true);
+                break;
+            case UnlimotionAutomationScenario.TaskSpacesOrphanCatalogRecovery:
+                WriteCorruptTaskSpacesConfig(configPath, tasksPath, duplicateSource: false);
                 break;
             default:
                 WriteSmokeConfig(configPath, tasksPath);
@@ -302,6 +316,52 @@ public static class UnlimotionAutomationScenarioData
         {
             (configuration as IDisposable)?.Dispose();
         }
+    }
+
+    private static void WriteCorruptTaskSpacesConfig(
+        string configPath,
+        string tasksPath,
+        bool duplicateSource)
+    {
+        WriteTaskSpacesConfig(configPath, tasksPath);
+        var configuration = WritableJsonConfigurationFabric.Create(configPath, reloadOnChange: false);
+        try
+        {
+            var settings = TaskSourceSettingsAdapter.LoadOrCreate(configuration, tasksPath);
+            if (duplicateSource)
+            {
+                var duplicate = settings.Sources[0];
+                settings.Sources.Add(new TaskSourceDescriptor
+                {
+                    Id = duplicate.Id,
+                    DisplayName = "Duplicate space",
+                    Kind = duplicate.Kind,
+                    Path = GetTaskSpacesSecondPath(tasksPath),
+                    IsEnabled = true
+                });
+            }
+            else
+            {
+                settings.ServerSettings.Add(new TaskSourceServerSettings
+                {
+                    SourceId = "missing-space",
+                    Login = "orphan-login"
+                });
+            }
+
+            TaskSourceSettingsAdapter.Save(configuration, settings);
+        }
+        finally
+        {
+            (configuration as IDisposable)?.Dispose();
+        }
+
+        var root = JsonNode.Parse(File.ReadAllText(configPath))?.AsObject()
+                   ?? throw new InvalidOperationException("Corrupt task-space scenario config is not a JSON object.");
+        root.Remove("TaskStorage");
+        File.WriteAllText(
+            configPath,
+            root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
     }
 
     private static void SeedTaskSpaces(string tasksPath)
