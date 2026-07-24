@@ -237,6 +237,7 @@ function Get-FullTreeNativeFileIdentityMap([string]$TreeRoot) {
     $identities = [System.Collections.Generic.Dictionary[string, string]]::new([StringComparer]::Ordinal)
     foreach ($file in @(Get-ChildItem -LiteralPath $root -Recurse -File -Force)) {
         Assert-True (-not $file.LinkType) 'Full tree file cannot be a link.'
+        if (-not $IsWindows) { continue }
         $identity = Get-WindowsNativeFileIdentity -Path $file.FullName
         Assert-True ($identity.NumberOfLinks -eq 1) 'Full tree file link count must be exactly one.'
         $key = ('{0:x8}:{1:x16}' -f $identity.VolumeSerialNumber, $identity.FileIndex)
