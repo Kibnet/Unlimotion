@@ -1936,10 +1936,13 @@ function Invoke-RegressionAttempt {
 function Read-ValidatedFullChildReceipt([string]$ChildRoot, [string]$ChildLane, [string]$SourceSha, [int]$Attempt) {
     $root = [IO.Path]::GetFullPath($ChildRoot)
     Assert-True ((Test-Path -LiteralPath $root -PathType Container) -and -not (Get-Item -LiteralPath $root -Force).LinkType) "Full $ChildLane child evidence root is missing."
+    Write-Verbose "Full $ChildLane child receipt: native identity."
     [void](Get-FullTreeNativeFileIdentityMap -TreeRoot $root)
+    Write-Verbose "Full $ChildLane child receipt: independent validation."
     $validatorPath = Join-Path $PSScriptRoot 'Test-NuGetEvidencePublication.ps1'
     & (Get-AbsolutePowerShellExecutable) -NoLogo -NoProfile -NonInteractive -File $validatorPath -EvidenceRoot $root -ExpectedLane $ChildLane -ExpectedSourceSha $SourceSha -ExpectedRunAttempt ([string]$Attempt) -ExpectedExecutionContext 'full-child' 2>$null | Out-Null
     Assert-True ($LASTEXITCODE -eq 0) "Full $ChildLane child evidence failed independent validation."
+    Write-Verbose "Full $ChildLane child receipt: parse and bind."
     $receiptPath = Join-Path $root 'attempt-receipt.json'
     $receipt = [IO.File]::ReadAllText($receiptPath, [Text.UTF8Encoding]::new($false)) | ConvertFrom-Json -AsHashtable -Depth 32
     Assert-True ($receipt.receiptKind -ceq 'primary' -and $receipt.lane -ceq $ChildLane -and $receipt.sourceSha -ceq $SourceSha -and $receipt.runAttempt -eq $Attempt -and $receipt.outcome -cin @('success', 'failure')) "Full $ChildLane child receipt is not a validated primary receipt."
@@ -2123,14 +2126,18 @@ function Invoke-FullChildAttempt([string]$ChildLane, [string]$Root, [string]$Sou
     New-Item -ItemType Directory -Path $workRoot, $childPackagesRoot, $sourceParentRoot -Force -ErrorAction Stop | Out-Null
     Assert-True (-not (Get-Item -LiteralPath $workRoot -Force).LinkType -and -not (Get-Item -LiteralPath $childPackagesRoot -Force).LinkType -and -not (Get-Item -LiteralPath $sourceParentRoot -Force).LinkType -and -not (Test-Path -LiteralPath $childEvidenceRoot) -and -not (Test-Path -LiteralPath $sourceRoot)) "Full $ChildLane source worktree root is invalid."
     try {
+        Write-Verbose "Full $ChildLane child: create source worktree."
         & git -C $Root worktree add --detach --force $sourceRoot $SourceSha *> $null
         Assert-True ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath $sourceRoot -PathType Container) -and -not (Get-Item -LiteralPath $sourceRoot -Force).LinkType) "Full $ChildLane child source worktree could not be created."
+        Write-Verbose "Full $ChildLane child: execute isolated lane."
         $childExitCode = Invoke-FullChildProcess -ChildLane $ChildLane -Root $sourceRoot -SourceSha $SourceSha -Attempt $Attempt -ChildEvidenceRoot $childEvidenceRoot -ChildPackagesRoot $childPackagesRoot -OuterDeadlineUtc $OuterDeadlineUtc -ChildDeadlineMinutes $ChildDeadlineMinutes -ReserveMinutes $ReserveMinutes
+        Write-Verbose "Full $ChildLane child: read receipt."
         $receipt = Read-ValidatedFullChildReceipt -ChildRoot $ChildEvidenceRoot -ChildLane $ChildLane -SourceSha $SourceSha -Attempt $Attempt
         Assert-True (($childExitCode -eq 0) -eq ($receipt.outcome -ceq 'success')) "Full $ChildLane child exit code does not match its receipt outcome."
         return [ordered]@{ exitCode = $childExitCode; evidenceRoot = $childEvidenceRoot; receipt = $receipt }
     } finally {
         if (Test-Path -LiteralPath $sourceRoot -PathType Container) {
+            Write-Verbose "Full $ChildLane child: remove source worktree."
             & git -C $Root worktree remove --force $sourceRoot *> $null
             Assert-True ($LASTEXITCODE -eq 0 -and -not (Test-Path -LiteralPath $sourceRoot)) "Full $ChildLane child source worktree could not be removed."
         }
