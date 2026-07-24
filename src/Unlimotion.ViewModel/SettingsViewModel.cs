@@ -37,6 +37,7 @@ public class SettingsViewModel
     private readonly ILocalizationService _localization;
     private readonly bool _defaultIsDarkTheme;
     private readonly Func<string?>? _defaultTaskStoragePathProvider;
+    private bool _deferTaskSpaceSettingsPersistence;
     private IApplicationUpdateService? _applicationUpdateService;
     private ApplicationUpdateInfo? _availableUpdate;
     private string? _updateStatusOverride;
@@ -69,6 +70,8 @@ public class SettingsViewModel
     private int _updateCheckIntervalValue;
     private ApplicationUpdateCheckIntervalUnit _updateCheckIntervalUnit;
     private BackupConflictFile? _selectedBackupConflict;
+    private TaskSpaceOptionViewModel? _selectedTaskSpace;
+    private TaskSpaceOptionViewModel? _headerTaskSpace;
 
     public SettingsViewModel(
         IConfiguration configuration,
@@ -90,6 +93,7 @@ public class SettingsViewModel
         _defaultTaskStoragePathProvider = defaultTaskStoragePathProvider;
 
         _localization.SetLanguage(_appearanceSettings.GetSection(AppearanceSettings.LanguageKey).Get<string>());
+        NewTaskSpaceName = _localization.Get("TaskSpacesDefaultName");
         _localization.CultureChanged += (_, __) => RefreshLocalizedText();
 
         _themeMode = AppearanceSettings.ParseThemeMode(
@@ -171,6 +175,139 @@ public class SettingsViewModel
     public ICommand? CheckForUpdatesCommand { get; set; }
     public ICommand? DownloadUpdateCommand { get; set; }
     public ICommand? ApplyUpdateCommand { get; set; }
+    public ICommand? AddTaskSpaceCommand { get; set; }
+    public ICommand? SwitchTaskSpaceCommand { get; set; }
+    public ICommand? RenameTaskSpaceCommand { get; set; }
+    public ICommand? RemoveTaskSpaceCommand { get; set; }
+
+    public ObservableCollection<TaskSpaceOptionViewModel> TaskSpaces { get; } = new();
+
+    public TaskSpaceOptionViewModel? SelectedTaskSpace
+    {
+        get => _selectedTaskSpace;
+        set => _selectedTaskSpace = value;
+    }
+
+    public TaskSpaceOptionViewModel? HeaderTaskSpace
+    {
+        get => _headerTaskSpace;
+        set
+        {
+            if (ReferenceEquals(_headerTaskSpace, value))
+            {
+                return;
+            }
+
+            _headerTaskSpace = value;
+            if (value != null && !value.IsActive && SwitchTaskSpaceCommand?.CanExecute(value) == true)
+            {
+                SwitchTaskSpaceCommand.Execute(value);
+            }
+        }
+    }
+
+    public string NewTaskSpaceName { get; set; } = "New space";
+
+    public bool IsTaskSpaceSwitching { get; set; }
+    public bool IsTaskSpaceRecoveryRequired { get; set; }
+    public string TaskSpaceRecoveryMessage { get; set; } = string.Empty;
+    public bool CanRemoveTaskSpace { get; set; }
+
+    public void ReloadTaskSpaces(IEnumerable<TaskSourceDescriptor> sources, string activeSourceId)
+    {
+        TaskSpaces.Clear();
+        foreach (var source in sources)
+        {
+            TaskSpaces.Add(new TaskSpaceOptionViewModel
+            {
+                SourceId = source.Id,
+                DisplayName = string.IsNullOrWhiteSpace(source.DisplayName) ? source.Id : source.DisplayName,
+                Kind = source.Kind,
+                SourceSummary = source.Kind == TaskSourceKind.Server ? source.Url : source.Path,
+                IsActive = string.Equals(source.Id, activeSourceId, StringComparison.Ordinal)
+            });
+        }
+
+        var active = TaskSpaces.FirstOrDefault(space => space.IsActive) ?? TaskSpaces.FirstOrDefault();
+        SelectedTaskSpace = active;
+        HeaderTaskSpace = active;
+        CanRemoveTaskSpace = TaskSpaces.Count > 1;
+    }
+
+    public void ReloadActiveTaskSpaceSettings()
+    {
+        var storage = _configuration.Get<TaskStorageSettings>("TaskStorage") ?? new TaskStorageSettings();
+        TaskStoragePath = storage.Path;
+        TaskStorageURL = storage.URL;
+        Login = storage.Login;
+        Password = storage.Password;
+        IsServerMode = storage.IsServerMode;
+
+        var git = _configuration.Get<GitSettings>("Git") ?? new GitSettings();
+        GitBackupEnabled = git.BackupEnabled;
+        GitShowStatusToasts = git.ShowStatusToasts;
+        GitRemoteUrl = git.RemoteUrl;
+        GitBranch = git.Branch;
+        GitUserName = git.UserName;
+        GitPassword = git.Password;
+        GitPullIntervalSeconds = git.PullIntervalSeconds;
+        GitPushIntervalSeconds = git.PushIntervalSeconds;
+        GitRemoteName = git.RemoteName;
+        GitPushRefSpec = git.PushRefSpec;
+        GitCommitterName = git.CommitterName;
+        GitCommitterEmail = git.CommitterEmail;
+        GitSshPrivateKeyPath = git.SshPrivateKeyPath;
+        GitSshPublicKeyPath = git.SshPublicKeyPath;
+        SshKeyStoragePath = git.SshKeyStoragePath;
+        ReloadSshPublicKeys();
+        ReloadGitMetadata();
+        RefreshStorageSelectionState();
+        RefreshStorageStatusText();
+    }
+
+    public void UseDeferredTaskSpaceSettingsPersistence() =>
+        _deferTaskSpaceSettingsPersistence = true;
+
+    public TaskSpaceSettingsDraft CreateTaskSpaceSettingsDraft(string sourceId) =>
+        new()
+        {
+            SourceId = sourceId,
+            Storage = new TaskStorageSettings
+            {
+                Path = TaskStoragePath ?? string.Empty,
+                URL = TaskStorageURL ?? string.Empty,
+                Login = Login ?? string.Empty,
+                Password = Password ?? string.Empty,
+                IsServerMode = IsServerMode,
+                IsFuzzySearch = IsFuzzySearch
+            },
+            Git = new GitSettings
+            {
+                BackupEnabled = GitBackupEnabled,
+                ShowStatusToasts = GitShowStatusToasts,
+                RemoteUrl = GitRemoteUrl ?? string.Empty,
+                Branch = GitBranch ?? string.Empty,
+                UserName = GitUserName ?? string.Empty,
+                Password = GitPassword ?? string.Empty,
+                SshPrivateKeyPath = GitSshPrivateKeyPath,
+                SshPublicKeyPath = GitSshPublicKeyPath,
+                SshKeyStoragePath = SshKeyStoragePath,
+                PullIntervalSeconds = GitPullIntervalSeconds,
+                PushIntervalSeconds = GitPushIntervalSeconds,
+                RemoteName = GitRemoteName ?? string.Empty,
+                PushRefSpec = GitPushRefSpec,
+                CommitterName = GitCommitterName ?? string.Empty,
+                CommitterEmail = GitCommitterEmail ?? string.Empty
+            }
+        };
+
+    private void SetTaskSpaceSetting(IConfiguration section, string key, object? value)
+    {
+        if (!_deferTaskSpaceSettingsPersistence)
+        {
+            section.GetSection(key).Set(value);
+        }
+    }
 
     public ThemeMode ThemeMode
     {
@@ -254,7 +391,7 @@ public class SettingsViewModel
         set
         {
             _taskStoragePath = value;
-            _taskStorageSettings.GetSection(nameof(TaskStorageSettings.Path)).Set(value);
+            SetTaskSpaceSetting(_taskStorageSettings, nameof(TaskStorageSettings.Path), value);
             RefreshStorageStatusText();
         }
     }
@@ -267,7 +404,7 @@ public class SettingsViewModel
         set
         {
             _taskStorageUrl = value;
-            _taskStorageSettings.GetSection(nameof(TaskStorageSettings.URL)).Set(value);
+            SetTaskSpaceSetting(_taskStorageSettings, nameof(TaskStorageSettings.URL), value);
         }
     }
 
@@ -288,7 +425,7 @@ public class SettingsViewModel
         set
         {
             _login = value;
-            _taskStorageSettings.GetSection(nameof(TaskStorageSettings.Login)).Set(value);
+            SetTaskSpaceSetting(_taskStorageSettings, nameof(TaskStorageSettings.Login), value);
             RefreshStorageStatusText();
         }
     }
@@ -299,7 +436,7 @@ public class SettingsViewModel
         set
         {
             _password = value;
-            _taskStorageSettings.GetSection(nameof(TaskStorageSettings.Password)).Set(value);
+            SetTaskSpaceSetting(_taskStorageSettings, nameof(TaskStorageSettings.Password), value);
             RefreshStorageStatusText();
         }
     }
@@ -310,7 +447,7 @@ public class SettingsViewModel
         set
         {
             _isServerMode = value;
-            _taskStorageSettings.GetSection(nameof(TaskStorageSettings.IsServerMode)).Set(value);
+            SetTaskSpaceSetting(_taskStorageSettings, nameof(TaskStorageSettings.IsServerMode), value);
             RefreshStorageSelectionState();
             RefreshStorageStatusText();
         }
@@ -434,7 +571,7 @@ public class SettingsViewModel
         set
         {
             _gitBackupEnabled = value;
-            _gitSettings.GetSection(nameof(GitSettings.BackupEnabled)).Set(value);
+            SetTaskSpaceSetting(_gitSettings, nameof(GitSettings.BackupEnabled), value);
             RefreshBackupState();
         }
     }
@@ -445,7 +582,7 @@ public class SettingsViewModel
         set
         {
             _gitShowStatusToasts = value;
-            _gitSettings.GetSection(nameof(GitSettings.ShowStatusToasts)).Set(value);
+            SetTaskSpaceSetting(_gitSettings, nameof(GitSettings.ShowStatusToasts), value);
         }
     }
 
@@ -455,7 +592,7 @@ public class SettingsViewModel
         set
         {
             _gitRemoteUrl = value;
-            _gitSettings.GetSection(nameof(GitSettings.RemoteUrl)).Set(value);
+            SetTaskSpaceSetting(_gitSettings, nameof(GitSettings.RemoteUrl), value);
             RefreshBackupAuthMode();
             RefreshBackupState();
         }
@@ -467,7 +604,7 @@ public class SettingsViewModel
         set
         {
             _gitBranch = value;
-            _gitSettings.GetSection(nameof(GitSettings.Branch)).Set(value);
+            SetTaskSpaceSetting(_gitSettings, nameof(GitSettings.Branch), value);
             EnsureGitPushRefSpecFallback();
             RefreshBackupActionAvailability();
         }
@@ -479,7 +616,7 @@ public class SettingsViewModel
         set
         {
             _gitUserName = value;
-            _gitSettings.GetSection(nameof(GitSettings.UserName)).Set(value);
+            SetTaskSpaceSetting(_gitSettings, nameof(GitSettings.UserName), value);
             RefreshBackupState();
         }
     }
@@ -490,7 +627,7 @@ public class SettingsViewModel
         set
         {
             _gitPassword = value;
-            _gitSettings.GetSection(nameof(GitSettings.Password)).Set(value);
+            SetTaskSpaceSetting(_gitSettings, nameof(GitSettings.Password), value);
             RefreshBackupState();
         }
     }
@@ -501,7 +638,7 @@ public class SettingsViewModel
         set
         {
             _gitPullIntervalSeconds = value;
-            _gitSettings.GetSection(nameof(GitSettings.PullIntervalSeconds)).Set(value);
+            SetTaskSpaceSetting(_gitSettings, nameof(GitSettings.PullIntervalSeconds), value);
         }
     }
 
@@ -511,7 +648,7 @@ public class SettingsViewModel
         set
         {
             _gitPushIntervalSeconds = value;
-            _gitSettings.GetSection(nameof(GitSettings.PushIntervalSeconds)).Set(value);
+            SetTaskSpaceSetting(_gitSettings, nameof(GitSettings.PushIntervalSeconds), value);
         }
     }
 
@@ -521,7 +658,7 @@ public class SettingsViewModel
         set
         {
             _gitRemoteName = value;
-            _gitSettings.GetSection(nameof(GitSettings.RemoteName)).Set(value);
+            SetTaskSpaceSetting(_gitSettings, nameof(GitSettings.RemoteName), value);
             SyncGitRemoteUrlFromSelectedRemote(forceKnownRemoteUrl: true);
             RefreshBackupAuthMode();
             RefreshBackupState();
@@ -567,7 +704,7 @@ public class SettingsViewModel
         set
         {
             _gitPushRefSpec = value;
-            _gitSettings.GetSection(nameof(GitSettings.PushRefSpec)).Set(value);
+            SetTaskSpaceSetting(_gitSettings, nameof(GitSettings.PushRefSpec), value);
             RefreshBackupActionAvailability();
         }
     }
@@ -580,7 +717,7 @@ public class SettingsViewModel
         set
         {
             _gitCommitterName = value;
-            _gitSettings.GetSection(nameof(GitSettings.CommitterName)).Set(value);
+            SetTaskSpaceSetting(_gitSettings, nameof(GitSettings.CommitterName), value);
         }
     }
 
@@ -590,7 +727,7 @@ public class SettingsViewModel
         set
         {
             _gitCommitterEmail = value;
-            _gitSettings.GetSection(nameof(GitSettings.CommitterEmail)).Set(value);
+            SetTaskSpaceSetting(_gitSettings, nameof(GitSettings.CommitterEmail), value);
         }
     }
 
@@ -600,7 +737,7 @@ public class SettingsViewModel
         set
         {
             _gitSshPrivateKeyPath = value;
-            _gitSettings.GetSection(nameof(GitSettings.SshPrivateKeyPath)).Set(value);
+            SetTaskSpaceSetting(_gitSettings, nameof(GitSettings.SshPrivateKeyPath), value);
         }
     }
 
@@ -610,7 +747,7 @@ public class SettingsViewModel
         set
         {
             _gitSshPublicKeyPath = value;
-            _gitSettings.GetSection(nameof(GitSettings.SshPublicKeyPath)).Set(value);
+            SetTaskSpaceSetting(_gitSettings, nameof(GitSettings.SshPublicKeyPath), value);
         }
     }
 
@@ -626,7 +763,7 @@ public class SettingsViewModel
             }
 
             _sshKeyStoragePath = value;
-            _gitSettings.GetSection(nameof(GitSettings.SshKeyStoragePath)).Set(value);
+            SetTaskSpaceSetting(_gitSettings, nameof(GitSettings.SshKeyStoragePath), value);
             ReloadSshPublicKeys();
         }
     }

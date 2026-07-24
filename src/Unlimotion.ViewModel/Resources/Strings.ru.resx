@@ -364,6 +364,19 @@
   <data name="Settings" xml:space="preserve"><value>Настройки</value></data>
   <data name="SettingsIntro" xml:space="preserve"><value>Настройте внешний вид, хранилище задач и резервное копирование. Некоторые изменения применяются сразу, а для подключения хранилища и репозитория нужны отдельные действия.</value></data>
   <data name="SettingsTitle" xml:space="preserve"><value>Настройки</value></data>
+  <data name="TaskSpacesAdd" xml:space="preserve"><value>Добавить пространство</value></data>
+  <data name="TaskSpacesCurrent" xml:space="preserve"><value>Настроенные пространства</value></data>
+  <data name="TaskSpacesHint" xml:space="preserve"><value>Активно только выбранное пространство. Задачи и настройки синхронизации изолированы.</value></data>
+  <data name="TaskSpacesName" xml:space="preserve"><value>Название пространства</value></data>
+  <data name="TaskSpacesNewName" xml:space="preserve"><value>Название нового пространства</value></data>
+  <data name="TaskSpacesDefaultName" xml:space="preserve"><value>Новое пространство</value></data>
+  <data name="TaskSpacesRemove" xml:space="preserve"><value>Удалить</value></data>
+  <data name="TaskSpacesRename" xml:space="preserve"><value>Переименовать</value></data>
+  <data name="TaskSpacesSwitch" xml:space="preserve"><value>Переключить</value></data>
+  <data name="TaskSpacesTitle" xml:space="preserve"><value>Пространства задач</value></data>
+  <data name="TaskSpaceRemoveConfirmMessage" xml:space="preserve"><value>Удалить пространство задач «{0}» с этого устройства? Данные задач и удалённый репозиторий не изменятся.</value></data>
+  <data name="TaskSpaceRemoveConfirmTitle" xml:space="preserve"><value>Удаление пространства задач</value></data>
+  <data name="TaskSpaceSelectorHint" xml:space="preserve"><value>Переключить пространство задач</value></data>
   <data name="SevenDays" xml:space="preserve"><value>7 дней</value></data>
   <data name="ShowAdvancedBackupSettings" xml:space="preserve"><value>Показать дополнительные параметры</value></data>
   <data name="ShowNotifications" xml:space="preserve"><value>Показывать уведомления</value></data>
@@ -554,4 +567,8 @@
   <data name="FridayShort" xml:space="preserve"><value>Пт</value></data>
   <data name="SaturdayShort" xml:space="preserve"><value>Сб</value></data>
   <data name="UnsupportedGitConnectAction" xml:space="preserve"><value>Неподдерживаемое действие подключения Git: {0}.</value></data>
+  <data name="TaskSpaceSwitching" xml:space="preserve"><value>Переключение пространства задач…</value></data>
+  <data name="TaskSpaceSwitchBlockedByConflict" xml:space="preserve"><value>Завершите разрешение конфликтов Git перед переключением пространства.</value></data>
+  <data name="TaskSpaceRecoveryTitle" xml:space="preserve"><value>Требуется восстановление пространства</value></data>
+  <data name="TaskSpaceRecoveryRequired" xml:space="preserve"><value>Новое пространство не подключилось ({0}), а предыдущее не удалось восстановить ({1}). Перезапустите приложение.</value></data>
 </root>

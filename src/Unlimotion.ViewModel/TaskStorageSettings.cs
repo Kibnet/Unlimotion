@@ -49,6 +49,24 @@ public class TaskSourceServerSettings
     public string UserId { get; set; } = string.Empty;
 }
 
+public class TaskSourceSyncSettings
+{
+    public string SourceId { get; set; } = TaskSourceDescriptor.DefaultSourceId;
+    public GitSettings Git { get; set; } = new();
+}
+
+public sealed class TaskSourceLegacyProjectionState
+{
+    public int ProfileSchemaVersion { get; set; } = 1;
+    public string ProjectionState { get; set; } = "Committed";
+    public string TargetSourceId { get; set; } = string.Empty;
+    public string TargetTaskStorageFingerprint { get; set; } = string.Empty;
+    public string TargetGitFingerprint { get; set; } = string.Empty;
+    public string CommittedSourceId { get; set; } = string.Empty;
+    public string CommittedTaskStorageFingerprint { get; set; } = string.Empty;
+    public string CommittedGitFingerprint { get; set; } = string.Empty;
+}
+
 public class TaskSourcesSettings
 {
     public const string SectionName = "TaskSources";
@@ -56,6 +74,15 @@ public class TaskSourcesSettings
     public string ActiveSourceId { get; set; } = TaskSourceDescriptor.DefaultSourceId;
     public List<TaskSourceDescriptor> Sources { get; set; } = new();
     public List<TaskSourceServerSettings> ServerSettings { get; set; } = new();
+    public List<TaskSourceSyncSettings> SyncSettings { get; set; } = new();
+    public TaskSourceLegacyProjectionState LegacyProjection { get; set; } = new();
+}
+
+public sealed class TaskSpaceSettingsDraft
+{
+    public string SourceId { get; set; } = TaskSourceDescriptor.DefaultSourceId;
+    public TaskStorageSettings Storage { get; set; } = new();
+    public GitSettings Git { get; set; } = new();
 }
 
 public class GitSettings

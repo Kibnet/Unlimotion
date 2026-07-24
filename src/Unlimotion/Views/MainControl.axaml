@@ -752,6 +752,21 @@
                                        HorizontalAlignment="Stretch"
                                        VerticalAlignment="Center"/>
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                <ComboBox Width="170"
+                          ItemsSource="{Binding Settings.TaskSpaces}"
+                          SelectedItem="{Binding Settings.HeaderTaskSpace, Mode=TwoWay}"
+                          IsEnabled="{Binding !Settings.IsTaskSpaceSwitching}"
+                          ToolTip.Tip="{DynamicResource TaskSpaceSelectorHint}"
+                          AutomationProperties.AutomationId="TaskSpaceSelector">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate DataType="viewModel:TaskSpaceOptionViewModel">
+                            <TextBlock Text="{Binding DisplayName}"
+                                       TextTrimming="CharacterEllipsis"
+                                       AutomationProperties.Name="{Binding DisplayName}"
+                                       ToolTip.Tip="{Binding SourceSummary}"/>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
                 <DropDownButton Classes="TaskCreateMenuButton TaskAccentOutlineButton TaskIconOnlyDropDownButton"
                                 Content="➕"
                                 ToolTip.Tip="{DynamicResource CreateTaskMenuTip}"
@@ -2339,6 +2354,44 @@
                 </Grid>
             </SplitView.Pane>
         </SplitView>
+        <Grid Grid.Row="1"
+              Panel.ZIndex="90"
+              IsVisible="{Binding Settings.IsTaskSpaceSwitching}"
+              Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
+              AutomationProperties.AutomationId="TaskSpaceSwitchOverlay">
+            <StackPanel HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Spacing="12">
+                <ProgressBar IsIndeterminate="True"
+                             Width="220"
+                             AutomationProperties.AutomationId="TaskSpaceSwitchProgress"/>
+                <TextBlock Text="{DynamicResource TaskSpaceSwitching}"
+                           HorizontalAlignment="Center"/>
+            </StackPanel>
+        </Grid>
+        <Grid Grid.Row="1"
+              Panel.ZIndex="91"
+              IsVisible="{Binding Settings.IsTaskSpaceRecoveryRequired}"
+              Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
+              AutomationProperties.AutomationId="TaskSpaceRecoveryOverlay">
+            <Border MaxWidth="620"
+                    Margin="24"
+                    Padding="20"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    BorderThickness="1"
+                    BorderBrush="{DynamicResource ThemeControlMidBrush}"
+                    CornerRadius="6">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="{DynamicResource TaskSpaceRecoveryTitle}"
+                               FontWeight="Bold"
+                               HorizontalAlignment="Center"/>
+                    <TextBlock Text="{Binding Settings.TaskSpaceRecoveryMessage}"
+                               TextWrapping="Wrap"
+                               TextAlignment="Center"/>
+                </StackPanel>
+            </Border>
+        </Grid>
         <!--Редактор задачи-->
         <Grid x:Name="HotkeyHelpOverlayHost"
               Grid.RowSpan="2"

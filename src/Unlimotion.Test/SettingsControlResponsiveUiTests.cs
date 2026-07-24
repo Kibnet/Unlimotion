@@ -26,6 +26,121 @@ namespace Unlimotion.Test;
 public class SettingsControlResponsiveUiTests
 {
     [Test]
+    public async Task TaskSpaceSwitching_ShowsMainOverlayAndDisablesSpaceScopedSettings()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? mainWindow = null;
+            Window? settingsWindow = null;
+
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                vm.Settings.ReloadTaskSpaces(
+                [
+                    new TaskSourceDescriptor
+                    {
+                        Id = "personal",
+                        DisplayName = "Personal",
+                        Kind = TaskSourceKind.File,
+                        Path = "personal"
+                    },
+                    new TaskSourceDescriptor
+                    {
+                        Id = "work",
+                        DisplayName = "Work",
+                        Kind = TaskSourceKind.File,
+                        Path = "work"
+                    }
+                ],
+                "personal");
+                var mainView = new MainControl { DataContext = vm };
+                var settingsView = new SettingsControl { DataContext = vm.Settings };
+                mainWindow = CreateWindow(mainView, 900, 700);
+                settingsWindow = CreateWindow(settingsView, 720, 800);
+                mainWindow.Show();
+                settingsWindow.Show();
+
+                vm.Settings.IsTaskSpaceSwitching = true;
+                Dispatcher.UIThread.RunJobs();
+
+                var overlay = FindControlByAutomationId<Grid>(mainView, "TaskSpaceSwitchOverlay");
+                var selector = FindControlByAutomationId<ComboBox>(mainView, "TaskSpaceSelector");
+                var addButton = FindControlByAutomationId<Button>(settingsView, "AddTaskSpaceButton");
+                var pathInput = FindControlByAutomationId<TextBox>(settingsView, "TaskStoragePathTextBox");
+                await Assert.That(overlay.IsVisible).IsTrue();
+                await Assert.That(selector.IsEffectivelyEnabled).IsFalse();
+                await Assert.That(addButton.IsEffectivelyEnabled).IsFalse();
+                await Assert.That(pathInput.IsEffectivelyEnabled).IsFalse();
+            }
+            finally
+            {
+                settingsWindow?.Close();
+                mainWindow?.Close();
+                await fixture.CleanTasksAsync();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task SettingsControl_TaskSpacesSection_ShowsConfiguredSpacesAndSwitchesFromHeader()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var settings = fixture.MainWindowViewModelTest.Settings;
+                settings.ReloadTaskSpaces(
+                [
+                    new TaskSourceDescriptor { Id = "personal", DisplayName = "Personal", Kind = TaskSourceKind.File },
+                    new TaskSourceDescriptor { Id = "work", DisplayName = "Work", Kind = TaskSourceKind.File }
+                ],
+                "personal");
+                TaskSpaceOptionViewModel? switchedTo = null;
+                settings.SwitchTaskSpaceCommand = new TestParameterCommand(parameter =>
+                    switchedTo = parameter as TaskSpaceOptionViewModel);
+
+                var view = new SettingsControl { DataContext = settings };
+                window = CreateWindow(view, 720, 800);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var section = FindControlByAutomationId<Control>(view, "TaskSpacesSection");
+                var spaces = FindControlByAutomationId<ComboBox>(view, "TaskSpacesList");
+                await Assert.That(section.IsVisible).IsTrue();
+                await Assert.That(spaces.ItemCount).IsEqualTo(2);
+                await Assert.That(settings.SelectedTaskSpace?.SourceId).IsEqualTo("personal");
+
+                settings.ReloadTaskSpaces(
+                [
+                    new TaskSourceDescriptor { Id = "personal", DisplayName = "Personal", Kind = TaskSourceKind.File },
+                    new TaskSourceDescriptor { Id = "work", DisplayName = "Work", Kind = TaskSourceKind.File },
+                    new TaskSourceDescriptor { Id = "team", DisplayName = "Team", Kind = TaskSourceKind.File }
+                ],
+                "work");
+                Dispatcher.UIThread.RunJobs();
+
+                await Assert.That(spaces.ItemCount).IsEqualTo(3);
+                await Assert.That((spaces.SelectedItem as TaskSpaceOptionViewModel)?.SourceId).IsEqualTo("work");
+
+                settings.HeaderTaskSpace = settings.TaskSpaces.Single(space => space.SourceId == "team");
+                await Assert.That(switchedTo?.SourceId).IsEqualTo("team");
+            }
+            finally
+            {
+                window?.Close();
+                await fixture.CleanTasksAsync();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
     public async Task SettingsControl_TaskOutlineClipboardCheckBoxes_PersistSettings()
     {
         var session = HeadlessUnitTestSession.StartNew(typeof(App));

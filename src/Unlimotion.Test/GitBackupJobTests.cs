@@ -1,8 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Unlimotion.Scheduling.Jobs;
+using Unlimotion.Services;
 using Unlimotion.ViewModel;
 using WritableJsonConfiguration;
 
@@ -83,6 +86,50 @@ public sealed class GitBackupJobTests : IDisposable
         await Assert.That(backupService.LastPushMessage).IsEqualTo("Backup created");
     }
 
+    [Test]
+    public async System.Threading.Tasks.Task PullJob_HoldsSharedTaskSpaceLeaseForEntireBackupOperation()
+    {
+        var configuration = CreateConfiguration(backupEnabled: true);
+        using var runner = new TaskSpaceOperationRunner();
+        var pullEntered = new ManualResetEventSlim();
+        var releasePull = new ManualResetEventSlim();
+        var backupService = new FakeRemoteBackupService
+        {
+            ConflictStatus = BackupConflictStatus.None,
+            PullAction = () =>
+            {
+                pullEntered.Set();
+                releasePull.Wait();
+            }
+        };
+        var sourceConfiguration = new RecordingActiveTaskSpaceConfiguration(runner);
+        var job = new GitPullJob(
+            configuration,
+            backupService,
+            runner,
+            () => "space-a",
+            sourceConfiguration);
+
+        var jobTask = Task.Run(() => job.Execute(null!));
+        await Assert.That(pullEntered.Wait(TimeSpan.FromSeconds(5))).IsTrue();
+        var switchEntered = false;
+        var switchTask = runner.RunExclusiveAsync(
+            "SwitchTaskSpace",
+            "space-b",
+            _ =>
+            {
+                switchEntered = true;
+                return Task.CompletedTask;
+            });
+
+        await Task.Delay(50);
+        await Assert.That(switchEntered).IsFalse();
+        releasePull.Set();
+        await Task.WhenAll(jobTask, switchTask);
+        await Assert.That(switchEntered).IsTrue();
+        await Assert.That(sourceConfiguration.PersistedSourceIds).IsEquivalentTo(["space-a"]);
+    }
+
     private IConfigurationRoot CreateConfiguration(bool backupEnabled)
     {
         var configuration = WritableJsonConfigurationFabric.Create(_configPath, reloadOnChange: false);
@@ -106,6 +153,8 @@ public sealed class GitBackupJobTests : IDisposable
         public int PushCalls { get; private set; }
 
         public string? LastPushMessage { get; private set; }
+
+        public Action? PullAction { get; init; }
 
         public List<string> Remotes() => new();
 
@@ -148,6 +197,7 @@ public sealed class GitBackupJobTests : IDisposable
         public void Pull()
         {
             PullCalls++;
+            PullAction?.Invoke();
         }
 
         public void PullExistingRepository() => throw new NotSupportedException();
@@ -157,5 +207,27 @@ public sealed class GitBackupJobTests : IDisposable
         public void ConnectRepository(bool allowMergeWithNonEmptyRemote) => throw new NotSupportedException();
 
         public void CloneOrUpdateRepo() => throw new NotSupportedException();
+    }
+
+    private sealed class RecordingActiveTaskSpaceConfiguration(ITaskSpaceOperationRunner runner)
+        : IActiveTaskSpaceConfiguration
+    {
+        public List<string> PersistedSourceIds { get; } = [];
+
+        public TaskSpaceSettingsDraft Read(string sourceId) =>
+            new()
+            {
+                SourceId = sourceId,
+                Storage = new TaskStorageSettings(),
+                Git = new GitSettings { BackupEnabled = true }
+            };
+
+        public TaskSpaceSettingsDraft CaptureActiveProjection(string sourceId) => Read(sourceId);
+
+        public void PersistCore(TaskSpaceOperationContext context, TaskSpaceSettingsDraft draft)
+        {
+            runner.Validate(context);
+            PersistedSourceIds.Add(draft.SourceId);
+        }
     }
 }

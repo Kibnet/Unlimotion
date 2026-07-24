@@ -70,6 +70,12 @@ bash ./run.macos.sh
 
 ## Conceptual description
 
+### Task spaces
+
+One application instance can keep several named task spaces. Use the selector in the main header to switch the active space, and the first Settings section to add, rename, switch, or remove configured spaces.
+
+Only one space is active at a time. Its task source and complete Git synchronization profile are isolated from every other space; tasks from multiple spaces are never shown together and cross-space task relations are rejected. To configure storage or Git for another space, switch to it first. Removing a space removes only its configuration and stored credentials from this application—it does not delete or move the task files or remote repository.
+
 ### Task states
 
 Any task can be in only one of five statuses:

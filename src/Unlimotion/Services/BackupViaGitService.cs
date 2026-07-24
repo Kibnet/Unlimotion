@@ -11,6 +11,7 @@ using System.Security.Cryptography;
 using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using LibGit2Sharp;
 using LibGit2Sharp.Handlers;
@@ -23,7 +24,7 @@ using L10n = Unlimotion.ViewModel.Localization.Localization;
 
 namespace Unlimotion.Services;
 
-public class BackupViaGitService : IRemoteBackupService
+public class BackupViaGitService : IRemoteBackupService, ITaskSpaceBackupOperationScope
 {
     private const string DefaultSshKeyFileName = "id_ed25519_unlimotion";
     private const string KnownHostsFileName = "known_hosts_unlimotion";
@@ -62,17 +63,27 @@ public class BackupViaGitService : IRemoteBackupService
     private readonly INotificationManagerWrapper? _notificationManager;
     private readonly ITaskStorageFactory? _storageFactory;
     private readonly Func<string, string> _getAbsolutePath;
+    private readonly ITaskSpaceOperationRunner? _operationRunner;
+    private readonly Func<string?>? _activeSourceIdProvider;
+    private readonly IActiveTaskSpaceConfiguration? _activeTaskSpaceConfiguration;
+    private readonly AsyncLocal<TaskSpaceBackupOperation?> _taskSpaceOperation = new();
 
     public BackupViaGitService(
         IConfiguration configuration,
         INotificationManagerWrapper? notificationManager = null,
         ITaskStorageFactory? storageFactory = null,
-        Func<string, string>? getAbsolutePath = null)
+        Func<string, string>? getAbsolutePath = null,
+        ITaskSpaceOperationRunner? operationRunner = null,
+        Func<string?>? activeSourceIdProvider = null,
+        IActiveTaskSpaceConfiguration? activeTaskSpaceConfiguration = null)
     {
         _configuration = configuration;
         _notificationManager = notificationManager;
         _storageFactory = storageFactory;
         _getAbsolutePath = getAbsolutePath ?? (path => new DirectoryInfo(path).FullName);
+        _operationRunner = operationRunner;
+        _activeSourceIdProvider = activeSourceIdProvider;
+        _activeTaskSpaceConfiguration = activeTaskSpaceConfiguration;
     }
 
     public List<string> Refs()
@@ -173,7 +184,16 @@ public class BackupViaGitService : IRemoteBackupService
         }
     }
 
-    public RemoteConnectionTypeSwitchResult SwitchRemoteConnectionType(string remoteName, BackupAuthMode targetMode)
+    public RemoteConnectionTypeSwitchResult SwitchRemoteConnectionType(
+        string remoteName,
+        BackupAuthMode targetMode) =>
+        RunInTaskSpaceOperation(
+            "SwitchGitRemoteConnectionType",
+            () => SwitchRemoteConnectionTypeCore(remoteName, targetMode));
+
+    private RemoteConnectionTypeSwitchResult SwitchRemoteConnectionTypeCore(
+        string remoteName,
+        BackupAuthMode targetMode)
     {
         lock (LockObject)
         {
@@ -1863,22 +1883,31 @@ public class BackupViaGitService : IRemoteBackupService
     private void SetRemoteName(GitSettings gitSettings, string remoteName)
     {
         gitSettings.RemoteName = remoteName;
-        _configuration.GetSection("Git").GetSection(nameof(GitSettings.RemoteName)).Set(remoteName);
+        PersistGitSettingsMutation(
+            () => _configuration.GetSection("Git")
+                .GetSection(nameof(GitSettings.RemoteName))
+                .Set(remoteName));
     }
 
     private void SetRemoteUrl(GitSettings gitSettings, string remoteUrl)
     {
         gitSettings.RemoteUrl = remoteUrl;
-        _configuration.GetSection("Git").GetSection(nameof(GitSettings.RemoteUrl)).Set(remoteUrl);
+        PersistGitSettingsMutation(
+            () => _configuration.GetSection("Git")
+                .GetSection(nameof(GitSettings.RemoteUrl))
+                .Set(remoteUrl));
     }
 
     private void SetPushRefSpec(GitSettings gitSettings, string pushRefSpec)
     {
         gitSettings.PushRefSpec = pushRefSpec;
         gitSettings.Branch = GetBranchShortName(pushRefSpec);
-        var gitSection = _configuration.GetSection("Git");
-        gitSection.GetSection(nameof(GitSettings.PushRefSpec)).Set(pushRefSpec);
-        gitSection.GetSection(nameof(GitSettings.Branch)).Set(gitSettings.Branch);
+        PersistGitSettingsMutation(() =>
+        {
+            var gitSection = _configuration.GetSection("Git");
+            gitSection.GetSection(nameof(GitSettings.PushRefSpec)).Set(pushRefSpec);
+            gitSection.GetSection(nameof(GitSettings.Branch)).Set(gitSettings.Branch);
+        });
     }
 
     private static bool HasLocalFolderContent(string repositoryPath)
@@ -2737,7 +2766,93 @@ public class BackupViaGitService : IRemoteBackupService
 
     private (GitSettings git, string? repositoryPath) GetSettings()
     {
+        var operation = _taskSpaceOperation.Value;
+        if (operation != null)
+        {
+            return (operation.Git, operation.RepositoryPath);
+        }
+
         return (_configuration.Get<GitSettings>("Git"), ResolveRepositoryPathFromSettings());
+    }
+
+    public IDisposable BeginTaskSpaceOperation(TaskSpaceOperationContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        _operationRunner?.Validate(context);
+
+        var previous = _taskSpaceOperation.Value;
+        if (previous != null)
+        {
+            if (ReferenceEquals(previous.Context, context))
+            {
+                return NoopDisposable.Instance;
+            }
+
+            throw new InvalidOperationException(
+                "A different task-space backup operation is already active in this execution context.");
+        }
+
+        var sourceId = context.SourceId ?? _activeSourceIdProvider?.Invoke();
+        if (string.IsNullOrWhiteSpace(sourceId) || _activeTaskSpaceConfiguration == null)
+        {
+            return NoopDisposable.Instance;
+        }
+
+        var draft = _activeTaskSpaceConfiguration.Read(sourceId);
+        var repositoryPath = string.IsNullOrWhiteSpace(draft.Storage.Path)
+            ? ResolveRepositoryPathFromSettings()
+            : draft.Storage.Path;
+        _taskSpaceOperation.Value = new TaskSpaceBackupOperation(
+            context,
+            sourceId,
+            ActiveTaskSpaceConfiguration.CloneStorage(draft.Storage),
+            ActiveTaskSpaceConfiguration.CloneGit(draft.Git),
+            repositoryPath);
+        return new TaskSpaceBackupOperationLease(this, previous);
+    }
+
+    private T RunInTaskSpaceOperation<T>(string operationName, Func<T> operation)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(operationName);
+        ArgumentNullException.ThrowIfNull(operation);
+        if (_taskSpaceOperation.Value != null ||
+            _operationRunner == null ||
+            _activeTaskSpaceConfiguration == null)
+        {
+            return operation();
+        }
+
+        var sourceId = _activeSourceIdProvider?.Invoke();
+        return _operationRunner.RunExclusiveAsync(
+                operationName,
+                sourceId,
+                context =>
+                {
+                    using var scope = BeginTaskSpaceOperation(context);
+                    return Task.FromResult(operation());
+                })
+            .GetAwaiter()
+            .GetResult();
+    }
+
+    private void PersistGitSettingsMutation(Action legacyWrite)
+    {
+        ArgumentNullException.ThrowIfNull(legacyWrite);
+        var operation = _taskSpaceOperation.Value;
+        if (operation == null || _activeTaskSpaceConfiguration == null)
+        {
+            legacyWrite();
+            return;
+        }
+
+        _activeTaskSpaceConfiguration.PersistCore(
+            operation.Context,
+            new TaskSpaceSettingsDraft
+            {
+                SourceId = operation.SourceId,
+                Storage = ActiveTaskSpaceConfiguration.CloneStorage(operation.Storage),
+                Git = ActiveTaskSpaceConfiguration.CloneGit(operation.Git)
+            });
     }
 
     private string? ResolveRepositoryPathFromSettings()
@@ -2768,6 +2883,48 @@ public class BackupViaGitService : IRemoteBackupService
         }
 
         _notificationManager?.ErrorToast(message);
+    }
+
+    private sealed class TaskSpaceBackupOperation(
+        TaskSpaceOperationContext context,
+        string sourceId,
+        TaskStorageSettings storage,
+        GitSettings git,
+        string? repositoryPath)
+    {
+        public TaskSpaceOperationContext Context { get; } = context;
+        public string SourceId { get; } = sourceId;
+        public TaskStorageSettings Storage { get; } = storage;
+        public GitSettings Git { get; } = git;
+        public string? RepositoryPath { get; } = repositoryPath;
+    }
+
+    private sealed class TaskSpaceBackupOperationLease(
+        BackupViaGitService owner,
+        TaskSpaceBackupOperation? previous)
+        : IDisposable
+    {
+        private bool _disposed;
+
+        public void Dispose()
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
+            owner._taskSpaceOperation.Value = previous;
+        }
+    }
+
+    private sealed class NoopDisposable : IDisposable
+    {
+        public static NoopDisposable Instance { get; } = new();
+
+        public void Dispose()
+        {
+        }
     }
 
     private void ShowUiMessage(string message)

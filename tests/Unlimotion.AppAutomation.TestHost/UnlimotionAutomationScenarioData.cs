@@ -1,9 +1,12 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using LibGit2Sharp;
+using Microsoft.Extensions.Configuration;
 using Unlimotion.Domain;
+using Unlimotion.Services;
 using Unlimotion.ViewModel;
 using Unlimotion.ViewModel.Localization;
+using WritableJsonConfiguration;
 
 namespace Unlimotion.AppAutomation.TestHost;
 
@@ -28,6 +31,10 @@ public static class UnlimotionAutomationScenarioData
     public const string StatusContractBlockerTaskId = "status-contract-blocker";
     public const string StatusContractBlockerTaskTitle = "Status contract blocker";
     public const string StatusContractWindowTitle = "Unlimotion Status Contract";
+    public const string TaskSpacesTaskId = "task-spaces-shared-id";
+    public const string TaskSpacesSpaceATitle = "Space A task";
+    public const string TaskSpacesSpaceBTitle = "Space B task";
+    public const string TaskSpacesWindowTitle = "Unlimotion Task Spaces";
     public static readonly IReadOnlyList<string> ReadmeDemoLastOpenedTaskIds =
     [
         "launch-pilot",
@@ -51,6 +58,7 @@ public static class UnlimotionAutomationScenarioData
                 ? ReadmeDemoCurrentTaskIdRu
                 : ReadmeDemoCurrentTaskId,
             UnlimotionAutomationScenario.StatusContract => StatusContractTerminalTaskId,
+            UnlimotionAutomationScenario.TaskSpaces => TaskSpacesTaskId,
             _ => SmokeCurrentTaskId
         };
     }
@@ -102,6 +110,7 @@ public static class UnlimotionAutomationScenarioData
                 StatusContractBlockerTaskId => StatusContractBlockerTaskTitle,
                 _ => StatusContractTerminalTaskTitle
             },
+            UnlimotionAutomationScenario.TaskSpaces => TaskSpacesSpaceATitle,
             _ => SmokeCurrentTaskTitle
         };
     }
@@ -137,6 +146,7 @@ public static class UnlimotionAutomationScenarioData
                 ? ReadmeDemoWindowTitleRu
                 : ReadmeDemoWindowTitle,
             UnlimotionAutomationScenario.StatusContract => StatusContractWindowTitle,
+            UnlimotionAutomationScenario.TaskSpaces => TaskSpacesWindowTitle,
             _ => null
         };
     }
@@ -158,6 +168,9 @@ public static class UnlimotionAutomationScenarioData
                 break;
             case UnlimotionAutomationScenario.StatusContract:
                 SeedStatusContractTasks(tasksPath);
+                break;
+            case UnlimotionAutomationScenario.TaskSpaces:
+                SeedTaskSpaces(tasksPath);
                 break;
             default:
                 CopySmokeSnapshots(repositoryRoot, tasksPath);
@@ -182,6 +195,9 @@ public static class UnlimotionAutomationScenarioData
                 break;
             case UnlimotionAutomationScenario.StatusContract:
                 WriteStatusContractConfig(configPath, tasksPath, language, theme);
+                break;
+            case UnlimotionAutomationScenario.TaskSpaces:
+                WriteTaskSpacesConfig(configPath, tasksPath);
                 break;
             default:
                 WriteSmokeConfig(configPath, tasksPath);
@@ -249,6 +265,71 @@ public static class UnlimotionAutomationScenarioData
 
         WriteJson(configPath, config);
     }
+
+    private static void WriteTaskSpacesConfig(string configPath, string tasksPath)
+    {
+        WriteSmokeConfig(configPath, tasksPath);
+        var configuration = WritableJsonConfigurationFabric.Create(configPath, reloadOnChange: false);
+        try
+        {
+            var settings = TaskSourceSettingsAdapter.LoadOrCreate(configuration, tasksPath);
+            settings.Sources[0].DisplayName = "Space A";
+            settings.SyncSettings[0].Git.Branch = "space-a";
+            settings.Sources.Add(new TaskSourceDescriptor
+            {
+                Id = "space-b",
+                DisplayName = "Space B",
+                Kind = TaskSourceKind.File,
+                Path = GetTaskSpacesSecondPath(tasksPath),
+                IsEnabled = true
+            });
+            settings.SyncSettings.Add(new TaskSourceSyncSettings
+            {
+                SourceId = "space-b",
+                Git = new GitSettings
+                {
+                    BackupEnabled = false,
+                    Branch = "space-b",
+                    RemoteName = "origin",
+                    PushRefSpec = "refs/heads/space-b"
+                }
+            });
+            TaskSourceSettingsAdapter.Save(configuration, settings);
+            TaskSourceSettingsAdapter.SyncLegacy(configuration, settings, settings.Sources[0]);
+            configuration.GetSection("TaskStatusModel:MigrationNoticeShown").Set(true);
+        }
+        finally
+        {
+            (configuration as IDisposable)?.Dispose();
+        }
+    }
+
+    private static void SeedTaskSpaces(string tasksPath)
+    {
+        var secondPath = GetTaskSpacesSecondPath(tasksPath);
+        Directory.CreateDirectory(secondPath);
+        WriteJson(
+            Path.Combine(tasksPath, TaskSpacesTaskId),
+            new TaskItem
+            {
+                Id = TaskSpacesTaskId,
+                Title = TaskSpacesSpaceATitle,
+                CreatedDateTime = DateTime.UtcNow.AddMinutes(-2),
+                Version = 1
+            });
+        WriteJson(
+            Path.Combine(secondPath, TaskSpacesTaskId),
+            new TaskItem
+            {
+                Id = TaskSpacesTaskId,
+                Title = TaskSpacesSpaceBTitle,
+                CreatedDateTime = DateTime.UtcNow.AddMinutes(-1),
+                Version = 1
+            });
+    }
+
+    private static string GetTaskSpacesSecondPath(string tasksPath) =>
+        Path.Combine(Path.GetDirectoryName(tasksPath)!, "Tasks-B");
 
     private static void WriteGitRemoteSwitchConfig(string configPath, string tasksPath)
     {

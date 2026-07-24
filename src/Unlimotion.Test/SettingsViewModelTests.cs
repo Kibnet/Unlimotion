@@ -1099,6 +1099,33 @@ public class SettingsViewModelTests : IDisposable
     }
 
     [Test]
+    public async System.Threading.Tasks.Task ReloadTaskSpaces_NotifiesBothActiveSelections()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var settings = new SettingsViewModel(configuration);
+        var changedProperties = new List<string>();
+        ((INotifyPropertyChanged)settings).PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName != null)
+            {
+                changedProperties.Add(args.PropertyName);
+            }
+        };
+
+        settings.ReloadTaskSpaces(
+        [
+            new TaskSourceDescriptor { Id = "personal", DisplayName = "Personal", Kind = TaskSourceKind.File },
+            new TaskSourceDescriptor { Id = "work", DisplayName = "Work", Kind = TaskSourceKind.File }
+        ],
+        "work");
+
+        await Assert.That(settings.SelectedTaskSpace?.SourceId).IsEqualTo("work");
+        await Assert.That(settings.HeaderTaskSpace?.SourceId).IsEqualTo("work");
+        await Assert.That(changedProperties).Contains(nameof(SettingsViewModel.SelectedTaskSpace));
+        await Assert.That(changedProperties).Contains(nameof(SettingsViewModel.HeaderTaskSpace));
+    }
+
+    [Test]
     public async System.Threading.Tasks.Task ReloadGitMetadata_FillsEmptyRepositoryUrlFromSelectedRemote()
     {
         var backupService = new FakeRemoteBackupService

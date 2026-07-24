@@ -364,6 +364,19 @@
   <data name="Settings" xml:space="preserve"><value>Settings</value></data>
   <data name="SettingsIntro" xml:space="preserve"><value>Configure appearance, task storage, and backup. Some changes apply immediately; connecting storage and repository requires separate actions.</value></data>
   <data name="SettingsTitle" xml:space="preserve"><value>Settings</value></data>
+  <data name="TaskSpacesAdd" xml:space="preserve"><value>Add space</value></data>
+  <data name="TaskSpacesCurrent" xml:space="preserve"><value>Configured spaces</value></data>
+  <data name="TaskSpacesHint" xml:space="preserve"><value>Only the selected space is active. Tasks and synchronization settings stay isolated.</value></data>
+  <data name="TaskSpacesName" xml:space="preserve"><value>Space name</value></data>
+  <data name="TaskSpacesNewName" xml:space="preserve"><value>Name for a new space</value></data>
+  <data name="TaskSpacesDefaultName" xml:space="preserve"><value>New space</value></data>
+  <data name="TaskSpacesRemove" xml:space="preserve"><value>Remove</value></data>
+  <data name="TaskSpacesRename" xml:space="preserve"><value>Rename</value></data>
+  <data name="TaskSpacesSwitch" xml:space="preserve"><value>Switch</value></data>
+  <data name="TaskSpacesTitle" xml:space="preserve"><value>Task spaces</value></data>
+  <data name="TaskSpaceRemoveConfirmMessage" xml:space="preserve"><value>Remove task space “{0}” from this device? Its task data and remote repository will not be changed.</value></data>
+  <data name="TaskSpaceRemoveConfirmTitle" xml:space="preserve"><value>Remove task space</value></data>
+  <data name="TaskSpaceSelectorHint" xml:space="preserve"><value>Switch task space</value></data>
   <data name="SevenDays" xml:space="preserve"><value>7 days</value></data>
   <data name="ShowAdvancedBackupSettings" xml:space="preserve"><value>Show advanced settings</value></data>
   <data name="ShowNotifications" xml:space="preserve"><value>Show notifications</value></data>
@@ -554,4 +567,8 @@
   <data name="FridayShort" xml:space="preserve"><value>Fri</value></data>
   <data name="SaturdayShort" xml:space="preserve"><value>Sat</value></data>
   <data name="UnsupportedGitConnectAction" xml:space="preserve"><value>Unsupported Git connect action: {0}.</value></data>
+  <data name="TaskSpaceSwitching" xml:space="preserve"><value>Switching task space…</value></data>
+  <data name="TaskSpaceSwitchBlockedByConflict" xml:space="preserve"><value>Finish Git conflict resolution before switching task spaces.</value></data>
+  <data name="TaskSpaceRecoveryTitle" xml:space="preserve"><value>Task space recovery required</value></data>
+  <data name="TaskSpaceRecoveryRequired" xml:space="preserve"><value>The new task space failed ({0}) and the previous space could not be restored ({1}). Restart the application.</value></data>
 </root>
