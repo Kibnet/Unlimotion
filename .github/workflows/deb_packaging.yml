@@ -12,12 +12,11 @@ on:
         type: string
 
 permissions:
-  contents: write
+  contents: read
 
 env:
-  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   RELEASE_TAG: ${{ github.event.release.tag_name || github.event.inputs.tag || github.ref_name }}
-  DOTNET_NUGET_SIGNATURE_VERIFICATION: "false"
+  DOTNET_NUGET_SIGNATURE_VERIFICATION: "true"
   INSTALLER_PUBLISHER: Kibnet
   VELOPACK_VERSION: 0.0.1298
   LINUX_PUBLISH_DIR: ${{ github.workspace }}/src/Unlimotion.Desktop/bin/Release/net10.0/linux-x64/publish
@@ -25,16 +24,23 @@ env:
 
 jobs:
   deb-build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      release_artifact_id: ${{ steps.upload_release_assets.outputs.artifact-id }}
+      release_artifact_digest: ${{ steps.upload_release_assets.outputs.artifact-digest }}
+      release_version: ${{ steps.release_version.outputs.version }}
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       with:
         ref: ${{ env.RELEASE_TAG }}
+        persist-credentials: false
 
     - name: Setup .NET 10 SDK
-      uses: actions/setup-dotnet@v4
+      uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
       with:
         dotnet-version: 10.0.x
 
@@ -70,16 +76,12 @@ jobs:
         -p:DebugType=None
         -p:DebugSymbols=false
         -p:Version=${{ steps.release_version.outputs.version }}
-        --ignore-failed-sources
 
     - name: Generate DebPkg
       run: sh ./src/Unlimotion.Desktop/ci/deb/generate-deb-pkg.sh ${{ steps.release_version.outputs.version }}
 
-    - name: Rename DebPkg
-      run: cd ./src/Unlimotion.Desktop/bin/Release/net*/linux-x64 && mv ./*.deb ./Unlimotion-${{ env.RELEASE_TAG }}.deb
-
     - name: Install Velopack CLI
-      run: dotnet tool install --global vpk --version "${{ env.VELOPACK_VERSION }}" --ignore-failed-sources
+      run: dotnet tool install --global vpk --version "${{ env.VELOPACK_VERSION }}"
 
     - name: Pack Velopack Linux Release
       shell: bash
@@ -98,43 +100,114 @@ jobs:
           --packAuthors "${{ env.INSTALLER_PUBLISHER }}" \
           --icon "${{ github.workspace }}/src/Unlimotion.Android/Icon.png"
 
-    - name: Remove Existing Linux Release Assets
-      if: ${{ github.event_name == 'workflow_dispatch' }}
+    - name: Prepare release assets
+      shell: bash
+      run: |
+        set -euo pipefail
+        deb_source="$(find ./src/Unlimotion.Desktop/bin/Release -type f -name '*.deb' -print -quit)"
+        if [ -z "$deb_source" ]; then
+          echo 'Debian package was not produced.' >&2
+          exit 1
+        fi
+
+        mkdir -p artifacts/deb
+        mv "$deb_source" "artifacts/deb/Unlimotion-${RELEASE_TAG}.deb"
+
+    - name: Upload verified Linux release assets
+      id: upload_release_assets
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: unlimotion-linux-release-assets
+        path: |
+          artifacts/velopack/linux
+          artifacts/deb
+        if-no-files-found: error
+
+  deb-release:
+    name: Upload Linux release assets
+    needs: deb-build
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: write
+
+    steps:
+    - name: Download and verify Linux release artifact
       shell: bash
       env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GH_TOKEN: ${{ github.token }}
+        ARTIFACT_ID: ${{ needs.deb-build.outputs.release_artifact_id }}
+        ARTIFACT_DIGEST: ${{ needs.deb-build.outputs.release_artifact_digest }}
       run: |
         set -euo pipefail
 
-        existing_assets="$(gh release view "$RELEASE_TAG" --repo "${{ github.repository }}" --json assets --jq '.assets[].name')"
+        if [[ ! "$ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]; then
+          echo 'Build job did not return a numeric Linux release artifact id.' >&2
+          exit 1
+        fi
 
-        delete_asset() {
-          local asset="$1"
-          if grep -Fxq "$asset" <<< "$existing_assets"; then
-            gh release delete-asset "$RELEASE_TAG" "$asset" --repo "${{ github.repository }}" --yes
-          fi
-        }
+        expected_digest="${ARTIFACT_DIGEST#sha256:}"
+        if [[ ! "$expected_digest" =~ ^[0-9a-f]{64}$ ]]; then
+          echo 'Build job did not return a SHA-256 Linux release artifact digest.' >&2
+          exit 1
+        fi
 
-        delete_asset "releases.linux.json"
-        delete_asset "assets.linux.json"
-        delete_asset "Unlimotion-${{ steps.release_version.outputs.version }}-linux-full.nupkg"
-        delete_asset "Unlimotion-${{ steps.release_version.outputs.version }}.deb"
-        delete_asset "Unlimotion.AppImage"
+        artifact_root="$RUNNER_TEMP/unlimotion-linux-release-artifact"
+        archive_path="$RUNNER_TEMP/unlimotion-linux-release.zip"
+        rm -rf "$artifact_root" "$archive_path"
+        mkdir -p "$artifact_root"
 
-    - name: Upload Velopack Linux Release
+        gh api --method GET "/repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID/zip" > "$archive_path"
+        actual_digest="$(sha256sum "$archive_path" | awk '{print $1}')"
+        if [[ "$actual_digest" != "$expected_digest" ]]; then
+          echo 'Linux release artifact archive digest mismatch.' >&2
+          exit 1
+        fi
+
+        unzip -Z1 "$archive_path" | LC_ALL=C sort > "$RUNNER_TEMP/unlimotion-linux-release-entries.txt"
+        if grep -Eq '(^/|(^|/)\.\.(/|$)|[[:cntrl:]])' "$RUNNER_TEMP/unlimotion-linux-release-entries.txt"; then
+          echo 'Linux release artifact archive contains an unsafe entry.' >&2
+          exit 1
+        fi
+
+        unzip -q "$archive_path" -d "$artifact_root"
+        mapfile -d '' release_files < <(find "$artifact_root" -type f \( -name '*.deb' -o -name '*.nupkg' -o -name '*.json' -o -name '*.AppImage' \) -print0 | LC_ALL=C sort -z)
+        if [ "${#release_files[@]}" -eq 0 ]; then
+          echo 'Linux release artifact archive does not contain publishable files.' >&2
+          exit 1
+        fi
+
+        unknown_file="$(find "$artifact_root" -type f ! \( -name '*.deb' -o -name '*.nupkg' -o -name '*.json' -o -name '*.AppImage' \) -print -quit)"
+        if [ -n "$unknown_file" ]; then
+          echo 'Linux release artifact archive contains an unexpected file.' >&2
+          exit 1
+        fi
+
+        printf '%s\0' "${release_files[@]}" > "$RUNNER_TEMP/unlimotion-linux-release-files.bin"
+        printf 'LINUX_RELEASE_ARTIFACT_ROOT=%s\n' "$artifact_root" >> "$GITHUB_ENV"
+
+    - name: Replace release assets
       shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        RELEASE_VERSION: ${{ needs.deb-build.outputs.release_version }}
       run: |
-        "$HOME/.dotnet/tools/vpk" upload github \
-          --outputDir "${{ env.LINUX_VELOPACK_DIR }}" \
-          --channel linux \
-          --repoUrl "https://github.com/${{ github.repository }}" \
-          --token "${{ secrets.GITHUB_TOKEN }}" \
-          --tag "${{ env.RELEASE_TAG }}" \
-          --merge \
-          --publish
+        set -euo pipefail
+        mapfile -d '' release_files < "$RUNNER_TEMP/unlimotion-linux-release-files.bin"
 
-    - name: Upload DebPkg To Release
-      uses: softprops/action-gh-release@v1
-      with:
-        tag_name: ${{ env.RELEASE_TAG }}
-        files: ./src/Unlimotion.Desktop/bin/Release/net*/linux-x64/Unlimotion-${{ env.RELEASE_TAG }}.deb
+        if [ "${GITHUB_EVENT_NAME}" = 'workflow_dispatch' ]; then
+          existing_assets="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
+          for asset in \
+            'releases.linux.json' \
+            'assets.linux.json' \
+            "Unlimotion-${RELEASE_VERSION}-linux-full.nupkg" \
+            "Unlimotion-${RELEASE_VERSION}.deb" \
+            "Unlimotion-${RELEASE_TAG}.deb" \
+            'Unlimotion.AppImage'; do
+            if grep -Fxq "$asset" <<< "$existing_assets"; then
+              gh release delete-asset "$RELEASE_TAG" "$asset" --repo "$GITHUB_REPOSITORY" --yes
+            fi
+          done
+        fi
+
+        gh release upload "$RELEASE_TAG" "${release_files[@]}" --clobber

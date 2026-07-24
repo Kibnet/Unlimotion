@@ -11,11 +11,10 @@ on:
       - published
 
 permissions:
-  contents: write
+  contents: read
 
 env:
-  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  DOTNET_NUGET_SIGNATURE_VERIFICATION: "false"
+  DOTNET_NUGET_SIGNATURE_VERIFICATION: "true"
   ANDROID_API_LEVEL: 24
   ANDROID_PLATFORM: android-36
   ANDROID_BUILD_TOOLS: 35.0.0
@@ -26,28 +25,41 @@ env:
 
 jobs:
   android-build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      apk_artifact_id: ${{ steps.upload_apk_artifact.outputs.artifact-id }}
+      apk_artifact_digest: ${{ steps.upload_apk_artifact.outputs.artifact-digest }}
+      apk_artifact_name: ${{ steps.android_artifact_metadata.outputs.artifact_name }}
+      apk_source_sha: ${{ steps.android_artifact_metadata.outputs.source_sha }}
+      apk_run_id: ${{ steps.android_artifact_metadata.outputs.run_id }}
+      apk_run_attempt: ${{ steps.android_artifact_metadata.outputs.run_attempt }}
+      apk_release_tag: ${{ steps.android_artifact_metadata.outputs.release_tag }}
+      apk_arm64_file: ${{ steps.android_artifact_metadata.outputs.arm64_file }}
+      apk_x64_file: ${{ steps.android_artifact_metadata.outputs.x64_file }}
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       with:
         ref: ${{ github.sha }}
         submodules: recursive
+        persist-credentials: false
 
     - name: Setup .NET 10 SDK
-      uses: actions/setup-dotnet@v4
+      uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
       with:
         global-json-file: global.json
 
     - name: Setup Java 17
-      uses: actions/setup-java@v4
+      uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4.8.0
       with:
         distribution: temurin
         java-version: "17"
 
     - name: Setup Android SDK
-      uses: android-actions/setup-android@v3
+      uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
 
     - name: Install Android SDK Packages
       run: |
@@ -78,7 +90,7 @@ jobs:
         echo "libgit2_sha=$(git -C .native/libgit2-src rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
     - name: Cache Android Native Dependencies
-      uses: actions/cache@v4
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
       with:
         path: |
           artifacts/android-native
@@ -86,7 +98,7 @@ jobs:
         key: android-native-${{ runner.os }}-ndk-${{ env.ANDROID_NDK_VERSION }}-openssl-${{ env.OPENSSL_VERSION }}-libssh2-${{ env.LIBSSH2_VERSION }}-libgit2pkg-${{ env.LIBGIT2_NATIVE_PACKAGE_VERSION }}-libgit2-${{ steps.android_native_cache_key.outputs.libgit2_sha }}-${{ hashFiles('scripts/android-native-common.sh', 'scripts/build-openssl-android.sh', 'scripts/build-libssh2-android.sh', 'scripts/build-libgit2-android.sh', 'scripts/pack-libgit2sharp-nativebinaries-android.sh') }}
 
     - name: Cache NuGet Packages
-      uses: actions/cache@v4
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
       with:
         path: ~/.nuget/packages
         key: nuget-${{ runner.os }}-sdk-${{ hashFiles('global.json') }}-projects-${{ hashFiles('src/Directory.Packages.props', 'src/nuget.config', 'src/**/*.csproj') }}-native-${{ env.ANDROID_NDK_VERSION }}-${{ env.OPENSSL_VERSION }}-${{ env.LIBSSH2_VERSION }}-${{ env.LIBGIT2_NATIVE_PACKAGE_VERSION }}-${{ steps.android_native_cache_key.outputs.libgit2_sha }}-${{ hashFiles('scripts/android-native-common.sh', 'scripts/build-openssl-android.sh', 'scripts/build-libssh2-android.sh', 'scripts/build-libgit2-android.sh', 'scripts/pack-libgit2sharp-nativebinaries-android.sh') }}
@@ -96,8 +108,10 @@ jobs:
       shell: bash
       run: |
         display_version="1.0"
+        release_tag="ci"
         if [ "${GITHUB_EVENT_NAME}" = "release" ]; then
           display_version="${GITHUB_REF_NAME#v}"
+          release_tag="${GITHUB_REF_NAME}"
 
           if [[ ! "$display_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "Release tag '${GITHUB_REF_NAME}' cannot be used by the current Android workflow. Use numeric SemVer tags like 1.2.3 or v1.2.3." >&2
@@ -117,6 +131,7 @@ jobs:
 
         echo "display_version=$display_version" >> "$GITHUB_OUTPUT"
         echo "version_code=$version_code" >> "$GITHUB_OUTPUT"
+        echo "release_tag=$release_tag" >> "$GITHUB_OUTPUT"
 
     - name: Prepare Android Release Signing
       if: github.event_name == 'release'
@@ -268,23 +283,206 @@ jobs:
 
           validate_runtime_symbols "$apk_path" "$abi"
 
-          asset_name="Unlimotion-${rid}.apk"
-          if [ "${GITHUB_EVENT_NAME}" = "release" ]; then
-            asset_name="Unlimotion-${GITHUB_REF_NAME}-${rid}.apk"
-          fi
+          asset_name="Unlimotion-${{ steps.android_version.outputs.release_tag }}-${rid}.apk"
 
           cp "$apk_path" "artifacts/android/${asset_name}"
         done
 
+    - name: Prepare closed Android artifact
+      id: android_artifact_metadata
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        source_sha="${GITHUB_SHA,,}"
+        run_id="$GITHUB_RUN_ID"
+        run_attempt="$GITHUB_RUN_ATTEMPT"
+        release_tag="${{ steps.android_version.outputs.release_tag }}"
+        artifact_name="unlimotion-android-apk-${source_sha}-attempt-${run_attempt}"
+        arm64_file="Unlimotion-${release_tag}-android-arm64.apk"
+        x64_file="Unlimotion-${release_tag}-android-x64.apk"
+
+        if [[ ! "$source_sha" =~ ^[0-9a-f]{40}$ ]] ||
+           [[ ! "$run_id" =~ ^[1-9][0-9]*$ ]] ||
+           [[ ! "$run_attempt" =~ ^[1-9][0-9]*$ ]] ||
+           { [[ "$release_tag" != 'ci' ]] && [[ ! "$release_tag" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]; }; then
+          echo 'Android artifact identity is invalid.' >&2
+          exit 1
+        fi
+
+        for file in "$arm64_file" "$x64_file"; do
+          path="artifacts/android/$file"
+          if [ ! -f "$path" ] || [ -L "$path" ]; then
+            echo "Expected regular APK is missing: $file" >&2
+            exit 1
+          fi
+        done
+
+        arm64_path="artifacts/android/$arm64_file"
+        x64_path="artifacts/android/$x64_file"
+        arm64_sha256="$(sha256sum "$arm64_path" | awk '{print $1}')"
+        x64_sha256="$(sha256sum "$x64_path" | awk '{print $1}')"
+        arm64_bytes="$(stat -c '%s' "$arm64_path")"
+        x64_bytes="$(stat -c '%s' "$x64_path")"
+
+        jq -cn \
+          --arg source_sha "$source_sha" \
+          --argjson run_id "$run_id" \
+          --argjson run_attempt "$run_attempt" \
+          --arg artifact_name "$artifact_name" \
+          --arg release_tag "$release_tag" \
+          --arg arm64_file "$arm64_file" \
+          --arg arm64_sha256 "$arm64_sha256" \
+          --argjson arm64_bytes "$arm64_bytes" \
+          --arg x64_file "$x64_file" \
+          --arg x64_sha256 "$x64_sha256" \
+          --argjson x64_bytes "$x64_bytes" \
+          '{schemaVersion:1,sourceSha:$source_sha,runId:$run_id,runAttempt:$run_attempt,artifactName:$artifact_name,releaseTag:$release_tag,apks:[{file:$arm64_file,byteLength:$arm64_bytes,sha256:$arm64_sha256},{file:$x64_file,byteLength:$x64_bytes,sha256:$x64_sha256}]}' \
+          > artifacts/android/android-artifact-manifest.json
+
+        {
+          echo "artifact_name=$artifact_name"
+          echo "source_sha=$source_sha"
+          echo "run_id=$run_id"
+          echo "run_attempt=$run_attempt"
+          echo "release_tag=$release_tag"
+          echo "arm64_file=$arm64_file"
+          echo "x64_file=$x64_file"
+        } >> "$GITHUB_OUTPUT"
+
     - name: Upload APK Artifact
-      uses: actions/upload-artifact@v4
+      id: upload_apk_artifact
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
       with:
-        name: unlimotion-android-apk
-        path: artifacts/android/*.apk
+        name: ${{ steps.android_artifact_metadata.outputs.artifact_name }}
+        path: |
+          artifacts/android/${{ steps.android_artifact_metadata.outputs.arm64_file }}
+          artifacts/android/${{ steps.android_artifact_metadata.outputs.x64_file }}
+          artifacts/android/android-artifact-manifest.json
         if-no-files-found: error
 
-    - name: Upload APK To Release
-      if: github.event_name == 'release'
-      uses: softprops/action-gh-release@v1
+  android-release:
+    name: Upload Android release assets
+    if: github.event_name == 'release'
+    needs: android-build
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: write
+
+    steps:
+    - name: Download and verify APK artifact
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        ARTIFACT_ID: ${{ needs.android-build.outputs.apk_artifact_id }}
+        ARTIFACT_DIGEST: ${{ needs.android-build.outputs.apk_artifact_digest }}
+        ARTIFACT_NAME: ${{ needs.android-build.outputs.apk_artifact_name }}
+        SOURCE_SHA: ${{ needs.android-build.outputs.apk_source_sha }}
+        RUN_ID: ${{ needs.android-build.outputs.apk_run_id }}
+        RUN_ATTEMPT: ${{ needs.android-build.outputs.apk_run_attempt }}
+        RELEASE_TAG: ${{ needs.android-build.outputs.apk_release_tag }}
+        ARM64_FILE: ${{ needs.android-build.outputs.apk_arm64_file }}
+        X64_FILE: ${{ needs.android-build.outputs.apk_x64_file }}
+      run: |
+        set -euo pipefail
+
+        if [[ ! "$ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]] ||
+           [[ ! "$ARTIFACT_NAME" =~ ^unlimotion-android-apk-[0-9a-f]{40}-attempt-[1-9][0-9]*$ ]] ||
+           [[ ! "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] ||
+           [[ ! "$RUN_ID" =~ ^[1-9][0-9]*$ ]] ||
+           [[ ! "$RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]] ||
+           [[ ! "$RELEASE_TAG" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]] ||
+           [[ "$ARM64_FILE" != "Unlimotion-${RELEASE_TAG}-android-arm64.apk" ]] ||
+           [[ "$X64_FILE" != "Unlimotion-${RELEASE_TAG}-android-x64.apk" ]]; then
+          echo 'Build job did not return a closed Android artifact identity.' >&2
+          exit 1
+        fi
+
+        expected_digest="${ARTIFACT_DIGEST#sha256:}"
+        if [[ ! "$expected_digest" =~ ^[0-9a-f]{64}$ ]]; then
+          echo 'Build job did not return a SHA-256 APK artifact digest.' >&2
+          exit 1
+        fi
+
+        artifact_root="$RUNNER_TEMP/unlimotion-android-release-artifact"
+        archive_path="$RUNNER_TEMP/unlimotion-android-release.zip"
+        rm -rf "$artifact_root" "$archive_path"
+        mkdir -p "$artifact_root"
+
+        metadata="$(gh api --method GET "/repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID")"
+        if ! jq -e \
+          --arg artifact_name "$ARTIFACT_NAME" \
+          --arg source_sha "$SOURCE_SHA" \
+          --arg expected_digest "sha256:$expected_digest" \
+          --argjson artifact_id "$ARTIFACT_ID" \
+          --argjson run_id "$RUN_ID" \
+          '.id == $artifact_id and .name == $artifact_name and .expired == false and .digest == $expected_digest and .workflow_run.id == $run_id and .workflow_run.head_sha == $source_sha' \
+          <<< "$metadata" > /dev/null; then
+          echo 'APK artifact metadata does not match build outputs.' >&2
+          exit 1
+        fi
+
+        gh api --method GET "/repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID/zip" > "$archive_path"
+        actual_digest="$(sha256sum "$archive_path" | awk '{print $1}')"
+        if [[ "$actual_digest" != "$expected_digest" ]]; then
+          echo 'APK artifact archive digest mismatch.' >&2
+          exit 1
+        fi
+
+        entries_path="$RUNNER_TEMP/unlimotion-android-release-entries.txt"
+        expected_entries_path="$RUNNER_TEMP/unlimotion-android-release-expected-entries.txt"
+        unzip -Z1 "$archive_path" | LC_ALL=C sort > "$entries_path"
+        printf '%s\n' "$ARM64_FILE" "$X64_FILE" 'android-artifact-manifest.json' | LC_ALL=C sort > "$expected_entries_path"
+        if ! cmp -s "$expected_entries_path" "$entries_path"; then
+          echo 'APK artifact archive has an unexpected file set.' >&2
+          exit 1
+        fi
+
+        unzip -q "$archive_path" -d "$artifact_root"
+        arm64_path="$artifact_root/$ARM64_FILE"
+        x64_path="$artifact_root/$X64_FILE"
+        manifest_path="$artifact_root/android-artifact-manifest.json"
+        for path in "$arm64_path" "$x64_path" "$manifest_path"; do
+          if [ ! -f "$path" ] || [ -L "$path" ]; then
+            echo 'APK artifact extraction did not produce regular files.' >&2
+            exit 1
+          fi
+        done
+
+        arm64_sha256="$(sha256sum "$arm64_path" | awk '{print $1}')"
+        x64_sha256="$(sha256sum "$x64_path" | awk '{print $1}')"
+        arm64_bytes="$(stat -c '%s' "$arm64_path")"
+        x64_bytes="$(stat -c '%s' "$x64_path")"
+        if ! jq -e \
+          --arg source_sha "$SOURCE_SHA" \
+          --arg artifact_name "$ARTIFACT_NAME" \
+          --arg release_tag "$RELEASE_TAG" \
+          --arg arm64_file "$ARM64_FILE" \
+          --arg arm64_sha256 "$arm64_sha256" \
+          --argjson arm64_bytes "$arm64_bytes" \
+          --arg x64_file "$X64_FILE" \
+          --arg x64_sha256 "$x64_sha256" \
+          --argjson x64_bytes "$x64_bytes" \
+          --argjson run_id "$RUN_ID" \
+          --argjson run_attempt "$RUN_ATTEMPT" \
+          'keys == ["apks","artifactName","releaseTag","runAttempt","runId","schemaVersion","sourceSha"] and .schemaVersion == 1 and .sourceSha == $source_sha and .runId == $run_id and .runAttempt == $run_attempt and .artifactName == $artifact_name and .releaseTag == $release_tag and .apks == [{file:$arm64_file,byteLength:$arm64_bytes,sha256:$arm64_sha256},{file:$x64_file,byteLength:$x64_bytes,sha256:$x64_sha256}]' \
+          "$manifest_path" > /dev/null; then
+          echo 'APK artifact manifest does not match extracted files.' >&2
+          exit 1
+        fi
+
+        {
+          echo "ANDROID_ARM64_APK_PATH=$arm64_path"
+          echo "ANDROID_X64_APK_PATH=$x64_path"
+        } >> "$GITHUB_ENV"
+
+    - name: Upload APKs to release
+      uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.2.1
       with:
-        files: artifacts/android/*.apk
+        token: ${{ github.token }}
+        files: |
+          ${{ env.ANDROID_ARM64_APK_PATH }}
+          ${{ env.ANDROID_X64_APK_PATH }}
+        fail_on_unmatched_files: true
+        overwrite_files: false
