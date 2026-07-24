@@ -571,4 +571,8 @@
   <data name="TaskSpaceSwitchBlockedByConflict" xml:space="preserve"><value>Finish Git conflict resolution before switching task spaces.</value></data>
   <data name="TaskSpaceRecoveryTitle" xml:space="preserve"><value>Task space recovery required</value></data>
   <data name="TaskSpaceRecoveryRequired" xml:space="preserve"><value>The new task space failed ({0}) and the previous space could not be restored ({1}). Restart the application.</value></data>
+  <data name="TaskSpaceStartupRecoveryRequired" xml:space="preserve"><value>The task-space catalog is inconsistent. Problematic identifiers: {0}. Tasks and synchronization are disabled. Fix the configuration and restart the application.</value></data>
+  <data name="TaskSpaceSettingsSaving" xml:space="preserve"><value>Saving task-space settings…</value></data>
+  <data name="TaskSpaceSettingsSaveFailed" xml:space="preserve"><value>Task-space settings were not saved: {0}. Retry before switching spaces or closing the application.</value></data>
+  <data name="TaskSpaceSettingsRetry" xml:space="preserve"><value>Retry saving</value></data>
 </root>

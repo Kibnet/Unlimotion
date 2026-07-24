@@ -15,6 +15,7 @@ public sealed class TaskStorageBuilder(
 {
     public TaskStorageBuildResult Build(TaskStorageBuildRequest request)
     {
+        _ = defaultStoragePathProvider;
         var descriptor = request.Descriptor;
         return descriptor.Kind == TaskSourceKind.Server
             ? BuildServerStorage(request)
@@ -50,7 +51,7 @@ public sealed class TaskStorageBuilder(
             return path;
         }
 
-        var defaultPath = defaultStoragePathProvider?.Invoke();
-        return string.IsNullOrWhiteSpace(defaultPath) ? "Tasks" : defaultPath;
+        throw new InvalidOperationException(
+            "A configured local task space must provide an explicit storage folder.");
     }
 }

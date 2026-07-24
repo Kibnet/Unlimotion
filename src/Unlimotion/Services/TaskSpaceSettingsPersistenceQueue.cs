@@ -1,16 +1,28 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using Unlimotion.ViewModel;
 
 namespace Unlimotion.Services;
 
+public sealed class TaskSpaceSettingsPersistenceStateChangedEventArgs(
+    bool hasPendingChanges,
+    Exception? lastError) : EventArgs
+{
+    public bool HasPendingChanges { get; } = hasPendingChanges;
+    public Exception? LastError { get; } = lastError;
+}
+
 public interface ITaskSpaceSettingsPersistenceQueue
 {
     Exception? LastError { get; }
+    bool HasPendingChanges { get; }
+    event EventHandler<TaskSpaceSettingsPersistenceStateChangedEventArgs>? StateChanged;
     void Enqueue(TaskSpaceSettingsDraft draft);
     Task DrainAsync();
+    Task RetryAsync();
 }
 
 public sealed class TaskSpaceSettingsPersistenceQueue(
@@ -25,6 +37,8 @@ public sealed class TaskSpaceSettingsPersistenceQueue(
     private bool _workerRunning;
     private Exception? _lastError;
 
+    public event EventHandler<TaskSpaceSettingsPersistenceStateChangedEventArgs>? StateChanged;
+
     public Exception? LastError
     {
         get
@@ -32,6 +46,17 @@ public sealed class TaskSpaceSettingsPersistenceQueue(
             lock (_sync)
             {
                 return _lastError;
+            }
+        }
+    }
+
+    public bool HasPendingChanges
+    {
+        get
+        {
+            lock (_sync)
+            {
+                return _workerRunning || _pending.Count != 0;
             }
         }
     }
@@ -51,6 +76,8 @@ public sealed class TaskSpaceSettingsPersistenceQueue(
                 _worker = Task.Run(ProcessAsync);
             }
         }
+
+        NotifyStateChanged();
     }
 
     public async Task DrainAsync()
@@ -84,21 +111,47 @@ public sealed class TaskSpaceSettingsPersistenceQueue(
         }
     }
 
+    public Task RetryAsync()
+    {
+        lock (_sync)
+        {
+            _lastError = null;
+            if (_pending.Count != 0 && !_workerRunning)
+            {
+                _workerRunning = true;
+                _worker = Task.Run(ProcessAsync);
+            }
+        }
+
+        NotifyStateChanged();
+        return DrainAsync();
+    }
+
     private async Task ProcessAsync()
     {
         while (true)
         {
             KeyValuePair<string, TaskSpaceSettingsDraft> next;
+            var finished = false;
             lock (_sync)
             {
                 if (_pending.Count == 0)
                 {
                     _workerRunning = false;
-                    return;
+                    finished = true;
+                    next = default;
                 }
+                else
+                {
+                    next = _pending.First();
+                    _pending.Remove(next.Key);
+                }
+            }
 
-                next = _pending.First();
-                _pending.Remove(next.Key);
+            if (finished)
+            {
+                NotifyStateChanged();
+                return;
             }
 
             try
@@ -116,6 +169,7 @@ public sealed class TaskSpaceSettingsPersistenceQueue(
                                 .ConfigureAwait(false);
                         }
                     }).ConfigureAwait(false);
+                NotifyStateChanged();
             }
             catch (Exception ex)
             {
@@ -126,7 +180,38 @@ public sealed class TaskSpaceSettingsPersistenceQueue(
                     _workerRunning = false;
                 }
 
+                NotifyStateChanged();
                 return;
+            }
+        }
+    }
+
+    private void NotifyStateChanged()
+    {
+        TaskSpaceSettingsPersistenceStateChangedEventArgs state;
+        lock (_sync)
+        {
+            state = new TaskSpaceSettingsPersistenceStateChangedEventArgs(
+                _workerRunning || _pending.Count != 0,
+                _lastError);
+        }
+
+        var handlers = StateChanged;
+        if (handlers == null)
+        {
+            return;
+        }
+
+        foreach (EventHandler<TaskSpaceSettingsPersistenceStateChangedEventArgs> handler
+                 in handlers.GetInvocationList())
+        {
+            try
+            {
+                handler(this, state);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Task-space settings persistence state handler failed: {ex}");
             }
         }
     }

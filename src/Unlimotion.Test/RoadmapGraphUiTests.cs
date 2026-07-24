@@ -2407,6 +2407,7 @@ public class RoadmapGraphUiTests
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
             Control? taskNode = null;
+            GraphControl? graphControl = null;
             var mouseIsDown = false;
 
             try
@@ -2423,7 +2424,7 @@ public class RoadmapGraphUiTests
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
 
-                var graphControl = OpenRoadmapTabAndWaitForGraphControl(view);
+                graphControl = OpenRoadmapTabAndWaitForGraphControl(view);
                 await Assert.That(graphControl).IsNotNull();
                 taskNode = WaitForTaskNode(
                     graphControl!,
@@ -2484,6 +2485,7 @@ public class RoadmapGraphUiTests
             {
                 var fixture = new MainWindowViewModelFixture();
                 Window? window = null;
+                GraphControl? graphControl = null;
                 var mouseIsDown = false;
                 var releasePoint = default(Point);
 
@@ -2499,7 +2501,7 @@ public class RoadmapGraphUiTests
                     window.Show();
                     Dispatcher.UIThread.RunJobs();
 
-                    var graphControl = OpenRoadmapTabAndWaitForGraphControl(view);
+                    graphControl = OpenRoadmapTabAndWaitForGraphControl(view);
                     await Assert.That(graphControl).IsNotNull();
                     graphControl!.IsRoadmapViewportToolbarExpanded = false;
                     graphControl.IsRoadmapMinimapExpanded = false;
@@ -2575,6 +2577,7 @@ public class RoadmapGraphUiTests
             {
                 var fixture = new MainWindowViewModelFixture();
                 Window? window = null;
+                GraphControl? graphControl = null;
 
                 try
                 {
@@ -2588,7 +2591,7 @@ public class RoadmapGraphUiTests
                     window.Show();
                     Dispatcher.UIThread.RunJobs();
 
-                    var graphControl = OpenRoadmapTabAndWaitForGraphControl(view);
+                    graphControl = OpenRoadmapTabAndWaitForGraphControl(view);
                     await Assert.That(graphControl).IsNotNull();
 
                     var selectedTask = TestHelpers.GetTask(vm, selectedTaskId);
@@ -2623,6 +2626,9 @@ public class RoadmapGraphUiTests
                             await Assert.That(createdTask.Parents).Contains(selectedTask.Id);
                             break;
                     }
+
+                    await TestHelpers.WaitThrottleTime();
+                    Dispatcher.UIThread.RunJobs();
                 }
                 finally
                 {
@@ -2733,6 +2739,7 @@ public class RoadmapGraphUiTests
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
+            GraphControl? graphControl = null;
 
             try
             {
@@ -2745,13 +2752,15 @@ public class RoadmapGraphUiTests
                 sourceTask.Title = "Roadmap DnD source";
                 var targetTask = await vm.taskRepository.Add();
                 targetTask.Title = "Roadmap DnD target";
+                await TestHelpers.WaitThrottleTime();
+                Dispatcher.UIThread.RunJobs();
 
                 var view = new MainControl { DataContext = vm };
                 window = CreateWindow(view);
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
 
-                var graphControl = OpenRoadmapTabAndWaitForGraphControl(view);
+                graphControl = OpenRoadmapTabAndWaitForGraphControl(view);
                 await Assert.That(graphControl).IsNotNull();
 
                 var sourceReady = WaitFor(() => FindRoadmapNode(graphControl!, sourceTask.Id) != null);
@@ -2793,6 +2802,7 @@ public class RoadmapGraphUiTests
         {
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
+            GraphControl? graphControl = null;
 
             try
             {
@@ -2808,7 +2818,6 @@ public class RoadmapGraphUiTests
                 secondSource.Title = "Roadmap batch DnD source B";
                 var targetTask = await vm.taskRepository.Add();
                 targetTask.Title = "Roadmap batch DnD target";
-
                 await TestHelpers.WaitThrottleTime();
                 Dispatcher.UIThread.RunJobs();
 
@@ -2817,7 +2826,7 @@ public class RoadmapGraphUiTests
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
 
-                var graphControl = OpenRoadmapTabAndWaitForGraphControl(view);
+                graphControl = OpenRoadmapTabAndWaitForGraphControl(view);
                 await Assert.That(graphControl).IsNotNull();
 
                 var firstReady = WaitFor(() => FindRoadmapNode(graphControl!, firstSource.Id) != null);
@@ -3828,6 +3837,19 @@ public class RoadmapGraphUiTests
             () => GetRoadmapActiveBuildCountForTest(graphControl) == 0 &&
                   !GetRoadmapGraphUpdateQueuedForTest(graphControl),
             timeoutMilliseconds);
+    }
+
+    private static async Task DeactivateRoadmapGraphForTeardownAsync(GraphControl? graphControl)
+    {
+        try
+        {
+            _ = await DeactivateRoadmapGraphAsync(graphControl);
+        }
+        catch (Exception teardownException)
+        {
+            Console.Error.WriteLine(
+                $"Roadmap graph best-effort teardown failed: {teardownException}");
+        }
     }
 
     private static int GetRoadmapActiveBuildCountForTest(GraphControl graphControl)

@@ -158,11 +158,39 @@ public sealed class TaskSpaceCoordinator(
         {
             throw;
         }
-        catch
+        catch (Exception activationError)
         {
-            if (sourceManager.ActiveSource != null)
+            var activeSource = sourceManager.ActiveSource;
+            if (activeSource == null)
             {
-                await restoreScheduler(sourceManager.ActiveSource).ConfigureAwait(false);
+                try
+                {
+                    await clearTaskSurface().ConfigureAwait(false);
+                }
+                catch (Exception clearError)
+                {
+                    throw new TaskSpaceRecoveryException(activationError, clearError);
+                }
+
+                throw;
+            }
+
+            try
+            {
+                await restoreScheduler(activeSource).ConfigureAwait(false);
+            }
+            catch (Exception restorationError)
+            {
+                try
+                {
+                    await clearTaskSurface().ConfigureAwait(false);
+                }
+                catch (Exception clearError)
+                {
+                    restorationError = new AggregateException(restorationError, clearError);
+                }
+
+                throw new TaskSpaceRecoveryException(activationError, restorationError);
             }
 
             throw;
@@ -205,7 +233,15 @@ public sealed class TaskSpaceCoordinator(
             }
             catch (Exception restorationError)
             {
-                await clearTaskSurface().ConfigureAwait(false);
+                try
+                {
+                    await clearTaskSurface().ConfigureAwait(false);
+                }
+                catch (Exception clearError)
+                {
+                    restorationError = new AggregateException(restorationError, clearError);
+                }
+
                 throw new TaskSpaceRecoveryException(activationError, restorationError);
             }
 

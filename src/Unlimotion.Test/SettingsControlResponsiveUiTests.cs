@@ -141,6 +141,56 @@ public class SettingsControlResponsiveUiTests
     }
 
     [Test]
+    public async Task SettingsControl_TaskSpacePersistenceFailure_ShowsRetryableStatus()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var settings = fixture.MainWindowViewModelTest.Settings;
+                var retryRequested = false;
+                settings.TaskSpaceSettingsPersistenceStatus = "Could not save task-space settings.";
+                settings.IsTaskSpaceSettingsPersistenceStatusVisible = true;
+                settings.IsTaskSpaceSettingsPersistenceError = true;
+                settings.RetryTaskSpaceSettingsPersistenceCommand =
+                    new TestParameterCommand(_ => retryRequested = true);
+
+                var view = new SettingsControl { DataContext = settings };
+                window = CreateWindow(view, 720, 800);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var status = FindControlByAutomationId<Border>(
+                    view,
+                    "TaskSpaceSettingsPersistenceStatus");
+                var statusText = FindControlByAutomationId<TextBlock>(
+                    view,
+                    "TaskSpaceSettingsPersistenceStatusText");
+                var retryButton = FindControlByAutomationId<Button>(
+                    view,
+                    "RetryTaskSpaceSettingsPersistenceButton");
+
+                await Assert.That(status.IsVisible).IsTrue();
+                await Assert.That(statusText.Text).IsEqualTo("Could not save task-space settings.");
+                await Assert.That(retryButton.IsVisible).IsTrue();
+                await Assert.That(retryButton.IsEffectivelyEnabled).IsTrue();
+
+                retryButton.Command?.Execute(retryButton.CommandParameter);
+                await Assert.That(retryRequested).IsTrue();
+            }
+            finally
+            {
+                window?.Close();
+                await fixture.CleanTasksAsync();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
     public async Task SettingsControl_TaskOutlineClipboardCheckBoxes_PersistSettings()
     {
         var session = HeadlessUnitTestSession.StartNew(typeof(App));

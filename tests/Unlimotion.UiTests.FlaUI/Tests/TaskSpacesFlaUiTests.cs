@@ -7,6 +7,7 @@ using FlaUI.Core.Exceptions;
 using FlaUI.UIA3;
 using System.Drawing;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 using TUnit.Core;
 using Unlimotion.AppAutomation.TestHost;
 using Unlimotion.UiTests.Authoring.Pages;
@@ -45,52 +46,78 @@ public sealed class TaskSpacesFlaUiTests
     public void Task_spaces_switch_A_B_A_and_emit_visual_evidence()
     {
         var session = _session ?? throw new InvalidOperationException("Desktop session was not initialized.");
-        var selector = session.MainWindow.FindFirstDescendant(
-                session.ConditionFactory.ByAutomationId("TaskSpaceSelector"))
-            ?.AsComboBox()
-            ?? throw new InvalidOperationException("Task-space header selector was not found.");
-        Capture(session, "space-a.png");
-        WaitUntilTaskVisible(session, UnlimotionAutomationScenarioData.TaskSpacesSpaceATitle);
+        var evidenceHandshake = TaskSpaceEvidenceHandshake.TryCreate();
+        Exception? scenarioFailure = null;
 
-        SelectTaskSpace(selector, "Space B");
-        WaitUntilTaskVisible(session, UnlimotionAutomationScenarioData.TaskSpacesSpaceBTitle);
-        Capture(session, "space-b.png");
-
-        selector = FindTaskSpaceCombo(session, "TaskSpaceSelector");
-        SelectTaskSpace(selector, "Space A");
-        WaitUntilTaskVisible(session, UnlimotionAutomationScenarioData.TaskSpacesSpaceATitle);
-        Capture(session, "space-a-return.png");
-
-        OpenTaskSpaceSettings(session);
-        AddAndRenameTaskSpace(session, "Space C", "Space C renamed", _configPath);
-        Capture(session, "settings-spaces.png");
-
-        RemoveTaskSpaceFromSettings(session, "Space C renamed");
         try
         {
+            evidenceHandshake?.SignalReadyAndWaitForScenario();
+            var selector = session.MainWindow.FindFirstDescendant(
+                    session.ConditionFactory.ByAutomationId("TaskSpaceSelector"))
+                ?.AsComboBox()
+                ?? throw new InvalidOperationException("Task-space header selector was not found.");
+            Capture(session, "space-a.png");
+            WaitUntilTaskVisible(session, UnlimotionAutomationScenarioData.TaskSpacesSpaceATitle);
+
+            SelectTaskSpace(selector, "Space B");
+            WaitUntilTaskVisible(session, UnlimotionAutomationScenarioData.TaskSpacesSpaceBTitle);
             WaitUntil(
-                () =>
-                {
-                    ThrowIfToastError(session);
-                    return ReadPersistedTaskSpaceNames(_configPath);
-                },
-                names => !names.Contains("Space C renamed", StringComparer.Ordinal),
-                "Removed active task space remained in the persisted catalog.",
+                () => IsTaskSpaceOperationIdle(session),
+                value => value,
+                "Space B remained in the switching state.",
+                TimeSpan.FromSeconds(45));
+            Capture(session, "space-b.png");
+
+            selector = FindTaskSpaceCombo(session, "TaskSpaceSelector");
+            SelectTaskSpace(selector, "Space A");
+            WaitUntilTaskVisible(session, UnlimotionAutomationScenarioData.TaskSpacesSpaceATitle);
+            WaitUntil(
+                () => IsTaskSpaceOperationIdle(session),
+                value => value,
+                "Space A remained in the switching state after returning.",
+                TimeSpan.FromSeconds(45));
+            Capture(session, "space-a-return.png");
+
+            OpenTaskSpaceSettings(session);
+            AddAndRenameTaskSpace(session, "Space C", "Space C renamed", _configPath);
+            Capture(session, "settings-spaces.png");
+
+            RemoveTaskSpaceFromSettings(session, "Space C renamed");
+            try
+            {
+                WaitUntil(
+                    () =>
+                    {
+                        ThrowIfToastError(session);
+                        return ReadPersistedTaskSpaceNames(_configPath);
+                    },
+                    names => !names.Contains("Space C renamed", StringComparer.Ordinal),
+                    "Removed active task space remained in the persisted catalog.",
+                    TimeSpan.FromSeconds(45));
+            }
+            catch
+            {
+                Capture(session, "settings-remove-failure.png");
+                DumpTaskSpaceFiles(_configPath);
+                throw;
+            }
+
+            WaitUntil(
+                () => IsVisibleText(session, "Space A") &&
+                      IsTaskSpaceOperationIdle(session),
+                value => value,
+                "The fallback task space did not become active after removing the active space.",
                 TimeSpan.FromSeconds(45));
         }
-        catch
+        catch (Exception ex)
         {
-            Capture(session, "settings-remove-failure.png");
-            DumpTaskSpaceFiles(_configPath);
+            scenarioFailure = ex;
             throw;
         }
-
-        WaitUntil(
-            () => IsVisibleText(session, "Space A") &&
-                  IsTaskSpaceOperationIdle(session),
-            value => value,
-            "The fallback task space did not become active after removing the active space.",
-            TimeSpan.FromSeconds(45));
+        finally
+        {
+            evidenceHandshake?.SignalCompleteAndWaitForRecorder(scenarioFailure);
+        }
     }
 
     private static void OpenTaskSpaceSettings(DesktopAppSession session)
@@ -408,7 +435,12 @@ public sealed class TaskSpacesFlaUiTests
     private static void Capture(DesktopAppSession session, string fileName)
     {
         var root = FindRepositoryRoot();
-        var outputPath = Path.Combine(root, "artifacts", "ui-evidence", "task-spaces", fileName);
+        var configuredOutputDirectory = Environment.GetEnvironmentVariable(
+            "UNLIMOTION_TASK_SPACES_EVIDENCE_ARTIFACT_DIR");
+        var outputDirectory = string.IsNullOrWhiteSpace(configuredOutputDirectory)
+            ? Path.Combine(root, "artifacts", "ui-evidence", "task-spaces")
+            : Path.GetFullPath(configuredOutputDirectory);
+        var outputPath = Path.Combine(outputDirectory, fileName);
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
         using var bitmap = CaptureWindow(session.MainWindow);
         bitmap.Save(outputPath);
@@ -453,6 +485,75 @@ public sealed class TaskSpacesFlaUiTests
         }
 
         return bitmap;
+    }
+
+    private sealed class TaskSpaceEvidenceHandshake(string directory)
+    {
+        private const string HandshakeEnvironmentVariable =
+            "UNLIMOTION_TASK_SPACES_EVIDENCE_HANDSHAKE_DIR";
+        private static readonly TimeSpan SignalTimeout = TimeSpan.FromMinutes(2);
+
+        public static TaskSpaceEvidenceHandshake? TryCreate()
+        {
+            var directory = Environment.GetEnvironmentVariable(HandshakeEnvironmentVariable);
+            return string.IsNullOrWhiteSpace(directory)
+                ? null
+                : new TaskSpaceEvidenceHandshake(Path.GetFullPath(directory));
+        }
+
+        public void SignalReadyAndWaitForScenario()
+        {
+            Directory.CreateDirectory(directory);
+            WriteJson(
+                "window-ready.json",
+                new
+                {
+                    WindowTitle = Environment.GetEnvironmentVariable(
+                        UnlimotionAppLaunchHost.AutomationWindowTitleEnvironmentVariable),
+                    ReadyAtUtc = DateTime.UtcNow
+                });
+            WaitForSignal("scenario-go.signal");
+        }
+
+        public void SignalCompleteAndWaitForRecorder(Exception? failure)
+        {
+            WriteJson(
+                "scenario-complete.json",
+                new
+                {
+                    Success = failure is null,
+                    Error = failure?.ToString(),
+                    CompletedAtUtc = DateTime.UtcNow
+                });
+            WaitForSignal("recording-finished.signal");
+        }
+
+        private void WriteJson(string fileName, object document)
+        {
+            var path = Path.Combine(directory, fileName);
+            var temporaryPath = $"{path}.{Guid.NewGuid():N}.tmp";
+            File.WriteAllText(
+                temporaryPath,
+                JsonSerializer.Serialize(document, new JsonSerializerOptions { WriteIndented = true }));
+            File.Move(temporaryPath, path, overwrite: true);
+        }
+
+        private void WaitForSignal(string fileName)
+        {
+            var path = Path.Combine(directory, fileName);
+            var deadline = DateTime.UtcNow + SignalTimeout;
+            while (DateTime.UtcNow < deadline)
+            {
+                if (File.Exists(path))
+                {
+                    return;
+                }
+
+                Thread.Sleep(100);
+            }
+
+            throw new TimeoutException($"Evidence handshake signal '{path}' was not received.");
+        }
     }
 
     private static class NativeMethods

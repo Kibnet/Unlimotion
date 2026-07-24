@@ -114,7 +114,10 @@ public static class UnlimotionAppLaunchHost
                     vm = CreateHeadlessViewModel(launchData, lifetime);
                     await vm.Connect();
 
-                    SelectAutomationTask(vm, launchData);
+                    if (!IsTaskSpaceRecoveryScenario(scenario))
+                    {
+                        SelectAutomationTask(vm, launchData);
+                    }
                     ApplyAutomationWindowTitle(vm, launchData);
                     afterViewModelPrepared?.Invoke(vm);
                 }
@@ -230,11 +233,35 @@ public static class UnlimotionAppLaunchHost
             WritableJsonConfigurationFabric.Create(launchData.ConfigPath, reloadOnChange: false));
         var mapper = AppModelMapping.ConfigureMapping();
         var notificationManager = new AutomationNotificationManager();
-        var storageFactory = new TaskStorageFactory(
-            configuration,
-            mapper,
-            notificationManager,
-            () => launchData.TasksPath);
+        TaskStorageFactory storageFactory;
+        try
+        {
+            storageFactory = new TaskStorageFactory(
+                configuration,
+                mapper,
+                notificationManager,
+                () => launchData.TasksPath);
+        }
+        catch (TaskSpaceCatalogException error)
+        {
+            var recoverySettings = new SettingsViewModel(configuration);
+            recoverySettings.IsTaskSpaceRecoveryRequired = true;
+            recoverySettings.TaskSpaceRecoveryMessage =
+                Unlimotion.ViewModel.Localization.Localization.Format(
+                "TaskSpaceStartupRecoveryRequired",
+                string.Join(", ", error.ProblemSourceIds));
+            recoverySettings.SetStorageConnectionState(SettingsConnectionState.Error);
+            return lifetime.RegisterViewModel(
+                new MainWindowViewModel(
+                    new AppNameDefinitionService(),
+                    notificationManager,
+                    configuration,
+                    () => null,
+                    recoverySettings,
+                    new GraphViewModel(),
+                    TaskTreeExpansionStateStore.GetDefaultPath(launchData.ConfigPath)));
+        }
+
         lifetime.RegisterStorage(storageFactory.CreateConfiguredStorage());
 
         var backupService = new BackupViaGitService(configuration, notificationManager, storageFactory);
@@ -266,6 +293,10 @@ public static class UnlimotionAppLaunchHost
 
         return vm;
     }
+
+    private static bool IsTaskSpaceRecoveryScenario(UnlimotionAutomationScenario scenario) =>
+        scenario is UnlimotionAutomationScenario.TaskSpacesDuplicateCatalogRecovery or
+            UnlimotionAutomationScenario.TaskSpacesOrphanCatalogRecovery;
 
     private static void ConfigureHeadlessTaskSpaces(
         MainWindowViewModel vm,

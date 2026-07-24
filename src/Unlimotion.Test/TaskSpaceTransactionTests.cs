@@ -141,6 +141,46 @@ public sealed class TaskSpaceTransactionTests : IDisposable
     }
 
     [Test]
+    public async Task SettingsQueue_PublicContractExposesFailureNotificationAndRetry()
+    {
+        var queueType = typeof(ITaskSpaceSettingsPersistenceQueue);
+
+        await Assert.That(queueType.GetEvent("StateChanged")).IsNotNull();
+        await Assert.That(queueType.GetProperty("HasPendingChanges")).IsNotNull();
+        await Assert.That(queueType.GetMethod("RetryAsync")).IsNotNull();
+    }
+
+    [Test]
+    public async Task SettingsQueue_FailureIsObservableAndRetryPersistsPendingDraft()
+    {
+        using var runner = new TaskSpaceOperationRunner();
+        var writer = new RecordingTaskSpaceConfiguration(runner)
+        {
+            FailuresRemaining = 1
+        };
+        var queue = new TaskSpaceSettingsPersistenceQueue(writer, runner);
+        var observedStates = new List<TaskSpaceSettingsPersistenceStateChangedEventArgs>();
+        queue.StateChanged += (_, state) => observedStates.Add(state);
+
+        queue.Enqueue(CreateDraft("source-a", "retry-branch"));
+
+        await Assert.That(async () => await queue.DrainAsync())
+            .Throws<InvalidOperationException>();
+        await Assert.That(queue.LastError).IsNotNull();
+        await Assert.That(queue.HasPendingChanges).IsTrue();
+        await Assert.That(observedStates.Any(state => state.LastError != null)).IsTrue();
+
+        await queue.RetryAsync();
+
+        await Assert.That(queue.LastError).IsNull();
+        await Assert.That(queue.HasPendingChanges).IsFalse();
+        await Assert.That(writer.Persisted.Select(draft => draft.Git.Branch))
+            .IsEquivalentTo(["retry-branch"]);
+        await Assert.That(observedStates.Last().HasPendingChanges).IsFalse();
+        await Assert.That(observedStates.Last().LastError).IsNull();
+    }
+
+    [Test]
     public async Task BackupService_UsesCapturedSourceSnapshotAndPersistsNormalizationToThatSource()
     {
         var configuration = CreateConfiguration(out _);
@@ -246,6 +286,49 @@ public sealed class TaskSpaceTransactionTests : IDisposable
         await Assert.That(fixture.Builder.Builds.Any(build => build.Descriptor.Id == created.Id)).IsFalse();
         await Assert.That(fixture.PauseSchedulerCalls).IsEqualTo(1);
         await Assert.That(fixture.RestoreSchedulerCalls).IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task Coordinator_SettingsDrainAndSchedulerRestoreDoubleFailureRequiresRecovery()
+    {
+        var fixture = CreateCoordinatorFixture(
+            failSettingsDrain: true,
+            failRestoreScheduler: true);
+        var created = fixture.Manager.AddConfiguredLocalSource(
+            "Work",
+            Path.Combine(_rootPath, "work-double-failure"));
+
+        var error = await Assert.That(async () => await fixture.Coordinator.SwitchAsync(created.Id))
+            .Throws<TaskSpaceRecoveryException>();
+
+        await Assert.That(error!.ActivationError.Message)
+            .Contains("Pending task-space settings could not be persisted.");
+        await Assert.That(error.RestorationError.Message)
+            .Contains("Injected scheduler restoration failure.");
+        await Assert.That(fixture.SurfaceCleared).IsTrue();
+    }
+
+    [Test]
+    public async Task Coordinator_RetainsAllErrorsWhenRecoverySurfaceAlsoFails()
+    {
+        var fixture = CreateCoordinatorFixture(
+            failSettingsDrain: true,
+            failRestoreScheduler: true,
+            failClearSurface: true);
+        var created = fixture.Manager.AddConfiguredLocalSource(
+            "Work",
+            Path.Combine(_rootPath, "work-triple-failure"));
+
+        var error = await Assert.That(async () => await fixture.Coordinator.SwitchAsync(created.Id))
+            .Throws<TaskSpaceRecoveryException>();
+
+        await Assert.That(error!.ActivationError.Message)
+            .Contains("Pending task-space settings could not be persisted.");
+        var restorationErrors = ((AggregateException)error.RestorationError).Flatten().InnerExceptions;
+        await Assert.That(restorationErrors.Select(exception => exception.Message))
+            .Contains("Injected scheduler restoration failure.");
+        await Assert.That(restorationErrors.Select(exception => exception.Message))
+            .Contains("Injected surface clear failure.");
     }
 
     [Test]
@@ -1191,6 +1274,8 @@ public sealed class TaskSpaceTransactionTests : IDisposable
         bool failTargetBind = false,
         bool failPreviousBind = false,
         bool failSettingsDrain = false,
+        bool failRestoreScheduler = false,
+        bool failClearSurface = false,
         IConfiguration? configuration = null)
     {
         configuration ??= CreateConfiguration(out _);
@@ -1234,6 +1319,11 @@ public sealed class TaskSpaceTransactionTests : IDisposable
             () =>
             {
                 fixture.SurfaceCleared = true;
+                if (failClearSurface)
+                {
+                    throw new InvalidOperationException("Injected surface clear failure.");
+                }
+
                 return Task.CompletedTask;
             },
             () =>
@@ -1244,6 +1334,11 @@ public sealed class TaskSpaceTransactionTests : IDisposable
             _ =>
             {
                 fixture.RestoreSchedulerCalls++;
+                if (failRestoreScheduler)
+                {
+                    throw new InvalidOperationException("Injected scheduler restoration failure.");
+                }
+
                 return Task.CompletedTask;
             });
         return fixture;
@@ -1377,6 +1472,7 @@ public sealed class TaskSpaceTransactionTests : IDisposable
             new(StringComparer.Ordinal);
 
         public List<TaskSpaceSettingsDraft> Persisted { get; } = [];
+        public int FailuresRemaining { get; set; }
 
         public TaskSpaceSettingsDraft Read(string sourceId) =>
             Drafts.TryGetValue(sourceId, out var draft)
@@ -1389,6 +1485,12 @@ public sealed class TaskSpaceTransactionTests : IDisposable
         public void PersistCore(TaskSpaceOperationContext context, TaskSpaceSettingsDraft draft)
         {
             runner.Validate(context);
+            if (FailuresRemaining > 0)
+            {
+                FailuresRemaining--;
+                throw new InvalidOperationException("Injected persistence failure.");
+            }
+
             var clone = ActiveTaskSpaceConfiguration.CloneDraft(draft);
             Persisted.Add(clone);
             Drafts[draft.SourceId] = ActiveTaskSpaceConfiguration.CloneDraft(draft);
@@ -1414,6 +1516,12 @@ public sealed class TaskSpaceTransactionTests : IDisposable
     private sealed class FailingSettingsQueue : ITaskSpaceSettingsPersistenceQueue
     {
         public Exception? LastError { get; } = new InvalidOperationException("Injected drain failure.");
+        public bool HasPendingChanges => true;
+        public event EventHandler<TaskSpaceSettingsPersistenceStateChangedEventArgs>? StateChanged
+        {
+            add { }
+            remove { }
+        }
 
         public void Enqueue(TaskSpaceSettingsDraft draft) =>
             throw new NotSupportedException();
@@ -1422,6 +1530,8 @@ public sealed class TaskSpaceTransactionTests : IDisposable
             Task.FromException(new InvalidOperationException(
                 "Pending task-space settings could not be persisted.",
                 LastError));
+
+        public Task RetryAsync() => DrainAsync();
     }
 
     private sealed class ConfigurableTaskStorageBuilder : ITaskStorageBuilder

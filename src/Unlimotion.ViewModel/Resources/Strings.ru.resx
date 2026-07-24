@@ -571,4 +571,8 @@
   <data name="TaskSpaceSwitchBlockedByConflict" xml:space="preserve"><value>Завершите разрешение конфликтов Git перед переключением пространства.</value></data>
   <data name="TaskSpaceRecoveryTitle" xml:space="preserve"><value>Требуется восстановление пространства</value></data>
   <data name="TaskSpaceRecoveryRequired" xml:space="preserve"><value>Новое пространство не подключилось ({0}), а предыдущее не удалось восстановить ({1}). Перезапустите приложение.</value></data>
+  <data name="TaskSpaceStartupRecoveryRequired" xml:space="preserve"><value>Каталог пространств повреждён. Проблемные идентификаторы: {0}. Задачи и синхронизация отключены. Исправьте конфигурацию и перезапустите приложение.</value></data>
+  <data name="TaskSpaceSettingsSaving" xml:space="preserve"><value>Настройки пространства сохраняются…</value></data>
+  <data name="TaskSpaceSettingsSaveFailed" xml:space="preserve"><value>Настройки пространства не сохранены: {0}. Повторите сохранение перед переключением пространства или закрытием приложения.</value></data>
+  <data name="TaskSpaceSettingsRetry" xml:space="preserve"><value>Повторить сохранение</value></data>
 </root>

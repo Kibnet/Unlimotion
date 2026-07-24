@@ -2388,7 +2388,8 @@
                                HorizontalAlignment="Center"/>
                     <TextBlock Text="{Binding Settings.TaskSpaceRecoveryMessage}"
                                TextWrapping="Wrap"
-                               TextAlignment="Center"/>
+                               TextAlignment="Center"
+                               AutomationProperties.AutomationId="TaskSpaceRecoveryMessageText"/>
                 </StackPanel>
             </Border>
         </Grid>

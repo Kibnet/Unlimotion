@@ -841,68 +841,81 @@ Exact test file split may follow current repository patterns; no unrelated modul
 
 ### Post-EXEC Review
 
-- Статус: PASS — AC1-AC15 и расширенный transactional/recovery contract реализованы и проверены.
-- Реализовано:
-  - единый non-reentrant `ITaskSpaceOperationRunner` и captured-source очередь настроек с drain/restart handshake;
+- Статус реализации: PASS — AC1-AC15, active-only isolation и расширенный transactional/recovery contract реализованы; одновременный показ задач и связи между пространствами не добавлены.
+- Статус текущей валидации: PASS для всех task-space, UI и platform gates; два существующих live server-теста остаются внешне заблокированы лицензией RavenDB, поэтому единый текущий `900/900` не заявляется.
+- Реализовано и повторно проверено:
+  - единый non-reentrant `ITaskSpaceOperationRunner`, captured-source очередь настроек и drain/restart handshake;
   - prepare/connect/init/bind/publish/abort activation с scheduler pause/restore, rollback и recovery state;
   - staged migration, `Prepared/Committed` legacy projection, mutation journal, sanitation и fault matrices;
   - active-only runtime/sync/jobs/backup, source-aware операции и запрет relation-операций между разными `SourceId`;
-  - каталог, header selector, Settings CRUD, busy/recovery UI, удаление активного пространства через успешный fallback;
-  - нормализация file path identity с junction/symlink и server identity по URL + login;
-  - AppAutomation `1.6.0`, deterministic automation ids и mixed-DPI-safe `PrintWindow` visual evidence.
-- Scope/Evidence pass: diff, implementation, tests, docs, resources, configuration projection, scheduler/jobs and generated evidence were reviewed.
-- Contract pass: model, persistence, operation ownership, activation, migration, removal, UI and AC1-AC15 agree; no task aggregation or cross-space links were introduced.
-- Adversarial risk pass:
-  - fixed queue worker-exit race that could strand a pending draft;
-  - paused scheduler again after queue drain to prevent old-profile post-persist reconfiguration during switch;
-  - completed active-space removal semantics and transactional rename;
-  - rejected duplicate normalized server URL + login while allowing different logins;
-  - disabled self-reload for writable production JSON because its provider rewrites the file per `Set`;
-  - replaced unstable popup property LINQ with per-element COM/property guards;
-  - added stable confirmation automation ids and window-local `PrintWindow` screenshots.
-- Role-Based pass: business isolation, minimal UX, negative/failure coverage, architecture ownership and delivery/security concerns all rechecked as PASS.
-- Fix and re-review: every issue above was fixed, its focused tests repeated, then full UI/headless/unit/platform gates were rerun.
-- Stop decision: PASS; no BLOCKER/HIGH/MEDIUM implementation finding remains.
-- Review limitation: the effective instruction forbids sub-agent delegation, so an independent reviewer was not spawned; a separate adversarial self-review pass was used and this process limitation remains disclosed as LOW.
+  - каталог, header selector, Settings CRUD, busy/recovery UI и удаление активного пространства через успешный fallback;
+  - AppAutomation `1.6.0`, deterministic automation ids, right-monitor execution и воспроизводимый video/screenshot evidence wrapper.
+- Исправления по многопрофильному review:
+  - пустой local path больше не подменяется общей default-папкой и отклоняется до мутации конфигурации;
+  - server endpoint обязан быть абсолютным HTTP(S) URL без credentials/query/fragment, канонизируется по scheme/IDN host/default port/trailing slash, сохраняет регистр path и сравнивается вместе с trimmed login;
+  - duplicate ownership, invalid path/URL/kind, corrupt descriptor/server slots, sync profiles и mutation-journal snapshot превращаются в `TaskSpaceCatalogException` до любой canonical/legacy записи;
+  - corrupt catalog открывает безопасную recovery shell, не активирует storage и не создаёт отсутствующие task-space-owned legacy sections;
+  - coordinator сохраняет исходную activation/drain ошибку вместе с scheduler-restore и clear-surface ошибками;
+  - background persistence показывает pending/error state, toast и retry; shutdown отменяется, пока draft не сохранён;
+  - evidence wrapper использует unique run directory и handshake, завершает дочерние процессы, корректно сериализует exception/error record и запускает актуальный recorder через Per-Monitor DPI v2 + DWM frame bounds.
+- Дополнительная стабилизация: Roadmap UI tests дожидаются throttle/build teardown, чтобы фоновые графовые задачи не протекали в последующие классы.
+- Scope/Evidence pass: diff, implementation, tests, resources, configuration projection, scheduler/jobs, automation и сгенерированные evidence artifacts пересмотрены.
+- Contract pass: model, persistence, operation ownership, activation, migration, removal, UI и AC1-AC15 согласованы.
+- Role-Based pass:
+  - business: каждое пространство владеет одним source/settings/sync profile; aggregation и cross-space relations отсутствуют;
+  - UX: selector + Settings CRUD остаются минимальным active-only интерфейсом; recovery/save failure имеют явное действие;
+  - QA: позитивные, duplicate/invalid/corrupt, rollback/double-failure, startup recovery и desktop flow покрыты;
+  - architecture/concurrency: publish происходит после успешного bind, операции сериализованы, settings draft привязан к captured `SourceId`;
+  - ops/security: orphan credentials и malformed journal не записываются обратно, video capture не захватывает фон рабочего стола.
+- Stop decision: implementation PASS; BLOCKER/HIGH/MEDIUM code findings отсутствуют. Текущий single-process full-suite green не заявляется из-за отдельно воспроизведённого RavenDB license blocker.
+- Review limitation: effective instruction запрещает sub-agent delegation; вместо независимого reviewer выполнен отдельный adversarial self-review pass, ограничение раскрыто как LOW.
 
 Validation evidence:
 
 - targeted TUnit:
-  - transaction/recovery matrix `37/37`;
-  - manager/path/server identity `20/20`;
+  - transaction/recovery matrix `41/41`;
+  - manager/path/server/catalog identity `36/36`;
   - Settings VM `70/70`;
-  - responsive UI `14/14`;
-  - Git jobs `4/4`;
+  - responsive UI `15/15`;
+  - Roadmap UI `47/47`;
   - backup service `53/53`;
-- full Avalonia Headless: `37/37`, artifact `artifacts/validation/task-spaces-headless-full-current`;
-- targeted FlaUI after deterministic confirmation fix: three consecutive runs `3/3`;
-- full FlaUI: `13/13`, artifact `artifacts/validation/task-spaces-flaui-full-right-monitor-final`;
-- every desktop UI run used `UNLIMOTION_AUTOMATION_DESKTOP_MONITOR=\\.\DISPLAY2`;
-- full unit suite:
-  - first run `878/879`; the unrelated stateful Shift+Delete test then passed `3/3` in isolation;
-  - clean repeat `879/879`, artifact `artifacts/validation/task-spaces-full-unit-final`;
+- full Avalonia Headless: `38/38`, artifact `artifacts/validation/task-spaces-remediation-headless-full-current-final`;
+- full FlaUI: `15/15`, artifact `artifacts/validation/task-spaces-remediation-flaui-full-right-current-final`;
+- every remediation desktop UI/evidence run used `UNLIMOTION_AUTOMATION_DESKTOP_MONITOR=right`;
+- current unit evidence:
+  - `845` tests outside backup/live classes were executed class-by-class in clean processes: `844` passed in the aggregate report; the only failure was an OS `IOException: Недостаточно места на диске` while writing a 20-KB fixture file;
+  - that exact `CompletingBlockingTask_Success` then passed `1/1` in a clean process;
+  - backup class passed `53/53`, so every one of the `898` current non-live tests has a successful current result;
+  - artifact roots: `artifacts/validation/task-spaces-remediation-unit-by-class-final-20260724T110702693Z`, `artifacts/validation/task-spaces-remediation-isolated-disk-full-test-final`, `artifacts/validation/task-spaces-remediation-backup-class-current-final`;
+  - prior full single-process baseline before seven catalog-only negative cases passed `893/893`, artifact `artifacts/validation/task-spaces-remediation-unit-full-final-current-2`;
+  - both `ServerStorageLiveIntegrationTests` fail before task-space code because bundled RavenDB rejects default revisions with `LicenseLimitException`; isolated artifacts are `artifacts/validation/task-spaces-remediation-isolated-live-servicestack-final` and `artifacts/validation/task-spaces-remediation-isolated-live-signalr-final`;
 - builds: Desktop, Browser (including Emscripten native link) and Android completed with zero errors;
-- visual evidence inspected:
-  - `artifacts/ui-evidence/task-spaces/space-a.png`;
-  - `artifacts/ui-evidence/task-spaces/space-b.png`;
-  - `artifacts/ui-evidence/task-spaces/space-a-return.png`;
-  - `artifacts/ui-evidence/task-spaces/settings-spaces.png`;
-- video fallback: the window recorder found the right-monitor Unlimotion window, but mixed-DPI Win32 coordinates were `7727,1438 1829x979` while ffmpeg exposed a `5760x2160` desktop, so its safe window-only capture rejected the out-of-bounds region. No invalid MP4 was retained; the same passing FlaUI scenario emitted the inspected window-local `PrintWindow` screenshots and TRX instead.
+- Android completed with the existing `66` LibGit2Sharp/API/page-size warnings and zero errors;
+- AppAutomation package audit: every reference is exactly `1.6.0`;
+- PowerShell parser and `git diff --check`: PASS;
+- final evidence run `artifacts/validation/task-spaces-evidence/20260724T115328339Z-936ac0796afd472794c04320fe157017`:
+  - targeted FlaUI `1/1`, `ScenarioSucceeded=true`, `RecordingStatus=Captured`;
+  - four inspected screenshots: Space A, Space B only, Space A return and Settings with renamed Space C;
+  - inspected MP4 `artifacts/ui-evidence/task-spaces/after-space-switch-final.mp4`: H.264, `45s`, `1002x540`, about `30 FPS`, window-only DWM bounds on the right monitor.
 
 | Severity | Area | Finding | Required action | Status |
 | --- | --- | --- | --- | --- |
-| HIGH | execution completeness | Transaction/recovery, migration/removal fault handling and active-only operation ownership were incomplete. | Implement the complete approved contract and repeat affected gates. | fixed |
-| MEDIUM | UI automation | Popup/confirmation lookup and mixed-DPI screen capture were unstable. | Use stable automation ids, property-safe popup traversal and window-local capture. | fixed |
-| MEDIUM | validation | First full unit run ended `878/879` because of an unrelated stateful asynchronous test leak. | Isolate/repeat the failure and rerun the complete suite in a clean process. | fixed; isolation `3/3`, repeat `879/879` |
+| HIGH | catalog integrity | Invalid/duplicate ownership and corrupt persisted slots/journal could be rewritten before rejection. | Validate every canonical snapshot before persistence and surface typed startup recovery. | fixed |
+| HIGH | recovery | Scheduler restore or clear-surface failure could mask the initiating activation/drain failure. | Preserve both errors in `TaskSpaceRecoveryException`/aggregate recovery. | fixed |
+| MEDIUM | settings persistence | Background save failure was invisible and shutdown could discard a pending draft. | Expose pending/error/retry state and cancel shutdown until persistence succeeds. | fixed |
+| MEDIUM | source identity | Empty path and non-canonical/invalid URL aliases could collide or reuse shared storage. | Require explicit local path and canonical endpoint + login ownership. | fixed |
+| MEDIUM | startup UX | Corrupt catalog could terminate startup or mutate legacy fields. | Render blocking recovery shell without storage activation/config rewrite. | fixed |
+| MEDIUM | validation environment | Two live server tests cannot create RavenDB default revisions with the bundled license. | Supply a license that permits revisions or change the server test fixture outside this task-space scope, then repeat the single-process full suite. | externally blocked; not reported green |
+| LOW | test environment | One old VM test hit transient OS disk-full while writing a small fixture. | Repeat the exact test in a clean process. | fixed; repeat `1/1` |
+| LOW | video evidence | Legacy DPI coordinates did not match `gdigrab` on the right mixed-DPI monitor. | Use Per-Monitor DPI v2, DWM visible frame bounds and synchronized test/recorder handshake. | fixed; inspected MP4 captured |
 | LOW | review process | Independent sub-agent review could not be run under the effective no-delegation instruction. | Disclose the limitation and perform an explicit adversarial self-review. | accepted; fallback PASS |
-| LOW | video evidence | Window-only ffmpeg recording rejected mixed-DPI coordinates outside its exposed desktop. | Retain no invalid video and provide inspected window-local screenshots plus passing TRX. | accepted fallback |
 
-- Fixed before final report: all implementation and validation findings above.
-- Checks rerun: targeted unit matrices, three targeted desktop repeats, full FlaUI, full Headless, full unit, Desktop/Browser/Android builds and final diff/package audit.
-- Validation evidence: complete for the approved scope.
+- Fixed before final report: all six review findings plus malformed-catalog and mixed-DPI wrapper defects.
+- Checks rerun: targeted/current unit matrices, isolated environmental triage, full FlaUI, full Headless, Desktop/Browser/Android builds, synchronized visual evidence and final diff/package/parser audit.
+- Validation evidence: complete for approved task-space scope; current single-process full-suite green remains explicitly blocked only by the unrelated RavenDB license condition above.
 - Unrelated changes: none beyond the approved implementation, docs, automation support and tests.
 - Needs human: нет; scope already approved.
-- Residual risks / follow-ups: existing Android LibGit2Sharp dependency/page-size warnings and the disclosed independent-review/video tooling limitations are outside the task-space contract and do not block this PASS.
+- Residual risks / follow-ups: renew/replace the RavenDB test license or make revisions optional in that server fixture, then rerun the two live tests/full suite; existing Android LibGit2Sharp dependency/page-size warnings and the disclosed independent-review limitation remain outside the task-space contract.
 
 ## Approval
 
@@ -923,3 +936,8 @@ Validation evidence:
 | EXEC | adversarial fixes | 0.99 | Full validation result | Repeat focused and full gates | Нет | Нет | Fixed queue worker race, scheduler post-drain race, active removal, server identity, writable JSON self-reload and UIA popup/confirmation instability. | services, App, UI automation tests |
 | EXEC | UI and visual validation | 0.99 | MP4 unavailable because of mixed-DPI recorder bounds | Use objective screenshot/TRX fallback | Нет | Да: UI tests only on right monitor | Full FlaUI passed 13/13 on `DISPLAY2`; four `PrintWindow` screenshots were inspected; invalid MP4 was not retained. | FlaUI TRX and `artifacts/ui-evidence/task-spaces` |
 | EXEC | full validation and Post-EXEC review | 0.99 | Нет | Stop with PASS | Нет | Нет | Headless 37/37, clean full unit 879/879, Desktop/Browser/Android builds and adversarial self-review passed; first full-run flake was isolated 3/3 before clean repeat. | validation artifacts, builds, this Post-EXEC |
+| EXEC | multi-profile review remediation intake | 0.99 | Targeted regression results | Add failing checks before production fixes | Нет | Да: `Исправляй` | The read-only review found six actionable gaps: empty local path, non-canonical server identity, startup catalog crash, scheduler restore double-failure, invisible queued-persistence failure and missing evidence wrapper. The approved isolation and active-only product contract is unchanged. | this spec, task-source services, App/settings UI, unit/headless/FlaUI tests, evidence script |
+| EXEC | remediation implementation | 0.99 | Нет | Run focused and full current gates | Нет | Нет | Added typed pre-persistence catalog validation, safe startup recovery, aggregated coordinator recovery, observable/retryable settings persistence and shutdown protection. | task-source services, App, Settings VM/XAML/resources, unit/headless/FlaUI tests |
+| EXEC | evidence wrapper remediation | 0.99 | Clean synchronized capture | Repeat right-monitor evidence scenario | Нет | Да: UI tests only on right monitor | The current recorder used legacy system-DPI coordinates; a Per-Monitor DPI v2 launcher plus DWM visible bounds now records only the right-monitor Unlimotion window. | evidence scripts, FlaUI handshake, manifest/screenshots/MP4 |
+| EXEC | current validation and environment triage | 0.99 | RavenDB revisions-capable license | Preserve truthful blocker and finish in-scope gates | Нет | Нет | All 898 non-live tests have a current passing result; Headless 38/38 and right-monitor FlaUI 15/15 pass. Two isolated live server tests fail before task-space code with RavenDB `LicenseLimitException`; one disk-full fixture failure passed 1/1 on repeat. | validation artifacts, RavenDB live-test logs, this Post-EXEC |
+| EXEC | final multi-profile re-review | 0.99 | Нет | Report implementation PASS with explicit external validation exception | Нет | Нет | Business, UX, QA, concurrency, ops/security and artifact evidence were rechecked; no implementation BLOCKER/HIGH/MEDIUM finding remains and no aggregation/cross-space relation was introduced. | final diff, platform builds, package/parser audit, this spec |
