@@ -47,6 +47,8 @@ internal static class CiReadmeMediaContract
         await Assert.That(nugetSignatureScript).Contains("tests\\Unlimotion.UiTests.Headless\\Unlimotion.UiTests.Headless.csproj");
         await Assert.That(nugetSignatureScript).Contains("--maximum-parallel-tests");
         await Assert.That(nugetSignatureScript).Contains("Invoke-TestCommandAdapter");
+        await Assert.That(nugetSignatureScript).Contains("A failing TUnit command may still leave its closed raw report set behind.");
+        await Assert.That(nugetSignatureScript).Contains("test-command-failed");
         await Assert.That(nugetSignatureScript).Contains("'headless-1', 'headless-2'");
         await Assert.That(nugetSignatureScript).Contains("--report-trx-filename");
         await Assert.That(nugetSignatureScript).Contains("TUNIT_DISABLE_GITHUB_REPORTER");

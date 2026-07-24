@@ -1481,7 +1481,18 @@ function Invoke-TestCommandAdapter(
         if ($overflowed) { return New-RegressionRunRecord -RunId $RunId -ProjectPath $ProjectRelativePath -State 'failure' -NativeExitCode (-3) -FailureCode 'native-output-limit-exceeded' }
         if ($timedOut) { return New-RegressionRunRecord -RunId $RunId -ProjectPath $ProjectRelativePath -State 'failure' -NativeExitCode (-1) -FailureCode 'native-command-timeout' }
         $nativeExitCode = [int]$process.ExitCode
-        if ($nativeExitCode -ne 0) { return New-RegressionRunRecord -RunId $RunId -ProjectPath $ProjectRelativePath -State 'failure' -NativeExitCode $nativeExitCode -FailureCode 'test-command-failed' }
+        if ($nativeExitCode -ne 0) {
+            # A failing TUnit command may still leave its closed raw report set behind.  Project only
+            # its validated numeric summary into the sanitized failure receipt; never publish raw
+            # reports, command output, test names, or exception text from the failed process.
+            try {
+                $reports = Get-ValidatedRawTUnitReports -RawRunRoot $rawRoot
+                $summary = Read-RawTUnitTrxSummary -TrxPath $reports.trxPath
+                return New-RegressionRunRecord -RunId $RunId -ProjectPath $ProjectRelativePath -State 'failure' -NativeExitCode $nativeExitCode -FailureCode 'test-command-failed' -Discovered $summary.discovered -Passed $summary.passed -Failed $summary.failed -Skipped $summary.skipped -DurationMs $summary.durationMs
+            } catch {
+                return New-RegressionRunRecord -RunId $RunId -ProjectPath $ProjectRelativePath -State 'failure' -NativeExitCode $nativeExitCode -FailureCode 'test-command-failed'
+            }
+        }
         try {
             $reports = Get-ValidatedRawTUnitReports -RawRunRoot $rawRoot
             $summary = Read-RawTUnitTrxSummary -TrxPath $reports.trxPath
@@ -2601,9 +2612,9 @@ function Invoke-SelfTest {
                     sourceSha = ('a' * 40)
                     runAttempt = '1'
                     executionContext = 'full-child'
-                    phaseResults = @([ordered]@{ name = 'regression:test:unit'; status = 'failure'; exitCode = 2; failureCode = 'test-evidence-failed' })
+                    phaseResults = @([ordered]@{ name = 'regression:test:unit'; status = 'failure'; exitCode = 2; failureCode = 'test-command-failed' })
                     runs = @(
-                        [ordered]@{ runId = 'unit'; state = 'failure'; projectPath = 'src/Unlimotion.Test/Unlimotion.Test.csproj'; configuration = 'Debug'; nativeExitCode = 0; failureCode = 'test-evidence-failed'; discovered = $null; passed = $null; failed = $null; skipped = $null; durationMs = $null; skipReason = $null },
+                        [ordered]@{ runId = 'unit'; state = 'failure'; projectPath = 'src/Unlimotion.Test/Unlimotion.Test.csproj'; configuration = 'Debug'; nativeExitCode = 2; failureCode = 'test-command-failed'; discovered = 830; passed = 829; failed = 1; skipped = 0; durationMs = 1; skipReason = $null },
                         [ordered]@{ runId = 'headless-1'; state = 'not-attempted'; projectPath = 'tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj'; configuration = 'Debug'; nativeExitCode = $null; failureCode = $null; discovered = $null; passed = $null; failed = $null; skipped = $null; durationMs = $null; skipReason = 'prerequisite-failed' },
                         [ordered]@{ runId = 'headless-2'; state = 'not-attempted'; projectPath = 'tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj'; configuration = 'Debug'; nativeExitCode = $null; failureCode = $null; discovered = $null; passed = $null; failed = $null; skipped = $null; durationMs = $null; skipReason = 'prerequisite-failed' }
                     )
@@ -2616,12 +2627,12 @@ function Invoke-SelfTest {
                     sourceSha = ('a' * 40)
                     runAttempt = '1'
                     lane = 'Regression'
-                    phaseResults = @([ordered]@{ name = 'regression:test:unit'; status = 'failure'; exitCode = 2; failureCode = 'test-evidence-failed' })
+                    phaseResults = @([ordered]@{ name = 'regression:test:unit'; status = 'failure'; exitCode = 2; failureCode = 'test-command-failed' })
                 }) -SecretSeeds $syntheticSeeds -TimeoutSeconds 10
             Assert-True ($regressionFailureFinalizerResult.Success -eq $true -and $regressionFailureFinalizerResult.ExitCode -eq 0) 'Publication finalizer did not publish Regression failure evidence.'
             $regressionFailureEvidence = [IO.File]::ReadAllText((Join-Path $regressionFailureFinalRoot 'regression\evidence.json'), [Text.UTF8Encoding]::new($false)) | ConvertFrom-Json -AsHashtable -Depth 16
             $regressionFailureReceipt = [IO.File]::ReadAllText((Join-Path $regressionFailureFinalRoot 'attempt-receipt.json'), [Text.UTF8Encoding]::new($false)) | ConvertFrom-Json -AsHashtable -Depth 16
-            Assert-True ($regressionFailureEvidence.evidenceKind -ceq 'regression-failure' -and $regressionFailureEvidence.runs[0].nativeExitCode -eq 0 -and $regressionFailureEvidence.runs[0].failureCode -ceq 'test-evidence-failed' -and $regressionFailureEvidence.runs[0].trx -eq $null -and $regressionFailureReceipt.outcome -ceq 'failure' -and $regressionFailureReceipt.failurePhase -ceq 'regression:test:unit' -and $regressionFailureReceipt.failureCode -ceq 'test-evidence-failed') 'Regression failure publication did not preserve the synthetic test-evidence failure tuple.'
+            Assert-True ($regressionFailureEvidence.evidenceKind -ceq 'regression-failure' -and $regressionFailureEvidence.runs[0].nativeExitCode -eq 2 -and $regressionFailureEvidence.runs[0].failureCode -ceq 'test-command-failed' -and $regressionFailureEvidence.runs[0].discovered -eq 830 -and $regressionFailureEvidence.runs[0].passed -eq 829 -and $regressionFailureEvidence.runs[0].failed -eq 1 -and $regressionFailureEvidence.runs[0].skipped -eq 0 -and $regressionFailureEvidence.runs[0].durationMs -eq 1 -and $regressionFailureEvidence.runs[0].trx -eq $null -and $regressionFailureReceipt.outcome -ceq 'failure' -and $regressionFailureReceipt.failurePhase -ceq 'regression:test:unit' -and $regressionFailureReceipt.failureCode -ceq 'test-command-failed') 'Regression failure publication did not preserve the sanitized failed-test summary.'
             & (Get-AbsolutePowerShellExecutable) -NoLogo -NoProfile -NonInteractive -File (Join-Path (Get-CanonicalRepositoryRoot) 'scripts\Test-NuGetEvidencePublication.ps1') -EvidenceRoot $regressionFailureFinalRoot -ExpectedLane Regression -ExpectedSourceSha ('a' * 40) -ExpectedRunAttempt 1 -ExpectedExecutionContext full-child
             Assert-True ($LASTEXITCODE -eq 0) 'Independent validator rejected published Regression failure evidence.'
             $regressionFailureFullCandidateRoot = $sanitizerRoot + '-full-regression-failure-candidate'
@@ -2633,7 +2644,7 @@ function Invoke-SelfTest {
             & (Get-AbsolutePowerShellExecutable) -NoLogo -NoProfile -NonInteractive -File (Join-Path (Get-CanonicalRepositoryRoot) 'scripts\Test-NuGetEvidencePublication.ps1') -EvidenceRoot $regressionFailureFullEvidenceRoot -ExpectedLane Full -ExpectedSourceSha ('a' * 40) -ExpectedRunAttempt 1
             Assert-True ($LASTEXITCODE -eq 0) 'Independent validator rejected Full evidence with a Regression child failure.'
             $regressionFailureFullReceipt = [IO.File]::ReadAllText((Join-Path $regressionFailureFullEvidenceRoot 'attempt-receipt.json'), [Text.UTF8Encoding]::new($false)) | ConvertFrom-Json -AsHashtable -Depth 16
-            Assert-True ($regressionFailureFullReceipt.receiptKind -ceq 'full-primary' -and $regressionFailureFullReceipt.outcome -ceq 'failure' -and $regressionFailureFullReceipt.failureCode -ceq 'test-evidence-failed' -and $regressionFailureFullReceipt.childAttempts[0].outcome -ceq 'success' -and $regressionFailureFullReceipt.childAttempts[1].outcome -ceq 'failure') 'Full primary evidence did not preserve a Regression child failure.'
+            Assert-True ($regressionFailureFullReceipt.receiptKind -ceq 'full-primary' -and $regressionFailureFullReceipt.outcome -ceq 'failure' -and $regressionFailureFullReceipt.failureCode -ceq 'test-command-failed' -and $regressionFailureFullReceipt.childAttempts[0].outcome -ceq 'success' -and $regressionFailureFullReceipt.childAttempts[1].outcome -ceq 'failure') 'Full primary evidence did not preserve a Regression child failure.'
             Remove-Item -LiteralPath $regressionFailureFullEvidenceRoot -Recurse -Force -ErrorAction Stop
             Remove-Item -LiteralPath $regressionFailureFinalRoot -Recurse -Force -ErrorAction Stop
             Remove-Item -LiteralPath $regressionFailureCandidateRoot -Recurse -Force -ErrorAction Stop
