@@ -1915,7 +1915,58 @@ function Copy-FullChildEvidenceToCandidate([string]$ChildRoot, [string]$Candidat
     Assert-True (Test-Path -LiteralPath $CandidateChildRoot -PathType Container) 'Full child evidence copy was not created.'
 }
 
-function Invoke-FullChildAttempt([string]$ChildLane, [string]$Root, [string]$SourceSha, [int]$Attempt, [string]$ChildWorkRoot) {
+function Assert-FullDeadlineBudget([DateTimeOffset]$DeadlineUtc, [int]$RequiredMinutes, [string]$Description) {
+    Assert-True ($RequiredMinutes -ge 1) 'Full deadline reserve must be positive.'
+    Assert-True (($DeadlineUtc - [DateTimeOffset]::UtcNow).TotalMinutes -ge $RequiredMinutes) "Full does not have enough time remaining for $Description."
+}
+
+function Invoke-FullChildProcess(
+    [string]$ChildLane,
+    [string]$Root,
+    [string]$SourceSha,
+    [int]$Attempt,
+    [string]$ChildEvidenceRoot,
+    [string]$ChildPackagesRoot,
+    [DateTimeOffset]$OuterDeadlineUtc,
+    [int]$ChildDeadlineMinutes,
+    [int]$ReserveMinutes
+) {
+    Assert-True ($ChildDeadlineMinutes -ge 1 -and $ReserveMinutes -ge 1) 'Full child deadline inputs are invalid.'
+    Assert-FullDeadlineBudget -DeadlineUtc $OuterDeadlineUtc -RequiredMinutes ($ChildDeadlineMinutes + $ReserveMinutes) -Description "$ChildLane child envelope"
+    $timeoutMilliseconds = [int][Math]::Min(
+        [Int32]::MaxValue,
+        [Math]::Floor(([TimeSpan]::FromMinutes($ChildDeadlineMinutes)).TotalMilliseconds))
+    $process = $null
+    try {
+        $startInfo = [Diagnostics.ProcessStartInfo]::new()
+        $startInfo.FileName = Get-AbsolutePowerShellExecutable
+        $startInfo.WorkingDirectory = $Root
+        $startInfo.UseShellExecute = $false
+        $startInfo.RedirectStandardOutput = $true
+        $startInfo.RedirectStandardError = $true
+        foreach ($argument in @('-NoLogo', '-NoProfile', '-NonInteractive', '-File', $script:WorkerScriptPath, '-Mode', 'RunAttempt', '-Lane', $ChildLane, '-RepositoryRoot', $Root, '-PackagesRoot', $ChildPackagesRoot, '-ExpectedSourceSha', $SourceSha, '-RunAttempt', ([string]$Attempt), '-EvidenceRoot', $ChildEvidenceRoot, '-FullChild')) {
+            [void]$startInfo.ArgumentList.Add($argument)
+        }
+        $process = [Diagnostics.Process]::new()
+        $process.StartInfo = $startInfo
+        [void]$process.add_OutputDataReceived([Diagnostics.DataReceivedEventHandler]{ param($sender, $eventArgs) })
+        [void]$process.add_ErrorDataReceived([Diagnostics.DataReceivedEventHandler]{ param($sender, $eventArgs) })
+        Assert-True $process.Start() "Full $ChildLane child process did not start."
+        $process.BeginOutputReadLine()
+        $process.BeginErrorReadLine()
+        if (-not $process.WaitForExit($timeoutMilliseconds)) {
+            $process.Kill($true)
+            Assert-True $process.WaitForExit(10000) "Full $ChildLane child process termination was not proven."
+            throw "Full $ChildLane child exceeded its declared deadline."
+        }
+        $process.WaitForExit()
+        return [int]$process.ExitCode
+    } finally {
+        if ($null -ne $process) { $process.Dispose() }
+    }
+}
+
+function Invoke-FullChildAttempt([string]$ChildLane, [string]$Root, [string]$SourceSha, [int]$Attempt, [string]$ChildWorkRoot, [DateTimeOffset]$OuterDeadlineUtc, [int]$ChildDeadlineMinutes, [int]$ReserveMinutes) {
     $workRoot = [IO.Path]::GetFullPath($ChildWorkRoot)
     $sourceParentRoot = Join-Path ([IO.Path]::GetPathRoot($workRoot)) 'uf'
     $sourceRoot = Join-Path $sourceParentRoot ([Guid]::NewGuid().ToString('N'))
@@ -1927,10 +1978,7 @@ function Invoke-FullChildAttempt([string]$ChildLane, [string]$Root, [string]$Sou
     try {
         & git -C $Root worktree add --detach --force $sourceRoot $SourceSha *> $null
         Assert-True ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath $sourceRoot -PathType Container)) "Full $ChildLane child source worktree could not be created."
-        & (Get-AbsolutePowerShellExecutable) -NoLogo -NoProfile -NonInteractive -File $script:WorkerScriptPath `
-            -Mode RunAttempt -Lane $ChildLane -RepositoryRoot $sourceRoot -PackagesRoot $childPackagesRoot `
-            -ExpectedSourceSha $SourceSha -RunAttempt ([string]$Attempt) -EvidenceRoot $ChildEvidenceRoot -FullChild 2>$null | Out-Null
-        $childExitCode = [int]$LASTEXITCODE
+        $childExitCode = Invoke-FullChildProcess -ChildLane $ChildLane -Root $sourceRoot -SourceSha $SourceSha -Attempt $Attempt -ChildEvidenceRoot $childEvidenceRoot -ChildPackagesRoot $childPackagesRoot -OuterDeadlineUtc $OuterDeadlineUtc -ChildDeadlineMinutes $ChildDeadlineMinutes -ReserveMinutes $ReserveMinutes
         $receipt = Read-ValidatedFullChildReceipt -ChildRoot $ChildEvidenceRoot -ChildLane $ChildLane -SourceSha $SourceSha -Attempt $Attempt
         return [ordered]@{ exitCode = $childExitCode; evidenceRoot = $childEvidenceRoot; receipt = $receipt }
     } finally {
@@ -1959,16 +2007,18 @@ function Invoke-FullAttempt {
     Assert-True (-not (Test-Path -LiteralPath $evidencePath) -and -not (Test-Path -LiteralPath $candidateRoot) -and -not (Test-Path -LiteralPath $workRoot)) 'Full evidence roots must be absent before the attempt.'
     $secretSeeds = Get-ClosedSecretSeedSnapshot -Environment ([Environment]::GetEnvironmentVariables('Process'))
     New-Item -ItemType Directory -Path $candidateRoot, $workRoot -ErrorAction Stop | Out-Null
+    $fullDeadlineUtc = [DateTimeOffset]::UtcNow.AddMinutes(175)
 
     $signatureReceipt = $null
     $regressionReceipt = $null
     try {
-        $signature = Invoke-FullChildAttempt -ChildLane 'Signature' -Root $root -SourceSha $sourceSha -Attempt $attempt -ChildWorkRoot (Join-Path $workRoot 'signature')
+        $signature = Invoke-FullChildAttempt -ChildLane 'Signature' -Root $root -SourceSha $sourceSha -Attempt $attempt -ChildWorkRoot (Join-Path $workRoot 'signature') -OuterDeadlineUtc $fullDeadlineUtc -ChildDeadlineMinutes 65 -ReserveMinutes 105
         $signatureReceipt = $signature.receipt
         Copy-FullChildEvidenceToCandidate -ChildRoot $signature.evidenceRoot -CandidateChildRoot (Join-Path $candidateRoot 'signature')
-        $regression = Invoke-FullChildAttempt -ChildLane 'Regression' -Root $root -SourceSha $sourceSha -Attempt $attempt -ChildWorkRoot (Join-Path $workRoot 'regression')
+        $regression = Invoke-FullChildAttempt -ChildLane 'Regression' -Root $root -SourceSha $sourceSha -Attempt $attempt -ChildWorkRoot (Join-Path $workRoot 'regression') -OuterDeadlineUtc $fullDeadlineUtc -ChildDeadlineMinutes 95 -ReserveMinutes 10
         $regressionReceipt = $regression.receipt
         Copy-FullChildEvidenceToCandidate -ChildRoot $regression.evidenceRoot -CandidateChildRoot (Join-Path $candidateRoot 'regression')
+        Assert-FullDeadlineBudget -DeadlineUtc $fullDeadlineUtc -RequiredMinutes 10 -Description 'outer aggregation and final validation'
         Publish-FullPrimaryEvidence -CandidateRoot $candidateRoot -EvidencePath $evidencePath -SourceSha $sourceSha -Attempt $attempt -SignatureReceipt $signatureReceipt -RegressionReceipt $regressionReceipt -SecretSeeds $secretSeeds
     } catch {
         if (Test-Path -LiteralPath $candidateRoot) { Remove-Item -LiteralPath $candidateRoot -Recurse -Force -ErrorAction SilentlyContinue }
@@ -2144,6 +2194,14 @@ function Invoke-SelfTest {
         }
         $syntheticSeeds = Get-ClosedSecretSeedSnapshot -Environment ([ordered]@{ PATH = 'ordinary-path'; API_TOKEN = 'one'; ConnectionString = 'two' })
         Assert-True ($syntheticSeeds.Count -eq 2 -and $syntheticSeeds[0].name -ceq 'API_TOKEN' -and $syntheticSeeds[1].name -ceq 'ConnectionString') 'Secret environment snapshot did not retain only closed seed names.'
+        Assert-FullDeadlineBudget -DeadlineUtc ([DateTimeOffset]::UtcNow.AddMinutes(2)) -RequiredMinutes 1 -Description 'self-test child reserve'
+        $deadlineRejected = $false
+        try {
+            Assert-FullDeadlineBudget -DeadlineUtc ([DateTimeOffset]::UtcNow) -RequiredMinutes 1 -Description 'self-test expired reserve'
+        } catch {
+            $deadlineRejected = $true
+        }
+        Assert-True $deadlineRejected 'Full deadline budget accepted an expired reserve.'
         $adapterResult = Invoke-ClosedWorkerProcessAdapter -WorkerKind 'SignatureVerify' -Payload ([ordered]@{
                 dotnetExecutable = (Get-Command dotnet -ErrorAction Stop).Source
                 repositoryRoot = Get-CanonicalRepositoryRoot

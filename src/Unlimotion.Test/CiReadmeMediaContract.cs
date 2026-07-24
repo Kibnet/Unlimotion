@@ -87,6 +87,10 @@ internal static class CiReadmeMediaContract
         await Assert.That(nugetSignatureScript).Contains("worktree remove --force");
         await Assert.That(nugetSignatureScript).Contains("source worktree root is invalid");
         await Assert.That(nugetSignatureScript).Contains("Full requires a clean checkout at the exact expected source SHA");
+        await Assert.That(nugetSignatureScript).Contains("Assert-FullDeadlineBudget");
+        await Assert.That(nugetSignatureScript).Contains("ChildDeadlineMinutes 65");
+        await Assert.That(nugetSignatureScript).Contains("ChildDeadlineMinutes 95");
+        await Assert.That(nugetSignatureScript).Contains("outer aggregation and final validation");
         await Assert.That(nugetSignatureScript).Contains("Publish-FullPrimaryEvidence");
         await Assert.That(nugetSignatureScript).Contains("full-primary");
         await Assert.That(nugetSignatureScript).Contains("full-child");
