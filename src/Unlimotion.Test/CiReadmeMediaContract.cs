@@ -93,6 +93,10 @@ internal static class CiReadmeMediaContract
         await Assert.That(nugetSignatureScript).Contains("Full tree file link count must be exactly one.");
         await Assert.That(nugetSignatureScript).Contains("Full trees share a native file identity.");
         await Assert.That(nugetSignatureScript).Contains("Full child work root grammar is invalid.");
+        await Assert.That(nugetSignatureScript).Contains("Assert-FullPrimaryChildReceipts");
+        await Assert.That(nugetSignatureScript).Contains("child exit code does not match its receipt outcome");
+        await Assert.That(nugetSignatureScript).Contains("reordered Full child receipt list");
+        await Assert.That(nugetSignatureScript).Contains("Full child receipt manifest mismatch");
         await Assert.That(nugetSignatureScript).Contains("ChildDeadlineMinutes 65");
         await Assert.That(nugetSignatureScript).Contains("ChildDeadlineMinutes 95");
         await Assert.That(nugetSignatureScript).Contains("outer aggregation and final validation");

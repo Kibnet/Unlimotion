@@ -1976,6 +1976,11 @@ function Publish-FullSafeFallback([string]$EvidencePath, [string]$SourceSha, [in
     }
 }
 
+function Assert-FullPrimaryChildReceipts([hashtable]$SignatureReceipt, [hashtable]$RegressionReceipt) {
+    Assert-True ($SignatureReceipt.receiptKind -ceq 'primary' -and $SignatureReceipt.lane -ceq 'Signature' -and $SignatureReceipt.outcome -cin @('success', 'failure')) 'Full Signature child receipt cannot be a fallback.'
+    Assert-True ($RegressionReceipt.receiptKind -ceq 'primary' -and $RegressionReceipt.lane -ceq 'Regression' -and $RegressionReceipt.outcome -cin @('success', 'failure')) 'Full Regression child receipt cannot be a fallback.'
+}
+
 function Publish-FullPrimaryEvidence(
     [string]$CandidateRoot,
     [string]$EvidencePath,
@@ -1987,6 +1992,7 @@ function Publish-FullPrimaryEvidence(
 ) {
     Assert-FullRootsDoNotOverlap -Roots @{ candidate = [IO.Path]::GetFullPath($CandidateRoot); final = [IO.Path]::GetFullPath($EvidencePath) }
     Assert-True ((Test-Path -LiteralPath $CandidateRoot -PathType Container) -and -not (Test-Path -LiteralPath $EvidencePath)) 'Full publication roots are invalid.'
+    Assert-FullPrimaryChildReceipts -SignatureReceipt $SignatureReceipt -RegressionReceipt $RegressionReceipt
     $seedElements = ConvertTo-SecretSeedElements -SecretSeeds $SecretSeeds
     try {
         $manifest = Get-CandidateEvidenceManifest -CandidateRoot $CandidateRoot -SecretSeeds $seedElements
@@ -2117,6 +2123,7 @@ function Invoke-FullChildAttempt([string]$ChildLane, [string]$Root, [string]$Sou
         Assert-True ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath $sourceRoot -PathType Container) -and -not (Get-Item -LiteralPath $sourceRoot -Force).LinkType) "Full $ChildLane child source worktree could not be created."
         $childExitCode = Invoke-FullChildProcess -ChildLane $ChildLane -Root $sourceRoot -SourceSha $SourceSha -Attempt $Attempt -ChildEvidenceRoot $childEvidenceRoot -ChildPackagesRoot $childPackagesRoot -OuterDeadlineUtc $OuterDeadlineUtc -ChildDeadlineMinutes $ChildDeadlineMinutes -ReserveMinutes $ReserveMinutes
         $receipt = Read-ValidatedFullChildReceipt -ChildRoot $ChildEvidenceRoot -ChildLane $ChildLane -SourceSha $SourceSha -Attempt $Attempt
+        Assert-True (($childExitCode -eq 0) -eq ($receipt.outcome -ceq 'success')) "Full $ChildLane child exit code does not match its receipt outcome."
         return [ordered]@{ exitCode = $childExitCode; evidenceRoot = $childEvidenceRoot; receipt = $receipt }
     } finally {
         if (Test-Path -LiteralPath $sourceRoot -PathType Container) {
@@ -2534,6 +2541,37 @@ function Invoke-SelfTest {
             Assert-True ($LASTEXITCODE -eq 0) 'Independent validator rejected the recursive Full primary evidence.'
             $fullReceipt = [IO.File]::ReadAllText((Join-Path $fullEvidenceRoot 'attempt-receipt.json'), [Text.UTF8Encoding]::new($false)) | ConvertFrom-Json -AsHashtable -Depth 16
             Assert-True ($fullReceipt.receiptKind -ceq 'full-primary' -and $fullReceipt.outcome -ceq 'failure' -and $fullReceipt.failureCode -ceq 'signature-verification-failed' -and (@($fullReceipt.childAttempts)).Count -eq 2 -and $fullReceipt.childAttempts[0].relativeRoot -ceq 'signature' -and $fullReceipt.childAttempts[1].relativeRoot -ceq 'regression') 'Full primary publication did not preserve the ordered child receipts.'
+            $fallbackChildRejected = $false
+            try {
+                Assert-FullPrimaryChildReceipts -SignatureReceipt ([ordered]@{ receiptKind = 'safe-fallback'; lane = 'Signature'; outcome = 'failure' }) -RegressionReceipt $fullRegressionReceipt
+            } catch {
+                $fallbackChildRejected = $true
+            }
+            Assert-True $fallbackChildRejected 'Full primary publication accepted a fallback child receipt.'
+            $fullOrderTamperRoot = $fullEvidenceRoot + '-order-tamper'
+            Copy-Item -LiteralPath $fullEvidenceRoot -Destination $fullOrderTamperRoot -Recurse -ErrorAction Stop
+            $fullOrderTamperReceiptPath = Join-Path $fullOrderTamperRoot 'attempt-receipt.json'
+            $fullOrderTamperReceipt = [IO.File]::ReadAllText($fullOrderTamperReceiptPath, [Text.UTF8Encoding]::new($false)) | ConvertFrom-Json -AsHashtable -Depth 16
+            $fullOrderTamperReceipt.childAttempts = @($fullOrderTamperReceipt.childAttempts[1], $fullOrderTamperReceipt.childAttempts[0])
+            [IO.File]::WriteAllText($fullOrderTamperReceiptPath, (ConvertTo-Json -InputObject $fullOrderTamperReceipt -Depth 16 -Compress), [Text.UTF8Encoding]::new($false))
+            & (Get-AbsolutePowerShellExecutable) -NoLogo -NoProfile -NonInteractive -File (Join-Path (Get-CanonicalRepositoryRoot) 'scripts\Test-NuGetEvidencePublication.ps1') -EvidenceRoot $fullOrderTamperRoot -ExpectedLane Full -ExpectedSourceSha ('a' * 40) -ExpectedRunAttempt 1 2>$null | Out-Null
+            Assert-True ($LASTEXITCODE -ne 0) 'Independent validator accepted a reordered Full child receipt list.'
+            Remove-Item -LiteralPath $fullOrderTamperRoot -Recurse -Force -ErrorAction Stop
+            $fullRootTamperRoot = $fullEvidenceRoot + '-root-tamper'
+            Copy-Item -LiteralPath $fullEvidenceRoot -Destination $fullRootTamperRoot -Recurse -ErrorAction Stop
+            $fullRootTamperReceiptPath = Join-Path $fullRootTamperRoot 'attempt-receipt.json'
+            $fullRootTamperReceipt = [IO.File]::ReadAllText($fullRootTamperReceiptPath, [Text.UTF8Encoding]::new($false)) | ConvertFrom-Json -AsHashtable -Depth 16
+            $fullRootTamperReceipt.childAttempts[0].relativeRoot = 'regression'
+            [IO.File]::WriteAllText($fullRootTamperReceiptPath, (ConvertTo-Json -InputObject $fullRootTamperReceipt -Depth 16 -Compress), [Text.UTF8Encoding]::new($false))
+            & (Get-AbsolutePowerShellExecutable) -NoLogo -NoProfile -NonInteractive -File (Join-Path (Get-CanonicalRepositoryRoot) 'scripts\Test-NuGetEvidencePublication.ps1') -EvidenceRoot $fullRootTamperRoot -ExpectedLane Full -ExpectedSourceSha ('a' * 40) -ExpectedRunAttempt 1 2>$null | Out-Null
+            Assert-True ($LASTEXITCODE -ne 0) 'Independent validator accepted an invalid Full child root.'
+            Remove-Item -LiteralPath $fullRootTamperRoot -Recurse -Force -ErrorAction Stop
+            $fullManifestTamperRoot = $fullEvidenceRoot + '-manifest-tamper'
+            Copy-Item -LiteralPath $fullEvidenceRoot -Destination $fullManifestTamperRoot -Recurse -ErrorAction Stop
+            [IO.File]::AppendAllText((Join-Path $fullManifestTamperRoot 'signature\attempt-receipt.json'), ' ', [Text.UTF8Encoding]::new($false))
+            & (Get-AbsolutePowerShellExecutable) -NoLogo -NoProfile -NonInteractive -File (Join-Path (Get-CanonicalRepositoryRoot) 'scripts\Test-NuGetEvidencePublication.ps1') -EvidenceRoot $fullManifestTamperRoot -ExpectedLane Full -ExpectedSourceSha ('a' * 40) -ExpectedRunAttempt 1 2>$null | Out-Null
+            Assert-True ($LASTEXITCODE -ne 0) 'Independent validator accepted a Full child receipt manifest mismatch.'
+            Remove-Item -LiteralPath $fullManifestTamperRoot -Recurse -Force -ErrorAction Stop
             Remove-Item -LiteralPath $fullEvidenceRoot -Recurse -Force -ErrorAction Stop
             Remove-Item -LiteralPath $regressionFinalRoot -Recurse -Force -ErrorAction Stop
             Remove-Item -LiteralPath $regressionCandidateRoot -Recurse -Force -ErrorAction Stop
