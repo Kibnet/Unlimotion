@@ -2104,7 +2104,7 @@ function Invoke-FullChildProcess(
             $stderrDrain.GetAwaiter().GetResult()
             throw "Full $ChildLane child exceeded its declared deadline."
         }
-        $process.WaitForExit()
+        [void]$process.WaitForExit()
         Assert-True ($stdoutDrain.Wait(10000) -and $stderrDrain.Wait(10000)) "Full $ChildLane child stream drain was not proven."
         $stdoutDrain.GetAwaiter().GetResult()
         $stderrDrain.GetAwaiter().GetResult()
