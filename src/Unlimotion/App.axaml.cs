@@ -299,6 +299,12 @@ public class App : Application
                 return;
             }
 
+            if (settings.IsTaskSpaceRemovalBlockedByConflict(selected.SourceId))
+            {
+                _notificationManager?.ErrorToast(L10n.Get("TaskSpaceSwitchBlockedByConflict"));
+                return;
+            }
+
             ConfirmAndRun(
                 L10n.Get("TaskSpaceRemoveConfirmTitle"),
                 L10n.Format("TaskSpaceRemoveConfirmMessage", selected.DisplayName),
@@ -306,6 +312,12 @@ public class App : Application
                 {
                     if (_taskSpaceCoordinator == null)
                     {
+                        return;
+                    }
+
+                    if (settings.IsTaskSpaceRemovalBlockedByConflict(selected.SourceId))
+                    {
+                        _notificationManager?.ErrorToast(L10n.Get("TaskSpaceSwitchBlockedByConflict"));
                         return;
                     }
 

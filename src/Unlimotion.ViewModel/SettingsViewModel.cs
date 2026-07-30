@@ -186,7 +186,16 @@ public class SettingsViewModel
     public TaskSpaceOptionViewModel? SelectedTaskSpace
     {
         get => _selectedTaskSpace;
-        set => _selectedTaskSpace = value;
+        set
+        {
+            if (ReferenceEquals(_selectedTaskSpace, value))
+            {
+                return;
+            }
+
+            _selectedTaskSpace = value;
+            RefreshTaskSpaceActionAvailability();
+        }
     }
 
     public TaskSpaceOptionViewModel? HeaderTaskSpace
@@ -212,7 +221,7 @@ public class SettingsViewModel
     public bool IsTaskSpaceSwitching { get; set; }
     public bool IsTaskSpaceRecoveryRequired { get; set; }
     public string TaskSpaceRecoveryMessage { get; set; } = string.Empty;
-    public bool CanRemoveTaskSpace { get; set; }
+    public bool CanRemoveTaskSpace { get; private set; }
     public bool IsTaskSpaceSettingsPersistenceStatusVisible { get; set; }
     public bool IsTaskSpaceSettingsPersistenceError { get; set; }
     public string TaskSpaceSettingsPersistenceStatus { get; set; } = string.Empty;
@@ -235,8 +244,13 @@ public class SettingsViewModel
         var active = TaskSpaces.FirstOrDefault(space => space.IsActive) ?? TaskSpaces.FirstOrDefault();
         SelectedTaskSpace = active;
         HeaderTaskSpace = active;
-        CanRemoveTaskSpace = TaskSpaces.Count > 1;
+        RefreshTaskSpaceActionAvailability();
     }
+
+    public bool IsTaskSpaceRemovalBlockedByConflict(string sourceId) =>
+        IsConflictResolutionMode &&
+        TaskSpaces.Any(space =>
+            space.IsActive && string.Equals(space.SourceId, sourceId, StringComparison.Ordinal));
 
     public void ReloadActiveTaskSpaceSettings()
     {
@@ -1578,6 +1592,14 @@ public class SettingsViewModel
         CanResolveSelectedConflictByFields = !IsBackupBusy &&
                                              IsConflictResolutionMode &&
                                              SelectedBackupConflict?.CanResolveByFields == true;
+        RefreshTaskSpaceActionAvailability();
+    }
+
+    private void RefreshTaskSpaceActionAvailability()
+    {
+        CanRemoveTaskSpace = SelectedTaskSpace != null &&
+                             TaskSpaces.Count > 1 &&
+                             !IsTaskSpaceRemovalBlockedByConflict(SelectedTaskSpace.SourceId);
     }
 
     private void SetUpdateState(ApplicationUpdateState state, string? statusText = null)

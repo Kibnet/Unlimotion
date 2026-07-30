@@ -743,6 +743,71 @@ public class SettingsControlResponsiveUiTests
     }
 
     [Test]
+    public async Task SettingsControl_ConflictResolutionMode_DisablesActiveTaskSpaceRemovalOnly()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var configPath = Path.Combine(
+                Environment.CurrentDirectory,
+                $"TaskSpaceConflictSettings_{Guid.NewGuid():N}.json");
+            File.WriteAllText(configPath, "{}");
+            IDisposable? configurationDisposable = null;
+            Window? window = null;
+
+            try
+            {
+                var configuration = WritableJsonConfigurationFabric.Create(configPath, reloadOnChange: false);
+                configurationDisposable = configuration as IDisposable;
+                var backupService = new FakeRemoteBackupService
+                {
+                    ConflictStatus = new BackupConflictStatus(true, new List<BackupConflictFile>())
+                };
+                var settings = new SettingsViewModel(configuration, backupService);
+                settings.RemoveTaskSpaceCommand = new TestParameterCommand(_ => { });
+                settings.ReloadTaskSpaces(
+                [
+                    new TaskSourceDescriptor
+                    {
+                        Id = "personal",
+                        DisplayName = "Personal",
+                        Kind = TaskSourceKind.File
+                    },
+                    new TaskSourceDescriptor
+                    {
+                        Id = "work",
+                        DisplayName = "Work",
+                        Kind = TaskSourceKind.File
+                    }
+                ],
+                "personal");
+
+                var view = new SettingsControl { DataContext = settings };
+                window = CreateWindow(view, 720, 800);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var removeButton = FindControlByAutomationId<Button>(view, "RemoveTaskSpaceButton");
+                await Assert.That(removeButton.IsEffectivelyEnabled).IsFalse();
+
+                settings.SelectedTaskSpace = settings.TaskSpaces.Single(space => space.SourceId == "work");
+                Dispatcher.UIThread.RunJobs();
+
+                await Assert.That(removeButton.IsEffectivelyEnabled).IsTrue();
+            }
+            finally
+            {
+                window?.Close();
+                configurationDisposable?.Dispose();
+                if (File.Exists(configPath))
+                {
+                    File.Delete(configPath);
+                }
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
     public async Task ConflictResolutionControl_ShowsFieldDecisionsAndDeleteSideAction()
     {
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));

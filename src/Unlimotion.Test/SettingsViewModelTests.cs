@@ -1126,6 +1126,37 @@ public class SettingsViewModelTests : IDisposable
     }
 
     [Test]
+    public async System.Threading.Tasks.Task ConflictResolutionMode_BlocksRemovingActiveTaskSpaceOnly()
+    {
+        var backupService = new FakeRemoteBackupService
+        {
+            ConflictStatus = new BackupConflictStatus(true, new List<BackupConflictFile>())
+        };
+        IConfigurationRoot configuration = CreateConfiguration();
+        var settings = new SettingsViewModel(configuration, backupService);
+
+        settings.ReloadTaskSpaces(
+        [
+            new TaskSourceDescriptor { Id = "personal", DisplayName = "Personal", Kind = TaskSourceKind.File },
+            new TaskSourceDescriptor { Id = "work", DisplayName = "Work", Kind = TaskSourceKind.File }
+        ],
+        "personal");
+
+        await Assert.That(settings.IsConflictResolutionMode).IsTrue();
+        await Assert.That(settings.SelectedTaskSpace?.IsActive).IsTrue();
+        await Assert.That(settings.CanRemoveTaskSpace).IsFalse();
+
+        settings.SelectedTaskSpace = settings.TaskSpaces.Single(space => space.SourceId == "work");
+
+        await Assert.That(settings.CanRemoveTaskSpace).IsTrue();
+
+        settings.SelectedTaskSpace = settings.TaskSpaces.Single(space => space.SourceId == "personal");
+        settings.CompleteConflictResolution();
+
+        await Assert.That(settings.CanRemoveTaskSpace).IsTrue();
+    }
+
+    [Test]
     public async System.Threading.Tasks.Task ReloadGitMetadata_FillsEmptyRepositoryUrlFromSelectedRemote()
     {
         var backupService = new FakeRemoteBackupService
