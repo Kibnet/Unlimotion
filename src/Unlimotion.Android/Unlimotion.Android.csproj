@@ -5,6 +5,7 @@
 		<LangVersion>latest</LangVersion>
     <SupportedOSPlatformVersion>23</SupportedOSPlatformVersion>
     <Nullable>enable</Nullable>
+    <FdroidBuild Condition="'$(FdroidBuild)' == ''">false</FdroidBuild>
 		<ApplicationId>com.Kibnet.Unlimotion</ApplicationId>
     <ApplicationVersion>1</ApplicationVersion>
     <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
@@ -26,6 +27,19 @@
     <ZipAlignToolExe Condition="Exists('/data/data/com.termux/files/usr/bin/zipalign')">zipalign</ZipAlignToolExe>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(FdroidBuild)' == 'true'">
+    <DefineConstants>$(DefineConstants);FDROID_BUILD</DefineConstants>
+    <RuntimeIdentifiers>android-arm64</RuntimeIdentifiers>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(FdroidBuild)' == 'true'">
+    <Compile Remove="Services\AndroidApplicationUpdateService.cs" />
+    <AndroidResource Remove="Resources\xml\apk_file_paths.xml" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(FdroidBuild)' != 'true'">
+    <AndroidManifestOverlay Include="Properties\AndroidManifest.Updater.xml" />
+  </ItemGroup>
 
   <ItemGroup>
     <AndroidAsset Include="Assets\cacert.pem" />

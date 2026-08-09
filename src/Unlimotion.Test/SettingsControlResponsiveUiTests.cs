@@ -200,6 +200,47 @@ public class SettingsControlResponsiveUiTests
     }
 
     [Test]
+    public async Task SettingsControl_UpdateSection_DisablesActions_WhenUpdateServiceIsUnavailable()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var settings = fixture.MainWindowViewModelTest.Settings;
+                settings.ConfigureUpdateService(null);
+                var view = new SettingsControl
+                {
+                    DataContext = settings
+                };
+
+                window = CreateWindow(view, 720, 800);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var statusText = FindControlByAutomationId<TextBlock>(view, "UpdateStatusText");
+                var checkButton = FindControlByAutomationId<Button>(view, "CheckForUpdatesButton");
+                var downloadButton = FindControlByAutomationId<Button>(view, "DownloadUpdateButton");
+                var applyButton = FindControlByAutomationId<Button>(view, "ApplyUpdateButton");
+
+                await Assert.That(settings.UpdateState).IsEqualTo(ApplicationUpdateState.Unsupported);
+                await Assert.That(statusText.Text).IsEqualTo(settings.UpdateStatusText);
+                await Assert.That(checkButton.IsEnabled).IsFalse();
+                await Assert.That(downloadButton.IsEnabled).IsFalse();
+                await Assert.That(applyButton.IsEnabled).IsFalse();
+            }
+            finally
+            {
+                window?.Close();
+                await fixture.CleanTasksAsync();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
     public async Task SettingsControl_UpdateAutoCheckSettings_UpdateViewModelFromControls()
     {
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));

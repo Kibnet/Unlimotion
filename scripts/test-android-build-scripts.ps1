@@ -8,6 +8,14 @@ $buildOpenSslScript = Get-Content -Raw (Join-Path $PSScriptRoot 'build-openssl-a
 $packScript = Get-Content -Raw (Join-Path $PSScriptRoot 'pack-libgit2sharp-nativebinaries-android.sh')
 $nugetConfig = Get-Content -Raw (Join-Path $rootDir 'src\nuget.config')
 $androidProject = Get-Content -Raw (Join-Path $rootDir 'src\Unlimotion.Android\Unlimotion.Android.csproj')
+$androidManifest = Get-Content -Raw (Join-Path $rootDir 'src\Unlimotion.Android\Properties\AndroidManifest.xml')
+$androidUpdaterManifestPath = Join-Path $rootDir 'src\Unlimotion.Android\Properties\AndroidManifest.Updater.xml'
+$androidUpdaterManifest = if (Test-Path -LiteralPath $androidUpdaterManifestPath) {
+    Get-Content -Raw -LiteralPath $androidUpdaterManifestPath
+} else {
+    ''
+}
+$androidMainActivity = Get-Content -Raw (Join-Path $rootDir 'src\Unlimotion.Android\MainActivity.cs')
 $gitattributes = Get-Content -Raw (Join-Path $rootDir '.gitattributes')
 $workflow = Get-Content -Raw (Join-Path $rootDir '.github\workflows\android-packaging.yml')
 $submoduleGitFile = Join-Path $rootDir '.native\libgit2-src\.git'
@@ -148,6 +156,17 @@ Assert-Match $packScript 'Compress-Archive' 'pack-libgit2sharp-nativebinaries-an
 
 Assert-Match $nugetConfig '\.\./artifacts/nuget-local' 'src/nuget.config must reference repo-local NuGet feed.'
 Assert-Match $androidProject '<RuntimeIdentifiers>android-arm64;android-x64</RuntimeIdentifiers>' 'Unlimotion.Android.csproj must build both arm64 and x64 Android runtimes.'
+Assert-Match $androidProject '<FdroidBuild Condition="''\$\(FdroidBuild\)'' == ''''">false</FdroidBuild>' 'Unlimotion.Android.csproj must keep the F-Droid build switch disabled by default.'
+Assert-Match $androidProject '<PropertyGroup Condition="''\$\(FdroidBuild\)'' == ''true''">[\s\S]*<DefineConstants>\$\(DefineConstants\);FDROID_BUILD</DefineConstants>[\s\S]*<RuntimeIdentifiers>android-arm64</RuntimeIdentifiers>' 'Unlimotion.Android.csproj must define the F-Droid compiler symbol and default to arm64.'
+Assert-Match $androidProject '<Compile Remove="Services\\AndroidApplicationUpdateService\.cs" />' 'The F-Droid build must exclude AndroidApplicationUpdateService from compilation.'
+Assert-Match $androidProject '<AndroidResource Remove="Resources\\xml\\apk_file_paths\.xml" />' 'The F-Droid build must exclude the updater FileProvider paths resource.'
+Assert-Match $androidProject '<AndroidManifestOverlay Include="Properties\\AndroidManifest\.Updater\.xml" />' 'The standard Android build must include the updater manifest overlay.'
+Assert-NotMatch $androidManifest 'android\.permission\.REQUEST_INSTALL_PACKAGES' 'The store-neutral base Android manifest must not request package installation permission.'
+Assert-NotMatch $androidManifest 'androidx\.core\.content\.FileProvider' 'The store-neutral base Android manifest must not declare the updater FileProvider.'
+Assert-Match $androidUpdaterManifest 'android\.permission\.REQUEST_INSTALL_PACKAGES' 'The standard updater overlay must request package installation permission.'
+Assert-Match $androidUpdaterManifest 'androidx\.core\.content\.FileProvider' 'The standard updater overlay must declare the updater FileProvider.'
+Assert-Match $androidMainActivity '#if !FDROID_BUILD[\s\S]*using Unlimotion\.Android\.Services;[\s\S]*#endif' 'MainActivity must not reference the updater namespace in F-Droid builds.'
+Assert-Match $androidMainActivity '#if FDROID_BUILD[\s\S]*App\.ConfigureUpdateService\(null\);[\s\S]*#else[\s\S]*App\.ConfigureUpdateService\(new AndroidApplicationUpdateService\(this\)\);[\s\S]*#endif' 'MainActivity must register the updater only for standard Android builds.'
 Assert-Match $androidProject '<AndroidEnableAssemblyCompression>true</AndroidEnableAssemblyCompression>' 'Unlimotion.Android.csproj must keep Android assembly compression enabled so libxamarin-app.so exports runtime symbols required by libmonodroid.so.'
 Assert-NotMatch $androidProject '<AndroidEnableAssemblyCompression>false</AndroidEnableAssemblyCompression>' 'Unlimotion.Android.csproj must not disable Android assembly compression because published APKs fail before startup on device.'
 Assert-Match $androidProject '<AndroidEnableMarshalMethods>false</AndroidEnableMarshalMethods>' 'Unlimotion.Android.csproj must keep static Java callable wrapper registration because marshal-method registration leaves MainActivity native callbacks unregistered on device.'
