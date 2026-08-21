@@ -1,0 +1,11 @@
+Unlimotion is a local-first task manager for planning work as a connected graph instead of a flat checklist.
+
+Key features:
+• unlimited levels of task nesting;
+• execution chains based on blocking dependencies;
+• the same task can belong to several parent tasks;
+• task statuses, completion criteria, planning dates and roadmap views;
+• task data is stored on your device;
+• optional Git-backed storage can be configured by the user.
+
+The F-Droid build does not contain Unlimotion's GitHub APK self-updater. Android updates for this build are delivered by F-Droid.

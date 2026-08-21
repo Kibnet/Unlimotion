@@ -1,0 +1,1 @@
+Local-first task manager with nesting and dependencies

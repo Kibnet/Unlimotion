@@ -39,6 +39,11 @@
 
   <ItemGroup Condition="'$(FdroidBuild)' != 'true'">
     <AndroidManifestOverlay Include="Properties\AndroidManifest.Updater.xml" />
+    <AndroidNativeLibrary Include="$(PkgLibGit2Sharp_NativeBinaries)\runtimes\android-x64\native\libcrypto.so.3" />
+    <AndroidNativeLibrary Include="$(PkgLibGit2Sharp_NativeBinaries)\runtimes\android-x64\native\libcrypto.so" />
+    <AndroidNativeLibrary Include="$(PkgLibGit2Sharp_NativeBinaries)\runtimes\android-x64\native\libssl.so.3" />
+    <AndroidNativeLibrary Include="$(PkgLibGit2Sharp_NativeBinaries)\runtimes\android-x64\native\libssl.so" />
+    <AndroidNativeLibrary Include="$(PkgLibGit2Sharp_NativeBinaries)\runtimes\android-x64\native\libssh2.so" />
   </ItemGroup>
 
   <ItemGroup>
@@ -51,11 +56,6 @@
     <AndroidNativeLibrary Include="$(PkgLibGit2Sharp_NativeBinaries)\runtimes\android-arm64\native\libssl.so.3" />
     <AndroidNativeLibrary Include="$(PkgLibGit2Sharp_NativeBinaries)\runtimes\android-arm64\native\libssl.so" />
     <AndroidNativeLibrary Include="$(PkgLibGit2Sharp_NativeBinaries)\runtimes\android-arm64\native\libssh2.so" />
-    <AndroidNativeLibrary Include="$(PkgLibGit2Sharp_NativeBinaries)\runtimes\android-x64\native\libcrypto.so.3" />
-    <AndroidNativeLibrary Include="$(PkgLibGit2Sharp_NativeBinaries)\runtimes\android-x64\native\libcrypto.so" />
-    <AndroidNativeLibrary Include="$(PkgLibGit2Sharp_NativeBinaries)\runtimes\android-x64\native\libssl.so.3" />
-    <AndroidNativeLibrary Include="$(PkgLibGit2Sharp_NativeBinaries)\runtimes\android-x64\native\libssl.so" />
-    <AndroidNativeLibrary Include="$(PkgLibGit2Sharp_NativeBinaries)\runtimes\android-x64\native\libssh2.so" />
   </ItemGroup>
 
   <ItemGroup>
@@ -67,7 +67,8 @@
   <ItemGroup>
     <PackageReference Include="Avalonia.Android" />
     <PackageReference Include="Xamarin.AndroidX.Core.SplashScreen" />
-    <PackageReference Include="LibGit2Sharp.NativeBinaries" GeneratePathProperty="true" />
+    <PackageReference Include="LibGit2Sharp.NativeBinaries" GeneratePathProperty="true" Condition="'$(FdroidBuild)' != 'true'" />
+    <PackageReference Include="LibGit2Sharp.NativeBinaries" VersionOverride="2.0.324-android.7.fdroid.1" GeneratePathProperty="true" Condition="'$(FdroidBuild)' == 'true'" />
   </ItemGroup>
 
   <ItemGroup>

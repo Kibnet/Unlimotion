@@ -179,6 +179,7 @@ Assert-Match $androidProject 'runtimes\\android-x64\\native\\libcrypto\.so' 'Unl
 Assert-Match $androidProject 'runtimes\\android-x64\\native\\libssl\.so\.3' 'Unlimotion.Android.csproj must explicitly package Android x64 libssl.so.3.'
 Assert-Match $androidProject 'runtimes\\android-x64\\native\\libssl\.so' 'Unlimotion.Android.csproj must explicitly package Android x64 libssl.so.'
 Assert-Match $androidProject 'runtimes\\android-x64\\native\\libssh2\.so' 'Unlimotion.Android.csproj must explicitly package Android x64 libssh2.so.'
+Assert-Match $androidProject '<ItemGroup Condition="''\$\(FdroidBuild\)'' != ''true''">[\s\S]*runtimes\\android-x64\\native' 'Unlimotion.Android.csproj must keep x64 native libraries out of the arm64-only F-Droid build.'
 Assert-Match $gitattributes '(?m)^\*\.sh\s+text\s+eol=lf\s*$' '.gitattributes must pin shell scripts to LF line endings.'
 Assert-Match $workflow 'ANDROID_PLATFORM:\s+android-36' 'android-packaging workflow must install Android platform 36 for the current .NET Android workload.'
 Assert-Match $workflow 'dotnet workload install android --skip-manifest-update' 'android-packaging workflow must skip workload manifest updates to keep Android CI setup fast and reproducible.'

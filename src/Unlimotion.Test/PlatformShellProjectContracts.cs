@@ -34,8 +34,26 @@ internal static class PlatformShellProjectContracts
         await Assert.That(packageReferences).Contains("Xamarin.AndroidX.Core.SplashScreen");
         await Assert.That(packageReferences).Contains("LibGit2Sharp.NativeBinaries");
 
-        var nativeBinariesReference = GetItem(project, "PackageReference", "LibGit2Sharp.NativeBinaries");
-        await Assert.That(nativeBinariesReference.Attribute("GeneratePathProperty")?.Value).IsEqualTo("true");
+        var nativeBinariesReferences = GetItems(project, "PackageReference", "LibGit2Sharp.NativeBinaries");
+        await Assert.That(nativeBinariesReferences.Count).IsEqualTo(2);
+        await Assert.That(nativeBinariesReferences.All(reference =>
+            string.Equals(reference.Attribute("GeneratePathProperty")?.Value, "true", StringComparison.Ordinal))).IsTrue();
+
+        var fdroidNativeBinariesReference = nativeBinariesReferences.Single(reference =>
+            reference.Attribute("VersionOverride") != null);
+        await Assert.That(fdroidNativeBinariesReference.Attribute("VersionOverride")?.Value)
+            .IsEqualTo("2.0.324-android.7.fdroid.1");
+        await Assert.That(fdroidNativeBinariesReference.Attribute("Condition")?.Value)
+            .IsEqualTo("'$(FdroidBuild)' == 'true'");
+
+        var sharedUiProject = LoadProject("src/Unlimotion/Unlimotion.csproj");
+        var nodifyReferences = GetItems(sharedUiProject, "PackageReference", "NodifyAvalonia");
+        await Assert.That(nodifyReferences.Count).IsEqualTo(2);
+        var fdroidNodifyReference = nodifyReferences.Single(reference => reference.Attribute("VersionOverride") != null);
+        await Assert.That(fdroidNodifyReference.Attribute("VersionOverride")?.Value)
+            .IsEqualTo("6.6.0-unlimotion.a12.1.fdroid.1");
+        await Assert.That(fdroidNodifyReference.Attribute("Condition")?.Value)
+            .IsEqualTo("'$(FdroidBuild)' == 'true'");
 
         var nativeLibraries = GetIncludeValues(project, "AndroidNativeLibrary");
         foreach (var rid in new[] { "android-arm64", "android-x64" })
@@ -148,12 +166,13 @@ internal static class PlatformShellProjectContracts
             .ToHashSet(StringComparer.Ordinal);
     }
 
-    private static XElement GetItem(XDocument project, string itemName, string include)
+    private static IReadOnlyList<XElement> GetItems(XDocument project, string itemName, string include)
     {
         return project
             .Descendants()
-            .Single(element =>
+            .Where(element =>
                 element.Name.LocalName == itemName &&
-                string.Equals(element.Attribute("Include")?.Value, include, StringComparison.Ordinal));
+                string.Equals(element.Attribute("Include")?.Value, include, StringComparison.Ordinal))
+            .ToArray();
     }
 }

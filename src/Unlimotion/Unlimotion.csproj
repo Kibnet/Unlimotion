@@ -73,7 +73,8 @@
 		<PackageReference Include="Avalonia.Themes.Fluent" />
 		<PackageReference Include="Avalonia.Fonts.Inter" />
 		<PackageReference Include="ReactiveUI.Avalonia" />
-		<PackageReference Include="NodifyAvalonia" />
+		<PackageReference Include="NodifyAvalonia" Condition="'$(FdroidBuild)' != 'true'" />
+		<PackageReference Include="NodifyAvalonia" VersionOverride="6.6.0-unlimotion.a12.1.fdroid.1" Condition="'$(FdroidBuild)' == 'true'" />
 		<PackageReference Include="LibGit2Sharp" />
 		<PackageReference Include="Quartz" />
 		<PackageReference Include="ServiceStack.Client" />

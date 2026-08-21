@@ -1,0 +1,4 @@
+Initial F-Droid-compatible Android release.
+
+• The F-Droid build has no APK self-updater.
+• Android native libraries and the customized Nodify package can be rebuilt from pinned public source revisions.
