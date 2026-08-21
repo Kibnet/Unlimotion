@@ -5,6 +5,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $rootDir = Split-Path -Parent $PSScriptRoot
+$expectedSourceCommit = '1289a92f3df58ff6dab0b1cd82e547b4bd44c128'
 $expectedNodifyCommit = 'a8c9a96c80bc5e666aa34c9d3ce5947376e37722'
 $expectedLibgit2Commit = '155578578b78efc6bae7383a708d470eb206e36a'
 $expectedOpenSslSha256 = '617e29af8e421f46649484a4937e48c685e47f46488167c982f88bc4ec1d522f'
@@ -184,7 +185,7 @@ if (-not $SkipRecipe) {
     Assert-Match $recipe 'Repo:\s+https://github\.com/Kibnet/Unlimotion\.git' 'F-Droid recipe must point to the public Unlimotion repository.'
     Assert-Match $recipe 'versionName:\s+1\.28\.0' 'F-Droid recipe must define versionName 1.28.0.'
     Assert-Match $recipe 'versionCode:\s+1028000' 'F-Droid recipe must define versionCode 1028000.'
-    Assert-Match $recipe 'commit:\s+[0-9a-f]{40}\s' 'F-Droid recipe must pin a full source commit SHA.'
+    Assert-Match $recipe ("commit:\s+" + [regex]::Escape($expectedSourceCommit) + "\s") 'F-Droid recipe must pin the reviewed source commit exactly.'
     Assert-Match $recipe 'submodules:\s+true' 'F-Droid recipe must initialize pinned source submodules.'
     Assert-Match $recipe 'scandelete:[\s\S]*libgit2-3f4182d\.so' 'F-Droid recipe must scanner-delete the tracked native library.'
     Assert-Match $recipe 'rm:[\s\S]*NodifyAvalonia\.6\.6\.0-unlimotion\.a12\.1\.nupkg[\s\S]*\.native/libgit2-src/tests[\s\S]*\.native/libgit2-src/fuzzers[\s\S]*\.native/libgit2-src/package\.json' 'F-Droid recipe must remove the unused tracked package, libgit2 fixtures, and its unlocked Node manifest before scanning.'
@@ -192,6 +193,7 @@ if (-not $SkipRecipe) {
     Assert-Match $recipe ([regex]::Escape($expectedDotnetSha512)) 'F-Droid recipe must verify the exact .NET 10.0.100 SDK archive.'
     Assert-Match $recipe 'AutoUpdateMode:\s+None' 'Initial F-Droid recipe must keep automatic updates disabled.'
     Assert-Match $recipe 'UpdateCheckMode:\s+None' 'Initial F-Droid recipe must avoid ambiguous historical tags.'
+    Assert-Match $runbook ([regex]::Escape($expectedSourceCommit)) 'F-Droid runbook must identify the exact source commit used by the recipe.'
 }
 
 Write-Output 'F-Droid publication contracts passed.'

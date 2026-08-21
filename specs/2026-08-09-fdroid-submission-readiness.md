@@ -15,10 +15,12 @@
   - https://f-droid.org/en/docs/Build_Metadata_Reference/
   - https://f-droid.org/en/docs/Inclusion_Policy/
   - https://gitlab.com/fdroid/fdroiddata/blob/master/CONTRIBUTING.md
+  - https://github.com/libgit2/libgit2/security/advisories/GHSA-j2v7-4f6v-gpg8
+  - https://openssl-library.org/news/vulnerabilities-3.0/
   - https://github.com/Kibnet/nodify-avalonia/tree/codex/avalonia-12-support
 
 ## 1. Overview / Цель
-Подготовить минимальный, проверяемый набор upstream-артефактов для отправки Unlimotion в F-Droid: source-only путь для локальных native/Nodify пакетов, Fastlane metadata, draft `fdroiddata` recipe и доказательство сборки в официальном F-Droid-окружении либо честный Request For Packaging (RFP) с воспроизводимым блокером.
+Подготовить минимальный, проверяемый набор upstream-артефактов для отправки Unlimotion в F-Droid: source-built замены локальных native/Nodify пакетов, Fastlane metadata, draft `fdroiddata` recipe и доказательство сборки в официальном F-Droid-окружении либо честный Request For Packaging (RFP) с воспроизводимым блокером. Остальные managed зависимости восстанавливаются через NuGet и остаются отдельным reviewer/BuildServer gate.
 
 Outcome contract:
 - Success means:
@@ -98,7 +100,7 @@ Updater-free APK уже существует, но F-Droid не может пр�
    - output into `artifacts/nuget-local` after pre-existing tracked package is removed by recipe.
 3. Native package:
    - build arm64-v8a only with NDK `27.2.12479018`;
-   - reuse pinned libgit2 submodule and source download checks already encoded for OpenSSL `3.0.14` and libssh2 `1.11.1`;
+   - использовать OpenSSL `3.0.21`, libssh2 `1.11.1` и официальный libgit2 `1.6.5` commit `155578578b78efc6bae7383a708d470eb206e36a`;
    - generate a minimal `.nuspec` and `.nupkg` containing only required `runtimes/android-arm64/native/*` entries;
    - never download/extract upstream `LibGit2Sharp.NativeBinaries.*.nupkg` in the F-Droid entrypoint.
 4. Android build:
@@ -108,7 +110,7 @@ Updater-free APK уже существует, но F-Droid не может пр�
    - output one unsigned Release APK for F-Droid signing.
 5. Scanner recipe:
    - `submodules: true`;
-   - delete `libgit2-3f4182d.so` and tracked Nodify `.nupkg` with `scandelete` before build;
+   - удалить tracked root `libgit2-3f4182d.so` через `scandelete`, а старый Nodify `.nupkg`, libgit2 test/fuzzer fixtures и unlocked `package.json` — через `rm` до scanner-а;
    - no `scanignore`;
    - record exact full Unlimotion release commit SHA only after the local release commit exists.
 6. .NET provisioning:
@@ -154,7 +156,7 @@ Updater-free APK уже существует, но F-Droid не может пр�
 | Android versionCode | agent | `1028000` deterministic semantic mapping | 0.88 | Different channel uses another sequence | Нет; F-Droid signing/channel independent |
 | Architecture | agent | arm64 only | 0.98 | x64 users excluded | Нет; agreed previous spec/minimal F-Droid path |
 | Nodify provenance | agent | pinned public fork as submodule | 0.96 | Fork remains maintenance burden | Нет |
-| Tracked package handling | agent | retain for standard builds, `scandelete` in F-Droid | 0.92 | Reviewer may request upstream removal | Нет; safer compatibility default |
+| Tracked package handling | agent | retain for standard builds, `rm` in F-Droid recipe | 0.92 | Reviewer may request upstream removal | Нет; safer compatibility default |
 | Automatic updates | agent | disabled initially | 0.95 | Manual metadata updates needed | Нет; avoids wrong historical tag |
 | MR vs RFP | agent | evidence-driven branch | 0.99 | RFP is slower than buildable MR | Нет; prevents false claim |
 | External publication actions | user | separate explicit approval | 1.00 | Without approval nothing is published externally | Нет для EXEC; Да before delivery phase |
@@ -204,10 +206,10 @@ Updater-free APK уже существует, но F-Droid не может пр�
 
 ## 11. Тестирование и критерии приёмки
 ### Acceptance Criteria
-- AC-1: source-only entrypoint собирает unsigned arm64 APK с `1.28.0`/`1028000` и `FdroidBuild=true`.
+- AC-1: F-Droid entrypoint с source-built Nodify/native replacements собирает unsigned arm64 APK с `1.28.0`/`1028000` и `FdroidBuild=true`.
 - AC-2: APK/manifest не содержит updater service, `REQUEST_INSTALL_PACKAGES`, update `FileProvider`, update URL/assembly markers; standard build сохраняет updater contract.
 - AC-3: Fastlane EN/RU metadata полна, assets читаемы, changelog соответствует versionCode.
-- AC-4: recipe использует full commit SHA, `submodules: true`, `scandelete` для tracked binaries, не содержит `scanignore` и готовых-package downloads; Nodify gitlink exact.
+- AC-4: recipe использует exact full commit SHA, `submodules: true`, явные `rm`/`scandelete`, не содержит `scanignore` и готовых-package downloads; Nodify/libgit2 gitlinks exact.
 - AC-5: официальный BuildServer/server-mode PoC имеет PASS либо сохранённый точный failure log и готовый RFP payload; неизвестный результат не допускается.
 - AC-6: runbook объясняет подпись, сроки 24–48h после merge как ориентир, MR-vs-RFP и external approval gate.
 - AC-7: affected tests, full `Unlimotion.Test`, full headless UI suite, `git diff --check` проходят после всех изменений.
@@ -252,7 +254,7 @@ Stop rules для validation:
 - F-Droid reviewer может не принять скачиваемый .NET SDK или NuGet dependency model из-за отсутствия precedent; mitigation — exact hashes, FOSS licenses, server PoC и RFP fallback.
 - `latestPatch` может остановить локальный build на машине без stable 10.0.1xx; это намеренный fail-fast, не повод вернуть preview roll-forward.
 - Nodify submodule может усложнить clone; recipe и runbook используют recursive submodules и exact SHA assertion.
-- Tracked local Nodify package остаётся в upstream source; `scandelete` допустим, но reviewer может попросить удалить его полностью. Это accepted follow-up, потому что немедленное удаление ломает существующие локальные сборки.
+- Tracked local Nodify package остаётся в upstream source; recipe удаляет его через `rm`, но reviewer может попросить удалить его полностью из upstream. Это accepted follow-up, потому что немедленное удаление ломает существующие локальные сборки.
 - Native library/SDK downloads должны иметь pinned version/hash; любой floating URL/hash является blocker.
 - F-Droid signature конфликтует с upstream signature; migration warning обязателен.
 - Existing historical tags мешают safe AutoUpdateMode; initial manual update is intentional.
@@ -428,12 +430,40 @@ Stop rules для validation:
 - Residual risks / follow-ups: F-Droid может потребовать иной способ provisioning .NET/NuGet или полную source сборку зависимостей; это определяется reviewer-ом/RFP.
 
 ### Post-EXEC Review
-- Статус: Не выполнен до EXEC
-- Scope reviewed: будет заполнено после реализации и fresh validation.
-- Decision: Не применимо до EXEC.
+- Статус: ASK-HUMAN
+- Scope reviewed: commits `94e4ae2f`..`1289a92f`, текущий recipe/runbook diff, source package contents, Fastlane metadata, official fdroidserver `readmeta`/`lint`/`scanner` output, TUnit и headless evidence.
+- Decision: локальная подготовка и draft recipe готовы к commit, но не к заявлению BuildServer PASS. Для следующего delivery evidence нужен отдельный внешний gate: push source commit `1289a92f...`, затем public-source scanner и `fdroid build --server`.
+- Review passes:
+  - Scope/Evidence pass: PASS — изменения ограничены build/compliance/metadata, UI и standard updater behavior не менялись.
+  - Contract pass: PASS — exact SDK/source/archive/package versions, arm64-only F-Droid path, no signing secrets, no `scanignore`, manual update mode и external approval gate формализованы.
+  - Adversarial risk pass: PASS после fixes — review обнаружил vulnerable libgit2 `1.6.4` и устаревший OpenSSL `3.0.14`; source pins обновлены до official libgit2 `1.6.5` и OpenSSL `3.0.21`. Reviewer sandbox не был технически read-only, поэтому этот проход считается adversarial fallback, а не независимым read-only approval.
+  - Scanner pass: PASS для local-mounted source — найденные ранее libgit2 test/fuzzer fixtures и unlocked `package.json` перенесены в `rm`, tracked root `.so` остаётся в `scandelete`; `scanignore` отсутствует. Public-source повтор остаётся после push.
+  - Regression pass: BLOCKED для full-green gate — affected Android project contract `1/1` и отдельный `Unlimotion.UiTests.Headless` `36/36` прошли; полный TUnit дал `829/832`, а `RoadmapGraphUiTests` — `44/47`. Три одинаковых межтестовых сбоя (`Collection was modified`/dispatcher ownership) прошли изолированно `1/1` каждый, но это не превращает общий suite в PASS.
+  - Build evidence pass: ASK-HUMAN — OpenSSL/libssh2/libgit2, native package `2.0.324-android.7.fdroid.2` и Nodify package собраны из закреплённых исходников; fresh APK не получен на host из-за `NETSDK1147` для отсутствующего/рассинхронизированного `wasm-tools` workload, а официальный server-mode нельзя честно запустить до публикации source SHA.
+- Evidence inspected:
+  - source commit `1289a92f3df58ff6dab0b1cd82e547b4bd44c128` и submodules `155578578b78efc6bae7383a708d470eb206e36a`/`a8c9a96c80bc5e666aa34c9d3ce5947376e37722`;
+  - source-built nupkg contents: Nodify managed output и NativeBinaries только `runtimes/android-arm64/native`, без x64;
+  - `test-fdroid-publication.ps1`, `test-android-build-scripts.ps1`, targeted/full TUnit и headless logs;
+  - актуальный `fdroiddata` master `f6dcb517...` от 2026-08-21;
+  - official fdroidserver container: `readmeta` exit 0, exact upstream recipe `lint` exit 0, local mounted source scanner exit 0 без problems;
+  - ожидаемый public-source scanner blocker до push: source commit `1289a92f...` отсутствует в public GitHub repository.
+- Fixed before continuing:
+  - отдельные Nodify `*.fdroid.1` и native `*.fdroid.2` package versions исключили конфликт с tracked standard package/cache;
+  - libgit2 переведён с vulnerable fork commit на official security-fixed v1.6.5; Android compatibility patch хранится явно, применяется временно и снимается даже при ошибке;
+  - OpenSSL обновлён до `3.0.21` с exact SHA-256;
+  - x64 native items оставлены только в standard path;
+  - libgit2 `tests`, `fuzzers`, unlocked `package.json` и tracked old Nodify nupkg удаляются через `rm`; tracked root `.so` — через `scandelete`;
+  - recipe использует категорию `Writing`, exact source commit `1289a92f...`, exact SDK SHA-512 и explicit `None` update modes.
+- Needs human: разрешение на push ветки/source commit. Tag/release/MR/RFP остаются отдельными внешними действиями и не подразумеваются разрешением на push, если пользователь не назовёт их явно.
+- Residual risks / follow-ups:
+  - F-Droid reviewer может не принять provisioning .NET SDK/workloads или NuGet-managed dependencies; тогда требуется RFP с server log;
+  - `fdroid build --server` и свежий APK/manifest proof остаются обязательными после push;
+  - full-green gate заблокирован межтестовой изоляцией трёх существующих `RoadmapGraphUiTests`; исправление не включено в минимальную publication scope;
+  - reused landscape screenshots валидны как PNG metadata, но reviewer может запросить нативные phone screenshots;
+  - F-Droid signature несовместима с GitHub release signature; migration warning находится в runbook.
 
 ## Approval
-Ожидается фраза: "Спеку подтверждаю"
+Получено 2026-08-21: пользователь написал точную фразу «Спеку подтверждаю».
 
 ## 20. Журнал действий агента
 | Фаза (SPEC/EXEC) | Тип намерения/сценария | Уверенность в решении (0.0-1.0) | Каких данных не хватает | Следующее действие | Нужна ли передача управления/решения человеку | Было ли фактическое обращение к человеку / решение человека | Короткое объяснение выбора | Затронутые артефакты/файлы |
@@ -445,9 +475,14 @@ Stop rules для validation:
 | SPEC | Post-SPEC review | 0.97 | Exact user approval | Остановиться и запросить фразу | Да | Нет | QUEST gate обязателен для новой итерации | эта спека |
 | EXEC | Approval gate | 1.00 | Нет | Начать test-first implementation | Нет | Да: пользователь написал «Спеку подтверждаю» 2026-08-21 | Получено точное обязательное подтверждение | эта спека |
 | EXEC | Expected red contracts | 0.99 | Нет | Реализовать pinned source и публикационные артефакты | Нет | Нет | `test-fdroid-publication.ps1 -SkipRecipe` ожидаемо остановился на отсутствующем Nodify submodule | `scripts/test-fdroid-publication.ps1` |
-| EXEC | Source-only dependencies | 0.98 | Official BuildServer verdict | Собрать recipe после фиксации полного source commit SHA | Нет | Нет | Nodify `a8c9a96c...` и libgit2 `8843a5e...` закреплены; source-only пакеты `*.fdroid.1` собраны без загрузки готовых nupkg | `.gitmodules`, `.native/*`, `scripts/pack-*-fdroid.sh`, Android/shared csproj |
+| EXEC | Source-built custom dependencies | 0.98 | Official BuildServer verdict | Собрать recipe после фиксации полного source commit SHA | Нет | Нет | Nodify `a8c9a96c...` и libgit2 `15557857...` закреплены; пакеты `*.fdroid.1`/`*.fdroid.2` собраны без загрузки готовых nupkg | `.gitmodules`, `.native/*`, `scripts/pack-*-fdroid.sh`, Android/shared csproj |
 | EXEC | Build orchestration and metadata | 0.97 | Official scanner/server verdict | Зафиксировать source commit, затем pin recipe на его полный SHA | Нет | Нет | Добавлены stable SDK guard, archive hashes, arm64 orchestration, EN/RU Fastlane metadata и безопасный delivery runbook | `global.json`, `scripts/build-fdroid-android.sh`, `fastlane/`, `fdroid/README.md` |
 | EXEC | Static and affected contracts | 0.99 | Нет | Продолжить regression и recipe validation | Нет | Нет | `test-fdroid-publication.ps1 -SkipRecipe`, `test-android-build-scripts.ps1` и Android project TUnit contract `1/1` прошли | scripts и `PlatformShellProjectContracts.cs` |
-| EXEC | Local source build | 0.93 | Чистый официальный Linux workload environment | Перенести APK proof в F-Droid buildserver после публикации source commit | Нет | Нет | OpenSSL/libssh2/libgit2 и оба локальных nupkg собраны; APK restore остановлен `NETSDK1147`, потому что локальный VS-манифест требует `MonoTargets 10.0.11`, а установлен pack `10.0.10`; глобальный workload не ремонтировался | source build log, `artifacts/nuget-local/` (ignored) |
-| EXEC | Full regression | 0.96 | Нет | Запустить Post-EXEC review после recipe checks | Нет | Нет | Full TUnit: `831/832`, один Avalonia dispatcher race; isolated retry той же parameterized method `3/3`; отдельный headless UI suite `36/36` | TUnit/HTML reports under ignored `TestResults/` |
+| EXEC | Local source build | 0.93 | Чистый официальный Linux workload environment | Перенести APK proof в F-Droid buildserver после публикации source commit | Нет | Нет | OpenSSL 3.0.21/libssh2/libgit2 1.6.5 и оба локальных nupkg собраны; APK restore остановлен `NETSDK1147` для `wasm-tools`; глобальный workload не ремонтировался | source build log, `artifacts/nuget-local/` (ignored) |
+| EXEC | Security review remediation | 0.99 | Official BuildServer verdict | Обновить recipe на новый source commit | Нет | Нет | Adversarial review обнаружил libgit2 1.6.4 GHSA и устаревший OpenSSL 3.0.14; обновлено до official libgit2 1.6.5 и OpenSSL 3.0.21, native package bumped to `.fdroid.2` | submodule, native scripts, explicit Android patch |
+| EXEC | Full regression | 0.94 | Причина общей headless изоляции вне publication scope | Не заявлять full-green; сохранить точное evidence | Нет | Нет | Full TUnit `829/832`, RoadmapGraph suite `44/47`; три одинаковых сбоя прошли изолированно `1/1` каждый; отдельный AppAutomation Headless `36/36` | TUnit/HTML reports under ignored `TestResults/` |
 | EXEC | Commit sequencing adjustment | 0.99 | Full SHA первого commit | Создать source commit, затем recipe commit | Нет | Нет | Recipe не может pin сам себя; поэтому source/build/metadata фиксируются первым commit, а draft recipe с его SHA — вторым логическим commit | git history, `fdroid/com.Kibnet.Unlimotion.yml` |
+| EXEC | Source commit | 1.00 | Нет | Pin recipe на полный SHA | Нет | Нет | Создан security-updated source commit `1289a92f3df58ff6dab0b1cd82e547b4bd44c128`; recipe и runbook закреплены на нём | git commit, recipe `commit` |
+| EXEC | Official metadata checks | 0.99 | Нет | Проверить source scanner | Нет | Нет | На актуальном `fdroiddata` official container: `readmeta` exit 0 и exact GitHub recipe `lint` exit 0; warning только о permissions временного `config.yml` | temp fdroiddata/container logs |
+| EXEC | Scanner remediation | 0.98 | Public commit availability | Зафиксировать recipe и запросить push approval | Нет | Нет | Первый реальный scan нашёл libgit2 fixtures/unlocked Node manifest; после `rm`/`scandelete` повторный local-mounted source scan завершился exit 0 без problems | `fdroid/com.Kibnet.Unlimotion.yml`, official scanner logs |
+| EXEC | External delivery gate | 1.00 | Разрешение на push; затем BuildServer verdict | Остановиться после локального commit и запросить отдельное разрешение | Да | Нет | Source SHA ещё не опубликован; public-source scanner, `fdroid build --server`, tag/release/MR/RFP до отдельного approval запрещены | runbook, Post-EXEC, git remote state |

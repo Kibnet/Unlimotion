@@ -33,7 +33,7 @@ VERSION_NAME=1.28.0 VERSION_CODE=1028000 \
 artifacts/fdroid/Unlimotion-1.28.0-1028000-android-arm64.apk
 ```
 
-Первый recipe закрепляется на отдельном source commit, содержащем build pipeline и Fastlane metadata. Будущий release tag `1.28.0` должен указывать именно на этот source commit; более поздний commit с самим upstream-черновиком recipe остаётся delivery-документацией и не входит в собираемый source snapshot.
+Первый recipe закреплён на source commit `1289a92f3df58ff6dab0b1cd82e547b4bd44c128`, содержащем build pipeline, security-fixed native pins и Fastlane metadata. Будущий release tag `1.28.0` должен указывать именно на этот commit; более поздний commit с самим upstream-черновиком recipe остаётся delivery-документацией и не входит в собираемый source snapshot.
 
 ## Проверка через fdroidserver
 
