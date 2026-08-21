@@ -14,9 +14,11 @@ LIBSSH2_ARCHIVE="$ROOT_DIR/artifacts/android-native/libssh2-$LIBSSH2_VERSION-and
 FDROID_ARTIFACTS_DIR="${FDROID_ARTIFACTS_DIR:-$ROOT_DIR/artifacts/fdroid}"
 NUGET_LOCAL_FEED="$ROOT_DIR/artifacts/nuget-local"
 NUGET_CONFIG="$ROOT_DIR/src/nuget.config"
+ANDROID_SDK_DIR="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
 OUTPUT_APK="$FDROID_ARTIFACTS_DIR/Unlimotion-$VERSION_NAME-$VERSION_CODE-android-arm64.apk"
 
 export AVALONIA_TELEMETRY_OPTOUT=1
+export DOTNET_NUGET_SIGNATURE_VERIFICATION=true
 export NUGET_LOCAL_FEED
 
 if ! command -v dotnet >/dev/null 2>&1 && [ -x '/c/Program Files/dotnet/dotnet.exe' ]; then
@@ -65,6 +67,10 @@ if ! [[ "$VERSION_CODE" =~ ^[1-9][0-9]*$ ]]; then
   fail "VERSION_CODE must be an explicit positive integer, for example 1028000."
 fi
 
+if [ -z "$ANDROID_SDK_DIR" ]; then
+  fail "ANDROID_SDK_ROOT or ANDROID_HOME must point to the installed Android SDK."
+fi
+
 effective_sdk="$(dotnet --version)"
 if ! [[ "$effective_sdk" =~ ^10\.0\.1[0-9]{2}$ ]]; then
   fail "F-Droid build requires a stable .NET 10.0.1xx SDK, got $effective_sdk."
@@ -110,6 +116,7 @@ dotnet restore "$ANDROID_PROJECT" \
   --configfile "$NUGET_CONFIG" \
   --force \
   --no-cache \
+  -p:AndroidSdkDirectory="$ANDROID_SDK_DIR" \
   -p:FdroidBuild=true \
   -p:RuntimeIdentifier=android-arm64 \
   -p:RuntimeIdentifiers=android-arm64
@@ -118,6 +125,7 @@ dotnet build "$ANDROID_PROJECT" \
   --configuration Release \
   --no-restore \
   --target Rebuild \
+  -p:AndroidSdkDirectory="$ANDROID_SDK_DIR" \
   -p:FdroidBuild=true \
   -p:RuntimeIdentifier=android-arm64 \
   -p:RuntimeIdentifiers=android-arm64 \
