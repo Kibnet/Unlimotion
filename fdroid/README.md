@@ -33,7 +33,7 @@ VERSION_NAME=1.28.0 VERSION_CODE=1028000 \
 artifacts/fdroid/Unlimotion-1.28.0-1028000-android-arm64.apk
 ```
 
-Первый recipe закреплён на source commit `1289a92f3df58ff6dab0b1cd82e547b4bd44c128`, содержащем build pipeline, security-fixed native pins и Fastlane metadata. Будущий release tag `1.28.0` должен указывать именно на этот commit; более поздний commit с самим upstream-черновиком recipe остаётся delivery-документацией и не входит в собираемый source snapshot.
+Первый recipe закреплён на source commit `eb58cb7327471be2ca95b43338a437e77f1bcf4e`, содержащем build pipeline, security-fixed native pins, переподписанные ReactiveUI packages и Fastlane metadata. Будущий release tag `1.28.0` должен указывать именно на этот commit; более поздний commit с самим upstream-черновиком recipe остаётся delivery-документацией и не входит в собираемый source snapshot.
 
 ## Проверка через fdroidserver
 
@@ -46,6 +46,13 @@ fdroid build --server com.Kibnet.Unlimotion:1028000
 ```
 
 Обычный запуск Docker-контейнера или локальный `dotnet build` не считается эквивалентом успешного `fdroid build --server`.
+
+Проверка 2026-08-21 на официальном образе `registry.gitlab.com/fdroid/fdroidserver:buildserver`:
+
+- public-source `fdroid scanner` для `eb58cb7327471be2ca95b43338a437e77f1bcf4e` завершился без findings;
+- `fdroid build --on-server com.Kibnet.Unlimotion:1028000` выполнил buildserver-side recipe и создал unsigned APK размером `57418795` bytes с SHA-256 `a68f495886b36ae7a917a4aebef38229b1626f10a56fa0d5917525f29269d9a2`;
+- APK имеет package `com.Kibnet.Unlimotion`, version `1.28.0` (`1028000`), target SDK `36` и только ABI `arm64-v8a`; updater permission, `FileProvider` и `apk_file_paths` отсутствуют;
+- это сильный recipe/APK PoC, но не замена полному client-to-VM `fdroid build --server`: Docker client image не содержит Python-модуль `vagrant`, поэтому server orchestration нужно подтвердить в поддерживаемой F-Droid buildserver-среде или приложить этот результат к RFP.
 
 ## Выбор MR или RFP
 
@@ -72,6 +79,6 @@ Byte-for-byte reproducible build и использование upstream signing 
 
 ## Внешний delivery gate
 
-Push ветки, merge, tag `1.28.0`, GitHub Release, fork/MR в `fdroiddata` или отправка RFP выполняются только после отдельного подтверждения пользователя. Локальные проверки не дают разрешения на публикацию от его имени.
+Ветка `feat/fdroid-build-variant` опубликована после отдельного подтверждения пользователя. Merge, tag `1.28.0`, GitHub Release, fork/MR в `fdroiddata` или отправка RFP выполняются только после нового отдельного подтверждения. Локальные проверки не дают разрешения на публикацию от его имени.
 
 Даже после принятия metadata F-Droid указывает обычный срок появления приложения в каталоге около 24–48 часов после merge. Это ориентир внешнего сервиса, а не гарантия срока.

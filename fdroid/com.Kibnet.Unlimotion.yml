@@ -15,18 +15,19 @@ Repo: https://github.com/Kibnet/Unlimotion.git
 Builds:
   - versionName: 1.28.0
     versionCode: 1028000
-    commit: 1289a92f3df58ff6dab0b1cd82e547b4bd44c128
+    commit: eb58cb7327471be2ca95b43338a437e77f1bcf4e
     submodules: true
     timeout: 14400
     sudo:
       - apt-get update
-      - apt-get install -y ca-certificates curl git unzip zip cmake ninja-build make perl python3
+      - apt-get install -y ca-certificates curl git unzip zip cmake ninja-build make perl python3 libicu76
+      - sdkmanager --install --sdk_root=/opt/android-sdk 'platforms;android-36' 'build-tools;36.0.0' 'platform-tools'
       - curl -fL https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.100/dotnet-sdk-10.0.100-linux-x64.tar.gz -o /tmp/dotnet-sdk-10.0.100-linux-x64.tar.gz
       - echo 'f78dbac30c9af2230d67ff5c224de3a5dbf63f8a78d1c206594dedb80e6909d2cc8a9d865d5105c72c2fd2aa266fc0c6c77dedac60408cbccf272b116bd11b07  /tmp/dotnet-sdk-10.0.100-linux-x64.tar.gz' | sha512sum -c -
       - mkdir -p /opt/dotnet
       - tar -xzf /tmp/dotnet-sdk-10.0.100-linux-x64.tar.gz -C /opt/dotnet
       - ln -sf /opt/dotnet/dotnet /usr/local/bin/dotnet
-      - DOTNET_CLI_TELEMETRY_OPTOUT=1 dotnet workload install android wasm-tools --skip-manifest-update
+      - DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NUGET_SIGNATURE_VERIFICATION=true dotnet workload install android wasm-tools --skip-manifest-update
     scandelete:
       - libgit2-3f4182d.so
     rm:

@@ -5,7 +5,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $rootDir = Split-Path -Parent $PSScriptRoot
-$expectedSourceCommit = '1289a92f3df58ff6dab0b1cd82e547b4bd44c128'
+$expectedSourceCommit = 'eb58cb7327471be2ca95b43338a437e77f1bcf4e'
 $expectedNodifyCommit = 'a8c9a96c80bc5e666aa34c9d3ce5947376e37722'
 $expectedLibgit2Commit = '155578578b78efc6bae7383a708d470eb206e36a'
 $expectedOpenSslSha256 = '617e29af8e421f46649484a4937e48c685e47f46488167c982f88bc4ec1d522f'
@@ -132,6 +132,8 @@ Assert-Match $libgit2Patch 'defined\(__ANDROID__\)' 'libgit2 Android patch must 
 
 $buildScript = Get-Content -Raw (Join-Path $rootDir 'scripts/build-fdroid-android.sh')
 Assert-Match $buildScript 'AVALONIA_TELEMETRY_OPTOUT=1' 'F-Droid build must disable Avalonia build telemetry.'
+Assert-Match $buildScript 'DOTNET_NUGET_SIGNATURE_VERIFICATION=true' 'F-Droid build must keep NuGet package signature verification enabled.'
+Assert-Match $buildScript 'AndroidSdkDirectory="\$ANDROID_SDK_DIR"' 'F-Droid build must pass the installed Android SDK path explicitly to MSBuild.'
 Assert-Match $buildScript 'VERSION_NAME' 'F-Droid build must require an explicit versionName.'
 Assert-Match $buildScript 'VERSION_CODE' 'F-Droid build must require an explicit versionCode.'
 Assert-Match $buildScript 'FdroidBuild=true' 'F-Droid build must enable the updater-free build variant.'
@@ -191,6 +193,9 @@ if (-not $SkipRecipe) {
     Assert-Match $recipe 'rm:[\s\S]*NodifyAvalonia\.6\.6\.0-unlimotion\.a12\.1\.nupkg[\s\S]*\.native/libgit2-src/tests[\s\S]*\.native/libgit2-src/fuzzers[\s\S]*\.native/libgit2-src/package\.json' 'F-Droid recipe must remove the unused tracked package, libgit2 fixtures, and its unlocked Node manifest before scanning.'
     Assert-NotMatch $recipe 'scanignore:' 'F-Droid recipe must not hide scanner findings.'
     Assert-Match $recipe ([regex]::Escape($expectedDotnetSha512)) 'F-Droid recipe must verify the exact .NET 10.0.100 SDK archive.'
+    Assert-Match $recipe 'apt-get install[^\r\n]*\blibicu76\b' 'F-Droid recipe must install the Debian 13 ICU runtime required by .NET.'
+    Assert-Match $recipe "sdkmanager[^\r\n]*'platforms;android-36'[^\r\n]*'build-tools;36\.0\.0'[^\r\n]*'platform-tools'" 'F-Droid recipe must install the pinned Android SDK platform and build tools through the buildserver sdkmanager.'
+    Assert-Match $recipe 'DOTNET_NUGET_SIGNATURE_VERIFICATION=true[^\r\n]*dotnet workload install' 'F-Droid recipe must verify NuGet signatures while installing workloads.'
     Assert-Match $recipe 'AutoUpdateMode:\s+None' 'Initial F-Droid recipe must keep automatic updates disabled.'
     Assert-Match $recipe 'UpdateCheckMode:\s+None' 'Initial F-Droid recipe must avoid ambiguous historical tags.'
     Assert-Match $runbook ([regex]::Escape($expectedSourceCommit)) 'F-Droid runbook must identify the exact source commit used by the recipe.'

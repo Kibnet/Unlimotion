@@ -462,6 +462,29 @@ Stop rules для validation:
   - reused landscape screenshots валидны как PNG metadata, но reviewer может запросить нативные phone screenshots;
   - F-Droid signature несовместима с GitHub release signature; migration warning находится в runbook.
 
+### Post-EXEC Review Addendum: public source and buildserver-side APK
+- Статус: PASS для public scanner и buildserver-side recipe/APK PoC; ASK-HUMAN для tag/release/PR/fdroiddata MR/RFP и полного `fdroid build --server` orchestration.
+- Scope reviewed: опубликованная ветка `feat/fdroid-build-variant`, source commits `2bc0d06e` и `eb58cb73`, final draft recipe, public-source scanner, official buildserver `--on-server` output, APK manifest/ABI/signature evidence, fresh NuGet restore и headless UI regression.
+- Decision: draft recipe готов к внешнему F-Droid review payload. Нельзя называть доказанным полный client-to-VM `fdroid build --server`: официальный Docker client дошёл до server orchestration, но остановился на отсутствующем Python-модуле `vagrant`; успешный `--on-server` исполняет buildserver-side path, но не доказывает транспорт/VM lifecycle.
+- Review passes:
+  - Public source pass: PASS — `fdroid scanner` получил `eb58cb7327471be2ca95b43338a437e77f1bcf4e` из GitHub, инициализировал submodules, применил `rm`/`scandelete` и завершился `Finished`, exit `0`, без findings.
+  - Metadata pass: PASS — final recipe совпадает с temporary `fdroiddata` metadata по SHA-256; official `fdroid lint` exit `0`; static publication и Android script contracts прошли.
+  - Buildserver-side pass: PASS — official image `fdroid build --on-server --verbose com.Kibnet.Unlimotion:1028000` exit `0`, созданы source tarball и unsigned APK.
+  - APK pass: PASS — `57418795` bytes, SHA-256 `a68f495886b36ae7a917a4aebef38229b1626f10a56fa0d5917525f29269d9a2`, package `com.Kibnet.Unlimotion`, version `1.28.0`/`1028000`, compile/target SDK `36`, min SDK `23`, native-code только `arm64-v8a`; `REQUEST_INSTALL_PACKAGES`, updater `FileProvider` и `apk_file_paths` отсутствуют; `apksigner` подтвердил отсутствие upstream signature.
+  - Dependency/security pass: PASS — revoked ReactiveUI graph заменён на upstream re-signed `ReactiveUI 23.2.28` и `ReactiveUI.Avalonia 12.0.2`; fresh restore с `DOTNET_NUGET_SIGNATURE_VERIFICATION=true` прошёл, NuGet bypass не добавлен.
+  - UI regression pass: PASS — отдельный `Unlimotion.UiTests.Headless` после dependency update прошёл `36/36` serially.
+- Fixed before continuing:
+  - добавлен Debian `libicu76`, необходимый .NET runtime в clean buildserver image;
+  - через buildserver `sdkmanager` устанавливаются API `36`, build-tools `36.0.0` и platform-tools из F-Droid transparency log;
+  - F-Droid build script явно передаёт `AndroidSdkDirectory` в restore/build и включает NuGet signature verification;
+  - recipe закреплён на final source commit `eb58cb7327471be2ca95b43338a437e77f1bcf4e`; будущий tag `1.28.0` должен указывать на этот SHA, а не на metadata-only commit.
+- Residual risks / follow-ups:
+  - full `fdroid build --server` нужно повторить в поддерживаемой Vagrant/libvirt buildserver-среде или отправить RFP с текущим `--on-server` evidence;
+  - managed NuGet dependency model и `MANAGE_EXTERNAL_STORAGE` остаются предметом F-Droid reviewer policy review;
+  - прежний full TUnit result остаётся `829/832` с тремя order-dependent `RoadmapGraphUiTests`, каждый из которых проходил изолированно; это не заявляется full-green;
+  - tag, GitHub Release, PR, `fdroiddata` MR и RFP не создавались и требуют отдельного разрешения пользователя.
+- Needs human: выбрать и отдельно разрешить следующий внешний шаг — PR/release tag или сразу RFP/`fdroiddata` contribution workflow.
+
 ## Approval
 Получено 2026-08-21: пользователь написал точную фразу «Спеку подтверждаю».
 
@@ -486,3 +509,7 @@ Stop rules для validation:
 | EXEC | Official metadata checks | 0.99 | Нет | Проверить source scanner | Нет | Нет | На актуальном `fdroiddata` official container: `readmeta` exit 0 и exact GitHub recipe `lint` exit 0; warning только о permissions временного `config.yml` | temp fdroiddata/container logs |
 | EXEC | Scanner remediation | 0.98 | Public commit availability | Зафиксировать recipe и запросить push approval | Нет | Нет | Первый реальный scan нашёл libgit2 fixtures/unlocked Node manifest; после `rm`/`scandelete` повторный local-mounted source scan завершился exit 0 без problems | `fdroid/com.Kibnet.Unlimotion.yml`, official scanner logs |
 | EXEC | External delivery gate | 1.00 | Разрешение на push; затем BuildServer verdict | Остановиться после локального commit и запросить отдельное разрешение | Да | Нет | Source SHA ещё не опубликован; public-source scanner, `fdroid build --server`, tag/release/MR/RFP до отдельного approval запрещены | runbook, Post-EXEC, git remote state |
+| EXEC | Branch push approval | 1.00 | Нет для branch push | Опубликовать source commits и повторить public checks | Нет | Да: пользователь разрешил push `feat/fdroid-build-variant` | Ветка и source SHA опубликованы; разрешение не распространяется на tag/release/PR/MR/RFP | Git remote branch |
+| EXEC | Revoked package remediation | 0.99 | Нет | Проверить clean signed restore и UI regression | Нет | Нет | Два direct pins переведены на upstream re-signed releases без NuGet bypass; fresh restore и Headless `36/36` прошли | `src/Directory.Packages.props`, restore/headless logs |
+| EXEC | Public scanner | 1.00 | Нет | Выполнить buildserver-side recipe | Нет | Нет | Official scanner получил final public SHA `eb58cb73...` и завершился без findings | official scanner log |
+| EXEC | Buildserver-side APK PoC | 0.99 | Полный client-to-VM `--server` lifecycle | Зафиксировать evidence и запросить отдельный delivery approval | Да для внешнего delivery | Нет | После ICU, Android SDK components и explicit SDK path official `--on-server` создал unsigned arm64 APK с корректными version/manifest | recipe, APK SHA-256/`aapt`/`apksigner` evidence |
