@@ -68,7 +68,7 @@
     <PackageReference Include="Avalonia.Android" />
     <PackageReference Include="Xamarin.AndroidX.Core.SplashScreen" />
     <PackageReference Include="LibGit2Sharp.NativeBinaries" GeneratePathProperty="true" Condition="'$(FdroidBuild)' != 'true'" />
-    <PackageReference Include="LibGit2Sharp.NativeBinaries" VersionOverride="2.0.324-android.7.fdroid.1" GeneratePathProperty="true" Condition="'$(FdroidBuild)' == 'true'" />
+    <PackageReference Include="LibGit2Sharp.NativeBinaries" VersionOverride="2.0.324-android.7.fdroid.2" GeneratePathProperty="true" Condition="'$(FdroidBuild)' == 'true'" />
   </ItemGroup>
 
   <ItemGroup>

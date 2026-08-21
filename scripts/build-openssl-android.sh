@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT_DIR/scripts/android-native-common.sh"
 
-OPENSSL_VERSION="${OPENSSL_VERSION:-3.0.14}"
+OPENSSL_VERSION="${OPENSSL_VERSION:-3.0.21}"
 ANDROID_API_LEVEL="${ANDROID_API_LEVEL:-24}"
 OPENSSL_BASE_URL="${OPENSSL_BASE_URL:-https://www.openssl.org/source}"
 

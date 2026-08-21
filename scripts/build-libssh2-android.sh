@@ -6,7 +6,7 @@ source "$ROOT_DIR/scripts/android-native-common.sh"
 
 LIBSSH2_VERSION="${LIBSSH2_VERSION:-1.11.1}"
 ANDROID_API_LEVEL="${ANDROID_API_LEVEL:-24}"
-OPENSSL_VERSION="${OPENSSL_VERSION:-3.0.14}"
+OPENSSL_VERSION="${OPENSSL_VERSION:-3.0.21}"
 LIBSSH2_BASE_URL="${LIBSSH2_BASE_URL:-https://www.libssh2.org/download}"
 
 android_native_select_abi

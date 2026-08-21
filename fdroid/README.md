@@ -7,7 +7,8 @@
 - `FdroidBuild=true` исключает GitHub APK updater, `REQUEST_INSTALL_PACKAGES` и update `FileProvider`.
 - F-Droid-вариант собирается только для `android-arm64`.
 - Изменённый Nodify package собирается из публичного submodule commit `a8c9a96c80bc5e666aa34c9d3ce5947376e37722`.
-- OpenSSL, libssh2 и libgit2 собираются из исходников; F-Droid native package не использует готовый upstream `LibGit2Sharp.NativeBinaries.nupkg`.
+- OpenSSL `3.0.21`, libssh2 `1.11.1` и libgit2 `1.6.5` собираются из исходников; F-Droid native package не использует готовый upstream `LibGit2Sharp.NativeBinaries.nupkg`.
+- Recipe удаляет неиспользуемые `libgit2` test/fuzzer fixtures и его Node manifest до scanner-а; production sources остаются и CMake всё равно запускается с `BUILD_TESTS=OFF` и `BUILD_FUZZERS=OFF`.
 - Avalonia build telemetry отключена через `AVALONIA_TELEMETRY_OPTOUT=1`.
 
 ## Локальная проверка
@@ -19,7 +20,7 @@ pwsh -NoProfile -File scripts/test-fdroid-publication.ps1
 pwsh -NoProfile -File scripts/test-android-build-scripts.ps1
 ```
 
-Source-only Android build выполняется в Bash с установленными Android SDK/NDK и .NET Android workload:
+F-Droid Android build с source-built заменами project-local Nodify/native packages выполняется в Bash с установленными Android SDK/NDK и .NET Android workload. Остальные managed зависимости по-прежнему восстанавливаются через NuGet; допустимость этой модели должен подтвердить F-Droid BuildServer/reviewer:
 
 ```bash
 VERSION_NAME=1.28.0 VERSION_CODE=1028000 \
@@ -31,6 +32,8 @@ VERSION_NAME=1.28.0 VERSION_CODE=1028000 \
 ```text
 artifacts/fdroid/Unlimotion-1.28.0-1028000-android-arm64.apk
 ```
+
+Первый recipe закрепляется на отдельном source commit, содержащем build pipeline и Fastlane metadata. Будущий release tag `1.28.0` должен указывать именно на этот source commit; более поздний commit с самим upstream-черновиком recipe остаётся delivery-документацией и не входит в собираемый source snapshot.
 
 ## Проверка через fdroidserver
 

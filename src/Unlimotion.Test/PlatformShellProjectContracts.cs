@@ -42,7 +42,7 @@ internal static class PlatformShellProjectContracts
         var fdroidNativeBinariesReference = nativeBinariesReferences.Single(reference =>
             reference.Attribute("VersionOverride") != null);
         await Assert.That(fdroidNativeBinariesReference.Attribute("VersionOverride")?.Value)
-            .IsEqualTo("2.0.324-android.7.fdroid.1");
+            .IsEqualTo("2.0.324-android.7.fdroid.2");
         await Assert.That(fdroidNativeBinariesReference.Attribute("Condition")?.Value)
             .IsEqualTo("'$(FdroidBuild)' == 'true'");
 

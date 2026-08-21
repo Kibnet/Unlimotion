@@ -7,10 +7,11 @@ source "$ROOT_DIR/scripts/android-native-common.sh"
 SRC_DIR="${SRC_DIR:-$ROOT_DIR/.native/libgit2-src}"
 LIB_NAME="libgit2-3f4182d.so"
 ANDROID_API_LEVEL="${ANDROID_API_LEVEL:-24}"
-OPENSSL_VERSION="${OPENSSL_VERSION:-3.0.14}"
+OPENSSL_VERSION="${OPENSSL_VERSION:-3.0.21}"
 LIBSSH2_VERSION="${LIBSSH2_VERSION:-1.11.1}"
 LIBGIT2_HTTPS_BACKEND="${LIBGIT2_HTTPS_BACKEND:-OpenSSL}"
 LIBGIT2_USE_SSH="${LIBGIT2_USE_SSH:-ON}"
+LIBGIT2_ANDROID_PATCH="${LIBGIT2_ANDROID_PATCH:-$ROOT_DIR/scripts/patches/libgit2-android.patch}"
 
 android_native_select_abi
 ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/data/data/com.termux/files/home/android-sdk}}"
@@ -31,6 +32,22 @@ if [ ! -d "$SRC_DIR" ] || ! git -C "$SRC_DIR" rev-parse --is-inside-work-tree >/
   echo "Missing submodule at $SRC_DIR. Run: git submodule update --init --recursive"
   exit 1
 fi
+
+if [ ! -f "$LIBGIT2_ANDROID_PATCH" ]; then
+  echo "Missing libgit2 Android patch: $LIBGIT2_ANDROID_PATCH"
+  exit 1
+fi
+
+if ! git -C "$SRC_DIR" apply --unidiff-zero --check "$LIBGIT2_ANDROID_PATCH"; then
+  echo "libgit2 Android patch does not apply cleanly to $(git -C "$SRC_DIR" rev-parse HEAD)"
+  exit 1
+fi
+
+git -C "$SRC_DIR" apply --unidiff-zero "$LIBGIT2_ANDROID_PATCH"
+cleanup_libgit2_patch() {
+  git -C "$SRC_DIR" apply --unidiff-zero --reverse "$LIBGIT2_ANDROID_PATCH"
+}
+trap cleanup_libgit2_patch EXIT
 
 CMAKE_TOOLCHAIN="$ANDROID_NDK_ROOT/build/cmake/android.toolchain.cmake"
 if [ ! -f "$CMAKE_TOOLCHAIN" ]; then

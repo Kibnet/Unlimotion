@@ -2,9 +2,9 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PACKAGE_VERSION="${LIBGIT2_NATIVE_PACKAGE_VERSION:-2.0.324-android.7.fdroid.1}"
-EXPECTED_LIBGIT2_COMMIT="${LIBGIT2_SOURCE_COMMIT:-8843a5e41474c7a260eb1c3de76955525be095e0}"
-OPENSSL_VERSION="${OPENSSL_VERSION:-3.0.14}"
+PACKAGE_VERSION="${LIBGIT2_NATIVE_PACKAGE_VERSION:-2.0.324-android.7.fdroid.2}"
+EXPECTED_LIBGIT2_COMMIT="${LIBGIT2_SOURCE_COMMIT:-155578578b78efc6bae7383a708d470eb206e36a}"
+OPENSSL_VERSION="${OPENSSL_VERSION:-3.0.21}"
 LIBSSH2_VERSION="${LIBSSH2_VERSION:-1.11.1}"
 NUGET_LOCAL_FEED="${NUGET_LOCAL_FEED:-$ROOT_DIR/artifacts/nuget-local}"
 LIBGIT2_SOURCE_DIR="${LIBGIT2_SOURCE_DIR:-$ROOT_DIR/.native/libgit2-src}"
@@ -65,13 +65,13 @@ cat > "$PROJECT_DIR/LibGit2Sharp.NativeBinaries.csproj" <<'EOF'
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <PackageId>LibGit2Sharp.NativeBinaries</PackageId>
-    <PackageVersion>2.0.324-android.7.fdroid.1</PackageVersion>
+    <PackageVersion>2.0.324-android.7.fdroid.2</PackageVersion>
     <Authors>LibGit2Sharp contributors; Unlimotion maintainers</Authors>
     <Description>Source-built Android arm64 native libraries for Unlimotion.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/Kibnet/Unlimotion</PackageProjectUrl>
     <RepositoryType>git</RepositoryType>
-    <RepositoryUrl>https://github.com/Kibnet/libgit2.git</RepositoryUrl>
+    <RepositoryUrl>https://github.com/libgit2/libgit2.git</RepositoryUrl>
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
     <NoWarn>$(NoWarn);NU5128</NoWarn>
