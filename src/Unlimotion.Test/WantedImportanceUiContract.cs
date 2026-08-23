@@ -111,8 +111,9 @@ internal static class WantedImportanceUiContract
                 }
                 finally
                 {
-                    window?.Close();
+                    await CloseWindowAndDrainAsync(window);
                     await fixture.CleanTasksAsync();
+                    await DrainUiThreadAsync();
                 }
             }, CancellationToken.None);
         }
@@ -271,6 +272,38 @@ internal static class WantedImportanceUiContract
         {
             Dispatcher.UIThread.RunJobs();
         }
+    }
+
+    private static async Task CloseWindowAndDrainAsync(Window? window)
+    {
+        if (window == null)
+        {
+            return;
+        }
+
+        var root = window.Content as Control;
+        window.Content = null;
+        if (root != null)
+        {
+            root.DataContext = null;
+        }
+
+        RunLayoutJobs();
+        window.Close();
+        await DrainUiThreadAsync();
+    }
+
+    private static async Task DrainUiThreadAsync(int quietMilliseconds = 200)
+    {
+        var drainUntil = DateTime.UtcNow.AddMilliseconds(quietMilliseconds);
+        do
+        {
+            RunLayoutJobs();
+            await Task.Delay(25);
+        }
+        while (DateTime.UtcNow < drainUntil);
+
+        RunLayoutJobs();
     }
 }
 

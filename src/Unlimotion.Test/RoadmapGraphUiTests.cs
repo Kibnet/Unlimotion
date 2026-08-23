@@ -779,7 +779,7 @@ public class RoadmapGraphUiTests
             }
             finally
             {
-                window?.Close();
+                await CloseWindowAndDrainRoadmapAsync(window);
             }
         }, CancellationToken.None);
     }
@@ -840,8 +840,8 @@ public class RoadmapGraphUiTests
             }
             finally
             {
-                window?.Close();
-                await fixture.CleanTasksAsync();
+                await CloseWindowAndDrainRoadmapAsync(window);
+                await CleanTasksAndDrainAsync(fixture);
             }
         }, CancellationToken.None);
     }
@@ -960,8 +960,8 @@ public class RoadmapGraphUiTests
                 }
                 finally
                 {
-                    window?.Close();
-                    await fixture.CleanTasksAsync();
+                    await CloseWindowAndDrainRoadmapAsync(window);
+                    await CleanTasksAndDrainAsync(fixture);
                 }
             }, CancellationToken.None);
         });
@@ -1089,8 +1089,8 @@ public class RoadmapGraphUiTests
                 }
                 finally
                 {
-                    window?.Close();
-                    await fixture.CleanTasksAsync();
+                    await CloseWindowAndDrainRoadmapAsync(window);
+                    await CleanTasksAndDrainAsync(fixture);
                 }
             }, CancellationToken.None);
         });
@@ -1176,8 +1176,8 @@ public class RoadmapGraphUiTests
             }
             finally
             {
-                window?.Close();
-                await fixture.CleanTasksAsync();
+                await CloseWindowAndDrainRoadmapAsync(window);
+                await CleanTasksAndDrainAsync(fixture);
             }
         }, CancellationToken.None);
     }
@@ -1288,8 +1288,8 @@ public class RoadmapGraphUiTests
                     graphControl.RoadmapGraphBuildOverride = null;
                 }
 
-                window?.Close();
-                await fixture.CleanTasksAsync();
+                await CloseWindowAndDrainRoadmapAsync(window);
+                await CleanTasksAndDrainAsync(fixture);
             }
         }, CancellationToken.None);
     }
@@ -1353,8 +1353,8 @@ public class RoadmapGraphUiTests
             }
             finally
             {
-                window?.Close();
-                await fixture.CleanTasksAsync();
+                await CloseWindowAndDrainRoadmapAsync(window);
+                await CleanTasksAndDrainAsync(fixture);
             }
         }, CancellationToken.None);
     }
@@ -1457,8 +1457,8 @@ public class RoadmapGraphUiTests
             }
             finally
             {
-                window?.Close();
-                await fixture.CleanTasksAsync();
+                await CloseWindowAndDrainRoadmapAsync(window);
+                await CleanTasksAndDrainAsync(fixture);
             }
         }, CancellationToken.None);
     }
@@ -1525,8 +1525,8 @@ public class RoadmapGraphUiTests
             }
             finally
             {
-                window?.Close();
-                await fixture.CleanTasksAsync();
+                await CloseWindowAndDrainRoadmapAsync(window);
+                await CleanTasksAndDrainAsync(fixture);
             }
         }, CancellationToken.None);
     }
@@ -1605,8 +1605,8 @@ public class RoadmapGraphUiTests
             }
             finally
             {
-                window?.Close();
-                await fixture.CleanTasksAsync();
+                await CloseWindowAndDrainRoadmapAsync(window);
+                await CleanTasksAndDrainAsync(fixture);
             }
         }, CancellationToken.None);
     }
@@ -1658,8 +1658,8 @@ public class RoadmapGraphUiTests
             }
             finally
             {
-                window?.Close();
-                await fixture.CleanTasksAsync();
+                await CloseWindowAndDrainRoadmapAsync(window);
+                await CleanTasksAndDrainAsync(fixture);
             }
         }, CancellationToken.None);
     }
@@ -1737,8 +1737,8 @@ public class RoadmapGraphUiTests
             }
             finally
             {
-                window?.Close();
-                await fixture.CleanTasksAsync();
+                await CloseWindowAndDrainRoadmapAsync(window);
+                await CleanTasksAndDrainAsync(fixture);
             }
         }, CancellationToken.None);
     }
@@ -1801,8 +1801,8 @@ public class RoadmapGraphUiTests
                 }
                 finally
                 {
-                    window?.Close();
-                    await fixture.CleanTasksAsync();
+                    await CloseWindowAndDrainRoadmapAsync(window);
+                    await CleanTasksAndDrainAsync(fixture);
                 }
             }, CancellationToken.None);
         }
@@ -1859,8 +1859,8 @@ public class RoadmapGraphUiTests
             }
             finally
             {
-                window?.Close();
-                await fixture.CleanTasksAsync();
+                await CloseWindowAndDrainRoadmapAsync(window);
+                await CleanTasksAndDrainAsync(fixture);
             }
         }, CancellationToken.None);
     }
@@ -1909,8 +1909,8 @@ public class RoadmapGraphUiTests
             }
             finally
             {
-                window?.Close();
-                await fixture.CleanTasksAsync();
+                await CloseWindowAndDrainRoadmapAsync(window);
+                await CleanTasksAndDrainAsync(fixture);
             }
         }, CancellationToken.None);
     }
@@ -1984,8 +1984,8 @@ public class RoadmapGraphUiTests
                 }
                 finally
                 {
-                    window?.Close();
-                    await fixture.CleanTasksAsync();
+                    await CloseWindowAndDrainRoadmapAsync(window);
+                    await CleanTasksAndDrainAsync(fixture);
                 }
             }, CancellationToken.None);
         }
@@ -2046,8 +2046,8 @@ public class RoadmapGraphUiTests
             }
             finally
             {
-                window?.Close();
-                await fixture.CleanTasksAsync();
+                await CloseWindowAndDrainRoadmapAsync(window);
+                await CleanTasksAndDrainAsync(fixture);
             }
         }, CancellationToken.None);
     }
@@ -2112,8 +2112,8 @@ public class RoadmapGraphUiTests
             }
             finally
             {
-                window?.Close();
-                await fixture.CleanTasksAsync();
+                await CloseWindowAndDrainRoadmapAsync(window);
+                await CleanTasksAndDrainAsync(fixture);
             }
         }, CancellationToken.None);
     }
@@ -2176,8 +2176,8 @@ public class RoadmapGraphUiTests
             }
             finally
             {
-                window?.Close();
-                await fixture.CleanTasksAsync();
+                await CloseWindowAndDrainRoadmapAsync(window);
+                await CleanTasksAndDrainAsync(fixture);
             }
         }, CancellationToken.None);
     }
@@ -2247,8 +2247,8 @@ public class RoadmapGraphUiTests
                     Dispatcher.UIThread.RunJobs();
                 }
 
-                window?.Close();
-                await fixture.CleanTasksAsync();
+                await CloseWindowAndDrainRoadmapAsync(window);
+                await CleanTasksAndDrainAsync(fixture);
             }
         }, CancellationToken.None);
     }
@@ -2316,8 +2316,8 @@ public class RoadmapGraphUiTests
                     Dispatcher.UIThread.RunJobs();
                 }
 
-                window?.Close();
-                await fixture.CleanTasksAsync();
+                await CloseWindowAndDrainRoadmapAsync(window);
+                await CleanTasksAndDrainAsync(fixture);
             }
         }, CancellationToken.None);
     }
@@ -2392,8 +2392,8 @@ public class RoadmapGraphUiTests
                     Dispatcher.UIThread.RunJobs();
                 }
 
-                window?.Close();
-                await fixture.CleanTasksAsync();
+                await CloseWindowAndDrainRoadmapAsync(window);
+                await CleanTasksAndDrainAsync(fixture);
             }
         }, CancellationToken.None);
     }
@@ -2468,8 +2468,8 @@ public class RoadmapGraphUiTests
                     Dispatcher.UIThread.RunJobs();
                 }
 
-                window?.Close();
-                await fixture.CleanTasksAsync();
+                await CloseWindowAndDrainRoadmapAsync(window);
+                await CleanTasksAndDrainAsync(fixture);
             }
         }, CancellationToken.None);
     }
@@ -2549,8 +2549,8 @@ public class RoadmapGraphUiTests
                         Dispatcher.UIThread.RunJobs();
                     }
 
-                    window?.Close();
-                    await fixture.CleanTasksAsync();
+                    await CloseWindowAndDrainRoadmapAsync(window);
+                    await CleanTasksAndDrainAsync(fixture);
                 }
             }, CancellationToken.None);
         }
@@ -2626,8 +2626,8 @@ public class RoadmapGraphUiTests
                 }
                 finally
                 {
-                    window?.Close();
-                    await fixture.CleanTasksAsync();
+                    await CloseWindowAndDrainRoadmapAsync(window);
+                    await CleanTasksAndDrainAsync(fixture);
                 }
             }, CancellationToken.None);
         }
@@ -2718,8 +2718,8 @@ public class RoadmapGraphUiTests
                 }
                 finally
                 {
-                    window?.Close();
-                    await fixture.CleanTasksAsync();
+                    await CloseWindowAndDrainRoadmapAsync(window);
+                    await CleanTasksAndDrainAsync(fixture);
                 }
             }
         }, CancellationToken.None);
@@ -2779,8 +2779,8 @@ public class RoadmapGraphUiTests
             }
             finally
             {
-                window?.Close();
-                await fixture.CleanTasksAsync();
+                await CloseWindowAndDrainRoadmapAsync(window);
+                await CleanTasksAndDrainAsync(fixture);
             }
         }, CancellationToken.None);
     }
@@ -2808,6 +2808,9 @@ public class RoadmapGraphUiTests
                 secondSource.Title = "Roadmap batch DnD source B";
                 var targetTask = await vm.taskRepository.Add();
                 targetTask.Title = "Roadmap batch DnD target";
+
+                await TestHelpers.WaitThrottleTime();
+                Dispatcher.UIThread.RunJobs();
 
                 var view = new MainControl { DataContext = vm };
                 window = CreateWindow(view);
@@ -2863,8 +2866,8 @@ public class RoadmapGraphUiTests
             }
             finally
             {
-                window?.Close();
-                await fixture.CleanTasksAsync();
+                await CloseWindowAndDrainRoadmapAsync(window);
+                await CleanTasksAndDrainAsync(fixture);
             }
         }, CancellationToken.None);
     }
@@ -2975,8 +2978,8 @@ public class RoadmapGraphUiTests
             }
             finally
             {
-                window?.Close();
-                await fixture.CleanTasksAsync();
+                await CloseWindowAndDrainRoadmapAsync(window);
+                await CleanTasksAndDrainAsync(fixture);
             }
         }, CancellationToken.None);
 
@@ -3742,6 +3745,75 @@ public class RoadmapGraphUiTests
             timeoutMilliseconds);
     }
 
+    private static async Task CloseWindowAndDrainRoadmapAsync(Window? window)
+    {
+        if (window == null)
+        {
+            return;
+        }
+
+        var graphControls = window.GetVisualDescendants()
+            .OfType<GraphControl>()
+            .ToArray();
+
+        var root = window.Content as Control;
+        window.Content = null;
+
+        // Clear bindings only after the visual tree has been detached so their
+        // collection resets cannot race an in-progress layout pass.
+        if (root != null)
+        {
+            root.DataContext = null;
+        }
+
+        foreach (var graphControl in graphControls)
+        {
+            if (!await DeactivateRoadmapGraphAsync(graphControl))
+            {
+                throw new TimeoutException(
+                    "Roadmap graph did not finish test cleanup: " +
+                    $"active={GetRoadmapActiveBuildCountForTest(graphControl)}, " +
+                    $"updateQueued={GetRoadmapGraphUpdateQueuedForTest(graphControl)}, " +
+                    $"inProgress={graphControl.RoadmapGraphBuildInProgress}, " +
+                    $"dataContext={graphControl.DataContext?.GetType().Name ?? "null"}, " +
+                    $"started={graphControl.RoadmapGraphBackgroundBuildStartCount}, " +
+                    $"cancelRequested={graphControl.RoadmapGraphBackgroundBuildCancelRequestCount}, " +
+                    $"canceled={graphControl.RoadmapGraphBackgroundBuildCanceledCount}.");
+            }
+        }
+
+        RunLayoutJobs();
+        window.Close();
+        RunLayoutJobs();
+    }
+
+    private static async Task CleanTasksAndDrainAsync(MainWindowViewModelFixture fixture)
+    {
+        await fixture.CleanTasksAsync();
+        await DrainUiThreadAsync();
+    }
+
+    private static async Task DrainUiThreadAsync(int quietMilliseconds = 200)
+    {
+        var drainUntil = DateTime.UtcNow.AddMilliseconds(quietMilliseconds);
+        do
+        {
+            RunLayoutJobs();
+            await Task.Delay(25);
+        }
+        while (DateTime.UtcNow < drainUntil);
+
+        RunLayoutJobs();
+    }
+
+    private static void RunLayoutJobs()
+    {
+        for (var i = 0; i < 20; i++)
+        {
+            Dispatcher.UIThread.RunJobs();
+        }
+    }
+
     private static async Task<bool> DeactivateRoadmapGraphAsync(
         GraphControl? graphControl,
         int timeoutMilliseconds = 5000)
@@ -3753,8 +3825,8 @@ public class RoadmapGraphUiTests
 
         graphControl.DataContext = null;
         return await WaitForAsync(
-            () => !graphControl.RoadmapGraphBuildInProgress &&
-                  GetRoadmapActiveBuildCountForTest(graphControl) == 0,
+            () => GetRoadmapActiveBuildCountForTest(graphControl) == 0 &&
+                  !GetRoadmapGraphUpdateQueuedForTest(graphControl),
             timeoutMilliseconds);
     }
 
@@ -3770,6 +3842,20 @@ public class RoadmapGraphUiTests
         }
 
         return (int)field.GetValue(graphControl)!;
+    }
+
+    private static bool GetRoadmapGraphUpdateQueuedForTest(GraphControl graphControl)
+    {
+        var field = typeof(GraphControl).GetField(
+            "graphUpdateQueued",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+
+        if (field == null)
+        {
+            throw new InvalidOperationException("GraphControl.graphUpdateQueued was not found.");
+        }
+
+        return (bool)field.GetValue(graphControl)!;
     }
 
     private static bool IsVisibleAndArranged(Control control)

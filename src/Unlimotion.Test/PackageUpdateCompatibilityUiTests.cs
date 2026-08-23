@@ -25,6 +25,7 @@ public class PackageUpdateCompatibilityUiTests
         {
             var fixture = new MainWindowViewModelFixture();
             var previousPlatformPicker = Dialogs.PlatformOpenFolderDialogAsync;
+            MainControl? view = null;
             Window? window = null;
 
             try
@@ -37,7 +38,7 @@ public class PackageUpdateCompatibilityUiTests
                 var targetTask = await vm.taskRepository.Add();
                 targetTask.Title = "Package update drag target";
 
-                var view = new MainControl { DataContext = vm };
+                view = new MainControl { DataContext = vm };
                 var targetControl = new ContentControl { DataContext = targetTask };
                 using var dragData = DragDataFormats.CreateTransfer(GraphControl.CustomDataFormat, sourceTask);
                 var dropArgs = new DragEventArgs(
@@ -94,8 +95,15 @@ public class PackageUpdateCompatibilityUiTests
             finally
             {
                 Dialogs.PlatformOpenFolderDialogAsync = previousPlatformPicker;
+                if (view != null)
+                {
+                    view.DataContext = null;
+                }
+
                 window?.Close();
+                await DrainUiThreadAsync();
                 await fixture.CleanTasksAsync();
+                await DrainUiThreadAsync();
             }
         }, CancellationToken.None);
     }
@@ -104,5 +112,18 @@ public class PackageUpdateCompatibilityUiTests
     {
         return Path.GetFullPath(path)
             .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+    }
+
+    private static async Task DrainUiThreadAsync(int quietMilliseconds = 200)
+    {
+        var drainUntil = DateTime.UtcNow.AddMilliseconds(quietMilliseconds);
+        do
+        {
+            Dispatcher.UIThread.RunJobs();
+            await Task.Delay(25);
+        }
+        while (DateTime.UtcNow < drainUntil);
+
+        Dispatcher.UIThread.RunJobs();
     }
 }

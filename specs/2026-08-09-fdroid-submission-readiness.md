@@ -485,6 +485,24 @@ Stop rules для validation:
   - tag, GitHub Release, PR, `fdroiddata` MR и RFP не создавались и требуют отдельного разрешения пользователя.
 - Needs human: выбрать и отдельно разрешить следующий внешний шаг — PR/release tag или сразу RFP/`fdroiddata` contribution workflow.
 
+### Post-EXEC Review Addendum: publication PR and full regression
+- Статус: PASS для публикационной ветки и PR validation; ASK-HUMAN для merge, tag, GitHub Release и `fdroiddata` MR.
+- Scope reviewed: PR #283, .NET 10 test invocation, headless UI lifecycle isolation, publication contract scripts и полный serial TUnit regression.
+- Decision: PR #283 открыт и готов к review. После исправления test-runner compatibility и межтестовых утечек полный regression прошёл; это не означает, что приложение уже слито, выпущено или добавлено в каталог F-Droid.
+- Review passes:
+  - CI compatibility pass: PASS — executable `dotnet test` calls явно используют `--project`, как требует .NET 10/Microsoft.Testing.Platform.
+  - Headless lifecycle pass: PASS — окна, view-model bindings, queued dispatcher work и асинхронные `GraphControl` builds завершаются до очистки fixture.
+  - Focused UI pass: PASS — `RoadmapGraphUiTests` `47/47` serially.
+  - Full regression pass: PASS — `Unlimotion.Test` `832/832` serially; отдельный `Unlimotion.UiTests.Headless` `36/36` serially.
+  - Publication contracts pass: PASS — `test-fdroid-publication.ps1` и `test-android-build-scripts.ps1` завершились успешно.
+  - Delivery trace pass: PASS — GitHub PR #283 открыт ready for review; ранее разрешённый F-Droid RFP создан как work item #4304.
+- Residual risks / follow-ups:
+  - полный client-to-VM `fdroid build --server` по-прежнему не доказан из-за отсутствующего Python-модуля `vagrant`; подтверждён buildserver-side `--on-server` path;
+  - NuGet-managed dependencies и `MANAGE_EXTERNAL_STORAGE` остаются предметом F-Droid reviewer policy review;
+  - F-Droid signing несовместим с текущей GitHub release signature; migration warning остаётся обязательным;
+  - initial recipe остаётся arm64-only.
+- Needs human: merge PR #283, tag/release и `fdroiddata` MR являются отдельными внешними действиями и не выполняются без явного разрешения.
+
 ## Approval
 Получено 2026-08-21: пользователь написал точную фразу «Спеку подтверждаю».
 
@@ -513,3 +531,6 @@ Stop rules для validation:
 | EXEC | Revoked package remediation | 0.99 | Нет | Проверить clean signed restore и UI regression | Нет | Нет | Два direct pins переведены на upstream re-signed releases без NuGet bypass; fresh restore и Headless `36/36` прошли | `src/Directory.Packages.props`, restore/headless logs |
 | EXEC | Public scanner | 1.00 | Нет | Выполнить buildserver-side recipe | Нет | Нет | Official scanner получил final public SHA `eb58cb73...` и завершился без findings | official scanner log |
 | EXEC | Buildserver-side APK PoC | 0.99 | Полный client-to-VM `--server` lifecycle | Зафиксировать evidence и запросить отдельный delivery approval | Да для внешнего delivery | Нет | После ICU, Android SDK components и explicit SDK path official `--on-server` создал unsigned arm64 APK с корректными version/manifest | recipe, APK SHA-256/`aapt`/`apksigner` evidence |
+| EXEC | GitHub PR | 1.00 | Нет для создания и обновления PR | Довести PR #283 до green CI | Нет | Да: пользователь написал «Делай» после предложения открыть PR и подготовить ветку | PR открыт ready for review; merge/tag/release не входят в это разрешение | GitHub PR #283, PR body |
+| EXEC | .NET 10 CI compatibility | 1.00 | Нет | Использовать explicit test project selection | Нет | Нет | Все executable `dotnet test` вызовы переведены на `--project`, устраняя pre-test MTP failure | workflow и evidence scripts |
+| EXEC | Headless test isolation | 0.99 | Remote CI verdict | Зафиксировать teardown и проверить PR CI | Нет | Нет | Завершены queued dispatcher/build операции и разорваны bindings до fixture cleanup; focused `47/47`, full `832/832`, standalone headless `36/36` | UI contract tests, local TUnit evidence |
