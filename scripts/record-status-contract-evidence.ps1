@@ -731,6 +731,7 @@ try {
     }
     $testArguments = @(
         "test",
+        "--project",
         $testProjectPath,
         "-c", "Debug",
         "--no-build",

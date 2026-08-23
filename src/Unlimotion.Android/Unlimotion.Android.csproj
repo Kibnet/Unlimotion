@@ -5,6 +5,7 @@
 		<LangVersion>latest</LangVersion>
     <SupportedOSPlatformVersion>23</SupportedOSPlatformVersion>
     <Nullable>enable</Nullable>
+    <FdroidBuild Condition="'$(FdroidBuild)' == ''">false</FdroidBuild>
 		<ApplicationId>com.Kibnet.Unlimotion</ApplicationId>
     <ApplicationVersion>1</ApplicationVersion>
     <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
@@ -26,6 +27,24 @@
     <ZipAlignToolExe Condition="Exists('/data/data/com.termux/files/usr/bin/zipalign')">zipalign</ZipAlignToolExe>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(FdroidBuild)' == 'true'">
+    <DefineConstants>$(DefineConstants);FDROID_BUILD</DefineConstants>
+    <RuntimeIdentifiers>android-arm64</RuntimeIdentifiers>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(FdroidBuild)' == 'true'">
+    <Compile Remove="Services\AndroidApplicationUpdateService.cs" />
+    <AndroidResource Remove="Resources\xml\apk_file_paths.xml" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(FdroidBuild)' != 'true'">
+    <AndroidManifestOverlay Include="Properties\AndroidManifest.Updater.xml" />
+    <AndroidNativeLibrary Include="$(PkgLibGit2Sharp_NativeBinaries)\runtimes\android-x64\native\libcrypto.so.3" />
+    <AndroidNativeLibrary Include="$(PkgLibGit2Sharp_NativeBinaries)\runtimes\android-x64\native\libcrypto.so" />
+    <AndroidNativeLibrary Include="$(PkgLibGit2Sharp_NativeBinaries)\runtimes\android-x64\native\libssl.so.3" />
+    <AndroidNativeLibrary Include="$(PkgLibGit2Sharp_NativeBinaries)\runtimes\android-x64\native\libssl.so" />
+    <AndroidNativeLibrary Include="$(PkgLibGit2Sharp_NativeBinaries)\runtimes\android-x64\native\libssh2.so" />
+  </ItemGroup>
 
   <ItemGroup>
     <AndroidAsset Include="Assets\cacert.pem" />
@@ -37,11 +56,6 @@
     <AndroidNativeLibrary Include="$(PkgLibGit2Sharp_NativeBinaries)\runtimes\android-arm64\native\libssl.so.3" />
     <AndroidNativeLibrary Include="$(PkgLibGit2Sharp_NativeBinaries)\runtimes\android-arm64\native\libssl.so" />
     <AndroidNativeLibrary Include="$(PkgLibGit2Sharp_NativeBinaries)\runtimes\android-arm64\native\libssh2.so" />
-    <AndroidNativeLibrary Include="$(PkgLibGit2Sharp_NativeBinaries)\runtimes\android-x64\native\libcrypto.so.3" />
-    <AndroidNativeLibrary Include="$(PkgLibGit2Sharp_NativeBinaries)\runtimes\android-x64\native\libcrypto.so" />
-    <AndroidNativeLibrary Include="$(PkgLibGit2Sharp_NativeBinaries)\runtimes\android-x64\native\libssl.so.3" />
-    <AndroidNativeLibrary Include="$(PkgLibGit2Sharp_NativeBinaries)\runtimes\android-x64\native\libssl.so" />
-    <AndroidNativeLibrary Include="$(PkgLibGit2Sharp_NativeBinaries)\runtimes\android-x64\native\libssh2.so" />
   </ItemGroup>
 
   <ItemGroup>
@@ -53,7 +67,8 @@
   <ItemGroup>
     <PackageReference Include="Avalonia.Android" />
     <PackageReference Include="Xamarin.AndroidX.Core.SplashScreen" />
-    <PackageReference Include="LibGit2Sharp.NativeBinaries" GeneratePathProperty="true" />
+    <PackageReference Include="LibGit2Sharp.NativeBinaries" GeneratePathProperty="true" Condition="'$(FdroidBuild)' != 'true'" />
+    <PackageReference Include="LibGit2Sharp.NativeBinaries" VersionOverride="2.0.324-android.7.fdroid.2" GeneratePathProperty="true" Condition="'$(FdroidBuild)' == 'true'" />
   </ItemGroup>
 
   <ItemGroup>

@@ -61,7 +61,7 @@ jobs:
     - name: Run Unlimotion Tests
       shell: pwsh
       run: >
-        dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj
+        dotnet test --project src/Unlimotion.Test/Unlimotion.Test.csproj
         -c Debug
         --no-restore
         -p:UseSharedCompilation=false
@@ -72,7 +72,7 @@ jobs:
     - name: Run Headless UI Tests
       shell: pwsh
       run: >
-        dotnet test tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj
+        dotnet test --project tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj
         -c Debug
         --no-restore
         -p:UseSharedCompilation=false

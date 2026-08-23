@@ -19,7 +19,9 @@ using Avalonia.Android;
 using LibGit2Sharp;
 using ReactiveUI.Avalonia;
 using Unlimotion;
+#if !FDROID_BUILD
 using Unlimotion.Android.Services;
+#endif
 using Unlimotion.Services;
 using L10n = Unlimotion.ViewModel.Localization.Localization;
 
@@ -151,7 +153,11 @@ public class MainActivity : AvaloniaMainActivity
             var dataDir = ConfigureCoreAppServices(this);
             _dataDir = dataDir;
 
+#if FDROID_BUILD
+            App.ConfigureUpdateService(null);
+#else
             App.ConfigureUpdateService(new AndroidApplicationUpdateService(this));
+#endif
             Dialogs.PlatformOpenFolderDialogAsync = ShowOpenDocumentTreeAsync;
         }
         catch (Exception ex)

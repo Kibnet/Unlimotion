@@ -1,3 +1,6 @@
 [submodule ".native/libgit2-src"]
 	path = .native/libgit2-src
-	url = https://github.com/Kibnet/libgit2.git
+	url = https://github.com/libgit2/libgit2.git
+[submodule ".native/nodify-avalonia-src"]
+	path = .native/nodify-avalonia-src
+	url = https://github.com/Kibnet/nodify-avalonia.git

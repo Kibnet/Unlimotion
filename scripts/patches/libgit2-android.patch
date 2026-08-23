@@ -1,0 +1,24 @@
+diff --git a/src/libgit2/CMakeLists.txt b/src/libgit2/CMakeLists.txt
+--- a/src/libgit2/CMakeLists.txt
++++ b/src/libgit2/CMakeLists.txt
+@@ -5 +5 @@
+-set_target_properties(libgit2 PROPERTIES C_STANDARD 90)
++set_target_properties(libgit2 PROPERTIES C_STANDARD 99)
+@@ -81 +81 @@
+-set_target_properties(libgit2package PROPERTIES C_STANDARD 90)
++set_target_properties(libgit2package PROPERTIES C_STANDARD 99)
+diff --git a/src/util/CMakeLists.txt b/src/util/CMakeLists.txt
+--- a/src/util/CMakeLists.txt
++++ b/src/util/CMakeLists.txt
+@@ -4 +4 @@
+-set_target_properties(util PROPERTIES C_STANDARD 90)
++set_target_properties(util PROPERTIES C_STANDARD 99)
+diff --git a/src/util/rand.c b/src/util/rand.c
+--- a/src/util/rand.c
++++ b/src/util/rand.c
+@@ -12,0 +13,5 @@ See <http://creativecommons.org/publicdomain/zero/1.0/>. */
++#if defined(__ANDROID__)
++# undef GIT_RAND_GETENTROPY
++# undef GIT_RAND_GETLOADAVG
++#endif
++

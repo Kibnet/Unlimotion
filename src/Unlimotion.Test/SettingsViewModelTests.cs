@@ -504,6 +504,22 @@ public class SettingsViewModelTests : IDisposable
     }
 
     [Test]
+    public async System.Threading.Tasks.Task AutomaticUpdateCheckAsync_SkipsUnsupportedService()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var updateService = new FakeApplicationUpdateService { IsSupported = false };
+        var settings = CreateSettingsViewModel(configuration);
+        settings.ConfigureUpdateService(updateService);
+        var app = new App();
+
+        await app.RunAutomaticUpdateCheckAsync(settings);
+
+        await Assert.That(updateService.CheckCalls).IsEqualTo(0);
+        await Assert.That(updateService.DownloadCalls).IsEqualTo(0);
+        await Assert.That(settings.UpdateState).IsEqualTo(ApplicationUpdateState.Unsupported);
+    }
+
+    [Test]
     public async System.Threading.Tasks.Task AutomaticUpdateCheckAsync_SkipsDisabledAndOverlappingRuns()
     {
         IConfigurationRoot configuration = CreateConfiguration();
