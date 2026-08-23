@@ -47,8 +47,8 @@ if (-not $NoBuild) {
 }
 
 if (-not $SkipTests) {
-    Invoke-Step @("dotnet", "test", "tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj", "-c", "Debug", "--no-build", "--", "--maximum-parallel-tests", "1", "--output", "Detailed")
-    Invoke-Step @("dotnet", "test", "tests/Unlimotion.UiTests.FlaUI/Unlimotion.UiTests.FlaUI.csproj", "-c", "Debug", "--no-build", "--", "--maximum-parallel-tests", "1", "--output", "Detailed")
+    Invoke-Step @("dotnet", "test", "--project", "tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj", "-c", "Debug", "--no-build", "--", "--maximum-parallel-tests", "1", "--output", "Detailed")
+    Invoke-Step @("dotnet", "test", "--project", "tests/Unlimotion.UiTests.FlaUI/Unlimotion.UiTests.FlaUI.csproj", "-c", "Debug", "--no-build", "--", "--maximum-parallel-tests", "1", "--output", "Detailed")
 }
 
 $runArgs = @(
