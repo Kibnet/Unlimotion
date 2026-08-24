@@ -28,6 +28,194 @@ public class DailyMarkdownStorageTests
     }
 
     [Test]
+    public async Task DeleteAsync_PreservesExternalWriteThatStartsAfterRevisionVerification()
+    {
+        using var directory = new TempNotesDirectory();
+        using var writerCancellation = new CancellationTokenSource();
+        const string path = "Ежедневные/2026-08-24.md";
+        const string externalText = "external replacement\n";
+        var seedVault = new FileNoteVault(directory.Path);
+        var seed = await seedVault.CreateAsync(path, "base\n");
+        var writerBlocked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Task? externalWriter = null;
+        var vault = new FileNoteVault(
+            directory.Path,
+            ownWrites: null,
+            afterRevisionVerified: null,
+            afterDeleteRevisionVerified: async (fullPath, _) =>
+            {
+                externalWriter = Task.Run(async () =>
+                {
+                    while (true)
+                    {
+                        writerCancellation.Token.ThrowIfCancellationRequested();
+                        try
+                        {
+                            await File.WriteAllTextAsync(
+                                fullPath,
+                                externalText,
+                                new UTF8Encoding(false),
+                                writerCancellation.Token);
+                            return;
+                        }
+                        catch (IOException)
+                        {
+                            writerBlocked.TrySetResult();
+                            await Task.Delay(TimeSpan.FromMilliseconds(10), writerCancellation.Token);
+                        }
+                    }
+                });
+                await writerBlocked.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            });
+
+        try
+        {
+            var deleted = await vault.DeleteAsync(path, seed.Revision);
+            await externalWriter!.WaitAsync(TimeSpan.FromSeconds(5));
+
+            await Assert.That(deleted).IsTrue();
+            await Assert.That(await File.ReadAllTextAsync(vault.ResolveSafePath(path))).IsEqualTo(externalText);
+        }
+        finally
+        {
+            writerCancellation.Cancel();
+            if (externalWriter is not null)
+            {
+                try
+                {
+                    await externalWriter;
+                }
+                catch (OperationCanceledException) when (writerCancellation.IsCancellationRequested)
+                {
+                }
+            }
+        }
+    }
+
+    [Test]
+    public async Task DeleteAsync_DoesNotDeleteExternalAtomicReplacementAfterRevisionVerification()
+    {
+        using var directory = new TempNotesDirectory();
+        const string path = "Ежедневные/2026-08-24.md";
+        const string externalText = "external atomic replacement\n";
+        var seedVault = new FileNoteVault(directory.Path);
+        var seed = await seedVault.CreateAsync(path, "base\n");
+        var vault = new FileNoteVault(
+            directory.Path,
+            ownWrites: null,
+            afterRevisionVerified: null,
+            afterDeleteRevisionVerified: async (fullPath, cancellationToken) =>
+            {
+                var directoryPath = Path.GetDirectoryName(fullPath)!;
+                var replacementPath = Path.Combine(
+                    directoryPath,
+                    $".{Path.GetFileName(fullPath)}.{Guid.NewGuid():N}.replacement.tmp");
+                var backupPath = Path.Combine(
+                    directoryPath,
+                    $".{Path.GetFileName(fullPath)}.{Guid.NewGuid():N}.external.bak");
+                await File.WriteAllTextAsync(replacementPath, externalText, new UTF8Encoding(false), cancellationToken);
+                File.Replace(replacementPath, fullPath, backupPath, ignoreMetadataErrors: true);
+            });
+
+        var conflict = await NotesTestSupport.CaptureAsync<VaultRevisionConflictException>(() =>
+            vault.DeleteAsync(path, seed.Revision));
+
+        await Assert.That(conflict.ExpectedRevision).IsEqualTo(seed.Revision);
+        await Assert.That(await File.ReadAllTextAsync(vault.ResolveSafePath(path))).IsEqualTo(externalText);
+    }
+
+    [Test]
+    public async Task DeleteAsync_RetainsTombstoneWrittenAfterFinalRevisionCheck()
+    {
+        using var directory = new TempNotesDirectory();
+        const string path = "Ежедневные/2026-08-24.md";
+        const string lateWriterText = "late writer content\n";
+        var seedVault = new FileNoteVault(directory.Path);
+        var seed = await seedVault.CreateAsync(path, "base\n");
+        string? tombstonePath = null;
+        var vault = new FileNoteVault(
+            directory.Path,
+            ownWrites: null,
+            afterRevisionVerified: null,
+            afterDeleteTombstoneVerified: async (fullPath, cancellationToken) =>
+            {
+                tombstonePath = fullPath;
+                await File.WriteAllTextAsync(fullPath, lateWriterText, new UTF8Encoding(false), cancellationToken);
+            });
+
+        var deleted = await vault.DeleteAsync(path, seed.Revision);
+        var markdownFiles = await vault.ListMarkdownFilesAsync();
+
+        await Assert.That(deleted).IsTrue();
+        await Assert.That(File.Exists(vault.ResolveSafePath(path))).IsFalse();
+        await Assert.That(tombstonePath).IsNotNull();
+        var tombstoneRelativePath = Path.GetRelativePath(vault.RootPath, tombstonePath!).Replace('\\', '/');
+        var tombstonePathParts = tombstoneRelativePath.Split('/');
+        await Assert.That(tombstonePathParts[0]).IsEqualTo(".unlimotion");
+        await Assert.That(tombstonePathParts[1]).IsEqualTo("deleted");
+        await Assert.That(Guid.TryParseExact(tombstonePathParts[2], "N", out _)).IsTrue();
+        await Assert.That(string.Join("/", tombstonePathParts.Skip(3))).IsEqualTo(path);
+        await Assert.That(await File.ReadAllTextAsync(tombstonePath!)).IsEqualTo(lateWriterText);
+        await Assert.That(markdownFiles).IsEmpty();
+    }
+
+    [Test]
+    public async Task DeleteAsync_RetainsLateWriteFromHandleOpenedBeforeDelete()
+    {
+        using var directory = new TempNotesDirectory();
+        const string path = "Ежедневные/2026-08-24.md";
+        const string lateWriterText = "late writer from retained handle\n";
+        var seedVault = new FileNoteVault(directory.Path);
+        var seed = await seedVault.CreateAsync(path, "base\n");
+        var originalPath = seedVault.ResolveSafePath(path);
+        var lateWriterBytes = new UTF8Encoding(false).GetBytes(lateWriterText);
+        await using var externalWriter = new FileStream(
+            originalPath,
+            FileMode.Open,
+            FileAccess.ReadWrite,
+            FileShare.ReadWrite | FileShare.Delete,
+            4096,
+            FileOptions.Asynchronous | FileOptions.WriteThrough);
+
+        async Task WriteLateTextAsync(CancellationToken cancellationToken)
+        {
+            externalWriter.Position = 0;
+            externalWriter.SetLength(0);
+            await externalWriter.WriteAsync(lateWriterBytes, cancellationToken);
+            await externalWriter.FlushAsync(cancellationToken);
+            externalWriter.Flush(flushToDisk: true);
+        }
+
+        string? tombstonePath = null;
+        var vault = new FileNoteVault(
+            directory.Path,
+            ownWrites: null,
+            afterRevisionVerified: null,
+            afterDeleteTombstoneVerified: async (fullPath, cancellationToken) =>
+            {
+                tombstonePath = fullPath;
+                await WriteLateTextAsync(cancellationToken);
+            });
+
+        try
+        {
+            var deleted = await vault.DeleteAsync(path, seed.Revision);
+
+            await Assert.That(deleted).IsTrue();
+            await Assert.That(tombstonePath).IsNotNull();
+            await Assert.That(File.Exists(originalPath)).IsFalse();
+            await Assert.That(await File.ReadAllTextAsync(tombstonePath!)).IsEqualTo(lateWriterText);
+        }
+        catch (Exception exception) when (exception is IOException or VaultRevisionConflictException)
+        {
+            await WriteLateTextAsync(CancellationToken.None);
+
+            await Assert.That(File.Exists(originalPath)).IsTrue();
+            await Assert.That(await File.ReadAllTextAsync(originalPath)).IsEqualTo(lateWriterText);
+        }
+    }
+
+    [Test]
     public async Task ReadWrite_PreservesUtf8BomAndCrLf()
     {
         using var directory = new TempNotesDirectory();

@@ -312,6 +312,11 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
         }
     }
 
+    internal void OnTaskStorageChanged()
+    {
+        EnsureTaskSearchSubscription();
+    }
+
     public Action<TaskItemViewModel>? NavigateToTaskRequested { get; set; }
 
     public Func<string, TaskItemViewModel?>? TaskResolver
@@ -3561,6 +3566,7 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
                 .Subscribe(_ => RequestTaskSearchRefresh());
         }
 
+        RefreshTaskReferences();
         RequestTaskSearchRefresh();
     }
 
