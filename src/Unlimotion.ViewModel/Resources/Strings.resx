@@ -148,9 +148,111 @@
   <data name="FilterSort" xml:space="preserve"><value>Sort</value></data>
   <data name="NoRelationCandidates" xml:space="preserve"><value>No available tasks for this relation.</value></data>
   <data name="FirstDayNextMonth" xml:space="preserve"><value>First day of next month</value></data>
+  <data name="FeedCapture" xml:space="preserve"><value>Add</value></data>
+  <data name="FeedChooseVault" xml:space="preserve"><value>Choose vault folder</value></data>
+  <data name="FeedEmptyDayList" xml:space="preserve"><value>No daily notes yet</value></data>
+  <data name="FeedMode" xml:space="preserve"><value>Feed</value></data>
+  <data name="FeedNoArea" xml:space="preserve"><value>No area</value></data>
+  <data name="FeedOnboardingDescription" xml:space="preserve"><value>Choose the root folder of an existing Obsidian vault. Files stay in place and are edited as Markdown.</value></data>
+  <data name="FeedOnboardingTitle" xml:space="preserve"><value>Connect your note vault</value></data>
+  <data name="FeedQuickCaptureTitle" xml:space="preserve"><value>Quick capture</value></data>
+  <data name="FeedQuickCaptureWatermark" xml:space="preserve"><value>Write a thought, task, or Markdown note...</value></data>
+  <data name="FeedRefresh" xml:space="preserve"><value>Refresh</value></data>
+  <data name="FeedSearchArea" xml:space="preserve"><value>Area</value></data>
+  <data name="FeedSearchAreaAll" xml:space="preserve"><value>All areas</value></data>
+  <data name="FeedSearchDateFrom" xml:space="preserve"><value>From date</value></data>
+  <data name="FeedSearchDateTo" xml:space="preserve"><value>To date</value></data>
+  <data name="FeedSearchNoResults" xml:space="preserve"><value>No matches found</value></data>
+  <data name="FeedSearchType" xml:space="preserve"><value>Type</value></data>
+  <data name="FeedSearchTypeAll" xml:space="preserve"><value>All types</value></data>
+  <data name="FeedSearchTypeDaily" xml:space="preserve"><value>Daily notes</value></data>
+  <data name="FeedSearchTypeNote" xml:space="preserve"><value>Permanent notes</value></data>
+  <data name="FeedSearchTypeTask" xml:space="preserve"><value>Tasks</value></data>
+  <data name="FeedSearchWatermark" xml:space="preserve"><value>Search notes</value></data>
+  <data name="FeedSearchIndexing" xml:space="preserve"><value>Indexing notes</value></data>
+  <data name="FeedTitle" xml:space="preserve"><value>Feed</value></data>
+  <data name="FeedExternalVaultUnsupported" xml:space="preserve"><value>Choosing an external note vault is not supported on this platform.</value></data>
+  <data name="FeedBootstrapIndexedFiles" xml:space="preserve"><value>Files indexed:</value></data>
+  <data name="FeedBootstrapPendingCheckboxes" xml:space="preserve"><value>Unfinished items:</value></data>
+  <data name="FeedReviewPendingBlocks" xml:space="preserve"><value>Blocks to review:</value></data>
+  <data name="FeedReviewPendingDays" xml:space="preserve"><value>Days:</value></data>
+  <data name="FeedStartReview" xml:space="preserve"><value>Review</value></data>
+  <data name="FeedFinishReview" xml:space="preserve"><value>Finish review</value></data>
+  <data name="FeedReviewExpandUp" xml:space="preserve"><value>Expand up</value></data>
+  <data name="FeedReviewExpandDown" xml:space="preserve"><value>Expand down</value></data>
+  <data name="FeedReviewShrinkUp" xml:space="preserve"><value>Shrink from top</value></data>
+  <data name="FeedReviewShrinkDown" xml:space="preserve"><value>Shrink from bottom</value></data>
+  <data name="FeedReviewAssignArea" xml:space="preserve"><value>Assign area</value></data>
+  <data name="FeedReviewLeave" xml:space="preserve"><value>Keep</value></data>
+  <data name="FeedReviewSkip" xml:space="preserve"><value>Skip</value></data>
+  <data name="FeedReviewMoveToday" xml:space="preserve"><value>Move to today</value></data>
+  <data name="FeedReviewTaskOptions" xml:space="preserve"><value>Task or goal</value></data>
+  <data name="FeedReviewGoal" xml:space="preserve"><value>Goal</value></data>
+  <data name="FeedReviewCreateTask" xml:space="preserve"><value>Create task</value></data>
+  <data name="FeedReviewNoteTitle" xml:space="preserve"><value>Note title</value></data>
+  <data name="FeedReviewNoteFolder" xml:space="preserve"><value>Thematic folder</value></data>
+  <data name="FeedReviewCreateNote" xml:space="preserve"><value>Create note</value></data>
+  <data name="FeedReviewContinue" xml:space="preserve"><value>Continue</value></data>
+  <data name="FeedIdentityConflictTitle" xml:space="preserve"><value>Vault identity changed</value></data>
+  <data name="FeedIdentityConflictDescription" xml:space="preserve"><value>Writing is paused. Both identity and review branches were preserved; choose how to reconnect this root.</value></data>
+  <data name="FeedIdentityConflictAccepted" xml:space="preserve"><value>Connected identity:</value></data>
+  <data name="FeedIdentityConflictCurrent" xml:space="preserve"><value>Current root:</value></data>
+  <data name="FeedIdentityConflictUseCurrent" xml:space="preserve"><value>Use current root identity</value></data>
+  <data name="FeedIdentityConflictReconnect" xml:space="preserve"><value>Reconnect another root</value></data>
+  <data name="FeedIdentityConflictReadOnly" xml:space="preserve"><value>Stay read-only</value></data>
+  <data name="FeedReviewRecoveryTitle" xml:space="preserve"><value>Unfinished review on another device</value></data>
+  <data name="FeedReviewRecoveryDescription" xml:space="preserve"><value>Continue the same review session or finish it explicitly. A new session will not be created silently.</value></data>
+  <data name="FeedReviewRecoveryContinue" xml:space="preserve"><value>Continue this review</value></data>
+  <data name="FeedReviewRecoveryAbandon" xml:space="preserve"><value>Finish unfinished review</value></data>
+  <data name="FeedReviewRecoveryOwner" xml:space="preserve"><value>Device</value></data>
+  <data name="FeedReviewUntitledNote" xml:space="preserve"><value>New note</value></data>
+  <data name="AreaArchivedBadge" xml:space="preserve"><value>Archived</value></data>
+  <data name="AreaArchive" xml:space="preserve"><value>Archive</value></data>
+  <data name="AreaRestore" xml:space="preserve"><value>Restore</value></data>
+  <data name="AreaCreateChild" xml:space="preserve"><value>Create child</value></data>
+  <data name="AreaCreateRoot" xml:space="preserve"><value>Create root</value></data>
+  <data name="AreaDefaultNoteFolderWatermark" xml:space="preserve"><value>Default note folder</value></data>
+  <data name="AreaManagementList" xml:space="preserve"><value>Areas</value></data>
+  <data name="AreaManagementTitle" xml:space="preserve"><value>Manage areas</value></data>
+  <data name="AreaNameWatermark" xml:space="preserve"><value>Area name</value></data>
+  <data name="AreaParentLabel" xml:space="preserve"><value>Parent area</value></data>
+  <data name="AreaPropertiesTitle" xml:space="preserve"><value>Area properties</value></data>
+  <data name="FeedConflictDescription" xml:space="preserve"><value>This note changed on disk while its block was being edited. Choose which version to keep.</value></data>
+  <data name="FeedConflictDiskVersion" xml:space="preserve"><value>Disk version</value></data>
+  <data name="FeedConflictEditorVersion" xml:space="preserve"><value>Editor version</value></data>
+  <data name="FeedConflictSaveBoth" xml:space="preserve"><value>Save both</value></data>
+  <data name="FeedConflictTitle" xml:space="preserve"><value>Note edit conflict</value></data>
+  <data name="FeedConflictUseDisk" xml:space="preserve"><value>Use disk version</value></data>
+  <data name="FeedConflictUseEditor" xml:space="preserve"><value>Use editor version</value></data>
+  <data name="FeedFilesEmpty" xml:space="preserve"><value>No thematic Markdown notes found</value></data>
+  <data name="FeedFilesTitle" xml:space="preserve"><value>Files</value></data>
+  <data name="FeedVaultIdentityFrozen" xml:space="preserve"><value>The vault identity changed externally. Editing is paused until the vault is reconnected and verified.</value></data>
+  <data name="FeedDraftRecoveryTitle" xml:space="preserve"><value>Unsaved Markdown found</value></data>
+  <data name="FeedDraftRecoveryDescription" xml:space="preserve"><value>Restore this local draft or discard it explicitly. The note is unchanged until you choose.</value></data>
+  <data name="FeedDraftRecoveryStale" xml:space="preserve"><value>The note changed after this draft was saved. Keep the draft for conflict recovery or discard it explicitly.</value></data>
+  <data name="TaskAreas" xml:space="preserve"><value>Areas</value></data>
+  <data name="TaskClassificationTitle" xml:space="preserve"><value>Classification</value></data>
+  <data name="TaskClassificationOldServerExplanation" xml:space="preserve"><value>This server does not support goal and area fields. Classification editing is disabled to prevent data loss.</value></data>
+  <data name="TaskIsGoal" xml:space="preserve"><value>Goal</value></data>
+  <data name="MarkdownBlockedLinkHelp" xml:space="preserve"><value>The URI scheme is unsafe, so this link is inactive.</value></data>
+  <data name="MarkdownBlockedLinkName" xml:space="preserve"><value>Blocked link: {0}</value></data>
+  <data name="MarkdownBlockedLinkTooltip" xml:space="preserve"><value>Unsafe URI scheme blocked</value></data>
+  <data name="MarkdownBlockAutomationName" xml:space="preserve"><value>Markdown block {0}: {1}</value></data>
+  <data name="MarkdownBlockCommitHelp" xml:space="preserve"><value>Ctrl+Enter saves. Escape cancels.</value></data>
+  <data name="MarkdownBlockEditHelp" xml:space="preserve"><value>Press Enter or F2 to edit this block.</value></data>
+  <data name="MarkdownBlockEditorAutomationName" xml:space="preserve"><value>Edit Markdown block {0}</value></data>
+  <data name="MarkdownBlockSaveFailed" xml:space="preserve"><value>Could not save the Markdown block.</value></data>
+  <data name="MarkdownEditingUnavailable" xml:space="preserve"><value>Editing is unavailable because no save handler is configured.</value></data>
+  <data name="MarkdownLinkName" xml:space="preserve"><value>Link: {0}</value></data>
+  <data name="MarkdownLivePreviewName" xml:space="preserve"><value>Markdown Live Preview</value></data>
+  <data name="MarkdownPatchAcknowledgementInvalid" xml:space="preserve"><value>The storage returned an invalid Markdown patch acknowledgement.</value></data>
+  <data name="MarkdownTaskCompleted" xml:space="preserve"><value>Completed</value></data>
+  <data name="MarkdownTaskIncomplete" xml:space="preserve"><value>Incomplete</value></data>
+  <data name="MarkdownUnsupportedRawName" xml:space="preserve"><value>Unsupported Markdown. Original source text.</value></data>
   <data name="FiveDays" xml:space="preserve"><value>5 days</value></data>
   <data name="FiveMinutes" xml:space="preserve"><value>5 minutes</value></data>
   <data name="FolderPickerDataFolder" xml:space="preserve"><value>Data folder</value></data>
+  <data name="FolderPickerNoteVaultRoot" xml:space="preserve"><value>Obsidian vault folder</value></data>
   <data name="FolderPickerSshKeyStoragePath" xml:space="preserve"><value>SSH keys folder</value></data>
   <data name="FolderPickerTaskStoragePath" xml:space="preserve"><value>Task storage folder</value></data>
   <data name="FontSize" xml:space="preserve"><value>Text size</value></data>
@@ -279,6 +381,13 @@
   <data name="NextFriday" xml:space="preserve"><value>Next Friday</value></data>
   <data name="NextMonday" xml:space="preserve"><value>Next Monday</value></data>
   <data name="None" xml:space="preserve"><value>None</value></data>
+  <data name="NoteVaultDesktopOnlyHint" xml:space="preserve"><value>External note vaults are available in the desktop app.</value></data>
+  <data name="NoteVaultFolder" xml:space="preserve"><value>Vault folder</value></data>
+  <data name="NoteVaultFolderPickerFailed" xml:space="preserve"><value>Could not select the note vault folder: {0}</value></data>
+  <data name="NoteVaultHint" xml:space="preserve"><value>Choose the root folder of an existing Obsidian vault. Unlimotion edits its Markdown files in place.</value></data>
+  <data name="NoteVaultTitle" xml:space="preserve"><value>Note vault</value></data>
+  <data name="NoteDayBoundary" xml:space="preserve"><value>Start of a new day</value></data>
+  <data name="NoteDayBoundaryHint" xml:space="preserve"><value>Captures before this local time are written to the previous daily note.</value></data>
   <data name="OneDay" xml:space="preserve"><value>1 day</value></data>
   <data name="OneHour" xml:space="preserve"><value>1 hour</value></data>
   <data name="OneMinute" xml:space="preserve"><value>1 minute</value></data>
@@ -449,6 +558,7 @@
   <data name="TaskCardPlanning" xml:space="preserve"><value>Planning</value></data>
   <data name="TaskCardRelations" xml:space="preserve"><value>Relations</value></data>
   <data name="TaskStorageNotConfigured" xml:space="preserve"><value>Task storage is not configured.</value></data>
+  <data name="TasksMode" xml:space="preserve"><value>Tasks</value></data>
   <data name="TenDays" xml:space="preserve"><value>10 days</value></data>
   <data name="TenMinutes" xml:space="preserve"><value>10 minutes</value></data>
   <data name="ThemeDark" xml:space="preserve"><value>Dark</value></data>
@@ -575,4 +685,29 @@
   <data name="TaskSpaceSettingsSaving" xml:space="preserve"><value>Saving task-space settings…</value></data>
   <data name="TaskSpaceSettingsSaveFailed" xml:space="preserve"><value>Task-space settings were not saved: {0}. Retry before switching spaces or closing the application.</value></data>
   <data name="TaskSpaceSettingsRetry" xml:space="preserve"><value>Retry saving</value></data>
+  <data name="FeedPendingRecoveryFailed" xml:space="preserve"><value>{0} Feed operation(s) still require recovery. Data was kept and the journal remains pending.&#10;{1}</value></data>
+  <data name="FeedLoadOlderDays" xml:space="preserve"><value>Show previous days</value></data>
+  <data name="FeedDayCollapseToggle" xml:space="preserve"><value>Collapse or expand this day</value></data>
+  <data name="FeedBrokenTaskReference" xml:space="preserve"><value>Broken task reference</value></data>
+  <data name="FeedBrokenTaskReferenceName" xml:space="preserve"><value>Broken task reference: {0}</value></data>
+  <data name="FeedBrokenTaskFind" xml:space="preserve"><value>Find</value></data>
+  <data name="FeedBrokenTaskUnlink" xml:space="preserve"><value>Unlink</value></data>
+  <data name="FeedBrokenTaskRestoreRevision" xml:space="preserve"><value>Restore from revision</value></data>
+  <data name="FeedBrokenTaskRevisionUnavailable" xml:space="preserve"><value>No safe revision containing the original text was found.</value></data>
+  <data name="FeedBrokenTaskActionFailed" xml:space="preserve"><value>The broken reference could not be updated.</value></data>
+  <data name="FeedPendingRecoveryTitle" xml:space="preserve"><value>Recovery required</value></data>
+  <data name="FeedPendingRecoveryDescription" xml:space="preserve"><value>Some Feed operations were interrupted. Finish the replacement or keep both versions; data is never deleted automatically.</value></data>
+  <data name="FeedRecoveryFinishReplacement" xml:space="preserve"><value>Finish replacement</value></data>
+  <data name="FeedRecoveryKeepBoth" xml:space="preserve"><value>Keep both versions</value></data>
+  <data name="FeedIdentitySafePendingTitle" xml:space="preserve"><value>Items requiring review</value></data>
+  <data name="FeedIdentitySafePendingDescription" xml:space="preserve"><value>These block references were preserved from the other vault identity branch. Review them before making further changes.</value></data>
+  <data name="FeedPendingRecoveryKindTask" xml:space="preserve"><value>Task</value></data>
+  <data name="FeedPendingRecoveryKindNote" xml:space="preserve"><value>Note</value></data>
+  <data name="FeedPendingRecoveryKindMove" xml:space="preserve"><value>Move</value></data>
+  <data name="AreaExternalConflict" xml:space="preserve"><value>Areas were changed both in Unlimotion and externally. Choose which version to keep.</value></data>
+  <data name="AreaUseLocalDraft" xml:space="preserve"><value>Use Unlimotion version</value></data>
+  <data name="AreaUseExternal" xml:space="preserve"><value>Use external version</value></data>
+  <data name="TaskGoalFilterAll" xml:space="preserve"><value>All</value></data>
+  <data name="TaskGoalFilterGoals" xml:space="preserve"><value>Goals</value></data>
+  <data name="TaskGoalFilterRegular" xml:space="preserve"><value>Regular</value></data>
 </root>

@@ -62,6 +62,8 @@ public sealed class TaskRelationEditorViewModel : ReactiveObject, IDisposable
 
     public bool IsOpen => !string.IsNullOrWhiteSpace(_currentTaskId) && _kind.HasValue;
 
+    public string? TargetTaskId => _currentTaskId;
+
     public TaskRelationKind? Kind => _kind;
 
     public bool IsOpenForParents => IsOpen && _kind == TaskRelationKind.Parents;
@@ -185,6 +187,7 @@ public sealed class TaskRelationEditorViewModel : ReactiveObject, IDisposable
         ResetTransientState();
 
         this.RaisePropertyChanged(nameof(IsOpen));
+        this.RaisePropertyChanged(nameof(TargetTaskId));
         this.RaisePropertyChanged(nameof(Kind));
         this.RaisePropertyChanged(nameof(IsOpenForParents));
         this.RaisePropertyChanged(nameof(IsOpenForContaining));
@@ -220,6 +223,22 @@ public sealed class TaskRelationEditorViewModel : ReactiveObject, IDisposable
         Cancel();
     }
 
+    public bool IsOpenFor(TaskRelationKind kind, TaskItemViewModel? targetTask)
+    {
+        return IsOpen &&
+               _kind == kind &&
+               !string.IsNullOrWhiteSpace(targetTask?.Id) &&
+               string.Equals(_currentTaskId, targetTask.Id, StringComparison.Ordinal);
+    }
+
+    public void CloseFor(TaskRelationKind kind, TaskItemViewModel? targetTask)
+    {
+        if (IsOpenFor(kind, targetTask))
+        {
+            Cancel();
+        }
+    }
+
     private void Cancel()
     {
         if (_kind == null && string.IsNullOrWhiteSpace(_currentTaskId) && !IsOpen)
@@ -232,6 +251,7 @@ public sealed class TaskRelationEditorViewModel : ReactiveObject, IDisposable
         ResetTransientState();
 
         this.RaisePropertyChanged(nameof(IsOpen));
+        this.RaisePropertyChanged(nameof(TargetTaskId));
         this.RaisePropertyChanged(nameof(Kind));
         this.RaisePropertyChanged(nameof(IsOpenForParents));
         this.RaisePropertyChanged(nameof(IsOpenForContaining));

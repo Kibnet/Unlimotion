@@ -1,0 +1,647 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:feed="clr-namespace:Unlimotion.ViewModel.Feed;assembly=Unlimotion.ViewModel"
+             xmlns:local="clr-namespace:Unlimotion"
+             xmlns:views="clr-namespace:Unlimotion.Views"
+             mc:Ignorable="d"
+             d:DesignWidth="900"
+             d:DesignHeight="700"
+             x:Class="Unlimotion.Views.FeedControl"
+             x:DataType="feed:FeedViewModel"
+             AutomationProperties.AutomationId="FeedRoot">
+    <UserControl.Resources>
+        <SolidColorBrush x:Key="FeedAccentBrush"
+                         Color="{DynamicResource SystemAccentColor}" />
+    </UserControl.Resources>
+    <UserControl.Styles>
+        <Style Selector="Border.FeedReviewTarget">
+            <Setter Property="BorderBrush" Value="{DynamicResource FeedAccentBrush}" />
+            <Setter Property="BorderThickness" Value="2" />
+        </Style>
+        <Style Selector="ToggleButton.FeedDayCollapseToggle">
+            <Setter Property="Content" Value="▾" />
+        </Style>
+        <Style Selector="ToggleButton.FeedDayCollapseToggle:checked">
+            <Setter Property="Content" Value="▸" />
+        </Style>
+    </UserControl.Styles>
+    <Grid RowDefinitions="Auto,*">
+        <Border Padding="16,12"
+                BorderBrush="{DynamicResource ThemeBorderLowBrush}"
+                BorderThickness="0,0,0,1">
+            <Grid RowDefinitions="Auto,Auto,Auto"
+                  ColumnDefinitions="*,Auto,Auto,Auto"
+                  ColumnSpacing="8"
+                  RowSpacing="8">
+                <TextBlock VerticalAlignment="Center"
+                           FontSize="20"
+                           FontWeight="SemiBold"
+                           Text="{DynamicResource FeedTitle}" />
+                <Button Grid.Column="1"
+                        Command="{Binding OpenAreasCommand}"
+                        Content="{DynamicResource TaskAreas}"
+                        AutomationProperties.AutomationId="FeedAreasButton" />
+                <Button Grid.Column="2"
+                        Command="{Binding OpenFilesCommand}"
+                        Content="{DynamicResource FeedFilesTitle}"
+                        AutomationProperties.AutomationId="FeedFilesButton" />
+                <Button Grid.Column="3"
+                        Command="{Binding RefreshCommand}"
+                        Content="{DynamicResource FeedRefresh}"
+                        AutomationProperties.AutomationId="FeedRefreshButton" />
+                <Grid Grid.Row="1"
+                      Grid.ColumnSpan="4"
+                      RowDefinitions="Auto,Auto"
+                      RowSpacing="4">
+                    <TextBox MinWidth="120"
+                             Text="{Binding SearchQuery, Mode=TwoWay}"
+                             PlaceholderText="{DynamicResource FeedSearchWatermark}"
+                             AutomationProperties.AutomationId="FeedSearchBox" />
+                    <Grid Grid.Row="1"
+                          ColumnDefinitions="Auto,100,Auto,Auto,Auto"
+                          ColumnSpacing="4"
+                          IsVisible="{Binding IsSearchIndexing}"
+                          AutomationProperties.AutomationId="FeedSearchIndexProgress">
+                        <TextBlock VerticalAlignment="Center"
+                                   Opacity="0.72"
+                                   Text="{DynamicResource FeedSearchIndexing}" />
+                        <ProgressBar Grid.Column="1"
+                                     Minimum="0"
+                                     Maximum="{Binding TotalMarkdownFiles}"
+                                     Value="{Binding IndexedMarkdownFiles}"
+                                     VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="2"
+                                   VerticalAlignment="Center"
+                                   Text="{Binding IndexedMarkdownFiles}" />
+                        <TextBlock Grid.Column="3"
+                                   VerticalAlignment="Center"
+                                   Text="/" />
+                        <TextBlock Grid.Column="4"
+                                   VerticalAlignment="Center"
+                                   Text="{Binding TotalMarkdownFiles}" />
+                    </Grid>
+                </Grid>
+                <WrapPanel Grid.Row="2"
+                           Grid.ColumnSpan="4"
+                           IsVisible="{Binding IsSearchActive}"
+                           Orientation="Horizontal">
+                    <StackPanel Width="180" Margin="0,0,8,0" Spacing="2">
+                        <TextBlock Opacity="0.72" Text="{DynamicResource FeedSearchType}" />
+                        <ComboBox ItemsSource="{Binding SearchTypeOptions}"
+                                  SelectedItem="{Binding SelectedSearchType, Mode=TwoWay}"
+                                  AutomationProperties.Name="{DynamicResource FeedSearchType}"
+                                  AutomationProperties.AutomationId="FeedSearchTypePicker">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="feed:FeedSearchTypeOptionViewModel">
+                                    <TextBlock Text="{Binding DisplayName}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </StackPanel>
+                    <StackPanel Width="180" Margin="0,0,8,0" Spacing="2">
+                        <TextBlock Opacity="0.72" Text="{DynamicResource FeedSearchArea}" />
+                        <ComboBox ItemsSource="{Binding SearchAreaOptions}"
+                                  SelectedItem="{Binding SelectedSearchArea, Mode=TwoWay}"
+                                  AutomationProperties.Name="{DynamicResource FeedSearchArea}"
+                                  AutomationProperties.AutomationId="FeedSearchAreaPicker">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="feed:FeedSearchAreaOptionViewModel">
+                                    <TextBlock Text="{Binding DisplayName}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </StackPanel>
+                    <StackPanel Width="170" Margin="0,0,8,0" Spacing="2">
+                        <TextBlock Opacity="0.72" Text="{DynamicResource FeedSearchDateFrom}" />
+                        <DatePicker SelectedDate="{Binding SearchFromDate, Mode=TwoWay}"
+                                    AutomationProperties.Name="{DynamicResource FeedSearchDateFrom}"
+                                    AutomationProperties.AutomationId="FeedSearchFromDatePicker" />
+                    </StackPanel>
+                    <StackPanel Width="170" Spacing="2">
+                        <TextBlock Opacity="0.72" Text="{DynamicResource FeedSearchDateTo}" />
+                        <DatePicker SelectedDate="{Binding SearchToDate, Mode=TwoWay}"
+                                    AutomationProperties.Name="{DynamicResource FeedSearchDateTo}"
+                                    AutomationProperties.AutomationId="FeedSearchToDatePicker" />
+                    </StackPanel>
+                </WrapPanel>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="1">
+            <Border IsVisible="{Binding IsOnboardingVisible}"
+                    Padding="24"
+                    AutomationProperties.AutomationId="FeedOnboardingRoot">
+                <StackPanel MaxWidth="520"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Spacing="14">
+                    <TextBlock HorizontalAlignment="Center"
+                               FontSize="24"
+                               FontWeight="SemiBold"
+                               Text="{DynamicResource FeedOnboardingTitle}" />
+                    <TextBlock TextAlignment="Center"
+                               TextWrapping="Wrap"
+                               Text="{DynamicResource FeedOnboardingDescription}" />
+                    <TextBlock IsVisible="{Binding IsVaultUnsupportedVisible}"
+                               TextAlignment="Center"
+                               TextWrapping="Wrap"
+                               Text="{DynamicResource FeedExternalVaultUnsupported}"
+                               AutomationProperties.AutomationId="FeedExternalVaultUnsupportedText" />
+                    <Button HorizontalAlignment="Center"
+                            IsEnabled="{Binding IsVaultChoiceEnabled}"
+                            Command="{Binding ChooseVaultCommand}"
+                            Content="{DynamicResource FeedChooseVault}"
+                            AutomationProperties.AutomationId="FeedOnboardingChooseVaultButton" />
+                    <TextBlock IsVisible="{Binding HasError}"
+                               Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+                               TextAlignment="Center"
+                               TextWrapping="Wrap"
+                               Text="{Binding ErrorMessage}"
+                               AutomationProperties.AutomationId="FeedOnboardingErrorText" />
+                </StackPanel>
+            </Border>
+
+            <Grid IsVisible="{Binding IsContentVisible}"
+                  RowDefinitions="Auto,Auto,*,Auto"
+                  Margin="16"
+                  RowSpacing="14">
+                <Border Padding="14"
+                        CornerRadius="8"
+                        BorderBrush="{DynamicResource ThemeBorderMidBrush}"
+                        BorderThickness="1">
+                    <StackPanel Spacing="10">
+                        <TextBlock FontWeight="SemiBold"
+                                   Text="{DynamicResource FeedQuickCaptureTitle}" />
+                        <ComboBox ItemsSource="{Binding Areas}"
+                                  SelectedItem="{Binding SelectedArea, Mode=TwoWay}"
+                                  HorizontalAlignment="Stretch"
+                                  AutomationProperties.AutomationId="FeedAreaPicker">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="feed:FeedAreaOptionViewModel">
+                                    <TextBlock Text="{Binding DestinationDisplayName}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <TextBox x:Name="QuickCaptureTextBox"
+                                 MinHeight="82"
+                                 AcceptsReturn="True"
+                                 TextWrapping="Wrap"
+                                 Text="{Binding QuickCaptureText, Mode=TwoWay}"
+                                 PlaceholderText="{DynamicResource FeedQuickCaptureWatermark}"
+                                 AutomationProperties.AutomationId="FeedQuickCaptureTextBox" />
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                            <TextBlock VerticalAlignment="Center"
+                                       IsVisible="{Binding HasError}"
+                                       Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+                                       TextWrapping="Wrap"
+                                       Text="{Binding ErrorMessage}"
+                                       AutomationProperties.AutomationId="FeedErrorText" />
+                            <Button Grid.Column="1"
+                                    IsEnabled="{Binding CanCapture}"
+                                    Command="{Binding CaptureCommand}"
+                                    Content="{DynamicResource FeedCapture}"
+                                    AutomationProperties.AutomationId="FeedCaptureButton" />
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <StackPanel Grid.Row="1" Spacing="10">
+                    <Border IsVisible="{Binding HasBootstrapSummary}"
+                            Padding="12"
+                            CornerRadius="8"
+                            Background="{DynamicResource ThemeControlLowBrush}"
+                            AutomationProperties.ControlTypeOverride="Group"
+                            AutomationProperties.IsControlElementOverride="True"
+                            AutomationProperties.AutomationId="FeedBootstrapSummary">
+                        <WrapPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Margin="0,0,6,0" Text="{DynamicResource FeedBootstrapIndexedFiles}" />
+                            <TextBlock Margin="0,0,16,0"
+                                       FontWeight="SemiBold"
+                                       Text="{Binding BootstrapIndexedFiles}"
+                                       AutomationProperties.AutomationId="FeedBootstrapIndexedFilesText" />
+                            <TextBlock Margin="0,0,6,0" Text="{DynamicResource FeedBootstrapPendingCheckboxes}" />
+                            <TextBlock FontWeight="SemiBold"
+                                       Text="{Binding BootstrapPendingCheckboxes}"
+                                       AutomationProperties.AutomationId="FeedBootstrapPendingCheckboxesText" />
+                        </WrapPanel>
+                    </Border>
+
+                    <Border IsVisible="{Binding IsReviewBannerVisible}"
+                            Padding="12"
+                            CornerRadius="8"
+                            BorderBrush="{DynamicResource FeedAccentBrush}"
+                            BorderThickness="1"
+                            AutomationProperties.ControlTypeOverride="Group"
+                            AutomationProperties.IsControlElementOverride="True"
+                            AutomationProperties.AutomationId="FeedReviewBanner">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                            <WrapPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Margin="0,0,6,0" Text="{DynamicResource FeedReviewPendingBlocks}" />
+                                <TextBlock Margin="0,0,14,0" FontWeight="SemiBold" Text="{Binding PendingReviewBlocks}" />
+                                <TextBlock Margin="0,0,6,0" Text="{DynamicResource FeedReviewPendingDays}" />
+                                <TextBlock FontWeight="SemiBold" Text="{Binding PendingReviewDays}" />
+                            </WrapPanel>
+                            <Button Grid.Column="1"
+                                    IsVisible="{Binding !IsReviewActive}"
+                                    IsEnabled="{Binding CanStartReview}"
+                                    Command="{Binding StartReviewCommand}"
+                                    Content="{DynamicResource FeedStartReview}"
+                                    AutomationProperties.AutomationId="FeedStartReviewButton" />
+                            <Button Grid.Column="1"
+                                    IsVisible="{Binding IsReviewActive}"
+                                    Command="{Binding FinishReviewCommand}"
+                                    Content="{DynamicResource FeedFinishReview}"
+                                    AutomationProperties.AutomationId="FeedFinishReviewButton" />
+                        </Grid>
+                    </Border>
+
+                    <Border IsVisible="{Binding IsReviewSelectionVisible}"
+                            Padding="14"
+                            CornerRadius="8"
+                            Background="{DynamicResource ThemeControlLowBrush}"
+                            BorderBrush="{DynamicResource FeedAccentBrush}"
+                            BorderThickness="2"
+                            AutomationProperties.ControlTypeOverride="Group"
+                            AutomationProperties.IsControlElementOverride="True"
+                            AutomationProperties.AutomationId="FeedReviewPanel">
+                        <StackPanel Spacing="12">
+                            <TextBlock Width="1"
+                                       Height="1"
+                                       Foreground="Transparent"
+                                       IsHitTestVisible="False"
+                                       Text="{Binding CurrentReview.SelectedMarkdown}"
+                                       AutomationProperties.AutomationId="FeedReviewSelectionText"
+                                       AutomationProperties.Name="{Binding CurrentReview.SelectedMarkdown}"
+                                       AutomationProperties.IsControlElementOverride="True"
+                                       AutomationProperties.ControlTypeOverride="Text" />
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                <TextBlock FontWeight="SemiBold" Text="{Binding CurrentReview.DisplayDate}" />
+                                <TextBlock Grid.Column="1" Opacity="0.72" Text="{Binding CurrentReview.SelectedBlockCount}" />
+                            </Grid>
+
+                            <WrapPanel IsVisible="{Binding CanModifyReviewSource}"
+                                       Orientation="Horizontal">
+                                <Button Margin="0,0,6,6"
+                                        IsEnabled="{Binding CurrentReview.CanExpandUp}"
+                                        Command="{Binding ExpandSelectionUpCommand}"
+                                        Content="{DynamicResource FeedReviewExpandUp}"
+                                        AutomationProperties.AutomationId="FeedReviewExpandUpButton" />
+                                <Button Margin="0,0,6,6"
+                                        IsEnabled="{Binding CurrentReview.CanExpandDown}"
+                                        Command="{Binding ExpandSelectionDownCommand}"
+                                        Content="{DynamicResource FeedReviewExpandDown}"
+                                        AutomationProperties.AutomationId="FeedReviewExpandDownButton" />
+                                <Button Margin="0,0,6,6"
+                                        IsEnabled="{Binding CurrentReview.CanShrinkUp}"
+                                        Command="{Binding ShrinkSelectionUpCommand}"
+                                        Content="{DynamicResource FeedReviewShrinkUp}"
+                                        AutomationProperties.AutomationId="FeedReviewShrinkUpButton" />
+                                <Button Margin="0,0,6,6"
+                                        IsEnabled="{Binding CurrentReview.CanShrinkDown}"
+                                        Command="{Binding ShrinkSelectionDownCommand}"
+                                        Content="{DynamicResource FeedReviewShrinkDown}"
+                                        AutomationProperties.AutomationId="FeedReviewShrinkDownButton" />
+                            </WrapPanel>
+
+                            <Grid IsVisible="{Binding CanModifyReviewSource}"
+                                  ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                <ComboBox ItemsSource="{Binding Areas}"
+                                          SelectedItem="{Binding ReviewDestinationArea, Mode=TwoWay}"
+                                          AutomationProperties.AutomationId="FeedReviewAreaPicker">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate x:DataType="feed:FeedAreaOptionViewModel">
+                                            <TextBlock Text="{Binding DestinationDisplayName}" />
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                                <Button Grid.Column="1"
+                                        Command="{Binding AssignReviewAreaCommand}"
+                                        Content="{DynamicResource FeedReviewAssignArea}"
+                                        AutomationProperties.AutomationId="FeedReviewAssignAreaButton" />
+                            </Grid>
+
+                            <WrapPanel IsVisible="{Binding CanModifyReviewSource}"
+                                       Orientation="Horizontal">
+                                <Button Margin="0,0,6,6"
+                                        Command="{Binding LeaveReviewCommand}"
+                                        Content="{DynamicResource FeedReviewLeave}"
+                                        AutomationProperties.AutomationId="FeedReviewLeaveButton" />
+                                <Button Margin="0,0,6,6"
+                                        Command="{Binding SkipReviewCommand}"
+                                        Content="{DynamicResource FeedReviewSkip}"
+                                        AutomationProperties.AutomationId="FeedReviewSkipButton" />
+                                <Button Margin="0,0,6,6"
+                                        IsEnabled="{Binding CanMoveReviewToToday}"
+                                        Command="{Binding MoveToTodayCommand}"
+                                        Content="{DynamicResource FeedReviewMoveToday}"
+                                        AutomationProperties.AutomationId="FeedReviewMoveTodayButton" />
+                            </WrapPanel>
+
+                            <Border IsVisible="{Binding CanModifyReviewSource}"
+                                    Padding="10"
+                                    CornerRadius="6"
+                                    BorderBrush="{DynamicResource ThemeBorderMidBrush}"
+                                    BorderThickness="1">
+                                <StackPanel Spacing="8">
+                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                                        <TextBlock FontWeight="SemiBold"
+                                                   VerticalAlignment="Center"
+                                                   Text="{DynamicResource FeedReviewTaskOptions}" />
+                                        <ToggleSwitch Grid.Column="1"
+                                                      IsChecked="{Binding ReviewTaskIsGoal, Mode=TwoWay}"
+                                                      Content="{DynamicResource FeedReviewGoal}"
+                                                      AutomationProperties.AutomationId="FeedReviewTaskGoalToggle" />
+                                    </Grid>
+                                    <ItemsControl ItemsSource="{Binding ReviewTaskAreas}"
+                                                  AutomationProperties.AutomationId="FeedReviewTaskAreas">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <WrapPanel Orientation="Horizontal" />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="feed:FeedTaskAreaOptionViewModel">
+                                                <CheckBox Margin="0,0,10,4"
+                                                          IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                                          Content="{Binding Area.DisplayName}" />
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <Button HorizontalAlignment="Right"
+                                            IsEnabled="{Binding CanCreateReviewTask}"
+                                            Command="{Binding CreateTaskCommand}"
+                                            Content="{DynamicResource FeedReviewCreateTask}"
+                                            AutomationProperties.AutomationId="FeedReviewCreateTaskButton" />
+                                    <TextBlock IsVisible="{Binding IsTaskConversionUnavailable}"
+                                               Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+                                               Text="{DynamicResource TaskClassificationOldServerExplanation}"
+                                               TextWrapping="Wrap"
+                                               AutomationProperties.AutomationId="FeedReviewTaskConversionUnavailable" />
+                                </StackPanel>
+                            </Border>
+
+                            <Border IsVisible="{Binding CanModifyReviewSource}"
+                                    Padding="10"
+                                    CornerRadius="6"
+                                    BorderBrush="{DynamicResource ThemeBorderMidBrush}"
+                                    BorderThickness="1">
+                                <Grid ColumnDefinitions="*,*,Auto" ColumnSpacing="8">
+                                    <TextBox Text="{Binding ReviewNoteTitle, Mode=TwoWay}"
+                                             PlaceholderText="{DynamicResource FeedReviewNoteTitle}"
+                                             AutomationProperties.AutomationId="FeedReviewNoteTitleBox" />
+                                    <TextBox Grid.Column="1"
+                                             Text="{Binding ReviewNoteFolder, Mode=TwoWay}"
+                                             PlaceholderText="{DynamicResource FeedReviewNoteFolder}"
+                                             AutomationProperties.AutomationId="FeedReviewNoteFolderBox" />
+                                    <Button Grid.Column="2"
+                                            Command="{Binding CreateNoteCommand}"
+                                            Content="{DynamicResource FeedReviewCreateNote}"
+                                            AutomationProperties.AutomationId="FeedReviewCreateNoteButton" />
+                                </Grid>
+                            </Border>
+
+                            <Border IsVisible="{Binding HasCreatedTask}"
+                                    Padding="10"
+                                    CornerRadius="6"
+                                    BorderBrush="{DynamicResource FeedAccentBrush}"
+                                    BorderThickness="1"
+                                    AutomationProperties.AutomationId="FeedTaskInlineSurface">
+                                <StackPanel Spacing="10">
+                                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                                        <local:TaskStatusPicker Task="{Binding CreatedTaskReference.Task}"
+                                                                VerticalAlignment="Center"
+                                                                AutomationProperties.AutomationId="FeedTaskStatusPicker" />
+                                        <Button Grid.Column="1"
+                                                HorizontalAlignment="Left"
+                                                Padding="0"
+                                                Background="Transparent"
+                                                BorderThickness="0"
+                                                DataContext="{Binding CreatedTaskReference}"
+                                                Click="OnTaskReferenceClick"
+                                                AutomationProperties.AutomationId="FeedTaskTitleButton">
+                                            <TextBlock Text="{Binding DisplayTitle}"
+                                                       FontWeight="SemiBold"
+                                                       TextWrapping="Wrap" />
+                                        </Button>
+                                        <ToggleSwitch Grid.Column="2"
+                                                      IsChecked="{Binding CreatedTaskReference.Task.IsGoal, Mode=TwoWay}"
+                                                      Content="{DynamicResource FeedReviewGoal}"
+                                                      AutomationProperties.AutomationId="FeedCreatedTaskGoalToggle" />
+                                    </Grid>
+                                    <ItemsControl ItemsSource="{Binding ReviewTaskAreas}"
+                                                  AutomationProperties.AutomationId="FeedCreatedTaskAreas">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <WrapPanel Orientation="Horizontal" />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="feed:FeedTaskAreaOptionViewModel">
+                                                <CheckBox Margin="0,0,10,4"
+                                                          IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                                          Content="{Binding Area.DisplayName}" />
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <views:TaskRelationsControl Owner="{Binding TaskOwner}"
+                                                                TargetTask="{Binding CreatedTaskReference.Task}"
+                                                                AutomationIdPrefix="FeedTaskParentsRelation"
+                                                                ParentsTreeAutomationId="FeedTaskParentsTree"
+                                                                OpenParentTaskOnDoubleTap="False" />
+                                    <Button HorizontalAlignment="Right"
+                                            Command="{Binding ContinueReviewCommand}"
+                                            Content="{DynamicResource FeedReviewContinue}"
+                                            AutomationProperties.AutomationId="FeedReviewContinueButton" />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <Grid Grid.Row="2">
+                    <Grid IsVisible="{Binding IsChronologyVisible}"
+                          RowDefinitions="*,Auto"
+                          RowSpacing="8">
+                        <TextBlock IsVisible="{Binding IsChronologyEmpty}"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Top"
+                                   Margin="16"
+                                   Text="{DynamicResource FeedEmptyDayList}" />
+                        <ListBox x:Name="ChronologyList"
+                                 ItemsSource="{Binding Days}"
+                                 SelectedItem="{Binding SelectedDay, Mode=TwoWay}"
+                                 Background="Transparent"
+                                 BorderThickness="0"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                 AutomationProperties.AutomationId="FeedChronologyList">
+                            <ListBox.Styles>
+                                <Style Selector="ListBoxItem">
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                </Style>
+                            </ListBox.Styles>
+                            <ListBox.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <VirtualizingStackPanel />
+                                </ItemsPanelTemplate>
+                            </ListBox.ItemsPanel>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="feed:FeedDayViewModel">
+                                    <Border Margin="0,0,0,12"
+                                            Padding="16"
+                                            CornerRadius="8"
+                                            BorderBrush="{DynamicResource ThemeBorderMidBrush}"
+                                            BorderThickness="1"
+                                            Classes.FeedReviewTarget="{Binding IsReviewTarget}"
+                                            AutomationProperties.AutomationId="{Binding AutomationId}"
+                                            AutomationProperties.Name="{Binding AutomationName}">
+                                        <StackPanel Spacing="10">
+                                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                                <TextBlock FontSize="18"
+                                                           FontWeight="SemiBold"
+                                                           VerticalAlignment="Center"
+                                                           Text="{Binding DisplayDate}" />
+                                                <ToggleButton Grid.Column="1"
+                                                              Classes="FeedDayCollapseToggle"
+                                                              IsChecked="{Binding IsCollapsed, Mode=TwoWay}"
+                                                              ToolTip.Tip="{DynamicResource FeedDayCollapseToggle}"
+                                                              AutomationProperties.Name="{DynamicResource FeedDayCollapseToggle}"
+                                                              AutomationProperties.AutomationId="{Binding CollapseAutomationId}" />
+                                            </Grid>
+                                            <Border IsVisible="{Binding !IsCollapsed}">
+                                                <views:MarkdownBlockLivePreviewEditor DataContext="{Binding MarkdownEditor}"
+                                                                                      LinkInvoked="OnMarkdownLinkInvoked"
+                                                                                      BrokenTaskReferenceActionInvoked="OnBrokenTaskReferenceActionInvoked" />
+                                            </Border>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                        <Button Grid.Row="1"
+                                HorizontalAlignment="Center"
+                                IsVisible="{Binding HasMoreDays}"
+                                Command="{Binding LoadOlderDaysCommand}"
+                                Content="{DynamicResource FeedLoadOlderDays}"
+                                AutomationProperties.AutomationId="FeedLoadOlderDaysButton" />
+                    </Grid>
+
+                    <Grid IsVisible="{Binding IsSearchActive}">
+                        <TextBlock IsVisible="{Binding IsSearchEmpty}"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Top"
+                                   Margin="16"
+                                   Text="{DynamicResource FeedSearchNoResults}" />
+                        <ListBox x:Name="SearchResultsList"
+                                 ItemsSource="{Binding SearchResults}"
+                                 Background="Transparent"
+                                 BorderThickness="0"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                 AutomationProperties.AutomationId="FeedSearchResultsList">
+                            <ListBox.Styles>
+                                <Style Selector="ListBoxItem">
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                </Style>
+                            </ListBox.Styles>
+                            <ListBox.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <VirtualizingStackPanel />
+                                </ItemsPanelTemplate>
+                            </ListBox.ItemsPanel>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="feed:FeedSearchResultViewModel">
+                                    <Button Margin="0,0,0,10"
+                                            Padding="0"
+                                            HorizontalContentAlignment="Stretch"
+                                            Background="Transparent"
+                                            BorderThickness="0"
+                                            Click="OnSearchResultClick"
+                                            AutomationProperties.Name="{Binding AutomationName}"
+                                            AutomationProperties.AutomationId="{Binding AutomationId}">
+                                        <Border Padding="14"
+                                                CornerRadius="8"
+                                                BorderBrush="{DynamicResource ThemeBorderMidBrush}"
+                                                BorderThickness="1">
+                                            <StackPanel Spacing="6">
+                                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                                                    <TextBlock FontWeight="SemiBold" Text="{Binding TypeDisplayName}" />
+                                                    <TextBlock Grid.Column="1"
+                                                               HorizontalAlignment="Right"
+                                                               Opacity="0.72"
+                                                               Text="{Binding DisplaySource}" />
+                                                </Grid>
+                                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                                                    <TextBlock Opacity="0.72" Text="{Binding DisplayAreas}" />
+                                                    <TextBlock Grid.Column="1"
+                                                               HorizontalAlignment="Right"
+                                                               Opacity="0.72"
+                                                               Text="{Binding RelativePath}"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                </Grid>
+                                                <TextBlock Text="{Binding Text}" TextWrapping="Wrap" />
+                                                <TextBlock Opacity="0.72" Text="{Binding Context}" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </Border>
+                                    </Button>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Grid>
+
+                    <Border
+                            IsVisible="{Binding HasOpenedThematicFile}"
+                            Padding="16"
+                            CornerRadius="8"
+                            BorderBrush="{DynamicResource ThemeBorderMidBrush}"
+                            BorderThickness="1"
+                            Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
+                            AutomationProperties.AutomationId="FeedThematicFileRoot">
+                        <Grid RowDefinitions="Auto,*" RowSpacing="12">
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                <StackPanel Spacing="2">
+                                    <TextBlock FontSize="18"
+                                               FontWeight="SemiBold"
+                                               Text="{Binding OpenedThematicFile.DisplayName}" />
+                                    <TextBlock Opacity="0.68"
+                                               Text="{Binding OpenedThematicFile.RelativePath}"
+                                               TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                                <Button Grid.Column="1"
+                                        Command="{Binding CloseThematicFileCommand}"
+                                        Content="×"
+                                        ToolTip.Tip="{DynamicResource Close}"
+                                        AutomationProperties.Name="{DynamicResource Close}"
+                                        AutomationProperties.AutomationId="FeedThematicFileCloseButton" />
+                            </Grid>
+                            <views:MarkdownBlockLivePreviewEditor Grid.Row="1"
+                                                                  DataContext="{Binding OpenedThematicFile.MarkdownEditor}"
+                                                                  LinkInvoked="OnMarkdownLinkInvoked"
+                                                                  BrokenTaskReferenceActionInvoked="OnBrokenTaskReferenceActionInvoked" />
+                        </Grid>
+                    </Border>
+
+                    <ProgressBar IsVisible="{Binding IsBusy}"
+                                 IsIndeterminate="True"
+                                 VerticalAlignment="Top"
+                                 AutomationProperties.AutomationId="FeedBusyIndicator" />
+                </Grid>
+
+                <views:FeedPendingRecovery Grid.Row="3"
+                                           DataContext="{Binding}" />
+            </Grid>
+
+            <views:FeedFilesDrawer
+                                   DataContext="{Binding FilesDrawer}" />
+            <views:AreaManagement
+                                  Margin="16"
+                                  DataContext="{Binding AreaManagement}" />
+            <views:FeedDocumentConflict
+                                        DataContext="{Binding DocumentConflict}" />
+            <views:FeedVaultIdentityConflict
+                                            DataContext="{Binding IdentityConflict}" />
+            <views:FeedReviewRecovery
+                                      DataContext="{Binding ReviewRecovery}" />
+        </Grid>
+    </Grid>
+</UserControl>

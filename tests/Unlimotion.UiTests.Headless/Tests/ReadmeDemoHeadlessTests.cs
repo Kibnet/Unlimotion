@@ -7,6 +7,7 @@ using TUnit.Core;
 using Unlimotion.AppAutomation.TestHost;
 using Unlimotion.UiTests.Authoring.Pages;
 using Unlimotion.UiTests.Authoring.Tests;
+using Unlimotion.UiTests.Headless.Infrastructure;
 using Unlimotion.ViewModel;
 
 namespace Unlimotion.UiTests.Headless.Tests;
@@ -29,7 +30,9 @@ public abstract class ReadmeDemoHeadlessTestsBase
                 UnlimotionAppLaunchHost.CreateHeadlessLaunchOptions(
                     UnlimotionAutomationScenario.ReadmeDemo,
                     Language,
-                    vm => _vm = vm)));
+                    vm => _vm = vm,
+                    viewModelFactoryDispatcher: factory => HeadlessRuntime.Dispatch(factory),
+                    headlessWindowCleanup: HeadlessSessionHooks.CloseWindow)));
     }
 
     protected override MainWindowPage CreatePage(MainWindowHeadlessTests.HeadlessRuntimeSession session)
