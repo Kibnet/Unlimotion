@@ -169,7 +169,7 @@ public class DailyMarkdownStorageTests
         var seed = await seedVault.CreateAsync(path, "base\n");
         var originalPath = seedVault.ResolveSafePath(path);
         var lateWriterBytes = new UTF8Encoding(false).GetBytes(lateWriterText);
-        await using var externalWriter = new FileStream(
+        var externalWriter = new FileStream(
             originalPath,
             FileMode.Open,
             FileAccess.ReadWrite,
@@ -199,19 +199,38 @@ public class DailyMarkdownStorageTests
 
         try
         {
-            var deleted = await vault.DeleteAsync(path, seed.Revision);
+            bool deleted = false;
+            Exception? deleteFailure = null;
+            try
+            {
+                deleted = await vault.DeleteAsync(path, seed.Revision);
+            }
+            catch (Exception exception) when (exception is IOException or VaultRevisionConflictException)
+            {
+                deleteFailure = exception;
+            }
 
-            await Assert.That(deleted).IsTrue();
-            await Assert.That(tombstonePath).IsNotNull();
-            await Assert.That(File.Exists(originalPath)).IsFalse();
-            await Assert.That(await File.ReadAllTextAsync(tombstonePath!)).IsEqualTo(lateWriterText);
+            if (deleteFailure is null)
+            {
+                await externalWriter.DisposeAsync();
+
+                await Assert.That(deleted).IsTrue();
+                await Assert.That(tombstonePath).IsNotNull();
+                await Assert.That(File.Exists(originalPath)).IsFalse();
+                await Assert.That(await File.ReadAllTextAsync(tombstonePath!)).IsEqualTo(lateWriterText);
+            }
+            else
+            {
+                await WriteLateTextAsync(CancellationToken.None);
+                await externalWriter.DisposeAsync();
+
+                await Assert.That(File.Exists(originalPath)).IsTrue();
+                await Assert.That(await File.ReadAllTextAsync(originalPath)).IsEqualTo(lateWriterText);
+            }
         }
-        catch (Exception exception) when (exception is IOException or VaultRevisionConflictException)
+        finally
         {
-            await WriteLateTextAsync(CancellationToken.None);
-
-            await Assert.That(File.Exists(originalPath)).IsTrue();
-            await Assert.That(await File.ReadAllTextAsync(originalPath)).IsEqualTo(lateWriterText);
+            await externalWriter.DisposeAsync();
         }
     }
 
