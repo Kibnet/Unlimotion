@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -12,6 +13,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Unlimotion.Domain;
 using Unlimotion.Notes.Identity;
 using Unlimotion.Notes.Areas;
 using Unlimotion.Notes.Markdown;
@@ -19,9 +21,11 @@ using Unlimotion.Notes.Operations;
 using Unlimotion.Notes.Review;
 using Unlimotion.Notes.Search;
 using Unlimotion.Notes.Vault;
+using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
 using Unlimotion.ViewModel.Feed;
 using Unlimotion.Views;
+using DomainTaskStatus = Unlimotion.Domain.TaskStatus;
 
 namespace Unlimotion.Test;
 
@@ -530,6 +534,135 @@ public class FeedControlUiTests
                     owner.SelectedWorkspaceMode == WorkspaceMode.Tasks
                     && owner.DetailsAreOpen
                     && string.Equals(owner.CurrentTaskItem?.Id, target.Id, StringComparison.Ordinal))).IsTrue();
+            }
+            finally
+            {
+                window?.Close();
+                await fixture.CleanTasksAsync();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task Feed_TaskReferenceRebindsAndClearDropsStaleReferencesEvenWhenAlreadyUninitialized()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            using var directory = new FeedTempDirectory();
+            Window? window = null;
+            try
+            {
+                var owner = fixture.MainWindowViewModelTest;
+                await owner.Connect();
+                var firstTask = TestHelpers.GetTask(owner, MainWindowViewModelFixture.RootTask2Id)
+                    ?? throw new InvalidOperationException("The source task fixture is missing.");
+                var taskId = firstTask.Id;
+                var firstTaskStatus = firstTask.Status;
+                var secondStorageRaw = new InMemoryStorage();
+                await secondStorageRaw.Save(new TaskItem
+                {
+                    Id = taskId,
+                    Title = "Задача из пространства B",
+                    Status = DomainTaskStatus.Prepared
+                });
+
+                using var activeSecondStorage = new UnifiedTaskStorage(new TaskTreeManager(secondStorageRaw));
+                await activeSecondStorage.Init();
+
+                directory.WriteDaily(
+                    new DateOnly(2026, 8, 24),
+                    $"[Задача из пространства A](unlimotion://task/{taskId})\n");
+                var feed = owner.Feed;
+                feed.TaskOwner = owner;
+                feed.TaskResolver = id => owner.taskRepository?.Tasks.Items.FirstOrDefault(task =>
+                    string.Equals(task.Id, id, StringComparison.Ordinal));
+                await feed.InitializeVaultAsync(directory.Path);
+
+                var view = new FeedControl { DataContext = feed };
+                window = new Window { Width = 900, Height = 700, Content = view };
+                window.Show();
+                RunLayoutJobs();
+
+                var initialReference = feed.Days.Single().TaskReferences.Single();
+                await Assert.That(initialReference.Task).IsSameReferenceAs(firstTask);
+
+                await owner.BindInitializedStorage(activeSecondStorage);
+
+                var rebound = await WaitForAsync(() =>
+                {
+                    var reference = feed.Days.Single().TaskReferences.Single();
+                    var picker = FindOptionalControlByAutomationId<global::Unlimotion.TaskStatusPicker>(
+                        view,
+                        reference.StatusAutomationId);
+                    return reference.Task is not null
+                        && !ReferenceEquals(reference.Task, firstTask)
+                        && string.Equals(reference.Task.Title, "Задача из пространства B", StringComparison.Ordinal)
+                        && ReferenceEquals(picker?.Task, reference.Task);
+                });
+
+                await Assert.That(rebound).IsTrue();
+                var reboundReference = feed.Days.Single().TaskReferences.Single();
+                var reboundTitle = FindControlByAutomationId<Button>(view, reboundReference.TitleAutomationId);
+                await Assert.That(AutomationProperties.GetName(reboundTitle)).IsEqualTo("Задача из пространства B");
+                var reboundPicker = FindControlByAutomationId<global::Unlimotion.TaskStatusPicker>(
+                    view,
+                    reboundReference.StatusAutomationId);
+                var flyout = await OpenStatusFlyoutAsync(reboundPicker);
+                var inProgress = flyout.Items
+                    .OfType<MenuItem>()
+                    .Single(item => string.Equals(
+                        AutomationProperties.GetAutomationId(item),
+                        "TaskStatusOptionInProgress",
+                        StringComparison.Ordinal));
+                await Assert.That(inProgress.IsEnabled).IsTrue();
+                inProgress.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent, inProgress));
+
+                var statusChangedInActiveSpace = await WaitForAsync(() =>
+                    reboundReference.Task?.Status == DomainTaskStatus.InProgress
+                    && firstTask.Status == firstTaskStatus);
+
+                await Assert.That(statusChangedInActiveSpace).IsTrue();
+                var reboundTask = reboundReference.Task
+                    ?? throw new InvalidOperationException("The active task reference is missing.");
+
+                owner.ClearTaskSpaceSurface();
+
+                var cleared = await WaitForAsync(() =>
+                {
+                    var reference = feed.Days.Single().TaskReferences.Single();
+                    return reference.Task is null
+                        && FindOptionalControlByAutomationId<global::Unlimotion.TaskStatusPicker>(
+                            view,
+                            reference.StatusAutomationId) is null
+                        && FindOptionalControlByAutomationId<Grid>(
+                            view,
+                            $"FeedTask-{taskId}-BrokenReference") is not null;
+                });
+
+                await Assert.That(cleared).IsTrue();
+                await Assert.That(owner.IsInitialized).IsFalse();
+
+                // A failed initialization can leave a storage assigned while initialization remains false.
+                owner.taskRepository = activeSecondStorage;
+                feed.OnTaskStorageChanged();
+
+                var restoredWhileUninitialized = await WaitForAsync(() =>
+                {
+                    var reference = feed.Days.Single().TaskReferences.Single();
+                    return ReferenceEquals(reference.Task, reboundTask);
+                });
+
+                await Assert.That(restoredWhileUninitialized).IsTrue();
+                await Assert.That(owner.IsInitialized).IsFalse();
+
+                owner.ClearTaskSpaceSurface();
+
+                var clearedWhileAlreadyUninitialized = await WaitForAsync(() =>
+                    feed.Days.Single().TaskReferences.Single().Task is null);
+
+                await Assert.That(clearedWhileAlreadyUninitialized).IsTrue();
             }
             finally
             {
@@ -1116,6 +1249,40 @@ public class FeedControlUiTests
         }
 
         RunLayoutJobs();
+    }
+
+    private static async Task<MenuFlyout> OpenStatusFlyoutAsync(global::Unlimotion.TaskStatusPicker statusPicker)
+    {
+        var point = new Point(statusPicker.Bounds.Width / 2, statusPicker.Bounds.Height / 2);
+        var pointer = new Pointer(1, PointerType.Mouse, true);
+        statusPicker.RaiseEvent(new PointerPressedEventArgs(
+            statusPicker,
+            pointer,
+            statusPicker,
+            point,
+            0,
+            new PointerPointProperties(
+                RawInputModifiers.LeftMouseButton,
+                PointerUpdateKind.LeftButtonPressed),
+            KeyModifiers.None,
+            1));
+        Dispatcher.UIThread.RunJobs();
+        statusPicker.RaiseEvent(new PointerReleasedEventArgs(
+            statusPicker,
+            pointer,
+            statusPicker,
+            point,
+            0,
+            new PointerPointProperties(
+                RawInputModifiers.None,
+                PointerUpdateKind.LeftButtonReleased),
+            KeyModifiers.None,
+            MouseButton.Left));
+
+        var opened = await WaitForAsync(() => statusPicker.Flyout is MenuFlyout { IsOpen: true });
+        return opened && statusPicker.Flyout is MenuFlyout flyout
+            ? flyout
+            : throw new InvalidOperationException("The feed task status flyout was not opened.");
     }
 
     private static void RunLayoutJobs()

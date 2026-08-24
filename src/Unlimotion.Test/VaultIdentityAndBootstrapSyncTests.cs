@@ -170,6 +170,53 @@ public class VaultIdentityAndBootstrapSyncTests
     }
 
     [Test]
+    public async Task ConcurrentIdentityConflictPreservationNeverOverwritesDifferentPayloads()
+    {
+        using var recoveryDirectory = new TempNotesDirectory();
+        var bothPassedMissingFileCheck = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseCreate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var arrivals = 0;
+        var store = new FileVaultIdentityConflictStore(
+            recoveryDirectory.Path,
+            async cancellationToken =>
+            {
+                if (Interlocked.Increment(ref arrivals) == 2)
+                {
+                    bothPassedMissingFileCheck.TrySetResult();
+                }
+
+                await releaseCreate.Task.WaitAsync(cancellationToken);
+            });
+        var first = CreateIdentityConflictBundle("accepted-first");
+        var second = first with
+        {
+            AcceptedBranch = first.AcceptedBranch with { IdentityJson = "accepted-second" }
+        };
+        var firstPreserve = Task.Run(() => store.PreserveAsync(first));
+        var secondPreserve = Task.Run(() => store.PreserveAsync(second));
+
+        try
+        {
+            await bothPassedMissingFileCheck.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+        finally
+        {
+            releaseCreate.TrySetResult();
+        }
+
+        var outcomes = await Task.WhenAll(CapturePreserve(firstPreserve), CapturePreserve(secondPreserve));
+        var persisted = await store.LoadAsync(first.ConflictId);
+
+        await Assert.That(outcomes.Count(static outcome => outcome is null)).IsEqualTo(1);
+        await Assert.That(outcomes.Count(static outcome => outcome is IOException)).IsEqualTo(1);
+        await Assert.That(persisted).IsNotNull();
+        await Assert.That(persisted!.AcceptedBranch.IdentityJson).IsEqualTo(
+            firstPreserve.IsCompletedSuccessfully
+                ? first.AcceptedBranch.IdentityJson
+                : second.AcceptedBranch.IdentityJson);
+    }
+
+    [Test]
     public async Task IdentityResolutionRechecksRevisionAndKeepsBundleOnDrift()
     {
         using var vaultDirectory = new TempNotesDirectory();
@@ -291,6 +338,34 @@ public class VaultIdentityAndBootstrapSyncTests
             new Dictionary<string, string>(),
             [new BlockLocator(
                 "Ежедневные/2026-08-24.md", null, MarkdownBlockKind.Paragraph, "accepted", 0)]);
+    }
+
+    private static VaultIdentityConflictBundle CreateIdentityConflictBundle(string acceptedIdentityJson)
+    {
+        return new VaultIdentityConflictBundle(
+            1,
+            "identity-conflict",
+            CreateAcceptedIdentityBranch() with { IdentityJson = acceptedIdentityJson },
+            new VaultIdentityBranchSnapshot(
+                "vault-current",
+                "{\"schemaVersion\":1,\"vaultId\":\"vault-current\"}\n",
+                "current-revision",
+                new Dictionary<string, string>(),
+                []),
+            DateTimeOffset.UtcNow);
+    }
+
+    private static async Task<Exception?> CapturePreserve(Task operation)
+    {
+        try
+        {
+            await operation;
+            return null;
+        }
+        catch (Exception exception)
+        {
+            return exception;
+        }
     }
 
     private sealed class PendingIdentityRecoveryGuard : IVaultIdentityRecoveryGuard
