@@ -35,6 +35,14 @@ public static class UnlimotionAutomationScenarioData
     public const string TaskSpacesSpaceATitle = "Space A task";
     public const string TaskSpacesSpaceBTitle = "Space B task";
     public const string TaskSpacesWindowTitle = "Unlimotion Task Spaces";
+    public const string FeedCurrentTaskId = "feed-live-task";
+    public const string FeedCurrentTaskTitle = "Publish the Feed concept";
+    public const string FeedWindowTitle = "Unlimotion Feed";
+    public const string FeedNewestMarker = "Newest feed entry for chronology";
+    public const string FeedOlderMarker = "Older searchable feed entry";
+    public const string FeedPendingReviewMarker = "Pending review item from yesterday";
+    public const string FeedQuickCaptureMarker = "Captured from AppAutomation";
+    public const string FeedPermanentNoteRelativePath = "Проекты/Лента.md";
     public static readonly IReadOnlyList<string> ReadmeDemoLastOpenedTaskIds =
     [
         "launch-pilot",
@@ -61,6 +69,7 @@ public static class UnlimotionAutomationScenarioData
             UnlimotionAutomationScenario.TaskSpaces or
                 UnlimotionAutomationScenario.TaskSpacesDuplicateCatalogRecovery or
                 UnlimotionAutomationScenario.TaskSpacesOrphanCatalogRecovery => TaskSpacesTaskId,
+            UnlimotionAutomationScenario.Feed => FeedCurrentTaskId,
             _ => SmokeCurrentTaskId
         };
     }
@@ -115,6 +124,7 @@ public static class UnlimotionAutomationScenarioData
             UnlimotionAutomationScenario.TaskSpaces or
                 UnlimotionAutomationScenario.TaskSpacesDuplicateCatalogRecovery or
                 UnlimotionAutomationScenario.TaskSpacesOrphanCatalogRecovery => TaskSpacesSpaceATitle,
+            UnlimotionAutomationScenario.Feed => FeedCurrentTaskTitle,
             _ => SmokeCurrentTaskTitle
         };
     }
@@ -153,6 +163,7 @@ public static class UnlimotionAutomationScenarioData
             UnlimotionAutomationScenario.TaskSpaces or
                 UnlimotionAutomationScenario.TaskSpacesDuplicateCatalogRecovery or
                 UnlimotionAutomationScenario.TaskSpacesOrphanCatalogRecovery => TaskSpacesWindowTitle,
+            UnlimotionAutomationScenario.Feed => FeedWindowTitle,
             _ => null
         };
     }
@@ -180,6 +191,9 @@ public static class UnlimotionAutomationScenarioData
             case UnlimotionAutomationScenario.TaskSpacesOrphanCatalogRecovery:
                 SeedTaskSpaces(tasksPath);
                 break;
+            case UnlimotionAutomationScenario.Feed:
+                SeedFeedTasks(tasksPath);
+                break;
             default:
                 CopySmokeSnapshots(repositoryRoot, tasksPath);
                 break;
@@ -191,7 +205,8 @@ public static class UnlimotionAutomationScenarioData
         string configPath,
         string tasksPath,
         string? language = null,
-        string? theme = null)
+        string? theme = null,
+        string? noteVaultPath = null)
     {
         switch (scenario)
         {
@@ -213,10 +228,74 @@ public static class UnlimotionAutomationScenarioData
             case UnlimotionAutomationScenario.TaskSpacesOrphanCatalogRecovery:
                 WriteCorruptTaskSpacesConfig(configPath, tasksPath, duplicateSource: false);
                 break;
+            case UnlimotionAutomationScenario.Feed:
+                WriteFeedConfig(
+                    configPath,
+                    tasksPath,
+                    noteVaultPath ?? throw new ArgumentNullException(nameof(noteVaultPath)),
+                    language,
+                    theme);
+                break;
             default:
                 WriteSmokeConfig(configPath, tasksPath);
                 break;
         }
+    }
+
+    public static string GetFeedDailyRelativePath(DateOnly date) =>
+        $"Ежедневные/{date:yyyy-MM-dd}.md";
+
+    public static void SeedFeedVault(string vaultPath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(vaultPath);
+
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        var yesterday = today.AddDays(-1);
+        var todayPath = Path.Combine(vaultPath, GetFeedDailyRelativePath(today).Replace('/', Path.DirectorySeparatorChar));
+        var yesterdayPath = Path.Combine(vaultPath, GetFeedDailyRelativePath(yesterday).Replace('/', Path.DirectorySeparatorChar));
+        var permanentNotePath = Path.Combine(vaultPath, FeedPermanentNoteRelativePath.Replace('/', Path.DirectorySeparatorChar));
+        var areasPath = Path.Combine(vaultPath, ".unlimotion", "areas.json");
+
+        Directory.CreateDirectory(Path.GetDirectoryName(todayPath)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(permanentNotePath)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(areasPath)!);
+
+        File.WriteAllText(
+            todayPath,
+            $"---\nid: feed-day-{today:yyyyMMdd}\n---\n# {today:yyyy-MM-dd}\n\n" +
+            "## Unlimotion <!-- unlimotion-area:area-unlimotion -->\n" +
+            $"{FeedNewestMarker}\n\n" +
+            $"[{FeedCurrentTaskTitle}](unlimotion://task/{FeedCurrentTaskId})\n",
+            new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        File.WriteAllText(
+            yesterdayPath,
+            $"---\nid: feed-day-{yesterday:yyyyMMdd}\n---\n# {yesterday:yyyy-MM-dd}\n\n" +
+            "## Unlimotion <!-- unlimotion-area:area-unlimotion -->\n" +
+            $"{FeedOlderMarker}\n\n" +
+            $"- [ ] {FeedPendingReviewMarker}\n",
+            new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        File.WriteAllText(
+            permanentNotePath,
+            "---\nid: feed-concept-note\n---\n# Feed concept\n\nDurable thematic note seeded for the Feed scenario.\n",
+            new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        WriteJson(
+            areasPath,
+            new
+            {
+                SchemaVersion = 1,
+                Areas = new[]
+                {
+                    new
+                    {
+                        Id = "area-unlimotion",
+                        Name = "Unlimotion",
+                        ParentId = (string?)null,
+                        IsArchived = false,
+                        SortOrder = 0,
+                        DefaultNoteFolder = "Проекты"
+                    }
+                }
+            });
     }
 
     private static bool IsRussian(string? language)
@@ -551,6 +630,94 @@ public static class UnlimotionAutomationScenarioData
         };
 
         WriteJson(configPath, config);
+    }
+
+    private static void WriteFeedConfig(
+        string configPath,
+        string tasksPath,
+        string noteVaultPath,
+        string? language,
+        string? theme)
+    {
+        var languageMode = NormalizeReadmeLanguage(language);
+        var themeMode = string.Equals(theme, AppearanceSettings.DarkTheme, StringComparison.OrdinalIgnoreCase)
+            ? AppearanceSettings.DarkTheme
+            : AppearanceSettings.LightTheme;
+        var config = new
+        {
+            TaskStorage = new
+            {
+                Path = tasksPath,
+                URL = string.Empty,
+                Login = string.Empty,
+                Password = string.Empty,
+                IsServerMode = "False"
+            },
+            NoteVault = new
+            {
+                RootPath = noteVaultPath,
+                DayBoundaryMinutes = 0
+            },
+            Git = new
+            {
+                BackupEnabled = "False",
+                ShowStatusToasts = "False",
+                RemoteUrl = string.Empty,
+                Branch = "main",
+                UserName = string.Empty,
+                Password = string.Empty,
+                PullIntervalSeconds = "30",
+                PushIntervalSeconds = "60",
+                RemoteName = "origin",
+                PushRefSpec = "refs/heads/main",
+                CommitterName = "Unlimotion Feed",
+                CommitterEmail = "feed@unlimotion.app"
+            },
+            AllTasks = new
+            {
+                ShowCompleted = "True",
+                ShowArchived = "True",
+                ShowWanted = "False",
+                CurrentSortDefinition = "Comfort",
+                CurrentSortDefinitionForUnlocked = "Comfort"
+            },
+            TaskStatusModel = new
+            {
+                MigrationNoticeShown = "True"
+            },
+            Appearance = new
+            {
+                Theme = themeMode,
+                FontSize = AppearanceSettings.DefaultFontSize,
+                Language = languageMode
+            }
+        };
+
+        WriteJson(configPath, config);
+    }
+
+    private static void SeedFeedTasks(string tasksPath)
+    {
+        var seedTime = DateTimeOffset.Now;
+        var task = new TaskItem
+        {
+            Id = FeedCurrentTaskId,
+            Title = FeedCurrentTaskTitle,
+            Description = "Task referenced directly from the seeded daily Feed note.",
+            Status = Domain.TaskStatus.Prepared,
+            StatusHistory =
+            [
+                CreateStatusHistoryEntry(Domain.TaskStatus.NotReady, seedTime.AddMinutes(-2)),
+                CreateStatusHistoryEntry(Domain.TaskStatus.Prepared, seedTime.AddMinutes(-1))
+            ],
+            AreaIds = ["area-unlimotion"],
+            IsCanBeCompleted = true,
+            CreatedDateTime = seedTime.AddMinutes(-2),
+            UpdatedDateTime = seedTime.AddMinutes(-1),
+            Version = 1
+        };
+
+        WriteStatusContractTaskJson(Path.Combine(tasksPath, task.Id), task);
     }
 
     private static void SeedStatusContractTasks(string tasksPath)

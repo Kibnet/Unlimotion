@@ -32,7 +32,11 @@ namespace Unlimotion
             cfg.CreateMap<RepeaterTypeMold, RepeaterType>().ReverseMap();
             cfg.CreateMap<ReceiveTaskItem, TaskItem>()
                 .IgnoreComputedStatusMembers();
-            cfg.CreateMap<TaskItem, TaskItemHubMold>();
+            cfg.CreateMap<TaskItem, TaskItemHubMold>()
+                .ForMember(
+                    mold => mold.TaskClassificationSchemaVersion,
+                    options => options.MapFrom(
+                        _ => TaskStorageCapabilities.CurrentTaskClassificationSchemaVersion));
             cfg.CreateMap<RepeaterType, RepeaterTypeHubMold>();
             cfg.CreateMap<RepeaterType, RepeaterType>().ReverseMap();
             cfg.CreateMap<RepeaterPattern, RepeaterPattern>().ReverseMap();

@@ -1,6 +1,8 @@
 using System.Threading.Tasks;
 using AppAutomation.Avalonia.Headless.Session;
+using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Threading;
 using TUnit.Core;
 using Unlimotion.AppAutomation.TestHost;
 
@@ -13,8 +15,31 @@ public static class HeadlessSessionHooks
     [Before(TestSession)]
     public static void SetupSession()
     {
-        _session = HeadlessUnitTestSession.StartNew(UnlimotionAppLaunchHost.AvaloniaAppType);
+        _session = HeadlessUnitTestSession.StartNew(
+            UnlimotionAppLaunchHost.AvaloniaAppType,
+            AvaloniaTestIsolationLevel.PerAssembly);
         HeadlessRuntime.SetSession(_session);
+    }
+
+    public static void CloseWindow(Window window)
+    {
+        ArgumentNullException.ThrowIfNull(window);
+        void CloseCore()
+        {
+            window.DataContext = null;
+            window.Content = null;
+            window.Close();
+            Dispatcher.UIThread.RunJobs();
+        }
+
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            CloseCore();
+        }
+        else
+        {
+            HeadlessRuntime.Dispatch(CloseCore);
+        }
     }
 
     [After(TestSession)]

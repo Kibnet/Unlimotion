@@ -382,7 +382,53 @@
             </Border>
 
             <Border Classes="SettingsSection"
-                    IsEnabled="{Binding !IsTaskSpaceSwitching}">
+                    IsEnabled="{Binding !IsTaskSpaceSwitching}"
+                    AutomationProperties.AutomationId="NoteVaultSettingsSection">
+                <StackPanel>
+                    <TextBlock Classes="SectionTitle" Text="{DynamicResource NoteVaultTitle}" />
+                    <TextBlock Classes="SectionHint" Text="{DynamicResource NoteVaultHint}" />
+
+                    <StackPanel Classes="FieldGroup"
+                                IsVisible="{Binding IsExternalNoteVaultSupported}">
+                        <TextBlock Classes="FieldLabel" Text="{DynamicResource FeedMode}" />
+                        <CheckBox AutomationProperties.AutomationId="FeedEnabledCheckBox"
+                                  IsChecked="{Binding IsFeedEnabled, Mode=TwoWay}"
+                                  IsVisible="{Binding IsExternalNoteVaultSupported}"
+                                  Content="{DynamicResource Enabled}" />
+                    </StackPanel>
+
+                    <StackPanel Classes="FieldGroup">
+                        <TextBlock Classes="FieldLabel" Text="{DynamicResource NoteVaultFolder}" />
+                        <Grid Classes="FieldActionRow" ColumnDefinitions="*,Auto">
+                            <TextBox AutomationProperties.AutomationId="NoteVaultRootPathTextBox"
+                                     Text="{Binding NoteVaultRootPath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                     ToolTip.Tip="{Binding NoteVaultRootPath}"
+                                     IsReadOnly="{Binding !IsExternalNoteVaultSupported}" />
+                            <Button Grid.Column="1"
+                                    AutomationProperties.AutomationId="BrowseNoteVaultRootPathButton"
+                                    Content="{DynamicResource Browse}"
+                                    Command="{Binding BrowseNoteVaultRootPathCommand}"
+                                    IsEnabled="{Binding IsExternalNoteVaultSupported}" />
+                        </Grid>
+                    </StackPanel>
+
+                    <StackPanel Classes="FieldGroup"
+                                IsEnabled="{Binding IsExternalNoteVaultSupported}">
+                        <TextBlock Classes="FieldLabel" Text="{DynamicResource NoteDayBoundary}" />
+                        <TimePicker AutomationProperties.AutomationId="NoteDayBoundaryTimePicker"
+                                    IsEnabled="{Binding IsExternalNoteVaultSupported}"
+                                    SelectedTime="{Binding NoteDayBoundary, Mode=TwoWay}" />
+                        <TextBlock Classes="SectionHint"
+                                   Text="{DynamicResource NoteDayBoundaryHint}" />
+                    </StackPanel>
+
+                    <TextBlock Classes="StatusText"
+                               Text="{DynamicResource NoteVaultDesktopOnlyHint}"
+                               IsVisible="{Binding !IsExternalNoteVaultSupported}" />
+                </StackPanel>
+            </Border>
+
+            <Border Classes="SettingsSection">
                 <StackPanel>
                     <TextBlock Classes="SectionTitle" Text="{DynamicResource BackupTitle}" />
                     <TextBlock Classes="SectionHint" Text="{DynamicResource BackupHint}" />

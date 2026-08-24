@@ -7,6 +7,7 @@ using TUnit.Assertions;
 using TUnit.Core;
 using Unlimotion.AppAutomation.TestHost;
 using Unlimotion.UiTests.Authoring.Pages;
+using Unlimotion.UiTests.Headless.Infrastructure;
 using Unlimotion.ViewModel;
 
 namespace Unlimotion.UiTests.Headless.Tests;
@@ -22,7 +23,9 @@ public sealed class SettingsRemoteTypeHeadlessTests
             DesktopAppSession.Launch(
                 UnlimotionAppLaunchHost.CreateHeadlessLaunchOptions(
                     UnlimotionAutomationScenario.GitRemoteSwitch,
-                    afterViewModelPrepared: vm => _vm = vm)));
+                    afterViewModelPrepared: vm => _vm = vm,
+                    viewModelFactoryDispatcher: factory => HeadlessRuntime.Dispatch(factory),
+                    headlessWindowCleanup: HeadlessSessionHooks.CloseWindow)));
     }
 
     protected override MainWindowPage CreatePage(MainWindowHeadlessTests.HeadlessRuntimeSession session)

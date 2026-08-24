@@ -12,6 +12,7 @@ using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
 using System.Windows.Input;
+using Unlimotion.ViewModel.Feed;
 using Unlimotion.ViewModel.Search;
 using Unlimotion.ViewModel.Localization;
 using DomainTaskStatus = Unlimotion.Domain.TaskStatus;
@@ -19,6 +20,19 @@ using L10n = Unlimotion.ViewModel.Localization.Localization;
 
 namespace Unlimotion.ViewModel
 {
+    public enum WorkspaceMode
+    {
+        Tasks,
+        Feed
+    }
+
+    public enum TaskGoalFilterMode
+    {
+        All,
+        Goals,
+        Regular
+    }
+
     public enum TreeCommandKind
     {
         ExpandCurrentNested,
@@ -57,6 +71,7 @@ namespace Unlimotion.ViewModel
         private const string ArchivedStatusFilterSettingsSection = "Archived";
         private const string LastOpenedStatusFilterSettingsSection = "LastOpened";
         private const string RoadmapStatusFilterSettingsSection = "Roadmap";
+        private const string GoalFilterSettingsPath = "AllTasks:GoalFilter";
         private static readonly ReadOnlyObservableCollection<TaskWrapperViewModel> EmptyTaskWrappers =
             new(new ObservableCollectionExtended<TaskWrapperViewModel>());
         private static readonly ReadOnlyObservableCollection<EmojiFilter> EmptyEmojiFilters =
@@ -84,6 +99,8 @@ namespace Unlimotion.ViewModel
             _getTaskStorage = getTaskStorage;
             _taskTreeExpansionStatePath = taskTreeExpansionStatePath;
             Settings = settings ?? new SettingsViewModel(_configuration);
+            Feed = new FeedViewModel();
+            Disposables.Add(Feed);
             Graph = graph ?? new GraphViewModel();
             CurrentAllTasksItems = EmptyTaskWrappers;
             UnlockedItems = EmptyTaskWrappers;
@@ -142,6 +159,11 @@ namespace Unlimotion.ViewModel
             ShowCompleted = IsStatusFilterSelected(DomainTaskStatus.Completed);
             ShowArchived = IsStatusFilterSelected(DomainTaskStatus.Archived);
             ShowWanted = _configuration?.GetSection("AllTasks:ShowWanted").Get<bool?>();
+            var configuredGoalFilter = _configuration?.GetSection(GoalFilterSettingsPath).Get<string>();
+            GoalFilterMode = Enum.TryParse<TaskGoalFilterMode>(configuredGoalFilter, ignoreCase: true, out var goalFilterMode) &&
+                             Enum.IsDefined(goalFilterMode)
+                ? goalFilterMode
+                : TaskGoalFilterMode.All;
             _defaultShowCompleted = ShowCompleted;
             _defaultShowArchived = ShowArchived;
             _defaultShowWanted = ShowWanted;
@@ -188,6 +210,9 @@ namespace Unlimotion.ViewModel
                 .AddToDispose(this);
             this.WhenAnyValue(m => m.ShowWanted)
                 .Subscribe(b => _configuration?.GetSection("AllTasks:ShowWanted").Set(b))
+                .AddToDispose(this);
+            this.WhenAnyValue(m => m.GoalFilterMode)
+                .Subscribe(mode => _configuration?.GetSection(GoalFilterSettingsPath).Set(mode.ToString()))
                 .AddToDispose(this);
             this.WhenAnyValue(m => m.CurrentSortDefinition)
                 .Subscribe(b =>
@@ -270,6 +295,11 @@ namespace Unlimotion.ViewModel
             }
 
             foreach (var filter in WantedFilterDefinitions)
+            {
+                filter.RefreshLocalization();
+            }
+
+            foreach (var filter in TaskGoalFilterDefinitions)
             {
                 filter.RefreshLocalization();
             }
@@ -737,6 +767,22 @@ namespace Unlimotion.ViewModel
             _lastSelectedAllTasksItem = null;
         }
 
+        private IObservable<Func<TaskItemViewModel, bool>> CreateGoalFilter(IObservable<long> taskChanges) =>
+            this.WhenAnyValue(m => m.GoalFilterMode)
+                .CombineLatest(taskChanges.StartWith(0), (mode, _) =>
+                {
+                    bool Predicate(TaskItemViewModel task) => mode switch
+                    {
+                        TaskGoalFilterMode.Goals => task.IsGoal,
+                        TaskGoalFilterMode.Regular => !task.IsGoal,
+                        _ => true
+                    };
+
+                    return (Func<TaskItemViewModel, bool>)Predicate;
+                })
+                .Replay(1)
+                .RefCount();
+
         private async Task ConnectCore(ITaskStorage? suppliedStorage, bool storageAlreadyInitialized)
         {
             IsTasksLoading = true;
@@ -801,6 +847,10 @@ namespace Unlimotion.ViewModel
                     }
                 }
                 taskRepository = taskStorage;
+                var goalFilter = CreateGoalFilter(taskRepository.Tasks
+                    .Connect()
+                    .AutoRefreshOnObservable(task => task.WhenAnyValue(item => item.IsGoal))
+                    .Select(_ => 0L));
 
                 //Если из коллекции пропадает итем, то очищаем выделенный итем.
                 taskRepository.Tasks.Connect()
@@ -1166,6 +1216,8 @@ namespace Unlimotion.ViewModel
                     m => m.IsCanBeCompleted,
                     m => m.Status,
                     m => m.UnlockedDateTime, (c, s, u) => c.Value && s.Value != DomainTaskStatus.Archived))
+                .AutoRefreshOnObservable(m => m.WhenAnyValue(x => x.IsGoal))
+                .Filter(goalFilter)
                 .Filter(allTasksStatusFilter)
                 .Filter(searchTopFilter)
                 .Filter(emojiRootFilter)
@@ -1178,7 +1230,7 @@ namespace Unlimotion.ViewModel
                         RemoveAction = RemoveTask,
                         GetBreadScrumbs = BredScrumbsAlgorithms.WrapperParent,
                         SortComparer = sortObservable,
-                        Filter = new() { allTasksStatusFilter, emojiExcludeFilter },
+                        Filter = new() { goalFilter, allTasksStatusFilter, emojiExcludeFilter },
                     }, "AllTasksTree");
                     var wrapper = new TaskWrapperViewModel(null, item, actions);
                     return wrapper;
@@ -1228,6 +1280,8 @@ namespace Unlimotion.ViewModel
                         x => x.Title,
                         x => x.Description,
                         x => x.GetAllEmoji))
+                    .AutoRefreshOnObservable(m => m.WhenAnyValue(x => x.IsGoal))
+                    .Filter(goalFilter)
                     .Filter(unlockedStatusFilter)
                     .Filter(unlockedTimeFilter)
                     .Filter(durationFilter)
@@ -1242,6 +1296,7 @@ namespace Unlimotion.ViewModel
                             ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
                             RemoveAction = RemoveTask,
                             GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
+                            Filter = new() { goalFilter },
                         }, "UnlockedTree");
                         var wrapper = new TaskWrapperViewModel(null, item, actions);
                         return wrapper;
@@ -1296,6 +1351,8 @@ namespace Unlimotion.ViewModel
                         x => x.Title,
                         x => x.Description,
                         x => x.GetAllEmoji))
+                    .AutoRefreshOnObservable(m => m.WhenAnyValue(x => x.IsGoal))
+                    .Filter(goalFilter)
                     .Filter(m => m.Status == DomainTaskStatus.InProgress)
                     .Filter(inProgressStatusFilter)
                     .Filter(emojiFilter)
@@ -1308,6 +1365,7 @@ namespace Unlimotion.ViewModel
                             ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
                             RemoveAction = RemoveTask,
                             GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
+                            Filter = new() { goalFilter },
                         }, "InProgressTree");
                         var wrapper = new TaskWrapperViewModel(null, item, actions);
                         return wrapper;
@@ -1387,6 +1445,8 @@ namespace Unlimotion.ViewModel
                         x => x.Title,
                         x => x.Description,
                         x => x.GetAllEmoji))
+                    .AutoRefreshOnObservable(m => m.WhenAnyValue(x => x.IsGoal))
+                    .Filter(goalFilter)
                     .Filter(m => m.Status == DomainTaskStatus.Completed)
                     .Filter(completedStatusFilter)
                     .Filter(completedDateFilter)
@@ -1400,6 +1460,7 @@ namespace Unlimotion.ViewModel
                             ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
                             RemoveAction = RemoveTask,
                             GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
+                            Filter = new() { goalFilter },
                         }, "CompletedTree");
                         var wrapper = new TaskWrapperViewModel(null, item, actions);
                         return wrapper;
@@ -1428,6 +1489,8 @@ namespace Unlimotion.ViewModel
                         x => x.Title,
                         x => x.Description,
                         x => x.GetAllEmoji))
+                    .AutoRefreshOnObservable(m => m.WhenAnyValue(x => x.IsGoal))
+                    .Filter(goalFilter)
                     .Filter(m => m.Status == DomainTaskStatus.Archived)
                     .Filter(archivedStatusFilter)
                     .Filter(archiveDateFilter)
@@ -1441,6 +1504,7 @@ namespace Unlimotion.ViewModel
                             ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
                             RemoveAction = RemoveTask,
                             GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
+                            Filter = new() { goalFilter },
                         }, "ArchivedTree");
                         var wrapper = new TaskWrapperViewModel(null, item, actions);
                         return wrapper;
@@ -1469,6 +1533,8 @@ namespace Unlimotion.ViewModel
                         x => x.Title,
                         x => x.Description,
                         x => x.GetAllEmoji))
+                    .AutoRefreshOnObservable(m => m.WhenAnyValue(x => x.IsGoal))
+                    .Filter(goalFilter)
                     .Filter(lastCreatedStatusFilter)
                     .Filter(lastCreatedDateFilter)
                     .Filter(emojiFilter)
@@ -1481,6 +1547,7 @@ namespace Unlimotion.ViewModel
                             ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
                             RemoveAction = RemoveTask,
                             GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
+                            Filter = new() { goalFilter },
                         }, "LastCreatedTree");
                         var wrapper = new TaskWrapperViewModel(null, item, actions);
                         return wrapper;
@@ -1510,6 +1577,8 @@ namespace Unlimotion.ViewModel
                         x => x.Title,
                         x => x.Description,
                         x => x.GetAllEmoji))
+                    .AutoRefreshOnObservable(m => m.WhenAnyValue(x => x.IsGoal))
+                    .Filter(goalFilter)
                     .Filter(lastUpdatedStatusFilter)
                     .Filter(lastUpdatedDateFilter)
                     .Filter(emojiFilter)
@@ -1522,6 +1591,7 @@ namespace Unlimotion.ViewModel
                             ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
                             RemoveAction = RemoveTask,
                             GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
+                            Filter = new() { goalFilter },
                         }, "LastUpdatedTree");
                         var wrapper = new TaskWrapperViewModel(null, item, actions);
                         return wrapper;
@@ -1545,6 +1615,8 @@ namespace Unlimotion.ViewModel
                 taskRepository.Tasks
                     .Connect()
                     .AutoRefreshOnObservable(m => m.WhenAnyValue(x => x.Status))
+                    .AutoRefreshOnObservable(m => m.WhenAnyValue(x => x.IsGoal))
+                    .Filter(goalFilter)
                     .Filter(roadmapStatusFilter)
                     .Filter(emojiFilter)
                     .Filter(emojiExcludeFilter)
@@ -1556,7 +1628,7 @@ namespace Unlimotion.ViewModel
                             ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
                             RemoveAction = RemoveTask,
                             GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
-                            Filter = new() { roadmapStatusFilter, emojiExcludeFilter },
+                            Filter = new() { goalFilter, roadmapStatusFilter, emojiExcludeFilter },
                         };
                         var wrapper = new TaskWrapperViewModel(null, item, actions);
                         return wrapper;
@@ -1572,6 +1644,8 @@ namespace Unlimotion.ViewModel
                         m => m.IsCanBeCompleted,
                         m => m.Status,
                         m => m.UnlockedDateTime, (c, s, u) => c.Value && s.Value != DomainTaskStatus.Archived))
+                    .AutoRefreshOnObservable(m => m.WhenAnyValue(x => x.IsGoal))
+                    .Filter(goalFilter)
                     .Filter(roadmapStatusFilter)
                     .Filter(roadmapRootFilter)
                     .Filter(emojiExcludeFilter)
@@ -1583,7 +1657,7 @@ namespace Unlimotion.ViewModel
                             RemoveAction = RemoveTask,
                             GetBreadScrumbs = BredScrumbsAlgorithms.WrapperParent,
                             SortComparer = sortObservable,
-                            Filter = new() { roadmapStatusFilter, emojiExcludeFilter },
+                            Filter = new() { goalFilter, roadmapStatusFilter, emojiExcludeFilter },
                         };
                         var wrapper = new TaskWrapperViewModel(null, item, actions);
                         return wrapper;
@@ -1664,7 +1738,10 @@ namespace Unlimotion.ViewModel
                     .AutoRefreshOnObservable(w => w.TaskItem.WhenAnyValue(
                         x => x.Status,
                         x => x.CompletedDateTime,
-                        x => x.ArchiveDateTime))
+                        x => x.ArchiveDateTime,
+                        x => x.IsGoal))
+                    .Filter(goalFilter.Select(predicate => new Func<TaskWrapperViewModel, bool>(
+                        wrapper => predicate(wrapper.TaskItem))))
                     .Filter(lastOpenedStatusFilter.Select(predicate => new Func<TaskWrapperViewModel, bool>(
                         wrapper => predicate(wrapper.TaskItem))))
                     .Filter(lastOpenedSearchFilter)
@@ -1692,6 +1769,7 @@ namespace Unlimotion.ViewModel
                             ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
                             RemoveAction = m => RemoveTask(m),
                             GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
+                            Filter = new() { goalFilter },
                         }, "LastOpenedTree");
                         var wrapper = new TaskWrapperViewModel(null, item.Item1, actions)
                         {
@@ -1921,6 +1999,8 @@ namespace Unlimotion.ViewModel
 
         public void ResetCurrentTabFilters()
         {
+            GoalFilterMode = TaskGoalFilterMode.All;
+
             if (AllTasksMode)
             {
                 ResetAllTasksTabFilters();
@@ -2962,7 +3042,49 @@ namespace Unlimotion.ViewModel
         [AlsoNotifyFor(nameof(CurrentWantedFilter))]
         public bool? ShowWanted { get; set; }
 
+        public IReadOnlyList<TaskGoalFilterOption> TaskGoalFilterDefinitions { get; } = TaskGoalFilterOption.All;
+
+        public TaskGoalFilterOption CurrentGoalFilter
+        {
+            get => TaskGoalFilterOption.Find(GoalFilterMode);
+            set
+            {
+                if (value != null && GoalFilterMode != value.Mode)
+                {
+                    GoalFilterMode = value.Mode;
+                }
+            }
+        }
+
+        [AlsoNotifyFor(nameof(CurrentGoalFilter))]
+        public TaskGoalFilterMode GoalFilterMode { get; set; }
+
         public SettingsViewModel Settings { get; set; }
+        public FeedViewModel Feed { get; }
+
+        [AlsoNotifyFor(nameof(IsTasksMode), nameof(IsFeedMode))]
+        public WorkspaceMode SelectedWorkspaceMode { get; set; } = WorkspaceMode.Tasks;
+
+        public bool IsTasksMode
+        {
+            get => SelectedWorkspaceMode == WorkspaceMode.Tasks;
+            set
+            {
+                if (value)
+                {
+                    SelectedWorkspaceMode = WorkspaceMode.Tasks;
+                }
+            }
+        }
+
+        public bool IsFeedMode
+        {
+            get => SelectedWorkspaceMode == WorkspaceMode.Feed;
+            set => SelectedWorkspaceMode = value
+                ? WorkspaceMode.Feed
+                : WorkspaceMode.Tasks;
+        }
+
         public GraphViewModel Graph { get; set; }
 
         private ReadOnlyObservableCollection<EmojiFilter> _emojiFilters = EmptyEmojiFilters;
@@ -2997,6 +3119,40 @@ namespace Unlimotion.ViewModel
         public ReadOnlyObservableCollection<DateFilterOption> DateFilterDefinitions { get; set; } = DateFilterDefinition.GetDefinitions();
         public object TabItems { get; } = null!;
         public object ToastNotificationManager { get; set; } = null!;
+    }
+
+    public sealed class TaskGoalFilterOption : ReactiveObject
+    {
+        public TaskGoalFilterMode Mode { get; init; }
+
+        public string ResourceKey { get; init; } = string.Empty;
+
+        public string Title => L10n.Get(ResourceKey);
+
+        public string DisplayText => Title;
+
+        public void RefreshLocalization()
+        {
+            this.RaisePropertyChanged(nameof(Title));
+            this.RaisePropertyChanged(nameof(DisplayText));
+        }
+
+        public override string ToString() => DisplayText;
+
+        public override bool Equals(object? obj) =>
+            obj is TaskGoalFilterOption option && option.Mode == Mode;
+
+        public override int GetHashCode() => Mode.GetHashCode();
+
+        public static IReadOnlyList<TaskGoalFilterOption> All { get; } =
+        [
+            new() { Mode = TaskGoalFilterMode.All, ResourceKey = "TaskGoalFilterAll" },
+            new() { Mode = TaskGoalFilterMode.Goals, ResourceKey = "TaskGoalFilterGoals" },
+            new() { Mode = TaskGoalFilterMode.Regular, ResourceKey = "TaskGoalFilterRegular" }
+        ];
+
+        public static TaskGoalFilterOption Find(TaskGoalFilterMode mode) =>
+            All.First(option => option.Mode == mode);
     }
 
     [AddINotifyPropertyChangedInterface]

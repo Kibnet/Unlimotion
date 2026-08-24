@@ -1,0 +1,88 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:feed="clr-namespace:Unlimotion.ViewModel.Feed;assembly=Unlimotion.ViewModel"
+             x:Class="Unlimotion.Views.FeedPendingRecovery"
+             x:DataType="feed:FeedViewModel"
+             x:CompileBindings="False">
+    <StackPanel Spacing="8">
+        <Border IsVisible="{Binding HasPendingRecoveries}"
+                Padding="12"
+                BorderBrush="{DynamicResource SystemControlErrorTextForegroundBrush}"
+                BorderThickness="1"
+                CornerRadius="8"
+                AutomationProperties.LiveSetting="Assertive"
+                AutomationProperties.AutomationId="FeedPendingRecoveryRoot">
+            <StackPanel Spacing="8">
+                <TextBlock FontWeight="SemiBold"
+                           Text="{DynamicResource FeedPendingRecoveryTitle}" />
+                <TextBlock Text="{DynamicResource FeedPendingRecoveryDescription}"
+                           TextWrapping="Wrap"
+                           Opacity="0.78" />
+                <ItemsControl ItemsSource="{Binding PendingRecoveries}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="feed:FeedPendingRecoveryViewModel">
+                            <Border Margin="0,3"
+                                    Padding="8"
+                                    Background="{DynamicResource ThemeBackgroundBrush}"
+                                    CornerRadius="6">
+                                <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="*,Auto" RowSpacing="4" ColumnSpacing="8">
+                                    <TextBlock FontWeight="SemiBold"
+                                               Text="{Binding DisplayKind}" />
+                                    <TextBlock Grid.Column="1"
+                                               Text="{Binding OperationId}"
+                                               Opacity="0.55"
+                                               FontSize="11" />
+                                    <TextBlock Grid.Row="1" Grid.ColumnSpan="2"
+                                               Text="{Binding SourcePath}"
+                                               TextTrimming="CharacterEllipsis"
+                                               Opacity="0.68" />
+                                    <TextBlock Grid.Row="2"
+                                               Text="{Binding Message}"
+                                               TextWrapping="Wrap" />
+                                    <WrapPanel Grid.Row="2" Grid.Column="1"
+                                               Margin="12,0,0,0"
+                                               HorizontalAlignment="Right">
+                                        <Button Margin="0,0,8,0"
+                                                Command="{Binding FinishCommand}"
+                                                Content="{DynamicResource FeedRecoveryFinishReplacement}"
+                                                AutomationProperties.AutomationId="FeedPendingRecoveryFinishButton" />
+                                        <Button Command="{Binding KeepBothCommand}"
+                                                IsEnabled="{Binding CanKeepBoth}"
+                                                Content="{DynamicResource FeedRecoveryKeepBoth}"
+                                                AutomationProperties.AutomationId="FeedPendingRecoveryKeepBothButton" />
+                                    </WrapPanel>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </Border>
+
+        <Border IsVisible="{Binding HasIdentitySafePending}"
+                Padding="12"
+                BorderBrush="{DynamicResource ThemeBorderMidBrush}"
+                BorderThickness="1"
+                CornerRadius="8"
+                AutomationProperties.LiveSetting="Polite"
+                AutomationProperties.AutomationId="FeedIdentitySafePendingRoot">
+            <StackPanel Spacing="6">
+                <TextBlock FontWeight="SemiBold"
+                           Text="{DynamicResource FeedIdentitySafePendingTitle}" />
+                <TextBlock Text="{DynamicResource FeedIdentitySafePendingDescription}"
+                           TextWrapping="Wrap"
+                           Opacity="0.78" />
+                <ItemsControl ItemsSource="{Binding IdentitySafePending}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="feed:FeedSafePendingLocatorViewModel">
+                            <TextBlock Margin="0,2"
+                                       Text="{Binding DisplayDetails}"
+                                       TextWrapping="Wrap"
+                                       AutomationProperties.AutomationId="FeedIdentitySafePendingItem" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>

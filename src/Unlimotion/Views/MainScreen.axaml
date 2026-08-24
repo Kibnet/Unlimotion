@@ -55,10 +55,84 @@
                     <views:ConflictResolutionControl />
                 </DataTemplate>
             </dialogHostAvalonia:DialogHost.DataTemplates>
-            <!-- put the content over which the dialog is shown here (e.g. your main window grid)-->
-            <Panel>
-                <views:MainControl Name="MainControl"/>
-                <ItemsControl x:CompileBindings="False"
+            <Grid RowDefinitions="Auto,*">
+                <Border Padding="12,8"
+                        BorderBrush="{DynamicResource ThemeBorderLowBrush}"
+                        BorderThickness="0,0,0,1">
+                    <StackPanel Orientation="Horizontal"
+                                HorizontalAlignment="Center"
+                                Spacing="6"
+                                AutomationProperties.AutomationId="ShellModeSelector">
+                        <RadioButton GroupName="WorkspaceMode"
+                                     IsChecked="{Binding IsFeedMode, Mode=TwoWay}"
+                                     IsVisible="{Binding Settings.IsFeedEnabled}"
+                                     IsEnabled="{Binding Settings.IsFeedEnabled}"
+                                     Content="{DynamicResource FeedMode}"
+                                     AutomationProperties.AutomationId="FeedModeButton" />
+                        <RadioButton GroupName="WorkspaceMode"
+                                     IsChecked="{Binding IsTasksMode, Mode=OneWay}"
+                                     Content="{DynamicResource TasksMode}"
+                                     AutomationProperties.AutomationId="TasksModeButton" />
+                    </StackPanel>
+                </Border>
+
+                <Grid Grid.Row="1"
+                      IsVisible="{Binding IsTasksMode}"
+                      AutomationProperties.ControlTypeOverride="Group"
+                      AutomationProperties.IsControlElementOverride="True"
+                      AutomationProperties.AutomationId="TasksModeRoot">
+                    <views:MainControl Name="MainControl" />
+                    <Grid x:Name="TasksLoadingOverlay"
+                          IsVisible="{Binding IsTasksLoading}"
+                          AutomationProperties.AutomationId="TasksLoadingOverlay">
+                        <Border Background="#66000000" />
+                        <Border MaxWidth="260"
+                                Padding="20"
+                                CornerRadius="14"
+                                Background="#F2FFFFFF"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center">
+                            <StackPanel Spacing="12">
+                                <Grid x:Name="TasksLoadingSpinner"
+                                      Width="34"
+                                      Height="34"
+                                      HorizontalAlignment="Center"
+                                      RenderTransformOrigin="50%,50%"
+                                      AutomationProperties.AutomationId="TasksLoadingSpinner">
+                                    <Border Width="6"
+                                            Height="14"
+                                            CornerRadius="3"
+                                            Background="Black"
+                                            HorizontalAlignment="Center"
+                                            VerticalAlignment="Top" />
+                                    <Ellipse Width="6"
+                                             Height="6"
+                                             Fill="#40000000"
+                                             HorizontalAlignment="Center"
+                                             VerticalAlignment="Bottom" />
+                                </Grid>
+                                <TextBlock Text="{DynamicResource LoadingTasks}"
+                                           Foreground="Black"
+                                           FontWeight="SemiBold"
+                                           HorizontalAlignment="Center"
+                                           TextAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </Grid>
+
+                <Grid Grid.Row="1"
+                      IsVisible="{Binding Settings.IsFeedEnabled}">
+                    <Grid IsVisible="{Binding IsFeedMode}"
+                          AutomationProperties.ControlTypeOverride="Group"
+                          AutomationProperties.IsControlElementOverride="True"
+                          AutomationProperties.AutomationId="FeedModeRoot">
+                        <views:FeedControl DataContext="{Binding Feed}" />
+                    </Grid>
+                </Grid>
+
+                <ItemsControl Grid.Row="1"
+                              x:CompileBindings="False"
                               ItemsSource="{Binding ToastNotificationManager.Messages}"
                               HorizontalAlignment="Center"
                               VerticalAlignment="Top"
@@ -66,7 +140,7 @@
                               AutomationProperties.AutomationId="ToastNotificationList">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
-                            <StackPanel Spacing="8"/>
+                            <StackPanel Spacing="8" />
                         </ItemsPanelTemplate>
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
@@ -82,7 +156,7 @@
                                     <TextBlock Text="{Binding Message}"
                                                Foreground="White"
                                                TextWrapping="Wrap"
-                                               VerticalAlignment="Center"/>
+                                               VerticalAlignment="Center" />
                                     <Button Grid.Column="1"
                                             MinWidth="28"
                                             MinHeight="28"
@@ -95,51 +169,13 @@
                                             VerticalContentAlignment="Center"
                                             Content="x"
                                             Command="{Binding CloseCommand}"
-                                            AutomationProperties.AutomationId="{Binding CloseAutomationId}"/>
+                                            AutomationProperties.AutomationId="{Binding CloseAutomationId}" />
                                 </Grid>
                             </Border>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
-                <Grid x:Name="TasksLoadingOverlay"
-                      IsVisible="{Binding IsTasksLoading}"
-                      AutomationProperties.AutomationId="TasksLoadingOverlay">
-                    <Border Background="#66000000"/>
-                    <Border MaxWidth="260"
-                            Padding="20"
-                            CornerRadius="14"
-                            Background="#F2FFFFFF"
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Center">
-                        <StackPanel Spacing="12">
-                            <Grid x:Name="TasksLoadingSpinner"
-                                  Width="34"
-                                  Height="34"
-                                  HorizontalAlignment="Center"
-                                  RenderTransformOrigin="50%,50%"
-                                  AutomationProperties.AutomationId="TasksLoadingSpinner">
-                                <Border Width="6"
-                                        Height="14"
-                                        CornerRadius="3"
-                                        Background="Black"
-                                        HorizontalAlignment="Center"
-                                        VerticalAlignment="Top"/>
-                                <Ellipse Width="6"
-                                         Height="6"
-                                         Fill="#40000000"
-                                         HorizontalAlignment="Center"
-                                         VerticalAlignment="Bottom"/>
-                            </Grid>
-                            <TextBlock Text="{DynamicResource LoadingTasks}"
-                                       Foreground="Black"
-                                       FontWeight="SemiBold"
-                                       HorizontalAlignment="Center"
-                                       TextAlignment="Center"/>
-                        </StackPanel>
-                    </Border>
-                </Grid>
-
-            </Panel>
+            </Grid>
         </dialogHostAvalonia:DialogHost>
     </Panel>
 </UserControl>

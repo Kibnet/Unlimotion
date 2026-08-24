@@ -134,6 +134,136 @@ public class SettingsViewModelTests : IDisposable
     }
 
     [Test]
+    public async System.Threading.Tasks.Task NoteVaultRootPath_PersistsInDedicatedConfigurationSection()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var settings = new SettingsViewModel(configuration, isExternalNoteVaultSupported: true);
+        var selectedPath = Path.Combine(Environment.CurrentDirectory, "ObsidianVault");
+
+        settings.NoteVaultRootPath = selectedPath;
+
+        await Assert.That(configuration
+                .GetSection("NoteVault")
+                .GetSection("RootPath")
+                .Get<string>())
+            .IsEqualTo(selectedPath);
+
+        var reloaded = new SettingsViewModel(configuration, isExternalNoteVaultSupported: true);
+        await Assert.That(reloaded.NoteVaultRootPath).IsEqualTo(selectedPath);
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task FeedEnabled_DefaultsToTrueAndPersistsRollbackChoice()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var settings = new SettingsViewModel(configuration, isExternalNoteVaultSupported: true);
+
+        await Assert.That(settings.IsFeedEnabled).IsTrue();
+
+        settings.IsFeedEnabled = false;
+
+        await Assert.That(configuration
+                .GetSection("NoteVault")
+                .GetSection("IsFeedEnabled")
+                .Get<bool>())
+            .IsFalse();
+
+        var reloaded = new SettingsViewModel(configuration, isExternalNoteVaultSupported: true);
+        await Assert.That(reloaded.IsFeedEnabled).IsFalse();
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task NoteDayBoundary_PersistsAsValidatedLocalMinutes()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var settings = new SettingsViewModel(configuration, isExternalNoteVaultSupported: true);
+
+        settings.NoteDayBoundary = TimeSpan.FromHours(4.5);
+
+        await Assert.That(configuration
+                .GetSection("NoteVault")
+                .GetSection("DayBoundaryMinutes")
+                .Get<int>())
+            .IsEqualTo(270);
+        var reloaded = new SettingsViewModel(configuration, isExternalNoteVaultSupported: true);
+        await Assert.That(reloaded.NoteDayBoundary).IsEqualTo(TimeSpan.FromMinutes(270));
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task NoteDayBoundary_InvalidStoredValue_FallsBackToMidnight()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        configuration.GetSection("NoteVault").GetSection("DayBoundaryMinutes").Set(24 * 60);
+
+        var settings = new SettingsViewModel(configuration, isExternalNoteVaultSupported: true);
+
+        await Assert.That(settings.NoteDayBoundary).IsEqualTo(TimeSpan.Zero);
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task ExternalNoteVaultSupport_CanBeDisabledForUnsupportedPlatforms()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var settings = new SettingsViewModel(configuration, isExternalNoteVaultSupported: false);
+
+        await Assert.That(settings.IsExternalNoteVaultSupported).IsFalse();
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task BrowseNoteVaultRootPathCommand_UsesCurrentFolderAndPersistsSelection()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var currentTaskPath = Path.Combine(Environment.CurrentDirectory, $"NoteVaultPickerTasks-{Guid.NewGuid():N}");
+        var currentVaultPath = Path.Combine(Environment.CurrentDirectory, "CurrentVault");
+        var selectedVaultPath = Path.Combine(Environment.CurrentDirectory, "SelectedVault");
+        var backupService = new FakeRemoteBackupService();
+        using var storageFactory = new RecordingTaskStorageFactory(
+            currentTaskPath,
+            new ConcurrentQueue<string>());
+        var settings = new SettingsViewModel(
+            configuration,
+            backupService,
+            localizationService: new FakeLocalizationService(),
+            isExternalNoteVaultSupported: true)
+        {
+            NoteVaultRootPath = currentVaultPath
+        };
+        using var appScope = ConfigureAppSettingsCommands(
+            settings,
+            configuration,
+            backupService,
+            storageFactory,
+            new Dialogs());
+        var previousPlatformPicker = Dialogs.PlatformOpenFolderDialogAsync;
+        string? capturedDirectory = null;
+
+        try
+        {
+            Dialogs.PlatformOpenFolderDialogAsync = (_, directory) =>
+            {
+                capturedDirectory = directory;
+                return System.Threading.Tasks.Task.FromResult<string?>(selectedVaultPath);
+            };
+
+            settings.BrowseNoteVaultRootPathCommand!.Execute(null);
+
+            await WaitForConditionAsync(
+                () => string.Equals(settings.NoteVaultRootPath, selectedVaultPath, StringComparison.Ordinal),
+                "Note vault folder picker command did not update the selected path.");
+            await Assert.That(capturedDirectory).IsEqualTo(currentVaultPath);
+            await Assert.That(configuration
+                    .GetSection("NoteVault")
+                    .GetSection("RootPath")
+                    .Get<string>())
+                .IsEqualTo(selectedVaultPath);
+        }
+        finally
+        {
+            Dialogs.PlatformOpenFolderDialogAsync = previousPlatformPicker;
+        }
+    }
+
+    [Test]
     public async System.Threading.Tasks.Task TaskTreeExpansionStateStore_BatchesChangesIntoOneWrite()
     {
         var writes = new ConcurrentQueue<string>();
@@ -1793,11 +1923,19 @@ public class SettingsViewModelTests : IDisposable
         SettingsViewModel settings,
         IConfiguration configuration,
         IRemoteBackupService backupService,
-        ITaskStorageFactory storageFactory)
+        ITaskStorageFactory storageFactory,
+        IDialogs? dialogs = null)
     {
         var appType = typeof(App);
         var app = new App();
         app.ConfigureRuntimeForTests(configuration, backupService, storageFactory);
+
+        if (dialogs != null)
+        {
+            var dialogsField = appType.GetField("_dialogs", BindingFlags.Instance | BindingFlags.NonPublic)
+                               ?? throw new MissingFieldException(nameof(App), "_dialogs");
+            dialogsField.SetValue(app, dialogs);
+        }
 
         var setupSettingsCommands = appType.GetMethod(
                                         "SetupSettingsCommands",

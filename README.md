@@ -76,6 +76,18 @@ One application instance can keep several named task spaces. Use the selector in
 
 Only one space is active at a time. Its task source and complete Git synchronization profile are isolated from every other space; tasks from multiple spaces are never shown together and cross-space task relations are rejected. To configure storage or Git for another space, switch to it first. Removing a space removes only its configuration and stored credentials from this application—it does not delete or move the task files or remote repository.
 
+### Daily Feed (development snapshot)
+
+The current source tree includes a desktop-first `Feed` mode for working directly with an existing Obsidian-compatible Markdown vault. It is not a claim about an already published release.
+
+- Choose the vault root in Settings. Notes stay in that folder; Unlimotion does not import them into task storage.
+- Daily notes use `Ежедневные/YYYY-MM-DD.md`. Quick capture appends to today's file, while block Live Preview keeps Markdown editable.
+- The Feed shows daily entries newest first, supports text search and a review flow, and can turn a selected fragment into a task, goal, or permanent thematic note.
+- A task or goal can belong to several hierarchical areas. Task references keep the status control to the left of the title and open the existing task card.
+- Thematic notes remain ordinary Markdown files in their topic folders. Portable Feed metadata is stored under `.unlimotion`; drafts and recovery copies stay in application-local storage.
+
+Direct access to an external vault currently requires the desktop application. Browser and mobile builds show that this provider is unsupported and do not open or watch an external vault until they have a verified persistent folder-access contract.
+
 ### Task states
 
 Any task can be in only one of five statuses:
