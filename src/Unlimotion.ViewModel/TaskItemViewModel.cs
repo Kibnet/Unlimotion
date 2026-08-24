@@ -98,6 +98,7 @@ namespace Unlimotion.ViewModel
         public ReactiveCommand<Unit, Unit> ReloadTaskCommand { get; private set; } = null!;
         private Task? _sealedPendingSavesTask;
         private bool _isUpdatingFromModel;
+        private IDictionary<string, Newtonsoft.Json.Linq.JToken>? _extensionData;
         public bool IsHighlighted { get; set; }
         private TimeSpan? plannedPeriod;
         private DateCommands? commands;
@@ -237,6 +238,20 @@ namespace Unlimotion.ViewModel
             CompletionCriteria.CollectionChanged += completionCriteriaChangedHandler;
             Disposable.Create(() => CompletionCriteria.CollectionChanged -= completionCriteriaChangedHandler).AddToDispose(this);
             RegisterCompletionCriteriaPropertyChangedSubscription();
+
+            NotifyCollectionChangedEventHandler areaIdsChangedHandler = (_, __) =>
+            {
+                if (CanTrackEditableChange)
+                {
+                    MarkEditableChanged(PendingTaskField.AreaIds);
+                }
+                if (CanAutosave)
+                {
+                    ExecuteSaveCommand();
+                }
+            };
+            AreaIds.CollectionChanged += areaIdsChangedHandler;
+            Disposable.Create(() => AreaIds.CollectionChanged -= areaIdsChangedHandler).AddToDispose(this);
 
             // Пересчитываем emoji текущей задачи и всех потомков при локальном изменении заголовка.
             ObserveProperty(nameof(Title), static task => task.Title)
@@ -672,6 +687,8 @@ namespace Unlimotion.ViewModel
                     PlannedDuration = PlannedDuration,
                     Importance = Importance,
                     Wanted = Wanted,
+                    IsGoal = IsGoal,
+                    AreaIds = AreaIds.ToList(),
                     IsCanBeCompleted = IsCanBeCompleted,
                     Version = Version,
                     BlocksTasks = Blocks.ToList(),
@@ -679,6 +696,7 @@ namespace Unlimotion.ViewModel
                     ContainsTasks = Contains.ToList(),
                     ParentTasks = Parents.ToList(),
                     Repeater = Repeater?.Model!,
+                    ExtensionData = CloneExtensionData(_extensionData),
                 };
             }
             set
@@ -788,6 +806,8 @@ namespace Unlimotion.ViewModel
         public int Importance { get; set; }
         [AlsoNotifyFor(nameof(WantedFromUi))]
         public bool Wanted { get; set; }
+        public bool IsGoal { get; set; }
+        public ObservableCollection<string> AreaIds { get; } = new();
 
         public bool WantedFromUi
         {
@@ -1221,15 +1241,18 @@ namespace Unlimotion.ViewModel
                 if (PlannedDuration != taskItem.PlannedDuration) PlannedDuration = taskItem.PlannedDuration;
                 if (Importance != taskItem.Importance) Importance = taskItem.Importance;
                 if (Wanted != taskItem.Wanted) Wanted = taskItem.Wanted;
+                if (IsGoal != taskItem.IsGoal) IsGoal = taskItem.IsGoal;
                 if (Status != taskItem.Status) Status = taskItem.Status;
                 SynchronizeCollections(StatusHistory, taskItem.StatusHistory ?? new List<TaskStatusHistoryEntry>());
                 SynchronizeCollections(CompletionCriteria, taskItem.CompletionCriteria ?? new List<TaskCompletionCriterion>());
                 if (Version != taskItem.Version) Version = taskItem.Version;
+                _extensionData = CloneExtensionData(taskItem.ExtensionData);
 
                 SynchronizeCollections(Blocks, taskItem.BlocksTasks);
                 SynchronizeCollections(BlockedBy, taskItem.BlockedByTasks);
                 SynchronizeCollections(Contains, taskItem.ContainsTasks);
                 SynchronizeCollections(Parents, taskItem.ParentTasks);
+                SynchronizeCollections(AreaIds, taskItem.AreaIds ?? new List<string>());
 
                 if (taskItem.Repeater != null)
                 {
@@ -1297,6 +1320,15 @@ namespace Unlimotion.ViewModel
                     return true;
                 }
             }
+        }
+
+        private static IDictionary<string, Newtonsoft.Json.Linq.JToken>? CloneExtensionData(
+            IDictionary<string, Newtonsoft.Json.Linq.JToken>? extensionData)
+        {
+            return extensionData?.ToDictionary(
+                pair => pair.Key,
+                pair => pair.Value.DeepClone(),
+                StringComparer.Ordinal);
         }
 
         public static void SynchronizeCollections(ObservableCollection<string> observableCollection, List<string> list)
@@ -1903,6 +1935,8 @@ namespace Unlimotion.ViewModel
             if (pendingFields.HasFlag(PendingTaskField.Repeater)) merged.Repeater = editorClone.Repeater;
             if (pendingFields.HasFlag(PendingTaskField.Importance)) merged.Importance = editorClone.Importance;
             if (pendingFields.HasFlag(PendingTaskField.Wanted)) merged.Wanted = editorClone.Wanted;
+            if (pendingFields.HasFlag(PendingTaskField.IsGoal)) merged.IsGoal = editorClone.IsGoal;
+            if (pendingFields.HasFlag(PendingTaskField.AreaIds)) merged.AreaIds = editorClone.AreaIds;
             return merged;
         }
 
@@ -1916,7 +1950,9 @@ namespace Unlimotion.ViewModel
             Importance = 1 << 3,
             Wanted = 1 << 4,
             Repeater = 1 << 5,
-            CompletionCriteria = 1 << 6
+            CompletionCriteria = 1 << 6,
+            IsGoal = 1 << 7,
+            AreaIds = 1 << 8
         }
 
         private readonly record struct PendingEditorState(
@@ -1933,6 +1969,7 @@ namespace Unlimotion.ViewModel
             nameof(Importance) => PendingTaskField.Importance,
             nameof(Wanted) => PendingTaskField.Wanted,
             nameof(Repeater) => PendingTaskField.Repeater,
+            nameof(IsGoal) => PendingTaskField.IsGoal,
             _ => PendingTaskField.None
         };
 
@@ -1962,7 +1999,9 @@ namespace Unlimotion.ViewModel
                          PendingTaskField.Importance,
                          PendingTaskField.Wanted,
                          PendingTaskField.Repeater,
-                         PendingTaskField.CompletionCriteria
+                         PendingTaskField.CompletionCriteria,
+                         PendingTaskField.IsGoal,
+                         PendingTaskField.AreaIds
                      })
             {
                 if (fields.HasFlag(field))
@@ -1979,7 +2018,9 @@ namespace Unlimotion.ViewModel
             PendingTaskField.Importance |
             PendingTaskField.Wanted |
             PendingTaskField.Repeater |
-            PendingTaskField.CompletionCriteria;
+            PendingTaskField.CompletionCriteria |
+            PendingTaskField.IsGoal |
+            PendingTaskField.AreaIds;
 
         private void MarkEditableChanged(PendingTaskField fields)
         {

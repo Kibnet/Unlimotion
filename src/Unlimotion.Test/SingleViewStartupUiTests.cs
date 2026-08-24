@@ -111,6 +111,50 @@ public class SingleViewStartupUiTests
     }
 
     [Test]
+    public async Task SingleViewStartup_TaskStorageFailure_DoesNotBlockConfiguredNoteVault()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            using var notesDirectory = new TempNotesDirectory();
+            var dailyDirectory = Path.Combine(notesDirectory.Path, "Ежедневные");
+            Directory.CreateDirectory(dailyDirectory);
+            File.WriteAllText(
+                Path.Combine(dailyDirectory, $"{DateTime.Now:yyyy-MM-dd}.md"),
+                "## Работа\n\nЛента должна открыться.\n");
+
+            var configPath = Path.Combine(notesDirectory.Path, "settings.json");
+            File.WriteAllText(configPath, "{}");
+            var configuration = WritableJsonConfigurationFabric.Create(configPath, reloadOnChange: false);
+            var notificationManager = new NotificationManagerWrapperMock();
+            var storage = new CountingStorage(new IOException("Task storage is unavailable."));
+            using var taskStorage = new UnifiedTaskStorage(
+                new TaskTreeManager(storage),
+                new TaskItemViewModelContext { NotificationManager = notificationManager });
+            var settings = new SettingsViewModel(configuration, isExternalNoteVaultSupported: true)
+            {
+                NoteVaultRootPath = notesDirectory.Path
+            };
+            using var viewModel = new MainWindowViewModel(
+                new AppNameDefinitionService(),
+                notificationManager,
+                configuration,
+                () => taskStorage,
+                settings);
+
+            await GetCurrentApp().InitializeStartupViewModelAsync(viewModel);
+
+            using (Assert.Multiple())
+            {
+                await Assert.That(settings.StorageConnectionState).IsEqualTo(SettingsConnectionState.Error);
+                await Assert.That(viewModel.Feed.IsVaultInitialized).IsTrue();
+                await Assert.That(viewModel.Feed.Days.Count).IsEqualTo(1);
+                await Assert.That(viewModel.Feed.Days[0].Text).Contains("Лента должна открыться");
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
     public async Task SingleViewStartup_ConnectsMigratedLocalFolderOutsideGitAndAllowsCreate()
     {
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
@@ -414,6 +458,7 @@ public class SingleViewStartupUiTests
 
     private sealed class CountingStorage : IStorage
     {
+        private readonly Exception? _connectFailure;
         private readonly TaskItem _task = new()
         {
             Id = "single-view-startup-task",
@@ -427,6 +472,11 @@ public class SingleViewStartupUiTests
             IsCompleted = false,
             IsCanBeCompleted = true,
         };
+
+        public CountingStorage(Exception? connectFailure = null)
+        {
+            _connectFailure = connectFailure;
+        }
 
         public int ConnectCallCount { get; private set; }
 
@@ -449,6 +499,11 @@ public class SingleViewStartupUiTests
         public Task<bool> Connect()
         {
             ConnectCallCount++;
+            if (_connectFailure != null)
+            {
+                return Task.FromException<bool>(_connectFailure);
+            }
+
             return Task.FromResult(true);
         }
 

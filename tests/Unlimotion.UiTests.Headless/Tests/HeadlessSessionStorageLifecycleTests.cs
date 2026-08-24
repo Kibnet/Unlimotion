@@ -3,6 +3,7 @@ using TUnit.Assertions;
 using TUnit.Core;
 using Unlimotion.AppAutomation.TestHost;
 using Unlimotion.TaskTree;
+using Unlimotion.UiTests.Headless.Infrastructure;
 using Unlimotion.ViewModel;
 
 namespace Unlimotion.UiTests.Headless.Tests;
@@ -26,7 +27,9 @@ public sealed class HeadlessSessionStorageLifecycleTests
             var options = UnlimotionAppLaunchHost.CreateHeadlessLaunchOptions(
                 UnlimotionAutomationScenario.ReadmeDemo,
                 language: "en",
-                afterViewModelPrepared: vm => captured = CaptureStorage(vm));
+                afterViewModelPrepared: vm => captured = CaptureStorage(vm),
+                viewModelFactoryDispatcher: factory => HeadlessRuntime.Dispatch(factory),
+                headlessWindowCleanup: HeadlessSessionHooks.CloseWindow);
             var session = DesktopAppSession.Launch(options);
             var state = RequireCapture(captured);
             var taskFilePath = Path.Combine(state.FileStorage.Path, currentTaskId);
@@ -94,7 +97,9 @@ public sealed class HeadlessSessionStorageLifecycleTests
                         {
                             captured = CaptureStorage(vm);
                             throw sentinel;
-                        }));
+                        },
+                        viewModelFactoryDispatcher: factory => HeadlessRuntime.Dispatch(factory),
+                        headlessWindowCleanup: HeadlessSessionHooks.CloseWindow));
             }
             catch (Exception exception)
             {
@@ -130,7 +135,9 @@ public sealed class HeadlessSessionStorageLifecycleTests
     {
         StorageCapture? captured = null;
         var options = UnlimotionAppLaunchHost.CreateHeadlessLaunchOptions(
-            afterViewModelPrepared: vm => captured = CaptureStorage(vm));
+            afterViewModelPrepared: vm => captured = CaptureStorage(vm),
+            viewModelFactoryDispatcher: factory => HeadlessRuntime.Dispatch(factory),
+            headlessWindowCleanup: HeadlessSessionHooks.CloseWindow);
         var session = DesktopAppSession.Launch(options);
         var state = RequireCapture(captured);
         var disposeCallback = options.DisposeCallback
@@ -161,6 +168,55 @@ public sealed class HeadlessSessionStorageLifecycleTests
         }
     }
 
+    [Test]
+    public async Task FeedSession_DisposeStopsVaultWorkAndRemovesIsolatedRoot()
+    {
+        string? vaultPath = null;
+        DesktopAppSession? session = null;
+        try
+        {
+            session = DesktopAppSession.Launch(
+                UnlimotionAppLaunchHost.CreateHeadlessLaunchOptions(
+                    UnlimotionAutomationScenario.Feed,
+                    feedVaultPrepared: path => vaultPath = path,
+                    beforeViewModelInitialized: viewModel =>
+                        viewModel.Feed.SetNotificationDispatcher(action =>
+                            HeadlessRuntime.Dispatch(action)),
+                    viewModelFactoryDispatcher: factory => HeadlessRuntime.Dispatch(factory),
+                    headlessWindowCleanup: HeadlessSessionHooks.CloseWindow));
+            var capturedVault = vaultPath
+                ?? throw new InvalidOperationException("Feed scenario did not expose its isolated vault path.");
+            var rootPath = Path.GetDirectoryName(capturedVault)
+                ?? throw new InvalidOperationException($"Unable to resolve Feed launch root for '{capturedVault}'.");
+            var todayPath = Path.Combine(
+                capturedVault,
+                UnlimotionAutomationScenarioData.GetFeedDailyRelativePath(DateOnly.FromDateTime(DateTime.Now))
+                    .Replace('/', Path.DirectorySeparatorChar));
+
+            await Assert.That(File.Exists(todayPath)).IsTrue();
+            session.Dispose();
+            session = null;
+
+            var cleanupDeadline = DateTimeOffset.UtcNow.AddSeconds(5);
+            while (Directory.Exists(rootPath) && DateTimeOffset.UtcNow < cleanupDeadline)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(50));
+            }
+
+            await Assert.That(Directory.Exists(rootPath))
+                .IsFalse()
+                .Because("Feed session cleanup must remove its isolated launch root.");
+
+            using var controlSession = LaunchControlSession(out var controlViewModelPrepared);
+            await Assert.That(controlViewModelPrepared).IsTrue();
+        }
+        finally
+        {
+            session?.Dispose();
+            BestEffortDelete(vaultPath is null ? null : Path.GetDirectoryName(vaultPath));
+        }
+    }
+
     private static StorageCapture CaptureStorage(MainWindowViewModel viewModel)
     {
         var unifiedStorage = viewModel.taskRepository as UnifiedTaskStorage
@@ -185,7 +241,9 @@ public sealed class HeadlessSessionStorageLifecycleTests
         var prepared = false;
         var session = DesktopAppSession.Launch(
             UnlimotionAppLaunchHost.CreateHeadlessLaunchOptions(
-                afterViewModelPrepared: _ => prepared = true));
+                afterViewModelPrepared: _ => prepared = true,
+                viewModelFactoryDispatcher: factory => HeadlessRuntime.Dispatch(factory),
+                headlessWindowCleanup: HeadlessSessionHooks.CloseWindow));
         viewModelPrepared = prepared;
         return session;
     }

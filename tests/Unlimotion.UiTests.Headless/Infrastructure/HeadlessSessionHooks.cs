@@ -2,6 +2,7 @@ using System;
 using System.Reflection;
 using System.Threading.Tasks;
 using AppAutomation.Avalonia.Headless.Session;
+using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia;
 using Avalonia.Threading;
@@ -107,6 +108,26 @@ public static class HeadlessSessionHooks
         if (session is not null) await session.DisposeAsync();
     }
 
+    public static void CloseWindow(Window window)
+    {
+        ArgumentNullException.ThrowIfNull(window);
+        void CloseCore()
+        {
+            window.DataContext = null;
+            window.Content = null;
+            window.Close();
+            Dispatcher.UIThread.RunJobs();
+        }
+
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            CloseCore();
+        }
+        else
+        {
+            HeadlessRuntime.Dispatch(CloseCore);
+        }
+    }
     [After(TestSession)]
     public static async Task CleanupSession()
     {
