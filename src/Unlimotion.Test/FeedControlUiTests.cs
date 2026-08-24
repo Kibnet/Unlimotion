@@ -140,7 +140,8 @@ public class FeedControlUiTests
             }
 
             viewModel.CreateTaskCommand.Execute(null);
-            await Assert.That(await WaitForAsync(() => taskTarget.Tasks.Count == 1)).IsTrue();
+            await Assert.That(await WaitForAsync(() => viewModel.HasCreatedTask && !viewModel.IsBusy)).IsTrue();
+            await Assert.That(taskTarget.Tasks.Count).IsEqualTo(1);
             await Assert.That(taskTarget.Tasks.Single().AreaIds).IsEquivalentTo(["work"]);
         }, CancellationToken.None);
     }
@@ -194,7 +195,8 @@ public class FeedControlUiTests
             }
 
             viewModel.CreateTaskCommand.Execute(null);
-            await Assert.That(await WaitForAsync(() => taskTarget.Tasks.Count == 1)).IsTrue();
+            await Assert.That(await WaitForAsync(() => viewModel.HasCreatedTask && !viewModel.IsBusy)).IsTrue();
+            await Assert.That(taskTarget.Tasks.Count).IsEqualTo(1);
             await Assert.That(taskTarget.Tasks.Single().AreaIds).IsEmpty();
         }, CancellationToken.None);
     }
@@ -274,7 +276,8 @@ public class FeedControlUiTests
             }
 
             viewModel.CreateTaskCommand.Execute(null);
-            await Assert.That(await WaitForAsync(() => taskTarget.Tasks.Count == 1)).IsTrue();
+            await Assert.That(await WaitForAsync(() => viewModel.HasCreatedTask && !viewModel.IsBusy)).IsTrue();
+            await Assert.That(taskTarget.Tasks.Count).IsEqualTo(1);
             await Assert.That(taskTarget.Tasks.Single().AreaIds).IsEmpty();
         }, CancellationToken.None);
     }
