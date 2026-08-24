@@ -19,10 +19,11 @@ using Unlimotion.Server.ServiceModel.Molds.Tasks;
 using Unlimotion.Services;
 using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
+using Unlimotion.ViewModel.Feed;
 
 namespace Unlimotion;
 
-public class ServerStorage : IStorage, ITaskGraphDiagnosticStorage
+public class ServerStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskClassificationCapabilityProvider
 {
     public event EventHandler<TaskStorageUpdateEventArgs>? Updating;
     public event Action<Exception?>? OnConnectionError;
@@ -42,6 +43,11 @@ public class ServerStorage : IStorage, ITaskGraphDiagnosticStorage
     public bool IsActive = true;
     public bool IsConnected { get; set; }
     public bool IsSignedIn { get; set; }
+    public TaskStorageCapabilities RemoteTaskStorageCapabilities { get; private set; } =
+        TaskStorageCapabilities.CreateUnsupported();
+    public bool SupportsTaskClassification =>
+        RemoteTaskStorageCapabilities.TaskClassificationSchemaVersion >=
+        TaskStorageCapabilities.CurrentTaskClassificationSchemaVersion;
 
     private HubConnection? _connection;
     private readonly IJsonServiceClient serviceClient;
@@ -120,6 +126,8 @@ public class ServerStorage : IStorage, ITaskGraphDiagnosticStorage
                 (_connection.State == HubConnectionState.Connected || _connection.State == HubConnectionState.Connecting))
                 return _connection.State == HubConnectionState.Connected;
 
+            RemoteTaskStorageCapabilities = TaskStorageCapabilities.CreateUnsupported();
+
             if (_connection != null)
             {
                 try 
@@ -168,6 +176,10 @@ public class ServerStorage : IStorage, ITaskGraphDiagnosticStorage
                 OnConnectionError?.Invoke(startEx);
                 return false;
             }
+
+            RemoteTaskStorageCapabilities = await QueryTaskStorageCapabilitiesAsync(
+                    () => _hub!.GetTaskStorageCapabilities())
+                .ConfigureAwait(false);
 
             // После старта — проверяем/обновляем токен асинхронно
             try
@@ -241,6 +253,7 @@ public class ServerStorage : IStorage, ITaskGraphDiagnosticStorage
             IsActive = false;
             IsSignedIn = false;
             IsConnected = false;
+            RemoteTaskStorageCapabilities = TaskStorageCapabilities.CreateUnsupported();
             serviceClient.BearerToken = null;
             if (_connection != null)
             {
@@ -290,7 +303,10 @@ public class ServerStorage : IStorage, ITaskGraphDiagnosticStorage
         {
             try
             {
-                var hubTask = mapper?.Map<TaskItemHubMold>(item);
+                var hubTask = CreateOutboundTaskMold(
+                    mapper,
+                    item,
+                    RemoteTaskStorageCapabilities);
                 if (hubTask != null)
                 {
                     item.Id = await _hub!.SaveTask(hubTask);
@@ -306,6 +322,34 @@ public class ServerStorage : IStorage, ITaskGraphDiagnosticStorage
         }
 
         return null!;
+    }
+
+    internal static TaskItemHubMold? CreateOutboundTaskMold(
+        IMapper? taskMapper,
+        TaskItem item,
+        TaskStorageCapabilities capabilities)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        ArgumentNullException.ThrowIfNull(capabilities);
+
+        var hubTask = taskMapper?.Map<TaskItemHubMold>(item);
+        if (hubTask is null)
+        {
+            return null;
+        }
+
+        if (capabilities.TaskClassificationSchemaVersion <
+            TaskStorageCapabilities.CurrentTaskClassificationSchemaVersion)
+        {
+            // Older servers do not implement the presence/version contract. Keep
+            // classification out of the outbound update entirely so an ordinary
+            // task save cannot be mistaken for a classification write.
+            hubTask.TaskClassificationSchemaVersion = null;
+            hubTask.IsGoal = null;
+            hubTask.AreaIds = null;
+        }
+
+        return hubTask;
     }
 
     public async Task<bool> Remove(string itemId)
@@ -446,6 +490,7 @@ public class ServerStorage : IStorage, ITaskGraphDiagnosticStorage
 
     private async Task ConnectionOnClosed(Exception? exception)
     {
+        RemoteTaskStorageCapabilities = TaskStorageCapabilities.CreateUnsupported();
         OnConnectionError?.Invoke(exception);
 
         var rnd = new Random();
@@ -623,6 +668,23 @@ public class ServerStorage : IStorage, ITaskGraphDiagnosticStorage
 
         var nameVersionClient = "Unlimotion Desktop Client 1.0";
         await _hub!.Login(settings.AccessToken, operatingSystem, ipAddress, nameVersionClient);
+    }
+
+    internal static async Task<TaskStorageCapabilities> QueryTaskStorageCapabilitiesAsync(
+        Func<Task<TaskStorageCapabilities>> query)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        try
+        {
+            return await query().ConfigureAwait(false)
+                ?? TaskStorageCapabilities.CreateUnsupported();
+        }
+        catch (Exception exception)
+        {
+            Debug.WriteLine($"Task storage capabilities are unavailable: {exception.Message}");
+            return TaskStorageCapabilities.CreateUnsupported();
+        }
     }
 
     protected virtual void OnUpdating(TaskStorageUpdateEventArgs e)

@@ -1,0 +1,113 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:feed="clr-namespace:Unlimotion.ViewModel.Feed;assembly=Unlimotion.ViewModel"
+             x:Class="Unlimotion.Views.FeedDocumentConflict"
+             x:DataType="feed:FeedDocumentConflictViewModel"
+             mc:Ignorable="d"
+             d:DesignWidth="840"
+             d:DesignHeight="520">
+    <Border IsVisible="{Binding IsOpen, FallbackValue=False}"
+            Padding="16"
+            Margin="12"
+            BorderBrush="{DynamicResource SystemControlErrorTextForegroundBrush}"
+            BorderThickness="1"
+            CornerRadius="10"
+            Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
+            AutomationProperties.ControlTypeOverride="Pane"
+            AutomationProperties.Name="{DynamicResource FeedConflictTitle}"
+            AutomationProperties.AutomationId="FeedDocumentConflictRoot">
+        <Grid RowDefinitions="Auto,*,Auto,Auto" RowSpacing="12">
+            <StackPanel Spacing="4">
+                <TextBlock FontSize="20"
+                           FontWeight="SemiBold"
+                           Text="{DynamicResource FeedConflictTitle}" />
+                <TextBlock Text="{DynamicResource FeedConflictDescription}"
+                           TextWrapping="Wrap"
+                           Opacity="0.75" />
+            </StackPanel>
+
+            <Grid x:Name="VersionsGrid"
+                  Grid.Row="1"
+                  ColumnDefinitions="*,*"
+                  RowDefinitions="*"
+                  ColumnSpacing="12"
+                  RowSpacing="12">
+                <Border x:Name="EditorVersionPane"
+                        Padding="10"
+                        BorderBrush="{DynamicResource ThemeBorderLowBrush}"
+                        BorderThickness="1"
+                        CornerRadius="8">
+                    <Grid RowDefinitions="Auto,Auto,*" RowSpacing="6">
+                        <TextBlock FontWeight="SemiBold"
+                                   Text="{DynamicResource FeedConflictEditorVersion}" />
+                        <TextBlock Grid.Row="1"
+                                   Text="{Binding EditorRelativePath}"
+                                   TextTrimming="CharacterEllipsis"
+                                   Opacity="0.68" />
+                        <TextBox Grid.Row="2"
+                                 Text="{Binding EditorText, Mode=OneWay}"
+                                 IsReadOnly="True"
+                                 AcceptsReturn="True"
+                                 TextWrapping="NoWrap"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                 AutomationProperties.AutomationId="FeedConflictEditorText" />
+                    </Grid>
+                </Border>
+
+                <Border x:Name="DiskVersionPane"
+                        Grid.Column="1"
+                        Padding="10"
+                        BorderBrush="{DynamicResource ThemeBorderLowBrush}"
+                        BorderThickness="1"
+                        CornerRadius="8">
+                    <Grid RowDefinitions="Auto,Auto,*" RowSpacing="6">
+                        <TextBlock FontWeight="SemiBold"
+                                   Text="{DynamicResource FeedConflictDiskVersion}" />
+                        <TextBlock Grid.Row="1"
+                                   Text="{Binding DiskRelativePath}"
+                                   TextTrimming="CharacterEllipsis"
+                                   Opacity="0.68" />
+                        <TextBox Grid.Row="2"
+                                 Text="{Binding DiskText, Mode=OneWay}"
+                                 IsReadOnly="True"
+                                 AcceptsReturn="True"
+                                 TextWrapping="NoWrap"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                 AutomationProperties.AutomationId="FeedConflictDiskText" />
+                    </Grid>
+                </Border>
+            </Grid>
+
+            <TextBlock Grid.Row="2"
+                       IsVisible="{Binding HasError}"
+                       Text="{Binding ErrorMessage}"
+                       TextWrapping="Wrap"
+                       Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+                       AutomationProperties.LiveSetting="Assertive"
+                       AutomationProperties.AutomationId="FeedConflictErrorText" />
+
+            <WrapPanel Grid.Row="3"
+                       HorizontalAlignment="Right">
+                <Button Margin="0,0,8,8"
+                        Command="{Binding UseEditorCommand}"
+                        IsEnabled="{Binding !IsResolving}"
+                        Content="{DynamicResource FeedConflictUseEditor}"
+                        AutomationProperties.AutomationId="FeedConflictUseEditorButton" />
+                <Button Margin="0,0,8,8"
+                        Command="{Binding UseDiskCommand}"
+                        IsEnabled="{Binding !IsResolving}"
+                        Content="{DynamicResource FeedConflictUseDisk}"
+                        AutomationProperties.AutomationId="FeedConflictUseDiskButton" />
+                <Button Margin="0,0,0,8"
+                        Command="{Binding SaveBothCommand}"
+                        IsEnabled="{Binding !IsResolving}"
+                        Content="{DynamicResource FeedConflictSaveBoth}"
+                        AutomationProperties.AutomationId="FeedConflictSaveBothButton" />
+            </WrapPanel>
+        </Grid>
+    </Border>
+</UserControl>

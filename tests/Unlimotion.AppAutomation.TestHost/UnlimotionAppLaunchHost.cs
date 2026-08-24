@@ -1,6 +1,7 @@
 using AppAutomation.Session.Contracts;
 using AppAutomation.TestHost.Avalonia;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using Microsoft.Extensions.Configuration;
@@ -57,13 +58,19 @@ public static class UnlimotionAppLaunchHost
         TimeSpan? mainWindowTimeout = null,
         TimeSpan? pollInterval = null,
         string? theme = null,
-        DesktopWindowPlacement? windowPlacement = null)
+        DesktopWindowPlacement? windowPlacement = null,
+        Action<string>? feedVaultPrepared = null)
     {
         var launchData = UnlimotionAutomationLaunchData.Create(scenario, language, currentTaskId, theme);
         var environmentVariables = CreateEnvironmentVariables(launchData);
 
         try
         {
+            if (scenario == UnlimotionAutomationScenario.Feed)
+            {
+                feedVaultPrepared?.Invoke(launchData.VaultPath);
+            }
+
             var launchOptions = AvaloniaDesktopLaunchHost.CreateLaunchOptions(
                 DesktopApp,
                 new AvaloniaDesktopLaunchOptions
@@ -96,12 +103,23 @@ public static class UnlimotionAppLaunchHost
         Action<MainWindowViewModel>? afterViewModelPrepared = null,
         string? currentTaskId = null,
         string? theme = null,
-        Action<string>? prepareConfiguration = null)
+        Action<string>? prepareConfiguration = null,
+        Action<string>? feedVaultPrepared = null,
+        Action<MainWindowViewModel>? beforeViewModelInitialized = null,
+        Func<Func<MainWindowViewModel>, MainWindowViewModel>? viewModelFactoryDispatcher = null,
+        Action<Window>? headlessWindowCleanup = null)
     {
         var launchData = UnlimotionAutomationLaunchData.Create(scenario, language, currentTaskId, theme);
+        if (scenario == UnlimotionAutomationScenario.Feed)
+        {
+            feedVaultPrepared?.Invoke(launchData.VaultPath);
+        }
+
         var previousDefaultIsExpanded = TaskWrapperViewModel.DefaultIsExpanded;
         var lifetime = new HeadlessSessionLifetime(launchData, previousDefaultIsExpanded);
         MainWindowViewModel? vm = null;
+        Window? window = null;
+        var disposeState = 0;
 
         return new HeadlessAppLaunchOptions
         {
@@ -115,8 +133,19 @@ public static class UnlimotionAppLaunchHost
                         TaskWrapperViewModel.DefaultIsExpanded = true;
                     }
 
-                    vm = CreateHeadlessViewModel(launchData, lifetime);
+                    vm = viewModelFactoryDispatcher is null
+                        ? CreateHeadlessViewModel(launchData, lifetime)
+                        : viewModelFactoryDispatcher(() => CreateHeadlessViewModel(launchData, lifetime));
+                    beforeViewModelInitialized?.Invoke(vm);
                     await vm.Connect();
+
+                    if (scenario == UnlimotionAutomationScenario.Feed)
+                    {
+                        vm.Feed.IsExternalVaultSupported = true;
+                        vm.Feed.TaskOwner = vm;
+                        vm.Feed.TaskResolver = taskId => FindTaskById(vm, taskId);
+                        await vm.Feed.InitializeVaultAsync(launchData.VaultPath);
+                    }
 
                     if (!IsTaskSpaceRecoveryScenario(scenario))
                     {
@@ -141,7 +170,7 @@ public static class UnlimotionAppLaunchHost
             CreateMainWindow = () =>
             {
                 ApplyAutomationTheme(theme);
-                var window = new MainWindow
+                window = new MainWindow
                 {
                     Width = scenario == UnlimotionAutomationScenario.StatusContract ? 1280 : 1200,
                     Height = 800,
@@ -150,7 +179,25 @@ public static class UnlimotionAppLaunchHost
                 window.Opened += (_, __) => ApplyAutomationTreeExpansion(vm, launchData);
                 return window;
             },
-            DisposeCallback = lifetime.Dispose
+            DisposeCallback = () =>
+            {
+                if (Interlocked.Exchange(ref disposeState, 1) != 0)
+                {
+                    return;
+                }
+
+                try
+                {
+                    if (window is not null)
+                    {
+                        headlessWindowCleanup?.Invoke(window);
+                    }
+                }
+                finally
+                {
+                    lifetime.Dispose();
+                }
+            }
         };
     }
 
@@ -633,6 +680,12 @@ public static class UnlimotionAppLaunchHost
         vm.SelectCurrentTask();
     }
 
+    private static TaskItemViewModel? FindTaskById(MainWindowViewModel vm, string taskId)
+    {
+        var lookup = vm.taskRepository?.Tasks.Lookup(taskId);
+        return lookup?.HasValue == true ? lookup.Value.Value : null;
+    }
+
     private sealed class HeadlessSessionLifetime : IDisposable
     {
         private readonly bool _previousDefaultIsExpanded;
@@ -736,6 +789,7 @@ public static class UnlimotionAppLaunchHost
             string repositoryRoot,
             string rootPath,
             string tasksPath,
+            string vaultPath,
             string configPath,
             string currentTaskId,
             string currentTaskTitle,
@@ -746,6 +800,7 @@ public static class UnlimotionAppLaunchHost
             RepositoryRoot = repositoryRoot;
             RootPath = rootPath;
             TasksPath = tasksPath;
+            VaultPath = vaultPath;
             ConfigPath = configPath;
             CurrentTaskId = currentTaskId;
             CurrentTaskTitle = currentTaskTitle;
@@ -759,6 +814,8 @@ public static class UnlimotionAppLaunchHost
         public string RootPath { get; }
 
         public string TasksPath { get; }
+
+        public string VaultPath { get; }
 
         public string ConfigPath { get; }
 
@@ -781,6 +838,7 @@ public static class UnlimotionAppLaunchHost
             var repositoryRoot = FindRepositoryRoot();
             var rootPath = Path.Combine(Path.GetTempPath(), "Unlimotion.AppAutomation", Guid.NewGuid().ToString("N"));
             var tasksPath = Path.Combine(rootPath, "Tasks");
+            var vaultPath = Path.Combine(rootPath, "Vault");
             var configPath = Path.Combine(rootPath, "Settings.json");
             var currentTaskId = string.IsNullOrWhiteSpace(currentTaskIdOverride)
                 ? UnlimotionAutomationScenarioData.GetCurrentTaskId(scenario, language)
@@ -801,12 +859,25 @@ public static class UnlimotionAppLaunchHost
 
             Directory.CreateDirectory(tasksPath);
             UnlimotionAutomationScenarioData.SeedTasks(scenario, repositoryRoot, tasksPath, language);
-            UnlimotionAutomationScenarioData.WriteConfig(scenario, configPath, tasksPath, language, theme);
+            if (scenario == UnlimotionAutomationScenario.Feed)
+            {
+                Directory.CreateDirectory(vaultPath);
+                UnlimotionAutomationScenarioData.SeedFeedVault(vaultPath);
+            }
+
+            UnlimotionAutomationScenarioData.WriteConfig(
+                scenario,
+                configPath,
+                tasksPath,
+                language,
+                theme,
+                vaultPath);
 
             return new UnlimotionAutomationLaunchData(
                 repositoryRoot,
                 rootPath,
                 tasksPath,
+                vaultPath,
                 configPath,
                 currentTaskId,
                 currentTaskTitle,

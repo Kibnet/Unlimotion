@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Input;
+using Unlimotion.ViewModel;
 
 namespace Unlimotion.Views
 {
@@ -12,7 +13,8 @@ namespace Unlimotion.Views
 
         internal bool TryHandleHotkeyHelpKey(KeyEventArgs e)
         {
-            return MainControl.TryHandleHotkeyHelpKey(e);
+            return DataContext is MainWindowViewModel { IsTasksMode: true }
+                && MainControl.TryHandleHotkeyHelpKey(e);
         }
     }
 }
