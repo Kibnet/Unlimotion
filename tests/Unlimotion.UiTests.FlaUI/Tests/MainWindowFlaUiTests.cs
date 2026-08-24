@@ -19,14 +19,18 @@ namespace Unlimotion.UiTests.FlaUI.Tests;
 
 [InheritsTests]
 public sealed class MainWindowFlaUiTests
-    : StatusContractScenariosBase<MainWindowFlaUiTests.FlaUiRuntimeSession>
+    : FeedScenariosBase<MainWindowFlaUiTests.FlaUiRuntimeSession>
 {
     private static int _physicalPixelDpiAwarenessConfigured;
+    private string? feedVaultPath;
 
     protected override FlaUiRuntimeSession LaunchSession()
     {
         var isStatusContract = IsStatusContractScenarioTest;
-        if (isStatusContract)
+        var isFeed = IsFeedScenarioTest;
+        var isFeedScreenshotCapture = isFeed &&
+            !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(ScreenshotPathEnvironmentVariable));
+        if (isStatusContract || isFeedScreenshotCapture)
         {
             EnsurePhysicalPixelDpiAwareness();
         }
@@ -35,14 +39,18 @@ public sealed class MainWindowFlaUiTests
             UnlimotionAppLaunchHost.CreateDesktopLaunchOptions(
                 isStatusContract
                     ? UnlimotionAutomationScenario.StatusContract
+                    : isFeed
+                        ? UnlimotionAutomationScenario.Feed
                     : UnlimotionAutomationScenario.Smoke,
                 language: isStatusContract ? StatusContractLanguage : null,
                 currentTaskId: isStatusContract ? StatusContractCurrentTaskId : null,
+                buildBeforeLaunch: false,
                 mainWindowTimeout: TimeSpan.FromSeconds(90),
-                theme: isStatusContract ? StatusContractTheme : null));
+                theme: isStatusContract ? StatusContractTheme : null,
+                feedVaultPrepared: path => feedVaultPath = path));
 
         session.MainWindow.Patterns.Window.Pattern.SetWindowVisualState(
-            isStatusContract ? WindowVisualState.Normal : WindowVisualState.Maximized);
+            isStatusContract || isFeed ? WindowVisualState.Normal : WindowVisualState.Maximized);
         session.MainWindow.Focus();
         if (isStatusContract)
         {
@@ -65,6 +73,142 @@ public sealed class MainWindowFlaUiTests
         }
 
         return new FlaUiRuntimeSession(session);
+    }
+
+    protected override string ReadFeedVaultText(string relativePath)
+    {
+        var root = feedVaultPath
+            ?? throw new InvalidOperationException("Feed automation vault was not captured.");
+        try
+        {
+            return File.ReadAllText(Path.Combine(root, relativePath.Replace('/', Path.DirectorySeparatorChar)));
+        }
+        catch (IOException)
+        {
+            return string.Empty;
+        }
+    }
+
+    protected override FeedTaskGeometrySnapshot GetFeedTaskGeometrySnapshot()
+    {
+        var status = FindProcessElement("FeedTask-feed-live-task-StatusPicker")
+            ?? throw new InvalidOperationException("Feed task status picker was absent from UI Automation.");
+        var title = FindProcessElement("FeedTask-feed-live-task-TitleButton")
+            ?? throw new InvalidOperationException("Feed task title button was absent from UI Automation.");
+        return new FeedTaskGeometrySnapshot(ToFeedBounds(status), ToFeedBounds(title));
+    }
+
+    protected override void CaptureFeedScreenshotIfRequested()
+    {
+        var configuredPath = Environment.GetEnvironmentVariable(ScreenshotPathEnvironmentVariable);
+        if (string.IsNullOrWhiteSpace(configuredPath))
+        {
+            return;
+        }
+
+        var mainWindow = Session.Inner.MainWindow;
+        var handle = mainWindow.Properties.NativeWindowHandle.ValueOrDefault;
+        const int captureWidth = 1280;
+        if (handle == IntPtr.Zero || !MoveWindow(handle, 0, 0, captureWidth, 2000, true))
+        {
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not place the Feed window for screenshot capture.");
+        }
+
+        Thread.Sleep(150);
+        var taskTitle = FindProcessElement("FeedTask-feed-live-task-TitleButton")
+            ?? throw new InvalidOperationException("Feed task title was absent before screenshot capture.");
+        taskTitle.Patterns.ScrollItem.PatternOrDefault?.ScrollIntoView();
+        var chronology = RequireProcessElement("FeedChronologyList");
+        var scrollPattern = chronology.Patterns.Scroll.PatternOrDefault;
+        for (var attempt = 0; attempt < 16 && !IsInsideViewport(taskTitle, chronology); attempt++)
+        {
+            scrollPattern?.Scroll(ScrollAmount.NoAmount, ScrollAmount.SmallIncrement);
+            Thread.Sleep(75);
+            taskTitle = FindProcessElement("FeedTask-feed-live-task-TitleButton") ?? taskTitle;
+        }
+
+        taskTitle = WaitUntil(
+            () => FindProcessElement("FeedTask-feed-live-task-TitleButton"),
+            element => element is not null && IsInsideViewport(element, chronology),
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "Feed task title did not become visible before screenshot capture.")!;
+
+        var outputPath = Path.GetFullPath(configuredPath);
+        Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+        using var screenshot = global::FlaUI.Core.Capturing.Capture.Element(
+            mainWindow,
+            new global::FlaUI.Core.Capturing.CaptureSettings());
+        screenshot.ToFile(outputPath);
+        if (new FileInfo(outputPath).Length == 0)
+        {
+            throw new InvalidOperationException($"Feed screenshot '{outputPath}' is empty.");
+        }
+    }
+
+    protected override FeedNarrowLayoutSnapshot GetFeedNarrowLayoutSnapshot()
+    {
+        var window = Session.Inner.MainWindow;
+        var handle = window.Properties.NativeWindowHandle.ValueOrDefault;
+        if (handle == IntPtr.Zero || !GetWindowRect(handle, out var currentBounds))
+        {
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not read Feed window bounds before narrow resize.");
+        }
+
+        if (!MoveWindow(handle, currentBounds.Left, currentBounds.Top, 720, 800, true))
+        {
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not resize Feed window to its narrow contract width.");
+        }
+
+        var resized = WaitUntil(
+            () => TryReadWindowBounds(handle),
+            bounds => bounds is { Width: <= 760, Height: > 0 },
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "Feed window did not reach its narrow contract width.")
+            ?? throw new InvalidOperationException("Feed window bounds were unavailable after narrow resize.");
+        var viewport = new FeedElementBounds(resized.Left, resized.Top, resized.Width, resized.Height);
+        var feedRoot = FindProcessElement("FeedRoot")
+            ?? throw new InvalidOperationException("Feed root was absent after narrow resize.");
+        var hasHorizontalOverflow = feedRoot.FindAllDescendants()
+            .Where(element => !element.Properties.IsOffscreen.ValueOrDefault)
+            .Select(ToFeedBounds)
+            .Any(bounds => bounds.Width > 0 &&
+                           (bounds.Left < viewport.Left - 1 || bounds.Right > viewport.Right + 1));
+
+        return new FeedNarrowLayoutSnapshot(
+            viewport,
+            ToFeedBounds(RequireProcessElement("FeedModeButton")),
+            ToFeedBounds(RequireProcessElement("TasksModeButton")),
+            ToFeedBounds(RequireProcessElement("FeedQuickCaptureTextBox")),
+            ToFeedBounds(RequireProcessElement("FeedStartReviewButton")),
+            hasHorizontalOverflow);
+    }
+
+    private AutomationElement RequireProcessElement(string automationId) =>
+        FindProcessElement(automationId)
+        ?? throw new InvalidOperationException($"Feed UI Automation element '{automationId}' was absent.");
+
+    private static FeedElementBounds ToFeedBounds(AutomationElement element)
+    {
+        var bounds = element.Properties.BoundingRectangle.ValueOrDefault;
+        return new FeedElementBounds(bounds.Left, bounds.Top, bounds.Width, bounds.Height);
+    }
+
+    private static bool IsInsideViewport(AutomationElement element, AutomationElement viewportElement)
+    {
+        var bounds = ToFeedBounds(element);
+        var viewport = ToFeedBounds(viewportElement);
+        return bounds.Width > 0 && bounds.Height > 0 && bounds.IsInside(viewport);
+    }
+
+    private static FeedElementBounds? TryReadWindowBounds(IntPtr handle)
+    {
+        return GetWindowRect(handle, out var bounds)
+            ? new FeedElementBounds(
+                bounds.Left,
+                bounds.Top,
+                bounds.Right - bounds.Left,
+                bounds.Bottom - bounds.Top)
+            : null;
     }
 
     protected override StatusContractWindowSnapshot GetStatusContractWindowSnapshot()
@@ -564,6 +708,16 @@ public sealed class MainWindowFlaUiTests
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetWindowRect(IntPtr windowHandle, out NativeRect rectangle);
 
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool MoveWindow(
+        IntPtr windowHandle,
+        int x,
+        int y,
+        int width,
+        int height,
+        [MarshalAs(UnmanagedType.Bool)] bool repaint);
+
     private static void EnsurePhysicalPixelDpiAwareness()
     {
         if (Volatile.Read(ref _physicalPixelDpiAwarenessConfigured) != 0)
@@ -580,7 +734,7 @@ public sealed class MainWindowFlaUiTests
             {
                 throw new Win32Exception(
                     error,
-                    "Could not enable per-monitor DPI awareness for status-contract capture.");
+                    "Could not enable per-monitor DPI awareness for physical-pixel UI capture.");
             }
         }
 

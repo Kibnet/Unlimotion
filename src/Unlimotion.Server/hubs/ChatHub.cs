@@ -28,6 +28,9 @@ namespace Unlimotion.Server.Hubs
 
         private readonly IAsyncDocumentSession _ravenSession;
 
+        public Task<TaskStorageCapabilities> GetTaskStorageCapabilities() =>
+            Task.FromResult(TaskStorageCapabilities.CreateCurrent());
+
         public async Task UpdateMyDisplayName(string userDispalyName)
         {
             if (Context.Items["nickname"] as string != userDispalyName)

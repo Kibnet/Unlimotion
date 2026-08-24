@@ -20,6 +20,10 @@ public class SettingsViewModel
     private const string ClientSettingsSectionName = "ClientSettings";
     private const string ClientLoginKey = "Login";
     private const string DefaultTaskStoragePath = "Tasks";
+    private const string NoteVaultSectionName = "NoteVault";
+    private const string NoteVaultRootPathKey = "RootPath";
+    private const string NoteVaultDayBoundaryMinutesKey = "DayBoundaryMinutes";
+    private const string NoteVaultIsFeedEnabledKey = "IsFeedEnabled";
     private const string TaskOutlineClipboardSectionName = "TaskOutlineClipboard";
     private const string TaskOutlineCopyAsMarkdownKey = "CopyAsMarkdown";
     private const string TaskOutlineCopyDescriptionKey = "CopyDescription";
@@ -28,6 +32,7 @@ public class SettingsViewModel
 
     private readonly IConfiguration _configuration;
     private readonly IConfiguration _taskStorageSettings;
+    private readonly IConfiguration _noteVaultSettings;
     private readonly IConfiguration _gitSettings;
     private readonly IConfiguration _appearanceSettings;
     private readonly IConfiguration _taskOutlineClipboardSettings;
@@ -36,6 +41,7 @@ public class SettingsViewModel
     private readonly IRemoteBackupService? _backupService;
     private readonly ILocalizationService _localization;
     private readonly bool _defaultIsDarkTheme;
+    private readonly bool _isExternalNoteVaultSupported;
     private readonly Func<string?>? _defaultTaskStoragePathProvider;
     private bool _deferTaskSpaceSettingsPersistence;
     private IApplicationUpdateService? _applicationUpdateService;
@@ -44,6 +50,9 @@ public class SettingsViewModel
 
     private ThemeMode _themeMode;
     private string? _taskStoragePath;
+    private string? _noteVaultRootPath;
+    private TimeSpan _noteDayBoundary;
+    private bool _isFeedEnabled;
     private string? _taskStorageUrl;
     private string? _login;
     private string? _password;
@@ -78,10 +87,12 @@ public class SettingsViewModel
         IRemoteBackupService? backupService = null,
         bool defaultIsDarkTheme = false,
         Func<string?>? defaultTaskStoragePathProvider = null,
-        ILocalizationService? localizationService = null)
+        ILocalizationService? localizationService = null,
+        bool? isExternalNoteVaultSupported = null)
     {
         _configuration = configuration;
         _taskStorageSettings = configuration.GetSection("TaskStorage");
+        _noteVaultSettings = configuration.GetSection(NoteVaultSectionName);
         _gitSettings = configuration.GetSection("Git");
         _appearanceSettings = configuration.GetSection(AppearanceSettings.SectionName);
         _taskOutlineClipboardSettings = configuration.GetSection(TaskOutlineClipboardSectionName);
@@ -90,6 +101,7 @@ public class SettingsViewModel
         _backupService = backupService;
         _localization = localizationService ?? LocalizationService.Current;
         _defaultIsDarkTheme = defaultIsDarkTheme;
+        _isExternalNoteVaultSupported = isExternalNoteVaultSupported ?? IsDesktopOperatingSystem();
         _defaultTaskStoragePathProvider = defaultTaskStoragePathProvider;
 
         _localization.SetLanguage(_appearanceSettings.GetSection(AppearanceSettings.LanguageKey).Get<string>());
@@ -99,6 +111,12 @@ public class SettingsViewModel
         _themeMode = AppearanceSettings.ParseThemeMode(
             _appearanceSettings.GetSection(AppearanceSettings.ThemeKey).Get<string>());
         _taskStoragePath = _taskStorageSettings.GetSection(nameof(TaskStorageSettings.Path)).Get<string>();
+        _noteVaultRootPath = _noteVaultSettings.GetSection(NoteVaultRootPathKey).Get<string>();
+        _noteDayBoundary = TimeSpan.FromMinutes(NormalizeDayBoundaryMinutes(
+            _noteVaultSettings.GetSection(NoteVaultDayBoundaryMinutesKey).Get<int?>() ?? 0));
+        _isFeedEnabled = _noteVaultSettings
+            .GetSection(NoteVaultIsFeedEnabledKey)
+            .Get<bool?>() ?? true;
         _taskStorageUrl = _taskStorageSettings.GetSection(nameof(TaskStorageSettings.URL)).Get<string>();
         _login = _taskStorageSettings.GetSection(nameof(TaskStorageSettings.Login)).Get<string>();
         _password = _taskStorageSettings.GetSection(nameof(TaskStorageSettings.Password)).Get<string>();
@@ -155,6 +173,7 @@ public class SettingsViewModel
     public ICommand? BackupCommand { get; set; }
     public ICommand? ResaveCommand { get; set; }
     public ICommand? BrowseTaskStoragePathCommand { get; set; }
+    public ICommand? BrowseNoteVaultRootPathCommand { get; set; }
     public ICommand? CloneCommand { get; set; }
     public ICommand? PullCommand { get; set; }
     public ICommand? PushCommand { get; set; }
@@ -415,6 +434,56 @@ public class SettingsViewModel
     }
 
     public string TaskStoragePathTooltip => ResolveTaskStoragePathTooltip();
+
+    public string? NoteVaultRootPath
+    {
+        get => _noteVaultRootPath;
+        set
+        {
+            if (string.Equals(_noteVaultRootPath, value, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _noteVaultRootPath = value;
+            _noteVaultSettings.GetSection(NoteVaultRootPathKey).Set(value);
+        }
+    }
+
+    public bool IsExternalNoteVaultSupported => _isExternalNoteVaultSupported;
+
+    public bool IsFeedEnabled
+    {
+        get => _isFeedEnabled;
+        set
+        {
+            if (_isFeedEnabled == value)
+            {
+                return;
+            }
+
+            _isFeedEnabled = value;
+            _noteVaultSettings.GetSection(NoteVaultIsFeedEnabledKey).Set(value);
+        }
+    }
+
+    public TimeSpan NoteDayBoundary
+    {
+        get => _noteDayBoundary;
+        set
+        {
+            var normalized = TimeSpan.FromMinutes(NormalizeDayBoundaryMinutes((int)value.TotalMinutes));
+            if (_noteDayBoundary == normalized)
+            {
+                return;
+            }
+
+            _noteDayBoundary = normalized;
+            _noteVaultSettings
+                .GetSection(NoteVaultDayBoundaryMinutesKey)
+                .Set((int)normalized.TotalMinutes);
+        }
+    }
 
     public string? TaskStorageURL
     {
@@ -1704,5 +1773,13 @@ public class SettingsViewModel
             .GetSection(ClientSettingsSectionName)
             .GetSection(ClientLoginKey)
             .Get<string>();
+    }
+
+    private static int NormalizeDayBoundaryMinutes(int minutes) =>
+        minutes is >= 0 and < 1440 ? minutes : 0;
+
+    private static bool IsDesktopOperatingSystem()
+    {
+        return OperatingSystem.IsWindows() || OperatingSystem.IsLinux() || OperatingSystem.IsMacOS();
     }
 }

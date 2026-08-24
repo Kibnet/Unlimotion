@@ -29,6 +29,7 @@ using Unlimotion.Scheduling;
 using Unlimotion.Scheduling.Jobs;
 using Unlimotion.Services;
 using Unlimotion.ViewModel;
+using Unlimotion.ViewModel.Feed;
 using Unlimotion.ViewModel.Localization;
 using Unlimotion.Views;
 using WritableJsonConfiguration;
@@ -204,6 +205,7 @@ public class App : Application
         SetupSettingsCommands(settingsViewModel);
         WireTaskSpaceSettingsPersistenceState(settingsViewModel);
         RefreshTaskSpaces(settingsViewModel);
+        WireNoteVaultFeed(settingsViewModel, _mainWindowViewModel);
         WireSettingsToActiveStorage(settingsViewModel);
         SetupAutomaticUpdateTimer(settingsViewModel);
         WireActiveTaskContext();
@@ -453,6 +455,10 @@ public class App : Application
                 }
 
                 WireSettingsToActiveStorage(settings);
+                if (_mainWindowViewModel?.Feed.IsVaultInitialized == true)
+                {
+                    await _mainWindowViewModel.Feed.RefreshAsync();
+                }
 
                 if (!settings.IsServerMode || settings.StorageConnectionState == SettingsConnectionState.Connecting)
                 {
@@ -631,6 +637,9 @@ public class App : Application
 
             await Task.CompletedTask;
         });
+
+        settings.BrowseNoteVaultRootPathCommand = ReactiveCommand.CreateFromTask(
+            () => BrowseNoteVaultRootPathAsync(settings));
 
         settings.BrowseTaskStoragePathCommand = ReactiveCommand.CreateFromTask(async param =>
         {
@@ -894,6 +903,75 @@ public class App : Application
         settings.CheckForUpdatesCommand = ReactiveCommand.CreateFromTask(() => settings.CheckForUpdatesAsync());
         settings.DownloadUpdateCommand = ReactiveCommand.CreateFromTask(() => settings.DownloadUpdateAsync());
         settings.ApplyUpdateCommand = ReactiveCommand.CreateFromTask(() => settings.ApplyUpdateAsync());
+    }
+
+    private void WireNoteVaultFeed(SettingsViewModel settings, MainWindowViewModel viewModel)
+    {
+        if (!settings.IsFeedEnabled)
+        {
+            viewModel.SelectedWorkspaceMode = WorkspaceMode.Tasks;
+        }
+
+        viewModel.Feed.IsExternalVaultSupported = settings.IsExternalNoteVaultSupported;
+        viewModel.Feed.DayBoundary = settings.NoteDayBoundary;
+        viewModel.Feed.TaskOwner = viewModel;
+        viewModel.Feed.TaskCreationTarget = new TaskStorageFeedTaskCreationTarget(() => viewModel.taskRepository);
+        viewModel.Feed.TaskResolver = taskId =>
+            viewModel.taskRepository?.Tasks.Items.FirstOrDefault(task =>
+                string.Equals(task.Id, taskId, StringComparison.Ordinal));
+        viewModel.Feed.NavigateToTaskRequested = task =>
+        {
+            viewModel.CurrentTaskItem = task;
+            viewModel.SelectedWorkspaceMode = WorkspaceMode.Tasks;
+            viewModel.DetailsAreOpen = true;
+            viewModel.SelectCurrentTask();
+        };
+        viewModel.Feed.ChooseVaultAsync = () => BrowseNoteVaultRootPathAsync(settings);
+        settings
+            .ObservableForProperty(model => model.NoteVaultRootPath, false, true)
+            .Subscribe(change => _ = viewModel.Feed.InitializeVaultAsync(
+                settings.IsFeedEnabled ? change.Value : null))
+            .AddToDispose(viewModel);
+        settings
+            .ObservableForProperty(model => model.NoteDayBoundary, false, true)
+            .Subscribe(change => viewModel.Feed.DayBoundary = change.Value)
+            .AddToDispose(viewModel);
+        settings
+            .ObservableForProperty(model => model.IsFeedEnabled, false, true)
+            .Subscribe(change =>
+            {
+                if (!change.Value)
+                {
+                    viewModel.SelectedWorkspaceMode = WorkspaceMode.Tasks;
+                }
+
+                _ = viewModel.Feed.InitializeVaultAsync(
+                    change.Value ? settings.NoteVaultRootPath : null);
+            })
+            .AddToDispose(viewModel);
+    }
+
+    private async Task BrowseNoteVaultRootPathAsync(SettingsViewModel settings)
+    {
+        if (_dialogs == null || !settings.IsExternalNoteVaultSupported)
+        {
+            return;
+        }
+
+        try
+        {
+            var path = await _dialogs.ShowOpenFolderDialogAsync(
+                L10n.Get("FolderPickerNoteVaultRoot"),
+                settings.NoteVaultRootPath);
+            if (!string.IsNullOrWhiteSpace(path))
+            {
+                settings.NoteVaultRootPath = path;
+            }
+        }
+        catch (Exception ex)
+        {
+            _notificationManager?.ErrorToast(L10n.Format("NoteVaultFolderPickerFailed", ex.Message));
+        }
     }
 
     private void EnterConflictResolutionMode(SettingsViewModel settings)
@@ -1724,6 +1802,11 @@ public class App : Application
             _ = InitializeStartupViewModelAsync(vm);
         }
 
+        if (ApplicationLifetime is IControlledApplicationLifetime controlledLifetime)
+        {
+            controlledLifetime.Exit += (_, __) => DisposeMainWindowViewModel();
+        }
+
         base.OnFrameworkInitializationCompleted();
     }
 
@@ -1763,6 +1846,11 @@ public class App : Application
             vm.ManagerWrapper?.ErrorToast(L10n.Format("ConnectStorageFailed", ex.Message, hint));
         }
 
+        await vm.Feed.InitializeVaultAsync(
+            vm.Settings.IsFeedEnabled && vm.Settings.IsExternalNoteVaultSupported
+                ? vm.Settings.NoteVaultRootPath
+                : null);
+
         ShowSettingsRecoveryWarning();
         _startupUpdateSettings = vm.Settings;
         RequestStartupUpdateCheck(vm.Settings);
@@ -1782,6 +1870,12 @@ public class App : Application
             L10n.Get("SettingsRecoveredWarning"), Brush.Parse("#9A6700"),
             "SettingsRecoveredWarning", "SettingsRecoveredWarningClose",
             notification => _toastNotificationManager.Messages.Remove(notification)));
+    }
+
+    private void DisposeMainWindowViewModel()
+    {
+        _mainWindowViewModel?.Dispose();
+        _mainWindowViewModel = null;
     }
 
     private static void ApplyAutomationStartupState(MainWindowViewModel vm)

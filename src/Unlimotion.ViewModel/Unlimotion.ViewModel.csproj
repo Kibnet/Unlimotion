@@ -13,6 +13,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
+	  <ProjectReference Include="..\Unlimotion.Notes\Unlimotion.Notes.csproj" />
 	  <ProjectReference Include="..\Unlimotion.TaskTreeManager\Unlimotion.TaskTree.csproj" />
 	</ItemGroup>
 </Project>

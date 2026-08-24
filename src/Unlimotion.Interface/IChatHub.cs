@@ -6,6 +6,7 @@ namespace Unlimotion.Interface
 {
     public interface IChatHub : IServerMethods
     {
+        Task<TaskStorageCapabilities> GetTaskStorageCapabilities();
         Task<string> SaveTask(TaskItemHubMold hubTask);
         Task UpdateMyDisplayName(string userDispalyName);
         Task Login(string token, string operatingSystem, string ipAddress, string nameVersionClient);
