@@ -171,8 +171,9 @@ Durable wireframe внутри SPEC:
   - `vault.json` — schema v1 и стабильный `VaultId` этой логической базы;
   - `areas.json` — каталог областей;
   - `review/` — события/решения разбора по daily file и append-only bootstrap operations.
+  - `deleted/<operation-id>/<original-relative-path>` — durable safety quarantine для файла, удалённого только после проверки expected revision. Каталог сохраняет исходный относительный путь и не очищается автоматически: внешний POSIX writer может дописать в уже перемещённый inode после последней проверки. Очистка требует отдельного явного user-facing workflow; до него пользователь при необходимости может восстановить файл из vault filesystem.
 - Незавершённые transactions, bounded revisions, drafts и rebuildable search index хранятся в app-local data, namespace которого включает `VaultId`. Они не синхронизируются как пользовательские заметки.
-- `.unlimotion/` и app-local artifacts не показываются в Ленте, Files drawer или результатах поиска.
+- `.unlimotion/` и app-local artifacts не показываются в Ленте, Files drawer или результатах поиска. `deleted/` также исключён из Markdown и sidecar watch scopes, чтобы safety quarantine не создавала новые candidates или review events.
 - Dedicated sidecar watcher/rescan обрабатывает внешние изменения `vault.json`, `areas.json` и `review/`: review events merge по semantic key/decision precedence, clean area catalog reloads, а concurrent identity/area conflict получает explicit conflict. Общий Markdown watcher не индексирует эти файлы как заметки.
 - Перемещение root вместе с `.unlimotion/vault.json` сохраняет логическую identity и перепривязывает app-local namespace к новому path. Копия с тем же `VaultId` считается той же логической базой; одновременно подключить две локальные roots с одним ID нельзя. Автоматическое создание независимой identity для clone не входит в MVP.
 - `vault.json` создаётся atomically с create-if-absent. Два несовместимых `VaultId` после внешней синхронизации не объединяются автоматически: sidecar writes блокируются, Markdown остаётся read-only доступным, обе identity/review branches копируются в immutable app-local conflict bundle и пользователь выбирает корректную identity.
@@ -464,6 +465,7 @@ unlimotion-areas:
 | Review persistence | agent | Sidecar fingerprints, без hidden marker в каждом block | 0.85 | Неоднозначный rematch | Нет; safe default повторно показывает block |
 | Live Preview | agent | Block renderer + raw active block | 0.9 | Полный WYSIWYG существенно дороже/рискованнее | Нет |
 | Task link | agent | `unlimotion://task/{id}` с Markdown fallback title | 0.9 | Custom URI не даёт full live status в Obsidian | Нет; Obsidian сохраняет читаемый fallback |
+| D-02: поздняя запись при удалении | user | Выбран вариант 1: переносимая `.unlimotion/deleted/<operation-id>/<original-relative-path>` без автоматической очистки | 1.0 | Автоматическая очистка может unlink-нуть inode, в который поздно допишет POSIX writer | Нет; явный user-facing cleanup — отдельный будущий workflow |
 | Note link | user/agent | Standard wiki-link + stable hidden note marker | 0.95 | Rename может сделать wiki path stale | Нет; ID resolution + explicit repair |
 | Task defaults | agent | Existing default status, no inferred planning dates, `IsGoal=false` | 0.9 | Неожиданная дата/статус изменят смысл | Нет |
 | Markdown dependency | agent | Выбрать в EXEC после compatibility/license/AOT check; contract не зависит от package | 0.8 | Не найдётся готовый безопасный renderer/parser | Нет; stop rule запрещает silent compromise |
@@ -486,6 +488,7 @@ unlimotion-areas:
 | Search index | Task-only filter | Rebuildable local block index + task adapter | Delete cache → rebuild | Index lifecycle tests |
 | Draft | Отсутствует | App-local dirty block draft keyed by vault/path | User can discard/recover | Crash recovery tests |
 | Revision | Git/task backup only | Bounded note safety snapshots | Does not replace external sync/Git | Restore/retention tests |
+| Verified delete safety | Direct file unlink | `.unlimotion/deleted/<operation-id>/<original-relative-path>` durable quarantine | Portable and excluded from Feed/watch; no automatic cleanup until a separate user-facing workflow | Pre-open writer / safe-conflict regression |
 
 ## 7. Бизнес-правила / Алгоритмы
 
@@ -683,7 +686,7 @@ Review records содержат `VaultId`, `EventId`, `DeviceId`, monotonic `Dev
 - **AC-14 — Areas и Goal.** Area tree управляется во временной панели и архивируется без удаления; tasks/goals/notes поддерживают multiple areas; Goal является bool-признаком TaskItem; local/new-server round-trip сохраняет fields, old-client save на new server их не стирает, new client блокирует unsafe classification edit against old server.
 - **AC-15 — Поиск.** Query заменяет Feed fragment results по daily/notes/tasks, поддерживает area/date/type filters, newest-first и открытие точного block; очистка возвращает сохранённую Feed position.
 - **AC-16 — External changes.** Recursive Markdown watcher обрабатывает create/change/rename/delete, игнорирует собственные writes по operation/hash и обновляет Feed/index без active dirty buffer; отдельный sidecar watcher валидирует identity/bootstrap и применяет causal review/area changes. Concurrent explicit decisions становятся pending conflict. При divergent identity writes freeze, обе branches сохраняются, три recovery actions доступны, revision drift отменяет confirm, а losing decisions не теряются молча.
-- **AC-17 — Conflict/recovery/revisions.** Dirty external change не перезаписывается; доступны три действия; crash draft восстанавливается; bounded revisions и transaction journal предотвращают data loss/duplicate conversion.
+- **AC-17 — Conflict/recovery/revisions.** Dirty external change не перезаписывается; доступны три действия; crash draft восстанавливается; bounded revisions и transaction journal предотвращают data loss/duplicate conversion. Verified delete не unlink-ает поздние байты внешнего POSIX writer: они остаются в `.unlimotion/deleted/<operation-id>/<original-relative-path>` до отдельной явной очистки.
 - **AC-18 — Path, link и rendering safety.** Запись вне canonical vault root, symlink/junction escape, executable HTML/script и unsafe URI блокируются; task/wiki serializers не позволяют special characters/path traversal изменить target, fragment или Markdown structure; логи не содержат note body.
 - **AC-19 — Platform boundary.** Desktop provider проходит end-to-end tests; shared solution продолжает собираться для поддерживаемых repo targets, а UI не обещает/не активирует неподтверждённый external-vault provider.
 - **AC-20 — Responsive/visual/accessibility.** Wide/narrow UI соответствует wireframe, не вводит modal review, status icon остаётся слева, controls доступны с клавиатуры/automation names и нет горизонтальной прокрутки основного потока.
@@ -804,7 +807,7 @@ dotnet test --project tests/Unlimotion.UiTests.FlaUI/Unlimotion.UiTests.FlaUI.cs
 | AC-14 | Area schema + task classification round-trip/compatibility tests | Inspect task card chips/toggle и old-server disabled copy | serialized fixtures/capability log | — |
 | AC-15 | SearchIndex unit + search Headless | Inspect context/sort/filter/return state | Headless evidence | — |
 | AC-16 | Markdown + causal sidecar + identity-resolution integration | Inject clock skew/concurrent decisions; resolve divergent ID with revision race | both-branch bundle + watcher/merge/conflict log | — |
-| AC-17 | Conflict/Draft/Revision/Transaction tests + Headless | Exercise three conflict actions | recovery fixtures/screenshot | — |
+| AC-17 | Conflict/Draft/Revision/Transaction tests + `FileNoteVault` delete-race regression + Headless | Exercise three conflict actions and a pre-open external writer | recovery fixtures/safety quarantine path + screenshot | Tombstone cleanup is intentionally not automatic |
 | AC-18 | Path/symlink/renderer + generated-link golden security tests | Inspect error copy and special-character output | test logs/golden Markdown | Symlink capability may be platform-gated but Windows path confinement remains tested |
 | AC-19 | Desktop AppAutomation + shared solution build | Verify unsupported provider state | build/test logs | External mobile vault intentionally not implemented |
 | AC-20 | Responsive Headless + FlaUI/AppAutomation | Compare wireframe, keyboard and bounds | screenshot/video fallback | — |
@@ -819,6 +822,7 @@ dotnet test --project tests/Unlimotion.UiTests.FlaUI/Unlimotion.UiTests.FlaUI.cs
 - **Duplicate blocks:** одинаковый текст затрудняет sidecar rematch. Mitigation: occurrence + neighbor anchors; ambiguity → pending.
 - **Partial conversion:** task/note может создаться до source rewrite. Mitigation: idempotent operation journal, stable resulting ID и explicit recovery.
 - **External sync races:** watcher events могут дублироваться/приходить не по порядку. Mitigation: revision hash, coalescing, operation correlation и re-read before mutation.
+- **Late POSIX writer during delete:** внешняя программа может удерживать исходный file descriptor и дописать данные уже после revision check. Mitigation: verified file атомарно переносится в `.unlimotion/deleted/<operation-id>/<original-relative-path>` и не unlink-ается автоматически; обычный source path исчезает, но поздние байты остаются в recoverable safety quarantine. Детерминированный test проверяет pre-open writer и safe-conflict fallback платформы.
 - **Clock skew/concurrent decisions:** wall-clock не задаёт happens-after. Mitigation: `DeviceId` + monotonic sequence + causal context; concurrent explicit conflicts сохраняются и становятся pending.
 - **Identity resolution loss:** выбор одной `VaultId` branch может скрыть решения другой. Mitigation: immutable both-branch conflict bundle, revision recheck, safe-pending losing locators и delayed recovery-namespace cleanup.
 - **Bootstrap sync/identity:** partial or concurrent sync может повторно скрыть новый block либо смешать две копии vault. Mitigation: immutable `VaultId`, append-only validated manifests, explicit-decision precedence, concurrent intersection и safe pending/conflict.
@@ -844,6 +848,7 @@ dotnet test --project tests/Unlimotion.UiTests.FlaUI/Unlimotion.UiTests.FlaUI.cs
 | «Unlimotion испортит мои Obsidian-файлы» | Vault — личный source of truth | Raw round-trip, minimal additive markers, atomic writes, revisions/conflicts | mitigated |
 | «Полезная мысль не попадёт в разбор без метки» | Capture должен быть быстрым | В очередь входят все новые content blocks | mitigated |
 | «Внешнее редактирование перезапишет мой текст» | Obsidian и Unlimotion работают с одними файлами | Expected hash + dirty conflict + preserve both/draft/revision | mitigated |
+| «Почему в vault осталась удалённая копия?» | Поздний POSIX writer иначе может потерять дописанные байты | Пользователь выбрал durable `.unlimotion/deleted` quarantine с сохранённым исходным путём и без automatic cleanup | accepted-by-user D-02 |
 | «Почему нет Android/Browser сразу?» | Unlimotion multiplatform | Desktop MVP назван явно; provider abstraction и shared build сохраняют будущий путь | accepted-risk for MVP |
 | «Задача создастся дважды после сбоя» | Cross-store operation не атомарна | Journal хранит resulting task ID; retry идемпотентен | mitigated |
 
@@ -1183,3 +1188,4 @@ SPEC подтверждена пользователем точной фразо
 | EXEC | Automated validation | 0.99 | Только mobile workloads для full solution | Завершить visual evidence и delivery audit | Нет | Нет | Headless `44/44` + final Feed `7/7`; Feed FlaUI `6/6`; storage `12/12`; scoped Release builds green; serial unit gate `1080/1081`, isolated Roadmap rerun `1/1`; full solution blocked только NETSDK1147 | Test reports/build logs |
 | EXEC | Visual acceptance | 1.0 | Нет | Закрыть post-EXEC gate | Нет | Нет | Реальный Desktop capture визуально проверен: task status control расположен слева от title; артефакт не предназначен для commit | `chat-artifacts/unlimotion-feed-real-desktop.png` |
 | EXEC | Post-EXEC Review | 1.0 | Нет | Передать результат пользователю без внешней доставки | Нет | Нет | Основной и финальный adversarial review вернули `PASS`; BLOCKER/HIGH/MEDIUM отсутствуют, один screenshot-isolation LOW принят как follow-up; effective reviewer sandbox был workspace-write, без edits/tests | Эта SPEC, production/test diffs, screenshot evidence |
+| EXEC | Follow-up review: delete safety | 1.0 | Локально отсутствует stable SDK 10.0.400 | Commit/push и дождаться authoritative CI | Да | Пользователь выбрал вариант `1` | Portable safety quarantine `deleted/` включена в contract; independent re-review `PASS`; pre-open writer regression добавлен, а local TUnit остановлен до discovery из-за SDK | Эта SPEC, `FileNoteVault`, `DailyMarkdownStorageTests` |
