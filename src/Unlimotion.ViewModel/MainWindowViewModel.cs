@@ -741,7 +741,6 @@ namespace Unlimotion.ViewModel
 
         public void ClearTaskSpaceSurface()
         {
-            IsInitialized = false;
             ResetTaskSpaceSelection();
             DetailsAreOpen = false;
             Search.SearchText = string.Empty;
@@ -750,6 +749,8 @@ namespace Unlimotion.ViewModel
             connectionDisposableList.Dispose();
             connectionDisposableList.Disposables.Clear();
             taskRepository = null;
+            Feed.OnTaskStorageChanged();
+            IsInitialized = false;
         }
 
         private void ResetTaskSpaceSelection()
@@ -848,6 +849,7 @@ namespace Unlimotion.ViewModel
                     }
                 }
                 taskRepository = taskStorage;
+                Feed.OnTaskStorageChanged();
                 var goalFilter = CreateGoalFilter(taskRepository.Tasks
                     .Connect()
                     .AutoRefreshOnObservable(task => task.WhenAnyValue(item => item.IsGoal))

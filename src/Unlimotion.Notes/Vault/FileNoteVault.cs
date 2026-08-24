@@ -7,6 +7,7 @@ namespace Unlimotion.Notes.Vault;
 public sealed class FileNoteVault : INoteVault
 {
     private const int MaximumConflictRestoreAttempts = 8;
+    private const string DeletedTombstonesRelativeDirectory = ".unlimotion/deleted";
 
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> SharedFileLocks = new(
         OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
@@ -14,6 +15,8 @@ public sealed class FileNoteVault : INoteVault
     private readonly string canonicalRootWithSeparator;
     private readonly OwnWriteRegistry? ownWrites;
     private readonly Func<string, CancellationToken, ValueTask>? afterRevisionVerified;
+    private readonly Func<string, CancellationToken, ValueTask>? afterDeleteRevisionVerified;
+    private readonly Func<string, CancellationToken, ValueTask>? afterDeleteTombstoneVerified;
     private readonly Func<string, CancellationToken, ValueTask>? beforeConflictRollback;
     private readonly Func<string, CancellationToken, ValueTask>? beforeConcurrentVersionRestore;
 
@@ -23,7 +26,9 @@ public sealed class FileNoteVault : INoteVault
             ownWrites,
             afterRevisionVerified: null,
             beforeConflictRollback: null,
-            beforeConcurrentVersionRestore: null)
+            beforeConcurrentVersionRestore: null,
+            afterDeleteRevisionVerified: null,
+            afterDeleteTombstoneVerified: null)
     {
     }
 
@@ -32,7 +37,9 @@ public sealed class FileNoteVault : INoteVault
         OwnWriteRegistry? ownWrites,
         Func<string, CancellationToken, ValueTask>? afterRevisionVerified,
         Func<string, CancellationToken, ValueTask>? beforeConflictRollback = null,
-        Func<string, CancellationToken, ValueTask>? beforeConcurrentVersionRestore = null)
+        Func<string, CancellationToken, ValueTask>? beforeConcurrentVersionRestore = null,
+        Func<string, CancellationToken, ValueTask>? afterDeleteRevisionVerified = null,
+        Func<string, CancellationToken, ValueTask>? afterDeleteTombstoneVerified = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(rootPath);
         RootPath = Path.GetFullPath(rootPath);
@@ -42,6 +49,8 @@ public sealed class FileNoteVault : INoteVault
             + Path.DirectorySeparatorChar;
         this.ownWrites = ownWrites;
         this.afterRevisionVerified = afterRevisionVerified;
+        this.afterDeleteRevisionVerified = afterDeleteRevisionVerified;
+        this.afterDeleteTombstoneVerified = afterDeleteTombstoneVerified;
         this.beforeConflictRollback = beforeConflictRollback;
         this.beforeConcurrentVersionRestore = beforeConcurrentVersionRestore;
     }
@@ -147,29 +156,120 @@ public sealed class FileNoteVault : INoteVault
         var fullPath = ResolveSafePath(normalized);
         var gate = SharedFileLocks.GetOrAdd(fullPath, static _ => new SemaphoreSlim(1, 1));
         await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        OwnWriteRegistration? ownWrite = null;
+        string? tombstonePath = null;
         try
         {
             EnsurePathComponentsSafe(fullPath);
-            var actual = await ReadRevisionAsync(fullPath, cancellationToken).ConfigureAwait(false);
-            if (!string.Equals(actual, expectedRevision, StringComparison.Ordinal))
+            FileStream sourceStream;
+            try
             {
-                throw new VaultRevisionConflictException(normalized, expectedRevision, actual);
+                // Block ordinary writers while allowing this verified handle to be atomically relocated.
+                sourceStream = new FileStream(
+                    fullPath,
+                    FileMode.Open,
+                    FileAccess.Read,
+                    FileShare.Read | FileShare.Delete,
+                    4096,
+                    FileOptions.Asynchronous | FileOptions.SequentialScan);
             }
-
-            if (actual is null)
+            catch (FileNotFoundException)
             {
+                var actual = await ReadRevisionAsync(fullPath, cancellationToken).ConfigureAwait(false);
+                if (!string.Equals(actual, expectedRevision, StringComparison.Ordinal))
+                {
+                    throw new VaultRevisionConflictException(normalized, expectedRevision, actual);
+                }
+
                 return false;
             }
 
-            using var ownWrite = ownWrites?.RegisterDeletion(Guid.NewGuid().ToString("N"), normalized);
-            File.Delete(fullPath);
+            await using (sourceStream.ConfigureAwait(false))
+            {
+                var bytes = await ReadAllBytesAsync(sourceStream, cancellationToken).ConfigureAwait(false);
+                var actual = VaultRevision.Compute(bytes);
+                if (!string.Equals(actual, expectedRevision, StringComparison.Ordinal))
+                {
+                    throw new VaultRevisionConflictException(normalized, expectedRevision, actual);
+                }
+
+                if (afterDeleteRevisionVerified is not null)
+                {
+                    await afterDeleteRevisionVerified(fullPath, cancellationToken).ConfigureAwait(false);
+                }
+
+                cancellationToken.ThrowIfCancellationRequested();
+                EnsurePathComponentsSafe(fullPath);
+                var movedTombstonePath = CreateDeleteTombstonePath(normalized);
+                tombstonePath = movedTombstonePath;
+                ownWrite = ownWrites?.RegisterDeletion(Guid.NewGuid().ToString("N"), normalized);
+                try
+                {
+                    File.Move(fullPath, movedTombstonePath, overwrite: false);
+                }
+                catch (FileNotFoundException)
+                {
+                    var current = await ReadRevisionAsync(fullPath, CancellationToken.None).ConfigureAwait(false);
+                    throw new VaultRevisionConflictException(normalized, expectedRevision, current);
+                }
+
+                var movedRevision = await ReadRevisionAsync(movedTombstonePath, CancellationToken.None).ConfigureAwait(false);
+                // A replacement can move a different file into the path, so delete only the revision we verified.
+                if (!string.Equals(movedRevision, expectedRevision, StringComparison.Ordinal))
+                {
+                    try
+                    {
+                        File.Move(movedTombstonePath, fullPath, overwrite: false);
+                    }
+                    catch (Exception restoreException) when (restoreException is IOException or UnauthorizedAccessException)
+                    {
+                        throw CreateRollbackException(
+                            normalized,
+                            expectedRevision!,
+                            movedRevision,
+                            [movedTombstonePath],
+                            restoreException);
+                    }
+
+                    throw new VaultRevisionConflictException(normalized, expectedRevision, movedRevision);
+                }
+            }
+
+            if (afterDeleteTombstoneVerified is not null)
+            {
+                await afterDeleteTombstoneVerified(tombstonePath!, CancellationToken.None).ConfigureAwait(false);
+            }
+
+            // Preserve the detached inode: a POSIX writer can retain a handle past the final revision read.
             ownWrite?.Commit();
             return true;
         }
         finally
         {
+            ownWrite?.Dispose();
             gate.Release();
         }
+    }
+
+    private string EnsureDeleteTombstoneDirectory()
+    {
+        var directory = ResolveSafePath(DeletedTombstonesRelativeDirectory);
+        EnsurePathComponentsSafe(directory, includeLeaf: false);
+        Directory.CreateDirectory(directory);
+        EnsurePathComponentsSafe(directory);
+        return directory;
+    }
+
+    private string CreateDeleteTombstonePath(string normalizedRelativePath)
+    {
+        var tombstoneDirectory = Path.Combine(
+            EnsureDeleteTombstoneDirectory(),
+            Guid.NewGuid().ToString("N"));
+        var tombstonePath = Path.Combine(tombstoneDirectory, normalizedRelativePath);
+        EnsurePathComponentsSafe(tombstonePath, includeLeaf: false);
+        Directory.CreateDirectory(Path.GetDirectoryName(tombstonePath)!);
+        EnsurePathComponentsSafe(tombstonePath, includeLeaf: false);
+        return tombstonePath;
     }
 
     public async Task<IReadOnlyList<string>> ListFilesAsync(

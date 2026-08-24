@@ -61,13 +61,29 @@ public sealed class NoPendingVaultIdentityRecoveryGuard : IVaultIdentityRecovery
     }
 }
 
-public sealed class FileVaultIdentityConflictStore(string appLocalRoot) : IVaultIdentityConflictStore
+public sealed class FileVaultIdentityConflictStore : IVaultIdentityConflictStore
 {
+    private readonly string appLocalRoot;
+    private readonly Func<CancellationToken, Task>? afterMissingFileCheckAsync;
+
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
         WriteIndented = true,
         Encoder = JavaScriptEncoder.Create(UnicodeRanges.All)
     };
+
+    public FileVaultIdentityConflictStore(string appLocalRoot)
+        : this(appLocalRoot, afterMissingFileCheckAsync: null)
+    {
+    }
+
+    internal FileVaultIdentityConflictStore(
+        string appLocalRoot,
+        Func<CancellationToken, Task>? afterMissingFileCheckAsync)
+    {
+        this.appLocalRoot = appLocalRoot;
+        this.afterMissingFileCheckAsync = afterMissingFileCheckAsync;
+    }
 
     public async Task PreserveAsync(
         VaultIdentityConflictBundle bundle,
@@ -87,7 +103,26 @@ public sealed class FileVaultIdentityConflictStore(string appLocalRoot) : IVault
             throw new IOException("Vault identity conflict bundles are immutable and cannot be overwritten.");
         }
 
-        await FileFeedDraftStore.AtomicJsonWriteAsync(path, bundle, cancellationToken).ConfigureAwait(false);
+        if (afterMissingFileCheckAsync is not null)
+        {
+            await afterMissingFileCheckAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        try
+        {
+            await FileFeedDraftStore.AtomicJsonWriteAsync(path, bundle, cancellationToken, overwrite: false)
+                .ConfigureAwait(false);
+        }
+        catch (IOException) when (File.Exists(path))
+        {
+            var existing = await ReadAsync(path, cancellationToken).ConfigureAwait(false);
+            if (HasSamePayload(existing, bundle))
+            {
+                return;
+            }
+
+            throw new IOException("Vault identity conflict bundles are immutable and cannot be overwritten.");
+        }
     }
 
     public async Task<VaultIdentityConflictBundle?> LoadAsync(
