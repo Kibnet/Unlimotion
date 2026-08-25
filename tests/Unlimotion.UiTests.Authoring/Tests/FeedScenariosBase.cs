@@ -17,8 +17,12 @@ public abstract class FeedScenariosBase<TSession> : StatusContractScenariosBase<
     public const string ReviewScenarioTestName = nameof(Feed_review_stays_inline);
     public const string TaskReferenceScenarioTestName = nameof(Feed_task_status_precedes_title_and_title_navigates);
     public const string NarrowScenarioTestName = nameof(Feed_narrow_layout_keeps_primary_actions_available);
+    public const string DailyNoteFilenameFormatScenarioTestName = nameof(Daily_note_filename_format_settings);
     public const string UnifiedScenarioTestName = "Feed_unified_capture_review_task_parent_status_navigation_search_and_conflicts";
     public const string ScreenshotPathEnvironmentVariable = "UNLIMOTION_FEED_SCREENSHOT_PATH";
+    public const string DailyNoteFilenameFormatScreenshotPathEnvironmentVariable =
+        "UNLIMOTION_DAILY_NOTE_FORMAT_SCREENSHOT_PATH";
+    private const string DailyNoteSettingsRelativePath = ".unlimotion/daily-note-settings.json";
 
     protected static bool IsFeedScenarioTest => TestContext.Current?.Metadata.TestName is
         ShellScenarioTestName or
@@ -27,7 +31,13 @@ public abstract class FeedScenariosBase<TSession> : StatusContractScenariosBase<
         ReviewScenarioTestName or
         TaskReferenceScenarioTestName or
         NarrowScenarioTestName or
+        DailyNoteFilenameFormatScenarioTestName or
         UnifiedScenarioTestName;
+
+    protected static bool IsDailyNoteFilenameFormatScenarioTest => string.Equals(
+        TestContext.Current?.Metadata.TestName,
+        DailyNoteFilenameFormatScenarioTestName,
+        StringComparison.Ordinal);
 
     protected static bool IsUnifiedFeedScenarioTest =>
         string.Equals(
@@ -47,6 +57,147 @@ public abstract class FeedScenariosBase<TSession> : StatusContractScenariosBase<
 
     protected virtual void CaptureFeedScreenshotIfRequested()
     {
+    }
+
+    protected virtual void ConfigureDailyNoteFilenameFormatSettings()
+    {
+    }
+
+    protected virtual void CaptureDailyNoteFilenameFormatScreenshotIfRequested()
+    {
+    }
+
+    /// <summary>
+    /// Opens Settings from the task workspace. Desktop implementations may use
+    /// the responsive main-tabs overflow when the direct tab is hidden.
+    /// </summary>
+    protected virtual void SelectSettingsTab()
+    {
+        Page.SelectTabItem(static page => page.SettingsTabItem, timeoutMs: 10_000);
+    }
+
+    protected virtual void WriteExternalDailyNoteFilenameFormat(string format)
+    {
+        throw new NotSupportedException(
+            "The active AppAutomation runtime does not expose a writable Feed vault.");
+    }
+
+    protected virtual void FlushDailyNoteFilenameFormatUi()
+    {
+    }
+
+    /// <summary>
+    /// Avalonia Headless exposes a native control tree but its Button adapter
+    /// can retain an earlier IsEnabled snapshot while a binding is recomputed.
+    /// The dedicated responsive test observes the native button; this hook lets
+    /// the shared scenario additionally assert the ViewModel predicate in that
+    /// adapter-only case.
+    /// </summary>
+    protected virtual bool? GetDailyNoteFilenameFormatCanApply() => null;
+
+    protected virtual string? DescribeDailyNoteFilenameFormatApplyAvailability() => null;
+
+    /// <summary>
+    /// AppAutomation's Avalonia Headless TextBox model updates its visible text
+    /// but does not raise the binding's source-update notification. The
+    /// Headless override mirrors that input into the Settings draft after the
+    /// stable-ID field is exercised; FlaUI uses the actual text input only.
+    /// </summary>
+    protected virtual void EnsureDailyNoteFilenameFormatDraft(string format)
+    {
+    }
+
+    /// <summary>
+    /// Enters a daily filename format through the active automation adapter.
+    /// Desktop adapters may use keyboard input when a UIA value-pattern write
+    /// would not exercise Avalonia's two-way text binding.
+    /// </summary>
+    protected virtual void EnterDailyNoteFilenameFormat(ITextBoxControl input, string format)
+    {
+        input.Enter(format);
+    }
+
+    protected virtual bool? IsDailyNoteFilenameFormatOperationIdle() => null;
+
+    /// <summary>
+    /// Headless dispatches the Feed's applied-state event separately from the
+    /// asynchronous command completion. This hook waits for that event before
+    /// deriving the next draft from the previous applied value. Desktop
+    /// automation leaves it unset and observes the bound controls directly.
+    /// </summary>
+    protected virtual string? GetAppliedDailyNoteFilenameFormat() => null;
+
+    /// <summary>
+    /// Lets desktop automation wait for the visible terminal result of an
+    /// Apply or Reload. Headless observes the Feed state directly instead.
+    /// </summary>
+    protected virtual bool? IsDailyNoteFilenameFormatAppliedInUi(string expectedFormat) => null;
+
+    private void WaitForAppliedDailyNoteFilenameFormat(string expectedFormat)
+    {
+        if (GetAppliedDailyNoteFilenameFormat() is null)
+        {
+            return;
+        }
+
+        WaitUntil(
+            () => GetAppliedDailyNoteFilenameFormat(),
+            actual => string.Equals(actual, expectedFormat, StringComparison.Ordinal),
+            timeout: TimeSpan.FromSeconds(20),
+            timeoutMessage: $"The daily note filename applied state did not become '{expectedFormat}'.");
+    }
+
+    private void WaitForDailyNoteFilenameFormatOperationIdle()
+    {
+        if (IsDailyNoteFilenameFormatOperationIdle() is not { } isIdle)
+        {
+            return;
+        }
+
+        if (!isIdle)
+        {
+            WaitUntil(
+                () => IsDailyNoteFilenameFormatOperationIdle(),
+                isIdle => isIdle == true,
+                timeout: TimeSpan.FromSeconds(20),
+                timeoutMessage: "The daily note filename format reconfiguration did not become idle.");
+        }
+    }
+
+    private void WaitForDailyNoteFilenameFormatOperationCompletion(string expectedFormat)
+    {
+        WaitForDailyNoteFilenameFormatOperationIdle();
+        WaitForAppliedDailyNoteFilenameFormat(expectedFormat);
+
+        if (IsDailyNoteFilenameFormatAppliedInUi(expectedFormat) is not { } isAppliedInUi)
+        {
+            return;
+        }
+
+        if (!isAppliedInUi)
+        {
+            WaitUntil(
+                () => IsDailyNoteFilenameFormatAppliedInUi(expectedFormat),
+                isApplied => isApplied == true,
+                timeout: TimeSpan.FromSeconds(20),
+                timeoutMessage: $"The daily note filename format UI did not settle on '{expectedFormat}'.");
+        }
+    }
+
+    protected static string GetDottedDailyRelativePath(DateOnly date) =>
+        $"Ежедневные/{date:yyyy.MM.dd}.md";
+
+    protected static void SeedDottedDailyNoteForFilenameFormatScenario(string vaultPath)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        var relativePath = GetDottedDailyRelativePath(today);
+        var absolutePath = Path.Combine(
+            vaultPath,
+            relativePath.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(absolutePath)!);
+        File.WriteAllText(
+            absolutePath,
+            $"# {today:yyyy.MM.dd}\n\nExisting dotted daily note for the filename format scenario.\n");
     }
 
     [Test]
@@ -194,6 +345,268 @@ public abstract class FeedScenariosBase<TSession> : StatusContractScenariosBase<
         if (finishReview?.IsEnabled == true)
         {
             finishReview.Invoke();
+        }
+    }
+
+    [Test]
+    [NotInParallel(DesktopUiConstraint)]
+    public async Task Daily_note_filename_format_settings()
+    {
+        const string captureMarker = "Daily format capture from AppAutomation";
+        ConfigureDailyNoteFilenameFormatSettings();
+
+        // Wait for the configured vault to finish its real startup binding before
+        // visiting Settings. The quick-capture input exists only for an initialized
+        // Feed session, so this avoids asserting an intentionally disabled Apply
+        // action while startup is still in progress.
+        OpenFeed();
+        _ = WaitForControl(
+            () => Page.FeedQuickCaptureTextBox,
+            "Feed vault did not finish initialization before opening daily format settings.");
+        const string readinessProbe = "Daily format startup readiness probe";
+        Page.FeedQuickCaptureTextBox.Enter(readinessProbe);
+        WaitUntil(
+            () => Page.FeedCaptureButton.IsEnabled,
+            timeout: TimeSpan.FromSeconds(30),
+            timeoutMessage: "Feed vault did not become ready before opening daily format settings.");
+        Page.FeedQuickCaptureTextBox.Enter(string.Empty);
+
+        // Settings belongs to the task workspace. Switch the top-level mode before
+        // resolving its controls, otherwise Headless can find a non-attached template
+        // whose command bindings have not been activated.
+        OpenTasks();
+        SelectSettingsTab();
+        var settingsTab = WaitForControl(
+            () => Page.SettingsTabItem,
+            "Settings tab did not become available after navigation.");
+        await Assert.That(settingsTab.IsSelected).IsTrue();
+
+        var formatInput = WaitForControl(
+            () => Page.NoteDailyFileNameFormatTextBox,
+            "Daily note filename format input was not exposed in Settings.");
+        var preview = WaitForControl(
+            () => Page.NoteDailyFileNameFormatPreviewText,
+            "Daily note filename format preview was not exposed in Settings.");
+        var apply = WaitForControl(
+            () => Page.ApplyNoteDailyFileNameFormatButton,
+            "Daily note filename format Apply action was not exposed in Settings.");
+
+        await Assert.That(preview.AutomationId)
+            .IsEqualTo("NoteDailyFileNameFormatPreviewText");
+
+        EnterDailyNoteFilenameFormat(formatInput, "yyyy.MM.dd");
+        EnsureDailyNoteFilenameFormatDraft("yyyy.MM.dd");
+        FlushDailyNoteFilenameFormatUi();
+        WaitUntil(
+            () => formatInput.Text,
+            text => string.Equals(text, "yyyy.MM.dd", StringComparison.Ordinal),
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "Daily note filename format input did not accept the dotted draft.");
+        WaitUntil(
+            () => apply.IsEnabled,
+            timeout: TimeSpan.FromSeconds(20),
+            timeoutMessage: "A valid dotted daily note filename format did not enable Apply. " +
+                DescribeDailyNoteFilenameFormatApplyAvailability());
+        if (GetDailyNoteFilenameFormatCanApply() is { } headlessCanApplyForDottedDraft)
+        {
+            if (!headlessCanApplyForDottedDraft)
+            {
+                throw new InvalidOperationException(
+                    "The Headless daily note filename format bridge did not enable Apply: " +
+                    DescribeDailyNoteFilenameFormatApplyAvailability());
+            }
+
+            await Assert.That(headlessCanApplyForDottedDraft).IsTrue();
+        }
+
+        EnterDailyNoteFilenameFormat(formatInput, "yyyy/MM/dd");
+        EnsureDailyNoteFilenameFormatDraft("yyyy/MM/dd");
+        FlushDailyNoteFilenameFormatUi();
+        WaitUntil(
+            () => formatInput.Text,
+            text => string.Equals(text, "yyyy/MM/dd", StringComparison.Ordinal),
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "Daily note filename format input did not accept the invalid draft.");
+        var validation = WaitForControl(
+            () => Page.NoteDailyFileNameFormatValidationText,
+            "An invalid daily note filename format did not expose validation.");
+        WaitUntil(
+            () => validation.Text,
+            text => !string.IsNullOrWhiteSpace(text),
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "An invalid daily note filename format did not render validation text.");
+        await Assert.That(validation.AutomationId)
+            .IsEqualTo("NoteDailyFileNameFormatValidationText");
+        if (GetDailyNoteFilenameFormatCanApply() is { } headlessCanApply)
+        {
+            await Assert.That(headlessCanApply).IsFalse();
+        }
+        else
+        {
+            WaitUntil(
+                () => !apply.IsEnabled,
+                timeout: TimeSpan.FromSeconds(10),
+                timeoutMessage: "An invalid daily note filename format did not disable Apply.");
+        }
+
+        EnterDailyNoteFilenameFormat(formatInput, "yyyy.MM.dd");
+        EnsureDailyNoteFilenameFormatDraft("yyyy.MM.dd");
+        FlushDailyNoteFilenameFormatUi();
+        WaitUntil(
+            () => apply.IsEnabled,
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "Applying after an invalid draft did not restore the valid dotted format.");
+
+        apply.Invoke();
+        FlushDailyNoteFilenameFormatUi();
+        WaitUntil(
+            () => ReadFeedVaultText(DailyNoteSettingsRelativePath),
+            text => text.Contains("\"dailyFileNameFormat\": \"yyyy.MM.dd\"", StringComparison.Ordinal),
+            timeout: TimeSpan.FromSeconds(20),
+            timeoutMessage: "Applying the dotted daily note filename format did not persist the sidecar. " +
+                DescribeDailyNoteFilenameFormatApplyAvailability());
+        WaitForDailyNoteFilenameFormatOperationCompletion("yyyy.MM.dd");
+
+        // A second pair of changes proves that a completed Apply does not leave
+        // the surface stuck or collapse subsequent reconfiguration requests.
+        EnterDailyNoteFilenameFormat(formatInput, "yyyy-MM-dd");
+        EnsureDailyNoteFilenameFormatDraft("yyyy-MM-dd");
+        FlushDailyNoteFilenameFormatUi();
+        WaitUntil(
+            () => apply.IsEnabled,
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "A second daily note filename format draft did not enable Apply.");
+        apply.Invoke();
+        FlushDailyNoteFilenameFormatUi();
+        WaitUntil(
+            () => ReadFeedVaultText(DailyNoteSettingsRelativePath),
+            text => text.Contains("\"dailyFileNameFormat\": \"yyyy-MM-dd\"", StringComparison.Ordinal),
+            timeout: TimeSpan.FromSeconds(20),
+            timeoutMessage: "The repeated Apply did not persist the hyphenated format.");
+        WaitForDailyNoteFilenameFormatOperationCompletion("yyyy-MM-dd");
+
+        EnterDailyNoteFilenameFormat(formatInput, "yyyy.MM.dd");
+        EnsureDailyNoteFilenameFormatDraft("yyyy.MM.dd");
+        FlushDailyNoteFilenameFormatUi();
+        WaitUntil(
+            () => apply.IsEnabled,
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "Returning to the dotted daily note filename format did not enable Apply.");
+        apply.Invoke();
+        FlushDailyNoteFilenameFormatUi();
+        WaitUntil(
+            () => ReadFeedVaultText(DailyNoteSettingsRelativePath),
+            text => text.Contains("\"dailyFileNameFormat\": \"yyyy.MM.dd\"", StringComparison.Ordinal),
+            timeout: TimeSpan.FromSeconds(20),
+            timeoutMessage: "Returning to the dotted daily note filename format did not complete.");
+        WaitForDailyNoteFilenameFormatOperationCompletion("yyyy.MM.dd");
+
+        // Keep a local draft while an external device first writes an invalid
+        // vault setting. The watcher must keep the draft, publish a diagnostic,
+        // and expose Reload by its stable ID instead of losing the last valid
+        // runtime configuration.
+        EnterDailyNoteFilenameFormat(formatInput, "yyyy-MM-dd");
+        EnsureDailyNoteFilenameFormatDraft("yyyy-MM-dd");
+        FlushDailyNoteFilenameFormatUi();
+        WaitUntil(
+            () => apply.IsEnabled,
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "The local draft was not available before the external change.");
+        WriteExternalDailyNoteFilenameFormat("yyyy/MM/dd");
+        FlushDailyNoteFilenameFormatUi();
+        var reload = WaitForControl(
+            () => Page.ReloadExternalNoteDailyFileNameFormatButton,
+            "An invalid watched daily note filename format did not expose Reload.");
+        WaitUntil(
+            () => reload.IsEnabled,
+            timeout: TimeSpan.FromSeconds(20),
+            timeoutMessage: "An invalid watched daily note filename format did not enable Reload.");
+        var status = WaitForControl(
+            () => Page.NoteDailyFileNameFormatStatusText,
+            "An invalid watched daily note filename format did not expose a diagnostic.");
+        using (Assert.Multiple())
+        {
+            await Assert.That(reload.AutomationId)
+                .IsEqualTo("ReloadExternalNoteDailyFileNameFormatButton");
+            await Assert.That(status.AutomationId)
+                .IsEqualTo("NoteDailyFileNameFormatStatusText");
+        }
+        WaitUntil(
+            () => status.Text,
+            text => !string.IsNullOrWhiteSpace(text),
+            timeout: TimeSpan.FromSeconds(20),
+            timeoutMessage: "An invalid watched daily note filename format did not expose a diagnostic.");
+        using (Assert.Multiple())
+        {
+            await Assert.That(formatInput.Text).IsEqualTo("yyyy-MM-dd");
+            await Assert.That(string.IsNullOrWhiteSpace(status.Text)).IsFalse();
+        }
+
+        // Once the external file has been corrected, Reload remains an
+        // explicit decision: it replaces the preserved local draft only after
+        // the user invokes the accessible action.
+        WriteExternalDailyNoteFilenameFormat("dd.MM.yyyy");
+        FlushDailyNoteFilenameFormatUi();
+        WaitUntil(
+            () => ReadFeedVaultText(DailyNoteSettingsRelativePath),
+            text => text.Contains("\"dailyFileNameFormat\":\"dd.MM.yyyy\"", StringComparison.Ordinal),
+            timeout: TimeSpan.FromSeconds(20),
+            timeoutMessage: "The corrected external daily note filename format was not written to the vault.");
+        WaitForAppliedDailyNoteFilenameFormat("dd.MM.yyyy");
+        WaitUntil(
+            () => reload.IsEnabled,
+            timeout: TimeSpan.FromSeconds(20),
+            timeoutMessage: "Reload was cleared before the corrected external value was explicitly accepted.");
+        await Assert.That(formatInput.Text).IsEqualTo("yyyy-MM-dd");
+
+        reload.Invoke();
+        FlushDailyNoteFilenameFormatUi();
+        WaitUntil(
+            () => formatInput.Text,
+            text => string.Equals(text, "dd.MM.yyyy", StringComparison.Ordinal) && !reload.IsEnabled,
+            timeout: TimeSpan.FromSeconds(20),
+            timeoutMessage: "Reload did not accept the watched external daily note filename format.");
+        WaitForDailyNoteFilenameFormatOperationCompletion("dd.MM.yyyy");
+
+        EnterDailyNoteFilenameFormat(formatInput, "yyyy.MM.dd");
+        EnsureDailyNoteFilenameFormatDraft("yyyy.MM.dd");
+        FlushDailyNoteFilenameFormatUi();
+        WaitUntil(
+            () => apply.IsEnabled,
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "The dotted format could not be reapplied after Reload.");
+        apply.Invoke();
+        FlushDailyNoteFilenameFormatUi();
+        WaitUntil(
+            () => ReadFeedVaultText(DailyNoteSettingsRelativePath),
+            text => text.Contains("\"dailyFileNameFormat\": \"yyyy.MM.dd\"", StringComparison.Ordinal),
+            timeout: TimeSpan.FromSeconds(20),
+            timeoutMessage: "The dotted daily note filename format was not restored after Reload.");
+        WaitForDailyNoteFilenameFormatOperationCompletion("yyyy.MM.dd");
+
+        CaptureDailyNoteFilenameFormatScreenshotIfRequested();
+
+        OpenFeed();
+        Page.FeedQuickCaptureTextBox.Enter(captureMarker);
+        WaitUntil(
+            () => Page.FeedCaptureButton.IsEnabled,
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "Feed capture was not available after applying the dotted filename format.");
+        Page.FeedCaptureButton.Invoke();
+
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        var dottedPath = GetDottedDailyRelativePath(today);
+        var hyphenPath = UnlimotionAutomationScenarioData.GetFeedDailyRelativePath(today);
+        WaitUntil(
+            () => ReadFeedVaultText(dottedPath),
+            text => text.Contains(captureMarker, StringComparison.Ordinal),
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "Quick capture was not written to the dotted daily Markdown file.");
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(ReadFeedVaultText(dottedPath)).Contains(captureMarker);
+            await Assert.That(ReadFeedVaultText(hyphenPath)).DoesNotContain(captureMarker);
         }
     }
 

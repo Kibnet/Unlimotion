@@ -386,6 +386,21 @@
   <data name="NoteVaultFolderPickerFailed" xml:space="preserve"><value>Could not select the note vault folder: {0}</value></data>
   <data name="NoteVaultHint" xml:space="preserve"><value>Choose the root folder of an existing Obsidian vault. Unlimotion edits its Markdown files in place.</value></data>
   <data name="NoteVaultTitle" xml:space="preserve"><value>Note vault</value></data>
+  <data name="NoteDailyFileNameFormat" xml:space="preserve"><value>Daily note filename format</value></data>
+  <data name="NoteDailyFileNameFormatApply" xml:space="preserve"><value>Apply</value></data>
+  <data name="NoteDailyFileNameFormatApplyCancelled" xml:space="preserve"><value>Applying the daily note filename format was cancelled.</value></data>
+  <data name="NoteDailyFileNameFormatApplyError" xml:space="preserve"><value>Could not apply the daily note filename format: {0}</value></data>
+  <data name="NoteDailyFileNameFormatApplyFailed" xml:space="preserve"><value>Could not apply the daily note filename format. You can try again.</value></data>
+  <data name="NoteDailyFileNameFormatApplied" xml:space="preserve"><value>Daily note filename format applied: {0}</value></data>
+  <data name="NoteDailyFileNameFormatApplying" xml:space="preserve"><value>Applying daily note filename format…</value></data>
+  <data name="NoteDailyFileNameFormatExternalChanged" xml:space="preserve"><value>The daily note filename format changed in another copy of this vault: {0}</value></data>
+  <data name="NoteDailyFileNameFormatHint" xml:space="preserve"><value>Enter only the filename stem. Unlimotion adds “Ежедневные/” and .md.</value></data>
+  <data name="NoteDailyFileNameFormatInvalid" xml:space="preserve"><value>Use yyyy, MM and dd once each; only -, . and _ may separate them.</value></data>
+  <data name="NoteDailyFileNameFormatPreview" xml:space="preserve"><value>Preview: </value></data>
+  <data name="NoteDailyFileNameFormatReloadExternal" xml:space="preserve"><value>Reload external value</value></data>
+  <data name="NoteDailyFileNameFormatReloading" xml:space="preserve"><value>Reloading the daily note filename format…</value></data>
+  <data name="NoteDailyFileNameFormatRootRequired" xml:space="preserve"><value>Select and initialize a vault folder before applying a daily note filename format.</value></data>
+  <data name="NoteDailyFileNameFormatWarning" xml:space="preserve"><value>Changing this format never renames files. Choose the convention that matches your history.</value></data>
   <data name="NoteDayBoundary" xml:space="preserve"><value>Start of a new day</value></data>
   <data name="NoteDayBoundaryHint" xml:space="preserve"><value>Captures before this local time are written to the previous daily note.</value></data>
   <data name="OneDay" xml:space="preserve"><value>1 day</value></data>
