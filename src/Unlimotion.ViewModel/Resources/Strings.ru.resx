@@ -386,6 +386,21 @@
   <data name="NoteVaultFolderPickerFailed" xml:space="preserve"><value>Не удалось выбрать папку базы заметок: {0}</value></data>
   <data name="NoteVaultHint" xml:space="preserve"><value>Выберите корневую папку существующей базы Obsidian. Unlimotion работает с её Markdown-файлами на месте.</value></data>
   <data name="NoteVaultTitle" xml:space="preserve"><value>База заметок</value></data>
+  <data name="NoteDailyFileNameFormat" xml:space="preserve"><value>Формат имени ежедневной заметки</value></data>
+  <data name="NoteDailyFileNameFormatApply" xml:space="preserve"><value>Применить</value></data>
+  <data name="NoteDailyFileNameFormatApplyCancelled" xml:space="preserve"><value>Применение формата имени ежедневной заметки отменено.</value></data>
+  <data name="NoteDailyFileNameFormatApplyError" xml:space="preserve"><value>Не удалось применить формат имени ежедневной заметки: {0}</value></data>
+  <data name="NoteDailyFileNameFormatApplyFailed" xml:space="preserve"><value>Не удалось применить формат имени ежедневной заметки. Попробуйте ещё раз.</value></data>
+  <data name="NoteDailyFileNameFormatApplied" xml:space="preserve"><value>Формат имени ежедневной заметки применён: {0}</value></data>
+  <data name="NoteDailyFileNameFormatApplying" xml:space="preserve"><value>Применение формата имени ежедневной заметки…</value></data>
+  <data name="NoteDailyFileNameFormatExternalChanged" xml:space="preserve"><value>Формат имени ежедневной заметки изменён в другой копии базы: {0}</value></data>
+  <data name="NoteDailyFileNameFormatHint" xml:space="preserve"><value>Укажите только основу имени. «Ежедневные/» и .md Unlimotion добавит сам.</value></data>
+  <data name="NoteDailyFileNameFormatInvalid" xml:space="preserve"><value>Используйте yyyy, MM и dd по одному разу; между ними допустимы только -, . или _.</value></data>
+  <data name="NoteDailyFileNameFormatPreview" xml:space="preserve"><value>Пример: </value></data>
+  <data name="NoteDailyFileNameFormatReloadExternal" xml:space="preserve"><value>Загрузить внешнее значение</value></data>
+  <data name="NoteDailyFileNameFormatReloading" xml:space="preserve"><value>Загрузка формата имени ежедневной заметки…</value></data>
+  <data name="NoteDailyFileNameFormatRootRequired" xml:space="preserve"><value>Выберите и инициализируйте папку базы, прежде чем применять формат имени ежедневной заметки.</value></data>
+  <data name="NoteDailyFileNameFormatWarning" xml:space="preserve"><value>При смене формата файлы не переименовываются. Выберите формат, соответствующий именам вашей истории.</value></data>
   <data name="NoteDayBoundary" xml:space="preserve"><value>Начало нового дня</value></data>
   <data name="NoteDayBoundaryHint" xml:space="preserve"><value>Записи до этого локального времени попадут в ежедневную заметку предыдущего дня.</value></data>
   <data name="OneDay" xml:space="preserve"><value>1 день</value></data>

@@ -11,7 +11,7 @@ namespace Unlimotion.Test;
 public class FeedSidecarSyncTests
 {
     [Test]
-    public async Task DedicatedWatcherClassifiesIdentityAreasAndRecursiveReviewArtifacts()
+    public async Task DedicatedWatcherClassifiesIdentityAreasDailySettingsAndRecursiveReviewArtifacts()
     {
         using var directory = new TempNotesDirectory();
         var source = new ManualVaultWatchSource();
@@ -28,6 +28,11 @@ public class FeedSidecarSyncTests
         source.Emit(new VaultRawChange(VaultRawChangeKind.Created, identity));
         var areas = await CreateAsync(directory.Path, ".unlimotion/areas.json", "[]");
         source.Emit(new VaultRawChange(VaultRawChangeKind.Changed, areas));
+        var dailySettings = await CreateAsync(
+            directory.Path,
+            ".unlimotion/daily-note-settings.json",
+            "{\"schemaVersion\":1,\"dailyFileNameFormat\":\"yyyy.MM.dd\"}");
+        source.Emit(new VaultRawChange(VaultRawChangeKind.Changed, dailySettings));
         var review = await CreateAsync(directory.Path, ".unlimotion/review/2026/event.json", "{}");
         source.Emit(new VaultRawChange(VaultRawChangeKind.Created, review));
         var ordinaryNote = await CreateAsync(directory.Path, "Ежедневные/2026-08-24.md", "text");
@@ -35,11 +40,13 @@ public class FeedSidecarSyncTests
 
         var identityChange = await sink.WaitForAsync(change => change.SidecarArtifact == SidecarArtifactKind.VaultIdentity);
         var areasChange = await sink.WaitForAsync(change => change.SidecarArtifact == SidecarArtifactKind.Areas);
+        var dailySettingsChange = await sink.WaitForAsync(change => change.SidecarArtifact == SidecarArtifactKind.DailyNoteSettings);
         var reviewChange = await sink.WaitForAsync(change => change.SidecarArtifact == SidecarArtifactKind.Review);
 
         await Assert.That(identityChange.Scope).IsEqualTo(VaultWatchScope.Sidecar);
         await Assert.That(identityChange.RelativePath).IsEqualTo(".unlimotion/vault.json");
         await Assert.That(areasChange.RelativePath).IsEqualTo(".unlimotion/areas.json");
+        await Assert.That(dailySettingsChange.RelativePath).IsEqualTo(".unlimotion/daily-note-settings.json");
         await Assert.That(reviewChange.RelativePath).IsEqualTo(".unlimotion/review/2026/event.json");
         await Assert.That(sink.Changes.Any(change => change.RelativePath == "Ежедневные/2026-08-24.md")).IsFalse();
     }
@@ -125,6 +132,42 @@ public class FeedSidecarSyncTests
         var change = await sink.WaitForAsync(item => item.SidecarArtifact == SidecarArtifactKind.Areas);
         await Assert.That(change.Kind).IsEqualTo(VaultWatchChangeKind.Deleted);
         await Assert.That(change.RelativePath).IsEqualTo(".unlimotion/areas.json");
+    }
+
+    [Test]
+    public async Task RenameBetweenKnownSidecarsDeliversDeleteAndCreateForBothContracts()
+    {
+        using var directory = new TempNotesDirectory();
+        var source = new ManualVaultWatchSource();
+        var sink = new RecordingVaultChangeSink();
+        await using var watcher = new SidecarVaultWatcher(
+            directory.Path,
+            source,
+            new OwnWriteRegistry(),
+            sink,
+            TimeSpan.Zero);
+        watcher.Start();
+
+        var original = await CreateAsync(
+            directory.Path,
+            ".unlimotion/daily-note-settings.json",
+            "{\"schemaVersion\":1,\"dailyFileNameFormat\":\"yyyy.MM.dd\"}");
+        var target = Path.Combine(directory.Path, ".unlimotion", "areas.json");
+        File.Move(original, target);
+        source.Emit(new VaultRawChange(VaultRawChangeKind.Renamed, target, original));
+
+        var deletedSettings = await sink.WaitForAsync(item =>
+            item.SidecarArtifact == SidecarArtifactKind.DailyNoteSettings
+            && item.Kind == VaultWatchChangeKind.Deleted);
+        var createdAreas = await sink.WaitForAsync(item =>
+            item.SidecarArtifact == SidecarArtifactKind.Areas
+            && item.Kind == VaultWatchChangeKind.Created);
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(deletedSettings.RelativePath).IsEqualTo(".unlimotion/daily-note-settings.json");
+            await Assert.That(createdAreas.RelativePath).IsEqualTo(".unlimotion/areas.json");
+        }
     }
 
     private static async Task<string> CreateAsync(string root, string relativePath, string contents)

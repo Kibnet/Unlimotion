@@ -14,8 +14,10 @@ using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using ReactiveUI;
+using System.Reactive.Disposables;
 using System.Reactive;
 using System.Reactive.Threading.Tasks;
+using System.ComponentModel;
 using System.Reflection;
 using System.Text;
 using TUnit.Assertions;
@@ -24,6 +26,7 @@ using Unlimotion.AppAutomation.TestHost;
 using Unlimotion.UiTests.Authoring.Pages;
 using Unlimotion.UiTests.Authoring.Tests;
 using Unlimotion.UiTests.Headless.Infrastructure;
+using Unlimotion.ViewModel;
 
 namespace Unlimotion.UiTests.Headless.Tests;
 
@@ -39,11 +42,13 @@ public sealed class MainWindowHeadlessTests
     private const string UnifiedDiskSaveBothMarker = "Unified disk version preserved by SaveBoth";
     private static readonly UTF8Encoding Utf8WithoutBom = new(encoderShouldEmitUTF8Identifier: false);
     private string? feedVaultPath;
+    private bool isDailyNoteFilenameFormatSettingsWired;
 
     protected override HeadlessRuntimeSession LaunchSession()
     {
         var isStatusContract = IsStatusContractScenarioTest;
         var isFeed = IsFeedScenarioTest;
+        var isDailyNoteFilenameFormatScenario = IsDailyNoteFilenameFormatScenarioTest;
         var headlessSession = HeadlessRuntime.Session;
         var sessionThreadId = HeadlessRuntime.Dispatch(static () => Environment.CurrentManagedThreadId);
         var inner = DesktopAppSession.Launch(
@@ -59,6 +64,11 @@ public sealed class MainWindowHeadlessTests
                     feedVaultPrepared: path =>
                     {
                         feedVaultPath = path;
+                        if (isDailyNoteFilenameFormatScenario)
+                        {
+                            SeedDottedDailyNoteForFilenameFormatScenario(path);
+                        }
+
                         if (IsUnifiedFeedScenarioTest)
                         {
                             CompleteSeededPendingReview(path);
@@ -84,6 +94,18 @@ public sealed class MainWindowHeadlessTests
 
                             _ = headlessSession.Dispatch(action, CancellationToken.None);
                         });
+
+                        if (isDailyNoteFilenameFormatScenario)
+                        {
+                            if (Environment.CurrentManagedThreadId == sessionThreadId)
+                            {
+                                WireDailyNoteFilenameFormatSettings(viewModel);
+                            }
+                            else
+                            {
+                                HeadlessRuntime.Dispatch(() => WireDailyNoteFilenameFormatSettings(viewModel));
+                            }
+                        }
                     },
                     viewModelFactoryDispatcher: factory => HeadlessRuntime.Dispatch(factory),
                     headlessWindowCleanup: HeadlessSessionHooks.CloseWindow));
@@ -111,6 +133,179 @@ public sealed class MainWindowHeadlessTests
     }
 
     protected override bool SupportsStatusContractScreenshotCapture => false;
+
+    protected override void ConfigureDailyNoteFilenameFormatSettings()
+    {
+        HeadlessRuntime.Dispatch(() =>
+        {
+            var window = Session.Inner.MainWindow;
+            if (!window.IsVisible)
+            {
+                window.Show();
+            }
+
+            Dispatcher.UIThread.RunJobs();
+            window.UpdateLayout();
+            var viewModel = GetHeadlessMainWindowViewModel();
+            WireDailyNoteFilenameFormatSettings(viewModel);
+            // The test harness wires this bridge before the Feed's initial vault binding. Its
+            // Headless property-observer path can miss that first transition, so refresh from
+            // the settled Feed session before exercising the Settings controls.
+            viewModel.Settings.SetNoteDailyFileNameFormatFeedAvailability(
+                viewModel.Feed.IsVaultInitialized,
+                viewModel.Feed.IsBusy || viewModel.Feed.IsIdentityFrozen,
+                viewModel.Feed.VaultRootPath);
+        });
+    }
+
+    private void WireDailyNoteFilenameFormatSettings(MainWindowViewModel viewModel)
+    {
+        if (isDailyNoteFilenameFormatSettingsWired)
+        {
+            return;
+        }
+
+        isDailyNoteFilenameFormatSettingsWired = true;
+        var settings = viewModel.Settings;
+        var feed = viewModel.Feed;
+        settings.ConfigureNoteDailyFileNameFormatBridge(
+            feed.ValidateDailyNoteFileNameFormat,
+            feed.ApplyDailyNoteFileNameFormatAsync,
+            feed.ReloadDailyNoteFileNameFormatAsync);
+        settings.ApplyNoteDailyFileNameFormatCommand = ReactiveCommand.CreateFromTask(
+            settings.ApplyNoteDailyFileNameFormatAsync);
+        settings.ReloadExternalNoteDailyFileNameFormatCommand = ReactiveCommand.CreateFromTask(
+            settings.ReloadExternalNoteDailyFileNameFormatAsync);
+
+        void RefreshDailyNoteFileNameFormatAvailability()
+        {
+            settings.SetNoteDailyFileNameFormatFeedAvailability(
+                feed.IsVaultInitialized,
+                feed.IsBusy || feed.IsIdentityFrozen,
+                feed.VaultRootPath);
+        }
+
+        var uiThreadId = Environment.CurrentManagedThreadId;
+        void ApplyDailyNoteFileNameFormatStateOnUiThread(NoteDailyFileNameFormatState state)
+        {
+            RefreshDailyNoteFileNameFormatAvailability();
+            settings.ApplyNoteDailyFileNameFormatState(state);
+        }
+
+        EventHandler<NoteDailyFileNameFormatState> dailyNoteFileNameFormatChanged = (_, state) =>
+        {
+            if (Environment.CurrentManagedThreadId == uiThreadId)
+            {
+                ApplyDailyNoteFileNameFormatStateOnUiThread(state);
+                return;
+            }
+
+            HeadlessRuntime.Dispatch(() => ApplyDailyNoteFileNameFormatStateOnUiThread(state));
+        };
+        PropertyChangedEventHandler feedPropertyChanged = (_, args) =>
+        {
+            if (args.PropertyName is not (nameof(feed.IsVaultInitialized) or
+                nameof(feed.IsBusy) or
+                nameof(feed.IsIdentityFrozen) or
+                nameof(feed.VaultRootPath)))
+            {
+                return;
+            }
+
+            if (Environment.CurrentManagedThreadId == uiThreadId)
+            {
+                RefreshDailyNoteFileNameFormatAvailability();
+                return;
+            }
+
+            HeadlessRuntime.Dispatch(RefreshDailyNoteFileNameFormatAvailability);
+        };
+        feed.DailyNoteFileNameFormatChanged += dailyNoteFileNameFormatChanged;
+        feed.PropertyChanged += feedPropertyChanged;
+        Disposable.Create(() =>
+            {
+                feed.DailyNoteFileNameFormatChanged -= dailyNoteFileNameFormatChanged;
+                feed.PropertyChanged -= feedPropertyChanged;
+            })
+            .AddToDispose(viewModel);
+
+        RefreshDailyNoteFileNameFormatAvailability();
+    }
+
+    protected override void WriteExternalDailyNoteFilenameFormat(string format)
+    {
+        var root = feedVaultPath
+            ?? throw new InvalidOperationException("Feed automation vault was not captured.");
+        var sidecarPath = Path.Combine(root, ".unlimotion", "daily-note-settings.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(sidecarPath)!);
+        File.WriteAllText(
+            sidecarPath,
+            $"{{\"schemaVersion\":1,\"dailyFileNameFormat\":\"{format}\"}}\n");
+    }
+
+    protected override void FlushDailyNoteFilenameFormatUi()
+    {
+        HeadlessRuntime.Dispatch(static () => Dispatcher.UIThread.RunJobs());
+    }
+
+    protected override bool? GetDailyNoteFilenameFormatCanApply() =>
+        HeadlessRuntime.Dispatch(
+            () => GetHeadlessMainWindowViewModel().Settings.CanApplyNoteDailyFileNameFormat);
+
+    protected override string? DescribeDailyNoteFilenameFormatApplyAvailability()
+    {
+        return HeadlessRuntime.Dispatch(() =>
+        {
+            var owner = GetHeadlessMainWindowViewModel();
+            var settings = owner.Settings;
+            var feed = owner.Feed;
+            return string.Join(
+                "; ",
+                $"root={settings.NoteVaultRootPath}",
+                $"enabled={settings.IsFeedEnabled}",
+                $"supported={settings.IsExternalNoteVaultSupported}",
+                $"initialized={settings.IsNoteDailyFileNameFormatFeedInitialized}",
+                $"busy={settings.IsNoteDailyFileNameFormatFeedBusyOrRecovering}",
+                $"applying={settings.IsApplyingNoteDailyFileNameFormat}",
+                $"dirty={settings.HasUnappliedNoteDailyFileNameFormatDraft}",
+                $"invalid={settings.IsNoteDailyFileNameFormatValidationVisible}",
+                $"draft={settings.NoteDailyFileNameFormatDraft}",
+                $"applied={settings.AppliedNoteDailyFileNameFormat}",
+                $"status={settings.NoteDailyFileNameFormatStatusText}",
+                $"settingsApplyCommand={settings.ApplyNoteDailyFileNameFormatCommand?.GetType().Name ?? "<null>"}",
+                $"workspaceMode={owner.SelectedWorkspaceMode}",
+                $"feedRoot={feed.VaultRootPath}",
+                $"feedInitialized={feed.IsVaultInitialized}",
+                $"feedBusy={feed.IsBusy}",
+                $"feedError={feed.ErrorMessage}");
+        });
+    }
+
+    protected override void EnsureDailyNoteFilenameFormatDraft(string format)
+    {
+        HeadlessRuntime.Dispatch(() =>
+        {
+            var settings = GetHeadlessMainWindowViewModel().Settings;
+            if (!string.Equals(settings.NoteDailyFileNameFormatDraft, format, StringComparison.Ordinal))
+            {
+                settings.NoteDailyFileNameFormatDraft = format;
+            }
+        });
+    }
+
+    protected override bool? IsDailyNoteFilenameFormatOperationIdle() =>
+        HeadlessRuntime.Dispatch(() =>
+        {
+            var viewModel = GetHeadlessMainWindowViewModel();
+            return !viewModel.Settings.IsApplyingNoteDailyFileNameFormat &&
+                   viewModel.Feed.IsVaultInitialized &&
+                   !viewModel.Feed.IsBusy &&
+                   !viewModel.Feed.IsIdentityFrozen;
+        });
+
+    protected override string? GetAppliedDailyNoteFilenameFormat() =>
+        HeadlessRuntime.Dispatch(() =>
+            GetHeadlessMainWindowViewModel().Settings.AppliedNoteDailyFileNameFormat);
 
     protected override string ReadFeedVaultText(string relativePath)
     {

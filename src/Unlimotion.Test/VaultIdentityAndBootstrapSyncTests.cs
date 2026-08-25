@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Unlimotion.Notes.Daily;
 using Unlimotion.Notes.Identity;
 using Unlimotion.Notes.Markdown;
 using Unlimotion.Notes.Review;
@@ -61,6 +62,276 @@ public class VaultIdentityAndBootstrapSyncTests
     }
 
     [Test]
+    public async Task DetachedSingleAttachmentCanCommitHandoffWithoutReleasingDuplicateProtection()
+    {
+        using var original = new TempNotesDirectory();
+        using var relocated = new TempNotesDirectory();
+        var registry = new VaultRootRegistry();
+        registry.Attach("vault1", original.Path);
+
+        using var lease = registry.BeginHandoff("vault1", original.Path, relocated.Path);
+        registry.Detach("vault1", original.Path);
+        registry.ConfirmHandoffOldAttachmentDetached(lease, original.Path);
+        registry.CommitHandoff(lease);
+        // The old session can finish disposal after the handoff; that stale
+        // detach must not release the new root's registry reference.
+        registry.Detach("vault1", original.Path);
+
+        var oldRootConflict = await NotesTestSupport.Capture<InvalidOperationException>(() =>
+            registry.Attach("vault1", original.Path));
+        registry.Attach("vault1", relocated.Path);
+        registry.Detach("vault1", relocated.Path);
+
+        var currentRootConflict = await NotesTestSupport.Capture<InvalidOperationException>(() =>
+            registry.Attach("vault1", original.Path));
+        registry.Detach("vault1", relocated.Path);
+        registry.Attach("vault1", original.Path);
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(oldRootConflict.Message).Contains("another local root");
+            await Assert.That(currentRootConflict.Message).Contains("another local root");
+        }
+    }
+
+    [Test]
+    public async Task BeginHandoffRejectsUnexpectedRootAndMultipleAttachments()
+    {
+        using var original = new TempNotesDirectory();
+        using var unexpected = new TempNotesDirectory();
+        using var relocated = new TempNotesDirectory();
+        var registry = new VaultRootRegistry();
+        registry.Attach("vault1", original.Path);
+
+        var unexpectedRoot = await NotesTestSupport.Capture<InvalidOperationException>(() =>
+            registry.BeginHandoff("vault1", unexpected.Path, relocated.Path));
+        registry.Attach("vault1", original.Path);
+        var multipleAttachments = await NotesTestSupport.Capture<InvalidOperationException>(() =>
+            registry.BeginHandoff("vault1", original.Path, relocated.Path));
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(unexpectedRoot.Message).Contains("expected local root");
+            await Assert.That(multipleAttachments.Message).Contains("multiple local attachments");
+        }
+    }
+
+    [Test]
+    public async Task GenericDetachCannotPermitCommitWithoutLeaseBoundConfirmation()
+    {
+        using var original = new TempNotesDirectory();
+        using var relocated = new TempNotesDirectory();
+        var registry = new VaultRootRegistry();
+        registry.Attach("vault1", original.Path);
+        using var lease = registry.BeginHandoff("vault1", original.Path, relocated.Path);
+
+        var prematureCommit = await NotesTestSupport.Capture<InvalidOperationException>(() =>
+            registry.CommitHandoff(lease));
+        // A path-only detach is intentionally frozen while the lease is active;
+        // only the owner may attest that it has disposed the old Feed session.
+        registry.Detach("vault1", original.Path);
+        var genericDetachCommit = await NotesTestSupport.Capture<InvalidOperationException>(() =>
+            registry.CommitHandoff(lease));
+        var wrongRootConfirmation = await NotesTestSupport.Capture<InvalidOperationException>(() =>
+            registry.ConfirmHandoffOldAttachmentDetached(lease, relocated.Path));
+        registry.ConfirmHandoffOldAttachmentDetached(lease, original.Path);
+        registry.ConfirmHandoffOldAttachmentDetached(lease, original.Path);
+        registry.CommitHandoff(lease);
+        var oldRootConflict = await NotesTestSupport.Capture<InvalidOperationException>(() =>
+            registry.Attach("vault1", original.Path));
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(prematureCommit.Message).Contains("confirmed detached");
+            await Assert.That(genericDetachCommit.Message).Contains("confirmed detached");
+            await Assert.That(wrongRootConfirmation.Message).Contains("expected local root");
+            await Assert.That(oldRootConflict.Message).Contains("another local root");
+        }
+    }
+
+    [Test]
+    public async Task PendingHandoffRejectsCompetingAttachmentsAndRetainsReservationAfterOldDetach()
+    {
+        using var original = new TempNotesDirectory();
+        using var relocated = new TempNotesDirectory();
+        using var competing = new TempNotesDirectory();
+        var registry = new VaultRootRegistry();
+        registry.Attach("vault1", original.Path);
+        using var lease = registry.BeginHandoff("vault1", original.Path, relocated.Path);
+
+        var competingRoot = await NotesTestSupport.Capture<InvalidOperationException>(() =>
+            registry.Attach("vault1", competing.Path));
+        var relocatedRoot = await NotesTestSupport.Capture<InvalidOperationException>(() =>
+            registry.Attach("vault1", relocated.Path));
+        registry.Detach("vault1", original.Path);
+        var afterOldDetach = await NotesTestSupport.Capture<InvalidOperationException>(() =>
+            registry.Attach("vault1", relocated.Path));
+
+        registry.ConfirmHandoffOldAttachmentDetached(lease, original.Path);
+        registry.CommitHandoff(lease);
+        var oldRootAfterCommit = await NotesTestSupport.Capture<InvalidOperationException>(() =>
+            registry.Attach("vault1", original.Path));
+        registry.Attach("vault1", relocated.Path);
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(competingRoot.Message).Contains("being handed off");
+            await Assert.That(relocatedRoot.Message).Contains("being handed off");
+            await Assert.That(afterOldDetach.Message).Contains("being handed off");
+            await Assert.That(oldRootAfterCommit.Message).Contains("another local root");
+        }
+    }
+
+    [Test]
+    public async Task CancellingUnconfirmedHandoffRestoresOriginalRootAfterGenericDetach()
+    {
+        using var original = new TempNotesDirectory();
+        using var relocated = new TempNotesDirectory();
+        var registry = new VaultRootRegistry();
+        registry.Attach("vault1", original.Path);
+        using var lease = registry.BeginHandoff("vault1", original.Path, relocated.Path);
+
+        // A stale generic detach cannot authorize a handoff and cancellation
+        // must restore the reservation for the still-live original session.
+        registry.Detach("vault1", original.Path);
+        registry.CancelHandoff(lease);
+
+        var relocatedConflict = await NotesTestSupport.Capture<InvalidOperationException>(() =>
+            registry.Attach("vault1", relocated.Path));
+        registry.Attach("vault1", original.Path);
+        registry.Detach("vault1", original.Path);
+        var stillAttachedAtOriginal = await NotesTestSupport.Capture<InvalidOperationException>(() =>
+            registry.Attach("vault1", relocated.Path));
+        registry.Detach("vault1", original.Path);
+        registry.Attach("vault1", relocated.Path);
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(relocatedConflict.Message).Contains("another local root");
+            await Assert.That(stillAttachedAtOriginal.Message).Contains("another local root");
+        }
+    }
+
+    [Test]
+    public async Task DisposingPendingHandoffReleasesOriginalRootWhenOldSessionDetached()
+    {
+        using var original = new TempNotesDirectory();
+        using var relocated = new TempNotesDirectory();
+        var registry = new VaultRootRegistry();
+        registry.Attach("vault1", original.Path);
+        var lease = registry.BeginHandoff("vault1", original.Path, relocated.Path);
+
+        registry.Detach("vault1", original.Path);
+        registry.ConfirmHandoffOldAttachmentDetached(lease, original.Path);
+        lease.Dispose();
+        registry.Attach("vault1", relocated.Path);
+        var oldRootConflict = await NotesTestSupport.Capture<InvalidOperationException>(() =>
+            registry.Attach("vault1", original.Path));
+
+        await Assert.That(oldRootConflict.Message).Contains("another local root");
+    }
+
+    [Test]
+    public async Task CancellingPendingHandoffReleasesOriginalRootWhenOldSessionDetached()
+    {
+        using var original = new TempNotesDirectory();
+        using var relocated = new TempNotesDirectory();
+        var registry = new VaultRootRegistry();
+        registry.Attach("vault1", original.Path);
+        using var lease = registry.BeginHandoff("vault1", original.Path, relocated.Path);
+
+        registry.Detach("vault1", original.Path);
+        registry.ConfirmHandoffOldAttachmentDetached(lease, original.Path);
+        registry.CancelHandoff(lease);
+        registry.Attach("vault1", relocated.Path);
+        var oldRootConflict = await NotesTestSupport.Capture<InvalidOperationException>(() =>
+            registry.Attach("vault1", original.Path));
+
+        await Assert.That(oldRootConflict.Message).Contains("another local root");
+    }
+
+    [Test]
+    public async Task CommittedHandoffLeavesNewRootAndConsumesItsLease()
+    {
+        using var original = new TempNotesDirectory();
+        using var relocated = new TempNotesDirectory();
+        var registry = new VaultRootRegistry();
+        registry.Attach("vault1", original.Path);
+        using var lease = registry.BeginHandoff("vault1", original.Path, relocated.Path);
+
+        registry.Detach("vault1", original.Path);
+        registry.ConfirmHandoffOldAttachmentDetached(lease, original.Path);
+        registry.CommitHandoff(lease);
+        var oldRootConflict = await NotesTestSupport.Capture<InvalidOperationException>(() =>
+            registry.Attach("vault1", original.Path));
+        registry.Attach("vault1", relocated.Path);
+        var repeatedCommit = await NotesTestSupport.Capture<InvalidOperationException>(() =>
+            registry.CommitHandoff(lease));
+        var repeatedCancel = await NotesTestSupport.Capture<InvalidOperationException>(() =>
+            registry.CancelHandoff(lease));
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(oldRootConflict.Message).Contains("another local root");
+            await Assert.That(repeatedCommit.Message).Contains("no longer active");
+            await Assert.That(repeatedCancel.Message).Contains("no longer active");
+        }
+    }
+
+    [Test]
+    public async Task HandoffLeaseCannotBeConsumedByAnotherRegistry()
+    {
+        using var original = new TempNotesDirectory();
+        using var relocated = new TempNotesDirectory();
+        var owner = new VaultRootRegistry();
+        var otherRegistry = new VaultRootRegistry();
+        owner.Attach("vault1", original.Path);
+        using var lease = owner.BeginHandoff("vault1", original.Path, relocated.Path);
+
+        var foreignCommit = await NotesTestSupport.Capture<InvalidOperationException>(() =>
+            otherRegistry.CommitHandoff(lease));
+        var foreignCancel = await NotesTestSupport.Capture<InvalidOperationException>(() =>
+            otherRegistry.CancelHandoff(lease));
+        owner.CancelHandoff(lease);
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(foreignCommit.Message).Contains("belongs to another registry");
+            await Assert.That(foreignCancel.Message).Contains("belongs to another registry");
+        }
+    }
+
+    [Test]
+    public async Task PendingHandoffRejectsConcurrentAttachments()
+    {
+        using var original = new TempNotesDirectory();
+        using var relocated = new TempNotesDirectory();
+        using var competing = new TempNotesDirectory();
+        var registry = new VaultRootRegistry();
+        registry.Attach("vault1", original.Path);
+        using var lease = registry.BeginHandoff("vault1", original.Path, relocated.Path);
+
+        var competitors = Enumerable.Range(0, 32)
+            .Select(_ => Task.Run(() =>
+            {
+                try
+                {
+                    registry.Attach("vault1", competing.Path);
+                    return false;
+                }
+                catch (InvalidOperationException)
+                {
+                    return true;
+                }
+            }))
+            .ToArray();
+
+        var allRejected = await Task.WhenAll(competitors);
+
+        await Assert.That(allRejected.All(static rejected => rejected)).IsTrue();
+    }
+
+    [Test]
     public async Task AnotherDeviceCanFindAndReuseValidatedCompleteManifest()
     {
         using var directory = new TempNotesDirectory();
@@ -76,6 +347,28 @@ public class VaultIdentityAndBootstrapSyncTests
         await Assert.That(reused!.ReusedExisting).IsTrue();
         await Assert.That(reused.PendingCheckboxes).IsEqualTo(1);
         await Assert.That(reused.Fingerprints.Count).IsEqualTo(2);
+    }
+
+    [Test]
+    public async Task AnotherDeviceCanReuseAValidatedDottedLayoutManifest()
+    {
+        using var directory = new TempNotesDirectory();
+        var vault = new FileNoteVault(directory.Path);
+        const string path = "Ежедневные/2026.08.20.md";
+        var naming = DailyNoteNaming.Create("yyyy.MM.dd");
+        await vault.CreateAsync(path, "Точечная история\n");
+        var firstDevice = new FirstConnectBootstrapService(vault, new MarkdownDocumentParser(), naming);
+        await firstDevice.CreateOrResumeAsync("vault1", "dotted-device-op", [path]);
+
+        var secondDevice = new FirstConnectBootstrapService(
+            new FileNoteVault(directory.Path),
+            new MarkdownDocumentParser(),
+            naming);
+        var reused = await secondDevice.FindValidCompleteAsync("vault1", ["dotted-device-op"]);
+
+        await Assert.That(reused).IsNotNull();
+        await Assert.That(reused!.Manifest.SchemaVersion).IsEqualTo(1);
+        await Assert.That(reused.Manifest.Files.Single().RelativePath).IsEqualTo(path);
     }
 
     [Test]

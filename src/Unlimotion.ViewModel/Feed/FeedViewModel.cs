@@ -49,16 +49,21 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
     private readonly VaultRootRegistry vaultRootRegistry;
     private readonly string reviewDeviceId;
     private readonly object sessionLock = new();
+    private readonly object reconfigureRequestLock = new();
+    private readonly object vaultRootHandoffLock = new();
     private readonly object searchLock = new();
     private readonly object indexLock = new();
     private readonly object reviewQueueLock = new();
     private readonly Queue<DocumentConflictState> pendingDocumentConflicts = new();
     private Action<Action>? notificationDispatcher;
     private CancellationTokenSource? sessionCancellation;
+    private CancellationTokenSource? rootReconfigureCancellation;
     private CancellationTokenSource? searchCancellation;
     private CancellationTokenSource? indexCancellation;
     private INoteVault? vault;
     private DailyNoteService? dailyNotes;
+    private DailyNoteNaming dailyNoteNaming = DailyNoteNaming.Default;
+    private DailyNoteSettingsSnapshot? dailyNoteSettingsSnapshot;
     private FeedSearchIndex? searchIndex;
     private IMarkdownDocumentParser? markdownParser;
     private FeedReviewSessionCoordinator? reviewCoordinator;
@@ -82,6 +87,7 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
     private string? vaultId;
     private string? attachedVaultId;
     private string? attachedVaultRootPath;
+    private VaultRootHandoffLease? pendingVaultRootHandoff;
     private FeedReviewCandidate? currentCandidate;
     private MarkdownDocument? currentReviewDocument;
     private MarkdownBlockSelection? currentReviewSelection;
@@ -100,6 +106,8 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
     private long searchGeneration;
     private long indexGeneration;
     private long reviewQueueVersion;
+    private long rootReconfigureGeneration;
+    private long sessionGeneration;
     private int loadedDayCount = InitialDayPageSize;
     private int totalDayCount;
     private bool isIdentityFrozen;
@@ -409,6 +417,93 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
 
     public string? VaultRootPath { get; private set; }
 
+    /// <summary>
+    /// Raised after the portable daily-note naming setting has been loaded or durably applied.
+    /// The Settings surface owns draft handling; Feed only publishes the applied vault state.
+    /// </summary>
+    public event EventHandler<NoteDailyFileNameFormatState>? DailyNoteFileNameFormatChanged;
+
+    public NoteDailyFileNameFormatValidation ValidateDailyNoteFileNameFormat(string format)
+    {
+        if (!DailyNoteNaming.TryCreate(format, out var naming, out var validationError))
+        {
+            return new NoteDailyFileNameFormatValidation(false, null, validationError);
+        }
+
+        return new NoteDailyFileNameFormatValidation(
+            true,
+            naming.GetRelativePath(EffectiveToday),
+            null);
+    }
+
+    public async Task<NoteDailyFileNameFormatApplyResult> ApplyDailyNoteFileNameFormatAsync(string format)
+    {
+        ThrowIfDisposed();
+        var validation = ValidateDailyNoteFileNameFormat(format);
+        if (!validation.IsValid)
+        {
+            return new NoteDailyFileNameFormatApplyResult(
+                false,
+                ErrorMessage: validation.ErrorMessage);
+        }
+
+        if (!DailyNoteNaming.TryCreate(format, out var naming, out var validationError))
+        {
+            return new NoteDailyFileNameFormatApplyResult(
+                false,
+                ErrorMessage: validationError);
+        }
+
+        var rootPath = VaultRootPath;
+        if (string.IsNullOrWhiteSpace(rootPath) || !IsVaultInitialized)
+        {
+            return new NoteDailyFileNameFormatApplyResult(
+                false,
+                ErrorMessage: "Connect a note vault before applying its daily filename format.");
+        }
+
+        var request = CaptureRootReconfigureRequest();
+        var session = new VaultSessionExpectation(rootPath, GetSessionToken());
+        var result = await RunVaultReconfigureAsync(
+                rootPath,
+                naming,
+                dailyNoteSettingsSnapshot?.Revision,
+                isExternalChange: false,
+                request: request,
+                expectedSession: session)
+            .ConfigureAwait(true);
+        return new NoteDailyFileNameFormatApplyResult(
+            result.Succeeded,
+            result.State,
+            result.ErrorMessage,
+            result.IsCancelled);
+    }
+
+    public async Task<NoteDailyFileNameFormatState> ReloadDailyNoteFileNameFormatAsync()
+    {
+        ThrowIfDisposed();
+        var rootPath = VaultRootPath;
+        if (string.IsNullOrWhiteSpace(rootPath) || !IsVaultInitialized)
+        {
+            return CreateDailyNoteFileNameFormatState();
+        }
+
+        var request = CaptureRootReconfigureRequest();
+        var session = new VaultSessionExpectation(rootPath, GetSessionToken());
+        var result = await RunVaultReconfigureAsync(
+                rootPath,
+                requestedNaming: null,
+                expectedDailyNoteSettingsRevision: null,
+                isExternalChange: true,
+                request: request,
+                expectedSession: session)
+            .ConfigureAwait(true);
+        return result.State ?? CreateDailyNoteFileNameFormatState(
+            result.ErrorMessage,
+            isExternalChange: true,
+            requiresReload: !result.IsCancelled);
+    }
+
     [AlsoNotifyFor(nameof(IsOnboardingVisible), nameof(IsContentVisible), nameof(CanCapture))]
     public bool IsVaultInitialized { get; private set; }
 
@@ -647,201 +742,588 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
 
     public async Task InitializeVaultAsync(string? rootPath)
     {
+        var request = BeginRootReconfigureRequest();
+        await RunVaultReconfigureAsync(
+                rootPath,
+                requestedNaming: null,
+                expectedDailyNoteSettingsRevision: null,
+                isExternalChange: false,
+                request: request,
+                expectedSession: null)
+            .ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Serializes every vault session replacement, including a daily-layout write. The gate is
+    /// acquired before the previous session is cancelled or disposed so a failed replacement
+    /// keeps the last usable timeline connected.
+    /// </summary>
+    private async Task<VaultReconfigureResult> RunVaultReconfigureAsync(
+        string? rootPath,
+        DailyNoteNaming? requestedNaming,
+        string? expectedDailyNoteSettingsRevision,
+        bool isExternalChange,
+        VaultReconfigureRequest request,
+        VaultSessionExpectation? expectedSession)
+    {
         ThrowIfDisposed();
-        var cancellationToken = ReplaceSession();
-        await DisposeVaultSessionAsync().ConfigureAwait(true);
-        ResetVisibleState();
-
-        if (string.IsNullOrWhiteSpace(rootPath))
-        {
-            return;
-        }
-
-        if (!IsExternalVaultSupported)
-        {
-            ErrorMessage = L10n.Get("FeedExternalVaultUnsupported");
-            return;
-        }
-
-        IsBusy = true;
+        var gateAcquired = false;
+        var cancellationToken = CancellationToken.None;
+        FeedLoadResult? loaded = null;
+        VaultRootHandoffLease? rootHandoff = null;
+        INoteVault? settingsVaultForRollback = null;
+        DailyNoteSettingsSnapshot? settingsBeforeApply = null;
+        DailyNoteSettingsSnapshot? persistedApplySettings = null;
+        var oldSessionTeardownStarted = false;
+        var candidateOwnershipTransferred = false;
+        var visibleCandidateInstalled = false;
         try
         {
-            await operationGate.WaitAsync(cancellationToken);
-            try
+            await operationGate.WaitAsync(request.CancellationToken).ConfigureAwait(true);
+            gateAcquired = true;
+            ThrowIfDisposed();
+            if (!IsCurrentReconfigureRequest(request)
+                || !IsCurrentVaultSession(expectedSession))
             {
-                var loaded = await Task.Run(async () =>
+                return VaultReconfigureResult.Cancelled(CreateDailyNoteFileNameFormatState());
+            }
+
+            if (string.IsNullOrWhiteSpace(rootPath))
+            {
+                cancellationToken = ReplaceSession(request.CancellationToken);
+                oldSessionTeardownStarted = true;
+                await DisposeVaultSessionAsync().ConfigureAwait(true);
+                if (cancellationToken.IsCancellationRequested
+                    || !IsCurrentReconfigureRequest(request))
                 {
-                    var ownWrites = new OwnWriteRegistry();
-                    var nextVault = vaultFactory(rootPath, ownWrites);
-                    FeedVaultWatchRuntime? nextRuntime = null;
-                    var rootAttached = false;
-                    string? registeredVaultId = null;
-                    string? registeredRootPath = null;
+                    ResetVisibleState();
+                    return VaultReconfigureResult.Cancelled(CreateDailyNoteFileNameFormatState());
+                }
+
+                ResetVisibleState();
+                var cleared = CreateDailyNoteFileNameFormatState();
+                if (!TryFinalizeVaultReconfigureRequest(request))
+                {
+                    ResetVisibleState();
+                    return VaultReconfigureResult.Cancelled(CreateDailyNoteFileNameFormatState());
+                }
+
+                PublishDailyNoteFileNameFormatState(cleared);
+                return VaultReconfigureResult.Success(cleared);
+            }
+
+            if (!IsExternalVaultSupported)
+            {
+                ErrorMessage = L10n.Get("FeedExternalVaultUnsupported");
+                return VaultReconfigureResult.Failure(ErrorMessage);
+            }
+
+            // Loading/validating the portable setting (and the revision-checked write for Apply)
+            // happens while the current session is still live. A corrupt external sidecar or an
+            // optimistic-write conflict must not disconnect the user from the last known-good
+            // daily layout.
+            var ownWrites = watchRuntime?.OwnWrites ?? new OwnWriteRegistry();
+            var preflightVault = vaultFactory(rootPath, ownWrites);
+            settingsVaultForRollback = preflightVault;
+            var preflightSettingsStore = new DailyNoteSettingsStore(preflightVault);
+            var preflightSettings = await preflightSettingsStore.LoadAsync(request.CancellationToken)
+                .ConfigureAwait(true);
+            if (!IsCurrentReconfigureRequest(request)
+                || !IsCurrentVaultSession(expectedSession))
+            {
+                return VaultReconfigureResult.Cancelled(CreateDailyNoteFileNameFormatState());
+            }
+
+            if (requestedNaming is not null)
+            {
+                settingsBeforeApply = preflightSettings;
+                preflightSettings = await preflightSettingsStore.SaveAsync(
+                        preflightSettings.Settings with
+                        {
+                            DailyFileNameFormat = requestedNaming.FileNameFormat
+                        },
+                        expectedDailyNoteSettingsRevision,
+                        request.CancellationToken)
+                    .ConfigureAwait(true);
+                persistedApplySettings = preflightSettings;
+                if (!IsCurrentReconfigureRequest(request)
+                    || !IsCurrentVaultSession(expectedSession))
+                {
+                    ApplyRestoredDailyNoteSettingsIfCurrent(
+                        await RestoreDailyNoteSettingsAfterFailedApplyAsync(
+                                settingsVaultForRollback,
+                                settingsBeforeApply,
+                                persistedApplySettings)
+                            .ConfigureAwait(true),
+                        expectedSession);
+                    return VaultReconfigureResult.Cancelled(CreateDailyNoteFileNameFormatState());
+                }
+            }
+
+            // Prepare the complete replacement while the current session remains usable. This
+            // keeps a valid timeline connected if the new layout cannot be read or indexed.
+            IsBusy = true;
+            var currentAttachedVaultId = attachedVaultId;
+            var currentAttachedVaultRootPath = attachedVaultRootPath;
+            Func<DailyNoteSettingsSnapshot, Task<FeedLoadResult>> prepareCandidateAsync = candidateSettings =>
+                Task.Run(async () =>
+            {
+                var nextVault = vaultFactory(rootPath, ownWrites);
+                FeedVaultWatchRuntime? nextRuntime = null;
+                FeedRuntimeSessionBinding? runtimeSession = null;
+                string? nextVaultId = null;
+                var vaultRootAttached = false;
+                VaultRootHandoffLease? candidateRootHandoff = null;
+                try
+                {
+                    var parser = new MarkdownDocumentParser();
+                    var identity = await new VaultIdentityService(nextVault).GetOrCreateAsync(request.CancellationToken)
+                        .ConfigureAwait(false);
+                    nextVaultId = identity.VaultId;
+                    var requiresVaultRootHandoff =
+                        string.Equals(currentAttachedVaultId, nextVaultId, StringComparison.Ordinal) &&
+                        !string.IsNullOrWhiteSpace(currentAttachedVaultRootPath) &&
+                        !AreEquivalentVaultRoots(currentAttachedVaultRootPath, nextVault.RootPath);
+                    if (requiresVaultRootHandoff)
+                    {
+                        // Keep A registered and freeze joins while B is prepared. The watcher for
+                        // B may buffer bootstrap-window changes, but it cannot route them until
+                        // this lease retires A and binds the new Feed session.
+                        candidateRootHandoff = vaultRootRegistry.BeginHandoff(
+                            nextVaultId,
+                            currentAttachedVaultRootPath!,
+                            nextVault.RootPath);
+                        RegisterPendingVaultRootHandoff(candidateRootHandoff);
+                    }
+                    else
+                    {
+                        // Normal candidates reserve their root while they are prepared.
+                        vaultRootRegistry.Attach(nextVaultId, nextVault.RootPath);
+                        vaultRootAttached = true;
+                    }
+                    var nextRevisionStore = revisionStoreFactory(identity.VaultId);
+                    if (nextVault is FileNoteVault)
+                    {
+                        runtimeSession = new FeedRuntimeSessionBinding();
+                        nextRuntime = new FeedVaultWatchRuntime(
+                            identity.VaultId,
+                            nextVault,
+                            ownWrites,
+                            new InMemoryDirtyDocumentRegistry(),
+                            GetDefaultRecoveryRoot(identity.VaultId),
+                            new FeedWatchRuntimeSink(this, runtimeSession.GetToken));
+                        nextRuntime.Start();
+                    }
+
                     try
                     {
-                        var parser = new MarkdownDocumentParser();
-                        var nextDailyNotes = new DailyNoteService(nextVault, parser, new MarkdownMutationService(parser));
-                        var identity = await new VaultIdentityService(nextVault).GetOrCreateAsync(cancellationToken)
+                        // The candidate watcher is running before this read. It closes the gap
+                        // after an Apply write: a sidecar update that wins before the candidate
+                        // starts is read here, while every later update is buffered by the
+                        // candidate runtime until its session is committed.
+                        candidateSettings = await new DailyNoteSettingsStore(nextVault)
+                            .LoadAsync(request.CancellationToken)
                             .ConfigureAwait(false);
-                        vaultRootRegistry.Attach(identity.VaultId, nextVault.RootPath);
-                        rootAttached = true;
-                        registeredVaultId = identity.VaultId;
-                        registeredRootPath = nextVault.RootPath;
-                        var nextRevisionStore = revisionStoreFactory(identity.VaultId);
-                        if (nextVault is FileNoteVault)
-                        {
-                            nextRuntime = new FeedVaultWatchRuntime(
-                                identity.VaultId,
-                                nextVault,
-                                ownWrites,
-                                new InMemoryDirtyDocumentRegistry(),
-                                GetDefaultRecoveryRoot(identity.VaultId),
-                                new FeedWatchRuntimeSink(this, cancellationToken));
-                            nextRuntime.Start();
-                        }
-
-                        var snapshot = await BuildSnapshotAsync(
-                            nextVault,
-                            nextDailyNotes,
-                            parser,
-                            taskResolver,
-                            ScheduleRefreshAfterMarkdownCommit,
-                            nextRuntime,
-                            () => !IsIdentityFrozen,
-                            loadedDayCount,
-                            cancellationToken).ConfigureAwait(false);
-                        var bootstrapService = new FirstConnectBootstrapService(nextVault, parser);
-                        var bootstrap = await bootstrapService.FindSafeCompleteAsync(identity.VaultId, cancellationToken)
-                            .ConfigureAwait(false);
-                        if (bootstrap is null)
-                        {
-                            var bootstrapPaths = await nextDailyNotes.ListDayPathsAsync(cancellationToken)
-                                .ConfigureAwait(false);
-                            var bootstrapDocuments = new List<BootstrapStartDocument>(bootstrapPaths.Count);
-                            foreach (var path in bootstrapPaths)
-                            {
-                                cancellationToken.ThrowIfCancellationRequested();
-                                var document = await nextVault.ReadAsync(path.RelativePath, cancellationToken)
-                                    .ConfigureAwait(false);
-                                if (document is not null)
-                                {
-                                    bootstrapDocuments.Add(new BootstrapStartDocument(
-                                        path.RelativePath,
-                                        document.Revision,
-                                        document.Text));
-                                }
-                            }
-
-                            bootstrap = await bootstrapService.CreateOrResumeAsync(
-                                    identity.VaultId,
-                                    CreateBootstrapOperationId(identity.VaultId, reviewDeviceId),
-                                    bootstrapDocuments,
-                                    cancellationToken)
-                                .ConfigureAwait(false);
-                            bootstrap = await bootstrapService.FindSafeCompleteAsync(identity.VaultId, cancellationToken)
-                                    .ConfigureAwait(false)
-                                ?? bootstrap;
-                        }
-                        var state = new ReviewStateStore();
-                        var coordinator = new FeedReviewSessionCoordinator(
-                            identity.VaultId,
-                            reviewDeviceId,
-                            new PortableReviewEventStore(nextVault),
-                            state);
-                        await coordinator.InitializeAsync(cancellationToken).ConfigureAwait(false);
-                        ApplyBootstrapBaseline(state, bootstrap, identity.VaultId);
-                        return new FeedLoadResult(
-                            nextVault,
-                            nextDailyNotes,
-                            parser,
-                            identity.VaultId,
-                            coordinator,
-                            nextRevisionStore,
-                            bootstrap,
-                            snapshot,
-                            nextRuntime);
                     }
-                    catch
+                    catch when (requestedNaming is not null)
                     {
-                        if (nextRuntime is not null)
+                        // A concurrent writer may have replaced the just-saved sidecar with an
+                        // invalid value. Do not roll the local value back over that writer; keep
+                        // the last good session and surface the explicit retry affordance.
+                        settingsVaultForRollback = null;
+                        settingsBeforeApply = null;
+                        persistedApplySettings = null;
+                        isExternalChange = true;
+                        throw;
+                    }
+
+                    var nextDailyNotes = new DailyNoteService(
+                        nextVault,
+                        parser,
+                        new MarkdownMutationService(parser),
+                        candidateSettings.Naming);
+
+                    var snapshot = await BuildSnapshotAsync(
+                        nextVault,
+                        nextDailyNotes,
+                        parser,
+                        taskResolver,
+                        ScheduleRefreshAfterMarkdownCommit,
+                        nextRuntime,
+                        () => !IsIdentityFrozen,
+                        loadedDayCount,
+                        request.CancellationToken).ConfigureAwait(false);
+                    var bootstrapService = new FirstConnectBootstrapService(
+                        nextVault,
+                        parser,
+                        candidateSettings.Naming);
+                    var bootstrap = await bootstrapService.FindSafeCompleteAsync(identity.VaultId, request.CancellationToken)
+                        .ConfigureAwait(false);
+                    if (bootstrap is null)
+                    {
+                        var bootstrapPaths = await nextDailyNotes.ListDayPathsAsync(request.CancellationToken)
+                            .ConfigureAwait(false);
+                        var bootstrapDocuments = new List<BootstrapStartDocument>(bootstrapPaths.Count);
+                        foreach (var path in bootstrapPaths)
+                        {
+                            request.CancellationToken.ThrowIfCancellationRequested();
+                            var document = await nextVault.ReadAsync(path.RelativePath, request.CancellationToken)
+                                .ConfigureAwait(false);
+                            if (document is not null)
+                            {
+                                bootstrapDocuments.Add(new BootstrapStartDocument(
+                                    path.RelativePath,
+                                    document.Revision,
+                                    document.Text));
+                            }
+                        }
+
+                        bootstrap = await bootstrapService.CreateOrResumeAsync(
+                                identity.VaultId,
+                                CreateBootstrapOperationId(
+                                    identity.VaultId,
+                                    reviewDeviceId,
+                                    candidateSettings.Naming),
+                                bootstrapDocuments,
+                                request.CancellationToken)
+                            .ConfigureAwait(false);
+                        bootstrap = await bootstrapService.FindSafeCompleteAsync(identity.VaultId, request.CancellationToken)
+                                .ConfigureAwait(false)
+                            ?? bootstrap;
+                    }
+
+                    var state = new ReviewStateStore();
+                    var coordinator = new FeedReviewSessionCoordinator(
+                        identity.VaultId,
+                        reviewDeviceId,
+                        new PortableReviewEventStore(nextVault),
+                        state);
+                    await coordinator.InitializeAsync(request.CancellationToken).ConfigureAwait(false);
+                    ApplyBootstrapBaseline(state, bootstrap, identity.VaultId);
+                    return new FeedLoadResult(
+                        nextVault,
+                        nextDailyNotes,
+                        candidateSettings,
+                        parser,
+                        identity.VaultId,
+                        coordinator,
+                        nextRevisionStore,
+                        bootstrap,
+                        snapshot,
+                        nextRuntime,
+                        runtimeSession,
+                        vaultRootAttached,
+                        candidateRootHandoff,
+                        Auxiliary: null);
+                }
+                catch
+                {
+                    if (nextRuntime is not null)
+                    {
+                        try
                         {
                             await nextRuntime.DisposeAsync().ConfigureAwait(false);
                         }
-
-                        if (rootAttached
-                            && registeredVaultId is not null
-                            && registeredRootPath is not null)
+                        catch (Exception)
                         {
-                            vaultRootRegistry.Detach(registeredVaultId, registeredRootPath);
+                            // Candidate cleanup must not strand its registry lease when a
+                            // watcher is already faulting during startup.
                         }
-
-                        throw;
                     }
-                }, cancellationToken);
-                if (cancellationToken.IsCancellationRequested)
-                {
-                    if (loaded.WatchRuntime is not null)
+
+                    if (vaultRootAttached && nextVaultId is not null)
                     {
-                        await loaded.WatchRuntime.DisposeAsync().ConfigureAwait(true);
+                        vaultRootRegistry.Detach(nextVaultId, nextVault.RootPath);
                     }
 
-                    vaultRootRegistry.Detach(loaded.VaultId, loaded.Vault.RootPath);
-
-                    cancellationToken.ThrowIfCancellationRequested();
+                    ClearPendingVaultRootHandoff(candidateRootHandoff);
+                    candidateRootHandoff?.Dispose();
+                    throw;
                 }
-                cancellationToken.ThrowIfCancellationRequested();
-
-                vault = loaded.Vault;
-                dailyNotes = loaded.DailyNotes;
-                markdownParser = loaded.Parser;
-                vaultId = loaded.VaultId;
-                reviewCoordinator = loaded.ReviewCoordinator;
-                revisionStore = loaded.RevisionStore;
-                watchRuntime = loaded.WatchRuntime;
-                searchIndex = loaded.Snapshot.SearchIndex;
-                VaultRootPath = loaded.Vault.RootPath;
-                attachedVaultId = loaded.VaultId;
-                attachedVaultRootPath = loaded.Vault.RootPath;
-                BootstrapIndexedFiles = loaded.Bootstrap.IndexedFiles;
-                BootstrapPendingCheckboxes = loaded.Bootstrap.PendingCheckboxes;
-                BootstrapWasReused = loaded.Bootstrap.ReusedExisting;
-                IsVaultInitialized = true;
-                ApplySnapshot(loaded.Snapshot);
-                RefreshIdentitySafePending();
-                await InitializeAuxiliaryViewModelsAsync(cancellationToken).ConfigureAwait(true);
-                await RestorePendingDocumentConflictsAsync(cancellationToken).ConfigureAwait(true);
-                if (await RecoverPendingOperationsAsync(cancellationToken).ConfigureAwait(true))
-                {
-                    await ReloadSnapshotAsync(cancellationToken).ConfigureAwait(true);
-                }
-                else
-                {
-                    await RefreshReviewSummaryAsync(cancellationToken).ConfigureAwait(true);
-                }
-
-                ShowForeignReviewRecoveryIfNeeded();
-                if (watchRuntime is not null)
-                {
-                    await watchRuntime.ActivateAsync(cancellationToken).ConfigureAwait(true);
-                }
-            }
-            finally
+            }, request.CancellationToken);
+            FeedLoadResult preparedLoad;
+            for (var stabilizationAttempt = 0; ; stabilizationAttempt++)
             {
-                operationGate.Release();
+                var candidate = await prepareCandidateAsync(preflightSettings).ConfigureAwait(true);
+                // Register the prepared candidate for outer cleanup before auxiliary view-model
+                // construction: that stage may fail after a watcher and root attachment exist.
+                loaded = candidate;
+                var auxiliary = await PrepareAuxiliaryViewModelsAsync(
+                        candidate.Vault,
+                        candidate.DailyNotes.Naming,
+                        request.CancellationToken)
+                    .ConfigureAwait(true);
+                candidate = candidate with { Auxiliary = auxiliary };
+                if (!IsCurrentReconfigureRequest(request)
+                    || !IsCurrentVaultSession(expectedSession))
+                {
+                    await DisposePreparedLoadAsync(candidate).ConfigureAwait(true);
+                    loaded = null;
+                    ApplyRestoredDailyNoteSettingsIfCurrent(
+                        await RestoreDailyNoteSettingsAfterFailedApplyAsync(
+                                settingsVaultForRollback,
+                                settingsBeforeApply,
+                                persistedApplySettings)
+                            .ConfigureAwait(true),
+                        expectedSession);
+                    return VaultReconfigureResult.Cancelled(CreateDailyNoteFileNameFormatState());
+                }
+
+                DailyNoteSettingsSnapshot committedSettings;
+                try
+                {
+                    committedSettings = await new DailyNoteSettingsStore(candidate.Vault)
+                        .LoadAsync(request.CancellationToken)
+                        .ConfigureAwait(true);
+                }
+                catch when (requestedNaming is not null)
+                {
+                    await DisposePreparedLoadAsync(candidate).ConfigureAwait(true);
+                    loaded = null;
+                    settingsVaultForRollback = null;
+                    settingsBeforeApply = null;
+                    persistedApplySettings = null;
+                    isExternalChange = true;
+                    throw;
+                }
+
+                if (!DailyNoteSettingsSnapshotsMatch(candidate.DailyNoteSettings, preflightSettings))
+                {
+                    // The sidecar changed after the local Apply write but before the candidate
+                    // began using it. The durable external value wins; never roll it back.
+                    settingsVaultForRollback = null;
+                    settingsBeforeApply = null;
+                    persistedApplySettings = null;
+                    isExternalChange = true;
+                }
+
+                if (DailyNoteSettingsSnapshotsMatch(candidate.DailyNoteSettings, committedSettings))
+                {
+                    preparedLoad = candidate;
+                    loaded = candidate;
+                    break;
+                }
+
+                await DisposePreparedLoadAsync(candidate).ConfigureAwait(true);
+                loaded = null;
+                settingsVaultForRollback = null;
+                settingsBeforeApply = null;
+                persistedApplySettings = null;
+                isExternalChange = true;
+                if (stabilizationAttempt >= 2)
+                {
+                    throw new InvalidDataException(
+                        "The daily note filename setting changed repeatedly while the Feed session was being prepared.");
+                }
+
+                // Rebuild the candidate from the exact durable revision. A new candidate starts
+                // its watcher before it reads the sidecar, closing the next observation window.
+                preflightSettings = committedSettings;
             }
+
+            // A root replacement can be requested while this session waits behind the operation
+            // gate. Bind the watcher only after the request is still current, then switch the
+            // in-memory session as one short, serialized commit.
+            rootHandoff = preparedLoad.RootHandoff;
+            cancellationToken = ReplaceSession(request.CancellationToken);
+            loaded.RuntimeSession?.Bind(cancellationToken);
+            oldSessionTeardownStarted = true;
+            await DisposeVaultSessionAsync(rootHandoff).ConfigureAwait(true);
+            if (cancellationToken.IsCancellationRequested
+                || !TryTransferPreparedVaultSessionOwnership(request, loaded, rootHandoff))
+            {
+                // The old session has already been detached, but this candidate no longer owns
+                // the root request. Dispose its reservation/runtime before releasing the gate,
+                // then revision-check the Apply rollback so a newer external sidecar still wins.
+                await DisposePreparedLoadAsync(loaded).ConfigureAwait(true);
+                loaded = null;
+                rootHandoff = null;
+                await RestoreDailyNoteSettingsAfterFailedApplyAsync(
+                        settingsVaultForRollback,
+                        settingsBeforeApply,
+                        persistedApplySettings)
+                    .ConfigureAwait(true);
+                ResetVisibleState();
+                return VaultReconfigureResult.Cancelled(CreateDailyNoteFileNameFormatState());
+            }
+
+            candidateOwnershipTransferred = true;
+            rootHandoff = null;
+            if (isDisposed || cancellationToken.IsCancellationRequested)
+            {
+                await DisposeTransferredCandidateAsync(loaded).ConfigureAwait(true);
+                loaded = null;
+                await RestoreDailyNoteSettingsAfterFailedApplyAsync(
+                        settingsVaultForRollback,
+                        settingsBeforeApply,
+                        persistedApplySettings)
+                    .ConfigureAwait(true);
+                ResetVisibleState();
+                return VaultReconfigureResult.Cancelled(CreateDailyNoteFileNameFormatState());
+            }
+
+            ResetVisibleState();
+            if (isDisposed || cancellationToken.IsCancellationRequested)
+            {
+                await DisposeTransferredCandidateAsync(loaded).ConfigureAwait(true);
+                loaded = null;
+                await RestoreDailyNoteSettingsAfterFailedApplyAsync(
+                        settingsVaultForRollback,
+                        settingsBeforeApply,
+                        persistedApplySettings)
+                    .ConfigureAwait(true);
+                ResetVisibleState();
+                return VaultReconfigureResult.Cancelled(CreateDailyNoteFileNameFormatState());
+            }
+
+            IsBusy = true;
+            vault = loaded.Vault;
+            dailyNotes = loaded.DailyNotes;
+            dailyNoteNaming = loaded.DailyNotes.Naming;
+            dailyNoteSettingsSnapshot = loaded.DailyNoteSettings;
+            markdownParser = loaded.Parser;
+            vaultId = loaded.VaultId;
+            reviewCoordinator = loaded.ReviewCoordinator;
+            revisionStore = loaded.RevisionStore;
+            searchIndex = loaded.Snapshot.SearchIndex;
+            VaultRootPath = loaded.Vault.RootPath;
+            BootstrapIndexedFiles = loaded.Bootstrap.IndexedFiles;
+            BootstrapPendingCheckboxes = loaded.Bootstrap.PendingCheckboxes;
+            BootstrapWasReused = loaded.Bootstrap.ReusedExisting;
+            IsVaultInitialized = true;
+            ApplySnapshot(loaded.Snapshot);
+            RefreshIdentitySafePending();
+            if (isDisposed || cancellationToken.IsCancellationRequested)
+            {
+                await DisposeTransferredCandidateAsync(loaded).ConfigureAwait(true);
+                loaded = null;
+                await RestoreDailyNoteSettingsAfterFailedApplyAsync(
+                        settingsVaultForRollback,
+                        settingsBeforeApply,
+                        persistedApplySettings)
+                    .ConfigureAwait(true);
+                ResetVisibleState();
+                return VaultReconfigureResult.Cancelled(CreateDailyNoteFileNameFormatState());
+            }
+
+            InstallPreparedAuxiliaryViewModels(loaded.Auxiliary
+                ?? throw new InvalidOperationException("The candidate Feed auxiliary view models are missing."));
+            visibleCandidateInstalled = true;
+            if (!await CompleteCommittedVaultSessionAsync(cancellationToken).ConfigureAwait(true)
+                || cancellationToken.IsCancellationRequested
+                || !IsCurrentReconfigureRequest(request))
+            {
+                await DisposeTransferredCandidateAsync(loaded, auxiliaryInstalled: true).ConfigureAwait(true);
+                loaded = null;
+                await RestoreDailyNoteSettingsAfterFailedApplyAsync(
+                        settingsVaultForRollback,
+                        settingsBeforeApply,
+                        persistedApplySettings)
+                    .ConfigureAwait(true);
+                ResetVisibleState();
+                return VaultReconfigureResult.Cancelled(CreateDailyNoteFileNameFormatState());
+            }
+
+            var applied = CreateDailyNoteFileNameFormatState(isExternalChange: isExternalChange);
+            if (!TryFinalizeVaultReconfigureRequest(request))
+            {
+                await DisposeTransferredCandidateAsync(loaded, auxiliaryInstalled: true).ConfigureAwait(true);
+                loaded = null;
+                await RestoreDailyNoteSettingsAfterFailedApplyAsync(
+                        settingsVaultForRollback,
+                        settingsBeforeApply,
+                        persistedApplySettings)
+                    .ConfigureAwait(true);
+                ResetVisibleState();
+                return VaultReconfigureResult.Cancelled(CreateDailyNoteFileNameFormatState());
+            }
+
+            PublishDailyNoteFileNameFormatState(applied);
+            return VaultReconfigureResult.Success(applied);
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested
+                                                 || request.CancellationToken.IsCancellationRequested)
         {
+            ClearPendingVaultRootHandoff(rootHandoff);
+            rootHandoff?.Dispose();
+            if (loaded is not null && !candidateOwnershipTransferred)
+            {
+                await DisposePreparedLoadAsync(loaded).ConfigureAwait(true);
+                loaded = null;
+            }
+            else if (loaded is not null && !visibleCandidateInstalled)
+            {
+                await DisposeTransferredCandidateAsync(loaded, auxiliaryInstalled: false).ConfigureAwait(true);
+                loaded = null;
+            }
+
+            if (!visibleCandidateInstalled)
+            {
+                ApplyRestoredDailyNoteSettingsIfCurrent(
+                    await RestoreDailyNoteSettingsAfterFailedApplyAsync(
+                            settingsVaultForRollback,
+                            settingsBeforeApply,
+                            persistedApplySettings)
+                        .ConfigureAwait(true),
+                        expectedSession);
+            }
+
+            if (oldSessionTeardownStarted && !visibleCandidateInstalled)
+            {
+                ResetVisibleState();
+            }
+
+            return VaultReconfigureResult.Cancelled(CreateDailyNoteFileNameFormatState());
         }
         catch (Exception exception)
         {
+            ClearPendingVaultRootHandoff(rootHandoff);
+            rootHandoff?.Dispose();
+            if (loaded is not null && !candidateOwnershipTransferred)
+            {
+                await DisposePreparedLoadAsync(loaded).ConfigureAwait(true);
+                loaded = null;
+            }
+            else if (loaded is not null && !visibleCandidateInstalled)
+            {
+                await DisposeTransferredCandidateAsync(loaded, auxiliaryInstalled: false).ConfigureAwait(true);
+                loaded = null;
+            }
+
+            if (!visibleCandidateInstalled)
+            {
+                ApplyRestoredDailyNoteSettingsIfCurrent(
+                    await RestoreDailyNoteSettingsAfterFailedApplyAsync(
+                            settingsVaultForRollback,
+                            settingsBeforeApply,
+                            persistedApplySettings)
+                        .ConfigureAwait(true),
+                        expectedSession);
+            }
+
+            if (oldSessionTeardownStarted && !visibleCandidateInstalled)
+            {
+                ResetVisibleState();
+            }
+
             ErrorMessage = exception.Message;
+            return VaultReconfigureResult.Failure(
+                exception.Message,
+                CreateDailyNoteFileNameFormatState(
+                    exception.Message,
+                    isExternalChange: isExternalChange,
+                    requiresReload: isExternalChange));
         }
         finally
         {
             if (!cancellationToken.IsCancellationRequested)
             {
                 IsBusy = false;
+            }
+
+            if (gateAcquired)
+            {
+                operationGate.Release();
             }
         }
     }
@@ -1516,7 +1998,8 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
             markdownParser,
             new MarkdownMutationService(markdownParser),
             operationJournal,
-            revisionStore);
+            revisionStore,
+            dailyNoteNaming);
         var result = await service.MoveAsync(
                 new MoveToTodayRequest(
                     vaultId,
@@ -1918,6 +2401,7 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
                 Array.AsReadOnly(reviewDocuments.ToArray()),
                 state,
                 coordinator.CurrentObserver,
+                dailyNoteNaming,
                 ReviewQueueBuildGateAsync);
         }).WaitAsync(cancellationToken).ConfigureAwait(false);
         return request ?? ReviewQueueBuildRequest.Empty(version, ReviewQueueBuildGateAsync);
@@ -1934,7 +2418,11 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        var candidates = new FeedReviewQueue(new MarkdownDocumentParser(), request.State).Build(
+        var candidates = new FeedReviewQueue(
+                new MarkdownDocumentParser(),
+                request.State,
+                request.Naming)
+            .Build(
                 request.Documents.Select(static document => (document.RelativePath, document.Text)),
                 request.Observer)
             .ToArray();
@@ -2392,7 +2880,8 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
                         markdownParser,
                         new MarkdownMutationService(markdownParser),
                         journal,
-                        revisionStore)
+                        revisionStore,
+                        dailyNoteNaming)
                     .ResumeAsync(pending, cancellationToken)
                     .ConfigureAwait(true);
                 break;
@@ -2775,7 +3264,7 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
             }
         }
 
-        var nextSearchIndex = new FeedSearchIndex(parser);
+        var nextSearchIndex = new FeedSearchIndex(parser, sourceDailyNotes.Naming);
         foreach (var document in documents.Values)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -3114,17 +3603,22 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
               ?? SearchAreaOptions[0];
     }
 
-    private async Task InitializeAuxiliaryViewModelsAsync(CancellationToken cancellationToken)
+    private async Task<FeedAuxiliaryViewModels> PrepareAuxiliaryViewModelsAsync(
+        INoteVault sourceVault,
+        DailyNoteNaming naming,
+        CancellationToken cancellationToken)
     {
-        var sourceVault = vault ?? throw new InvalidOperationException("The note vault is unavailable.");
-        var nextFiles = new FeedFilesDrawerViewModel(sourceVault)
+        var nextFiles = new FeedFilesDrawerViewModel(sourceVault, naming)
         {
             OpenFileCallbackAsync = OpenThematicFileAsync
         };
         var nextAreas = new AreaManagementViewModel(new AreaCatalogStore(sourceVault));
         try
         {
-            await Task.WhenAll(nextFiles.RefreshAsync(), nextAreas.LoadAsync()).ConfigureAwait(true);
+            await Task.WhenAll(
+                    nextFiles.RefreshAsync(cancellationToken),
+                    nextAreas.LoadAsync(cancellationToken))
+                .ConfigureAwait(true);
             cancellationToken.ThrowIfCancellationRequested();
         }
         catch
@@ -3134,14 +3628,19 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
             throw;
         }
 
-        FilesDrawer = nextFiles;
-        AreaManagement = nextAreas;
+        return new FeedAuxiliaryViewModels(nextFiles, nextAreas);
+    }
+
+    private void InstallPreparedAuxiliaryViewModels(FeedAuxiliaryViewModels auxiliary)
+    {
+        FilesDrawer = auxiliary.FilesDrawer;
+        AreaManagement = auxiliary.AreaManagement;
         areaCatalogChangedHandler = (_, _) =>
         {
             RebuildVisibleAreas();
             RebuildReviewTaskAreas();
         };
-        nextAreas.ClassificationAreas.CollectionChanged += areaCatalogChangedHandler;
+        auxiliary.AreaManagement.ClassificationAreas.CollectionChanged += areaCatalogChangedHandler;
         RebuildVisibleAreas();
         RebuildReviewTaskAreas();
     }
@@ -3285,7 +3784,10 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
             }
 
             await coordinator.InitializeAsync(cancellationToken).ConfigureAwait(true);
-            var safeBootstrap = await new FirstConnectBootstrapService(sourceVault, parser)
+            var safeBootstrap = await new FirstConnectBootstrapService(
+                    sourceVault,
+                    parser,
+                    dailyNoteNaming)
                 .FindSafeCompleteAsync(sourceVaultId, cancellationToken)
                 .ConfigureAwait(true);
             if (safeBootstrap is null)
@@ -3308,6 +3810,83 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
         {
             operationGate.Release();
         }
+    }
+
+    private async Task ReloadDailyNoteSettingsFromWatcherAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var rootPath = VaultRootPath;
+        if (string.IsNullOrWhiteSpace(rootPath) || !IsVaultInitialized)
+        {
+            return;
+        }
+
+        var request = CaptureRootReconfigureRequest();
+        var session = new VaultSessionExpectation(rootPath, cancellationToken);
+        var activeVault = vault;
+        var activeSettings = dailyNoteSettingsSnapshot;
+        if (activeVault is not null && activeSettings is not null)
+        {
+            try
+            {
+                var observedSettings = await new DailyNoteSettingsStore(activeVault)
+                    .LoadAsync(cancellationToken)
+                    .ConfigureAwait(true);
+                if (!IsCurrentReconfigureRequest(request) || !IsCurrentVaultSession(session))
+                {
+                    return;
+                }
+
+                if (DailyNoteSettingsSnapshotsMatch(activeSettings, observedSettings))
+                {
+                    // A directory-level watcher rescan can reach this route even when the
+                    // filename-format sidecar did not change. Do not replace the active
+                    // session or present a false external-change decision in that case.
+                    return;
+                }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception)
+            {
+                // Preserve the existing recovery behavior for a corrupt or transiently
+                // unreadable sidecar: the full reconfigure below publishes its safe state.
+            }
+        }
+
+        // This action was scheduled after the watcher released its route gate. Reconfiguring here
+        // may dispose that watcher, so it must never run inline inside the watcher callback.
+        var result = await RunVaultReconfigureAsync(
+                rootPath,
+                requestedNaming: null,
+                expectedDailyNoteSettingsRevision: null,
+                isExternalChange: true,
+                request: request,
+                expectedSession: session)
+            .ConfigureAwait(true);
+        if (!result.Succeeded &&
+            !result.IsCancelled &&
+            result.State is { } failedState &&
+            IsCurrentReconfigureRequest(request) &&
+            IsCurrentVaultSession(session))
+        {
+            // The invalid/corrupt sidecar remains on disk. Surface the failure through the
+            // same Settings state channel as a normal external change so the user gets a
+            // stable Reload affordance while the last valid Feed session stays usable.
+            PublishDailyNoteFileNameFormatState(failedState);
+        }
+    }
+
+    private async Task ReloadDailyNoteSettingsAfterWatcherRouteAsync(CancellationToken cancellationToken)
+    {
+        // ScheduleRuntimeAction can begin synchronously when Feed has no UI dispatcher. Yielding
+        // guarantees that FeedVaultWatchRuntime.RouteAsync releases routeGate before the
+        // reconfiguration disposes the old runtime and waits for that gate.
+        await Task.Yield();
+        cancellationToken.ThrowIfCancellationRequested();
+        await ReloadDailyNoteSettingsFromWatcherAsync(cancellationToken).ConfigureAwait(true);
     }
 
     private Task ShowDocumentConflictAsync(
@@ -3493,41 +4072,86 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
         IdentityConflict = next;
     }
 
-    private async Task DisposeVaultSessionAsync()
+    private async Task DisposeVaultSessionAsync(VaultRootHandoffLease? rootHandoff = null)
     {
-        if (AreaManagement is not null && areaCatalogChangedHandler is not null)
+        var previousAreaManagement = AreaManagement;
+        if (previousAreaManagement is not null && areaCatalogChangedHandler is not null)
         {
-            AreaManagement.ClassificationAreas.CollectionChanged -= areaCatalogChangedHandler;
+            previousAreaManagement.ClassificationAreas.CollectionChanged -= areaCatalogChangedHandler;
         }
 
         areaCatalogChangedHandler = null;
-        DocumentConflict?.Dispose();
+        var previousDocumentConflict = DocumentConflict;
         DocumentConflict = null;
-        IdentityConflict?.Dispose();
+        DisposeVaultSessionResource(previousDocumentConflict);
+        var previousIdentityConflict = IdentityConflict;
         IdentityConflict = null;
-        ReviewRecovery?.Dispose();
+        DisposeVaultSessionResource(previousIdentityConflict);
+        var previousReviewRecovery = ReviewRecovery;
         ReviewRecovery = null;
-        CloseThematicFile();
-        FilesDrawer?.Dispose();
+        DisposeVaultSessionResource(previousReviewRecovery);
+        var previousThematicFile = OpenedThematicFile;
+        OpenedThematicFile = null;
+        DisposeVaultSessionResource(previousThematicFile);
+        var previousFilesDrawer = FilesDrawer;
         FilesDrawer = null;
-        AreaManagement?.Dispose();
+        DisposeVaultSessionResource(previousFilesDrawer);
         AreaManagement = null;
+        DisposeVaultSessionResource(previousAreaManagement);
         var runtime = watchRuntime;
         watchRuntime = null;
         if (runtime is not null)
         {
-            await runtime.DisposeAsync().ConfigureAwait(false);
+            try
+            {
+                await runtime.DisposeAsync().ConfigureAwait(false);
+            }
+            catch (Exception exception)
+            {
+                // A watcher can already be shutting down after an external failure. Its
+                // resources have still been canceled by DisposeAsync; do not leave the old
+                // registry attachment behind or abort the replacement session.
+                ErrorMessage = exception.Message;
+            }
         }
 
 
         if (attachedVaultId is { } registeredVaultId
             && attachedVaultRootPath is { } registeredRootPath)
         {
-            vaultRootRegistry.Detach(registeredVaultId, registeredRootPath);
+            if (rootHandoff is null)
+            {
+                vaultRootRegistry.Detach(registeredVaultId, registeredRootPath);
+            }
+            else
+            {
+                // The relocation lease is the only proof that this exact old Feed session has
+                // reached its disposal point. A generic path-only Detach cannot authorize B.
+                vaultRootRegistry.ConfirmHandoffOldAttachmentDetached(rootHandoff, registeredRootPath);
+            }
         }
 
         attachedVaultId = null;
         attachedVaultRootPath = null;
+    }
+
+    private void DisposeVaultSessionResource(IDisposable? resource)
+    {
+        if (resource is null)
+        {
+            return;
+        }
+
+        try
+        {
+            resource.Dispose();
+        }
+        catch (Exception exception)
+        {
+            // Reconfiguration must always finish releasing the old registry attachment. A
+            // disposable UI surface cannot be allowed to strand a pending root handoff.
+            ErrorMessage = exception.Message;
+        }
     }
 
     private void AttachTaskSearchTracking()
@@ -3910,18 +4534,61 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
         HasSearchResults = SearchResults.Count > 0;
     }
 
-    private CancellationToken ReplaceSession()
+    private CancellationToken ReplaceSession(CancellationToken rootReconfigureCancellation = default)
     {
-        var next = new CancellationTokenSource();
+        var next = rootReconfigureCancellation.CanBeCanceled
+            ? CancellationTokenSource.CreateLinkedTokenSource(rootReconfigureCancellation)
+            : new CancellationTokenSource();
         CancellationTokenSource? previous;
         lock (sessionLock)
         {
             previous = sessionCancellation;
             sessionCancellation = next;
+            sessionGeneration++;
         }
 
         previous?.Cancel();
         return next.Token;
+    }
+
+    private bool TryTransferPreparedVaultSessionOwnership(
+        VaultReconfigureRequest request,
+        FeedLoadResult preparedLoad,
+        VaultRootHandoffLease? rootHandoff)
+    {
+        // BeginRootReconfigureRequest cancels the currently owned request under this same lock.
+        // Keep the ownership check, irreversible registry handoff and the fields used by
+        // DisposeVaultSessionAsync in one critical section. Dispose can therefore either win
+        // before this transfer (the candidate remains locally disposable) or after it (the
+        // candidate is already represented by the active session fields and is detached there).
+        lock (reconfigureRequestLock)
+        {
+            if (isDisposed || !IsCurrentReconfigureRequest(request))
+            {
+                return false;
+            }
+
+            if (rootHandoff is not null)
+            {
+                vaultRootRegistry.CommitHandoff(rootHandoff);
+                ClearPendingVaultRootHandoff(rootHandoff);
+                rootHandoff.Dispose();
+            }
+
+            watchRuntime = preparedLoad.WatchRuntime;
+            attachedVaultId = preparedLoad.VaultId;
+            attachedVaultRootPath = preparedLoad.Vault.RootPath;
+
+            return true;
+        }
+    }
+
+    private bool TryFinalizeVaultReconfigureRequest(VaultReconfigureRequest request)
+    {
+        lock (reconfigureRequestLock)
+        {
+            return !isDisposed && IsCurrentReconfigureRequest(request);
+        }
     }
 
     private CancellationToken GetSessionToken()
@@ -3932,11 +4599,315 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
         }
     }
 
+    private long GetSessionGeneration()
+    {
+        lock (sessionLock)
+        {
+            return sessionGeneration;
+        }
+    }
+
+    private VaultReconfigureRequest BeginRootReconfigureRequest()
+    {
+        var nextCancellation = new CancellationTokenSource();
+        CancellationTokenSource? previousCancellation;
+        long generation;
+        lock (reconfigureRequestLock)
+        {
+            previousCancellation = rootReconfigureCancellation;
+            rootReconfigureCancellation = nextCancellation;
+            generation = ++rootReconfigureGeneration;
+        }
+
+        previousCancellation?.Cancel();
+        return new VaultReconfigureRequest(generation, nextCancellation.Token);
+    }
+
+    private VaultReconfigureRequest CaptureRootReconfigureRequest()
+    {
+        lock (reconfigureRequestLock)
+        {
+            return new VaultReconfigureRequest(
+                rootReconfigureGeneration,
+                rootReconfigureCancellation?.Token ?? CancellationToken.None);
+        }
+    }
+
+    private bool IsCurrentReconfigureRequest(VaultReconfigureRequest request)
+    {
+        lock (reconfigureRequestLock)
+        {
+            return request.Generation == rootReconfigureGeneration
+                && request.CancellationToken == (rootReconfigureCancellation?.Token ?? CancellationToken.None)
+                && !request.CancellationToken.IsCancellationRequested;
+        }
+    }
+
+    private bool IsCurrentVaultSession(VaultSessionExpectation? expectedSession)
+    {
+        if (expectedSession is null)
+        {
+            return true;
+        }
+
+        return IsVaultInitialized
+            && !expectedSession.SessionToken.IsCancellationRequested
+            && expectedSession.SessionToken == GetSessionToken()
+            && AreEquivalentVaultRoots(expectedSession.RootPath, VaultRootPath);
+    }
+
+    private static bool AreEquivalentVaultRoots(string expectedRootPath, string? currentRootPath)
+    {
+        if (string.IsNullOrWhiteSpace(expectedRootPath)
+            || string.IsNullOrWhiteSpace(currentRootPath))
+        {
+            return false;
+        }
+
+        try
+        {
+            var comparison = OperatingSystem.IsWindows()
+                ? StringComparison.OrdinalIgnoreCase
+                : StringComparison.Ordinal;
+            return string.Equals(
+                Path.GetFullPath(expectedRootPath)
+                    .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                Path.GetFullPath(currentRootPath)
+                    .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                comparison);
+        }
+        catch (Exception exception) when (exception is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return false;
+        }
+    }
+
+    private void RegisterPendingVaultRootHandoff(VaultRootHandoffLease handoff)
+    {
+        ArgumentNullException.ThrowIfNull(handoff);
+        lock (vaultRootHandoffLock)
+        {
+            if (isDisposed)
+            {
+                handoff.Dispose();
+                throw new ObjectDisposedException(nameof(FeedViewModel));
+            }
+
+            if (pendingVaultRootHandoff is not null)
+            {
+                handoff.Dispose();
+                throw new InvalidOperationException("A vault root handoff is already pending.");
+            }
+
+            pendingVaultRootHandoff = handoff;
+        }
+    }
+
+    private void ClearPendingVaultRootHandoff(VaultRootHandoffLease? handoff)
+    {
+        if (handoff is null)
+        {
+            return;
+        }
+
+        lock (vaultRootHandoffLock)
+        {
+            if (ReferenceEquals(pendingVaultRootHandoff, handoff))
+            {
+                pendingVaultRootHandoff = null;
+            }
+        }
+    }
+
+    private VaultRootHandoffLease? TakePendingVaultRootHandoff()
+    {
+        lock (vaultRootHandoffLock)
+        {
+            var handoff = pendingVaultRootHandoff;
+            pendingVaultRootHandoff = null;
+            return handoff;
+        }
+    }
+
+    private async Task DisposePreparedLoadAsync(FeedLoadResult loaded)
+    {
+        loaded.Auxiliary?.Dispose();
+        ClearPendingVaultRootHandoff(loaded.RootHandoff);
+        loaded.RootHandoff?.Dispose();
+        try
+        {
+            if (loaded.WatchRuntime is not null)
+            {
+                await loaded.WatchRuntime.DisposeAsync().ConfigureAwait(false);
+            }
+        }
+        catch (Exception)
+        {
+            // Candidate cleanup must not hide the original rebind/cancellation failure.
+        }
+        finally
+        {
+            if (loaded.VaultRootAttached)
+            {
+                vaultRootRegistry.Detach(loaded.VaultId, loaded.Vault.RootPath);
+            }
+        }
+    }
+
+    private async Task DisposeTransferredCandidateAsync(
+        FeedLoadResult loaded,
+        bool auxiliaryInstalled = false)
+    {
+        // The registry attachment and watcher ownership moved into the active Feed fields before
+        // this method is called. Do not reuse DisposePreparedLoadAsync: a committed handoff is no
+        // longer represented by that lease, while DisposeVaultSessionAsync can detach its new root.
+        if (!auxiliaryInstalled)
+        {
+            loaded.Auxiliary?.Dispose();
+        }
+
+        await DisposeVaultSessionAsync().ConfigureAwait(false);
+    }
+
+    private async Task<bool> CompleteCommittedVaultSessionAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await RestorePendingDocumentConflictsAsync(cancellationToken).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return false;
+        }
+        catch (Exception exception)
+        {
+            // Conflict recovery is auxiliary to a successfully validated timeline. Keep the
+            // newly bound session usable and leave its durable bundles for the next recovery.
+            ErrorMessage = exception.Message;
+        }
+
+        try
+        {
+            if (await RecoverPendingOperationsAsync(cancellationToken).ConfigureAwait(true))
+            {
+                await ReloadSnapshotAsync(cancellationToken).ConfigureAwait(true);
+            }
+            else
+            {
+                await RefreshReviewSummaryAsync(cancellationToken).ConfigureAwait(true);
+            }
+
+            ShowForeignReviewRecoveryIfNeeded();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return false;
+        }
+        catch (Exception exception)
+        {
+            // A recoverable journal/index problem must not turn a completed vault rebind into a
+            // disconnected Feed. The candidate snapshot remains the visible, usable baseline.
+            ErrorMessage = exception.Message;
+        }
+
+        var runtime = watchRuntime;
+        if (runtime is null)
+        {
+            return true;
+        }
+
+        try
+        {
+            await runtime.ActivateAsync(cancellationToken).ConfigureAwait(true);
+            return true;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return false;
+        }
+        catch (Exception exception)
+        {
+            // The watcher may retry on the next session; its activation is not a prerequisite
+            // for displaying or editing the already prepared local snapshot.
+            ErrorMessage = exception.Message;
+            return true;
+        }
+    }
+
+    private static async Task<DailyNoteSettingsSnapshot?> RestoreDailyNoteSettingsAfterFailedApplyAsync(
+        INoteVault? vault,
+        DailyNoteSettingsSnapshot? settingsBeforeApply,
+        DailyNoteSettingsSnapshot? persistedApplySettings)
+    {
+        // The current session remains connected when candidate preparation fails. Restore the
+        // sidecar with a revision check as well, so a later reconnect cannot silently activate a
+        // format which this Apply never finished binding. A concurrent external write wins.
+        if (vault is null || settingsBeforeApply is null || persistedApplySettings is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            if (settingsBeforeApply.Revision is null)
+            {
+                var deleted = await vault.DeleteAsync(
+                        DailyNoteSettingsStore.RelativePath,
+                        persistedApplySettings.Revision,
+                        CancellationToken.None)
+                    .ConfigureAwait(false);
+                return deleted
+                    ? new DailyNoteSettingsSnapshot(settingsBeforeApply.Settings, Revision: null)
+                    : null;
+            }
+
+            var settingsStore = new DailyNoteSettingsStore(vault);
+            return await settingsStore.SaveAsync(
+                    settingsBeforeApply.Settings,
+                    persistedApplySettings.Revision,
+                    CancellationToken.None)
+                .ConfigureAwait(false);
+        }
+        catch (VaultRevisionConflictException)
+        {
+            // A remote writer updated the sidecar after the failed Apply. Never overwrite it.
+            return null;
+        }
+        catch (Exception)
+        {
+            // Preserve the original candidate-preparation error; the current session remains
+            // usable and a later reload surfaces the durable sidecar state.
+            return null;
+        }
+    }
+
+    private static bool DailyNoteSettingsSnapshotsMatch(
+        DailyNoteSettingsSnapshot left,
+        DailyNoteSettingsSnapshot right) =>
+        string.Equals(left.Revision, right.Revision, StringComparison.Ordinal)
+        && left.Settings.SchemaVersion == right.Settings.SchemaVersion
+        && string.Equals(
+            left.Settings.DailyFileNameFormat,
+            right.Settings.DailyFileNameFormat,
+            StringComparison.Ordinal);
+
+    private void ApplyRestoredDailyNoteSettingsIfCurrent(
+        DailyNoteSettingsSnapshot? restoredSettings,
+        VaultSessionExpectation? expectedSession)
+    {
+        if (restoredSettings is not null && IsCurrentVaultSession(expectedSession))
+        {
+            dailyNoteSettingsSnapshot = restoredSettings;
+        }
+    }
+
     private void ResetVisibleState()
     {
         CancelBackgroundSearchIndexing();
         vault = null;
         dailyNotes = null;
+        dailyNoteNaming = DailyNoteNaming.Default;
+        dailyNoteSettingsSnapshot = null;
         searchIndex = null;
         markdownParser = null;
         reviewCoordinator = null;
@@ -4280,11 +5251,36 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
         return "device-" + Convert.ToHexString(hash.AsSpan(0, 8)).ToLowerInvariant();
     }
 
-    private static string CreateBootstrapOperationId(string identity, string deviceId)
+    private static string CreateBootstrapOperationId(
+        string identity,
+        string deviceId,
+        DailyNoteNaming naming)
     {
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(identity + "|" + deviceId));
-        return "bootstrap-" + Convert.ToHexString(hash.AsSpan(0, 12)).ToLowerInvariant();
+        var legacy = "bootstrap-" + Convert.ToHexString(hash.AsSpan(0, 12)).ToLowerInvariant();
+        if (string.Equals(naming.FileNameFormat, DailyNoteNaming.DefaultFileNameFormat, StringComparison.Ordinal))
+        {
+            return legacy;
+        }
+
+        var layoutHash = SHA256.HashData(Encoding.UTF8.GetBytes(naming.FileNameFormat));
+        return legacy + "-layout-" + Convert.ToHexString(layoutHash.AsSpan(0, 8)).ToLowerInvariant();
     }
+
+    private NoteDailyFileNameFormatState CreateDailyNoteFileNameFormatState(
+        string? statusMessage = null,
+        bool isExternalChange = false,
+        bool requiresReload = false) => new(
+        dailyNoteNaming.FileNameFormat,
+        VaultRootPath,
+        dailyNoteSettingsSnapshot?.Revision,
+        statusMessage,
+        isExternalChange,
+        GetSessionGeneration(),
+        requiresReload);
+
+    private void PublishDailyNoteFileNameFormatState(NoteDailyFileNameFormatState state) =>
+        DailyNoteFileNameFormatChanged?.Invoke(this, state);
 
     private static string GetDefaultRecoveryRoot(string _)
     {
@@ -4341,12 +5337,20 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
 
     public void Dispose()
     {
-        if (isDisposed)
+        CancellationTokenSource? rootReconfigure;
+        lock (reconfigureRequestLock)
         {
-            return;
+            if (isDisposed)
+            {
+                return;
+            }
+
+            isDisposed = true;
+            rootReconfigure = rootReconfigureCancellation;
+            rootReconfigureCancellation = null;
+            rootReconfigureGeneration++;
         }
 
-        isDisposed = true;
         notificationDispatcher = null;
         DetachTaskSearchTracking();
         CancelBackgroundSearchIndexing();
@@ -4359,6 +5363,8 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
 
         cancellation?.Cancel();
 
+        rootReconfigure?.Cancel();
+
         CancellationTokenSource? pendingSearch;
         lock (searchLock)
         {
@@ -4368,12 +5374,14 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
 
         pendingSearch?.Cancel();
         InvalidateReviewQueue();
+        var pendingRootHandoff = TakePendingVaultRootHandoff();
         try
         {
-            DisposeVaultSessionAsync().GetAwaiter().GetResult();
+            DisposeVaultSessionAsync(pendingRootHandoff).GetAwaiter().GetResult();
         }
         finally
         {
+            pendingRootHandoff?.Dispose();
             foreach (var day in Days)
             {
                 day.Dispose();
@@ -4386,13 +5394,13 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
 
     private sealed class FeedWatchRuntimeSink(
         FeedViewModel owner,
-        CancellationToken expectedSession) : IFeedVaultWatchRuntimeSink
+        Func<CancellationToken> expectedSessionProvider) : IFeedVaultWatchRuntimeSink
     {
         public ValueTask ReloadMarkdownAsync(
             DocumentReloadSignal signal,
             CancellationToken cancellationToken)
         {
-            owner.ScheduleRuntimeAction(expectedSession, owner.RefreshMarkdownFromWatcherAsync);
+            owner.ScheduleRuntimeAction(expectedSessionProvider(), owner.RefreshMarkdownFromWatcherAsync);
             return ValueTask.CompletedTask;
         }
 
@@ -4401,7 +5409,7 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
             CancellationToken cancellationToken)
         {
             owner.ScheduleRuntimeAction(
-                expectedSession,
+                expectedSessionProvider(),
                 token => owner.ShowDocumentConflictAsync(conflict, token));
             return ValueTask.CompletedTask;
         }
@@ -4410,7 +5418,7 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
             VaultWatchChange change,
             CancellationToken cancellationToken)
         {
-            owner.ScheduleRuntimeAction(expectedSession, owner.RefreshAreasFromWatcherAsync);
+            owner.ScheduleRuntimeAction(expectedSessionProvider(), owner.RefreshAreasFromWatcherAsync);
             return ValueTask.CompletedTask;
         }
 
@@ -4418,7 +5426,15 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
             VaultWatchChange change,
             CancellationToken cancellationToken)
         {
-            owner.ScheduleRuntimeAction(expectedSession, owner.RefreshReviewFromWatcherAsync);
+            owner.ScheduleRuntimeAction(expectedSessionProvider(), owner.RefreshReviewFromWatcherAsync);
+            return ValueTask.CompletedTask;
+        }
+
+        public ValueTask ReloadDailyNoteSettingsAsync(
+            VaultWatchChange change,
+            CancellationToken cancellationToken)
+        {
+            owner.ScheduleRuntimeAction(expectedSessionProvider(), owner.ReloadDailyNoteSettingsAfterWatcherRouteAsync);
             return ValueTask.CompletedTask;
         }
 
@@ -4427,7 +5443,7 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
             CancellationToken cancellationToken)
         {
             owner.ScheduleRuntimeAction(
-                expectedSession,
+                expectedSessionProvider(),
                 token => owner.FreezeForIdentityChangeAsync(signal, token));
             return ValueTask.CompletedTask;
         }
@@ -4472,13 +5488,77 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
     private sealed record FeedLoadResult(
         INoteVault Vault,
         DailyNoteService DailyNotes,
+        DailyNoteSettingsSnapshot DailyNoteSettings,
         IMarkdownDocumentParser Parser,
         string VaultId,
         FeedReviewSessionCoordinator ReviewCoordinator,
         IRevisionStore RevisionStore,
         BootstrapResult Bootstrap,
         FeedSnapshot Snapshot,
-        FeedVaultWatchRuntime? WatchRuntime);
+        FeedVaultWatchRuntime? WatchRuntime,
+        FeedRuntimeSessionBinding? RuntimeSession,
+        bool VaultRootAttached,
+        VaultRootHandoffLease? RootHandoff,
+        FeedAuxiliaryViewModels? Auxiliary);
+
+    private sealed record FeedAuxiliaryViewModels(
+        FeedFilesDrawerViewModel FilesDrawer,
+        AreaManagementViewModel AreaManagement) : IDisposable
+    {
+        public void Dispose()
+        {
+            FilesDrawer.Dispose();
+            AreaManagement.Dispose();
+        }
+    }
+
+    private sealed record VaultReconfigureRequest(
+        long Generation,
+        CancellationToken CancellationToken);
+
+    private sealed record VaultSessionExpectation(
+        string RootPath,
+        CancellationToken SessionToken);
+
+    private sealed class FeedRuntimeSessionBinding
+    {
+        private readonly object sync = new();
+        private CancellationToken sessionToken;
+
+        public void Bind(CancellationToken value)
+        {
+            lock (sync)
+            {
+                sessionToken = value;
+            }
+        }
+
+        public CancellationToken GetToken()
+        {
+            lock (sync)
+            {
+                return sessionToken;
+            }
+        }
+    }
+
+    private sealed record VaultReconfigureResult(
+        bool Succeeded,
+        NoteDailyFileNameFormatState? State,
+        string? ErrorMessage,
+        bool IsCancelled)
+    {
+        public static VaultReconfigureResult Success(NoteDailyFileNameFormatState state) =>
+            new(true, state, null, false);
+
+        public static VaultReconfigureResult Failure(
+            string? errorMessage,
+            NoteDailyFileNameFormatState? state = null) =>
+            new(false, state, errorMessage, false);
+
+        public static VaultReconfigureResult Cancelled(NoteDailyFileNameFormatState state) =>
+            new(false, state, null, true);
+    }
 
     private sealed record FeedSnapshot(
         IReadOnlyList<FeedDayViewModel> Days,
@@ -4520,6 +5600,7 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
         IReadOnlyList<FeedReviewDocument> Documents,
         ReviewStateStore State,
         CausalEnvelope Observer,
+        DailyNoteNaming Naming,
         Func<CancellationToken, Task>? BuildGateAsync)
     {
         public static ReviewQueueBuildRequest Empty(
@@ -4532,6 +5613,7 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
                 "review-queue-empty",
                 1,
                 new Dictionary<string, long>(StringComparer.Ordinal)),
+            DailyNoteNaming.Default,
             buildGateAsync);
     }
 

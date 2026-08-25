@@ -144,11 +144,18 @@ public static partial class FeedLinkSerializer
         return $"{link} <!-- unlimotion-note:{noteId} -->";
     }
 
-    public static string MovedBlock(DateOnly date, string anchor)
+    public static string MovedBlock(
+        string destinationRelativePath,
+        string anchor)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(destinationRelativePath);
         ValidateStableId(anchor, nameof(anchor));
-        var target = $"Ежедневные/{date:yyyy-MM-dd}#^{anchor}";
-        return $"[[{target}|Перенесено на {date:yyyy-MM-dd}]]";
+        var normalizedPath = destinationRelativePath.Replace('\\', '/');
+        var target = RemoveMarkdownExtension(normalizedPath);
+        ValidateWikiTarget(target);
+        var destinationLabel = Path.GetFileNameWithoutExtension(normalizedPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(destinationLabel);
+        return $"[[{target}#^{anchor}|Перенесено на {destinationLabel}]]";
     }
 
     public static string MakeSafeFileName(string title)

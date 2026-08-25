@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Unlimotion.Notes.Daily;
 using Unlimotion.Notes.Markdown;
 using Unlimotion.Notes.Review;
 
@@ -9,6 +10,26 @@ namespace Unlimotion.Test;
 
 public class FeedReviewQueueTests
 {
+    [Test]
+    public async Task QueueUsesActiveDottedNamingAndSkipsOtherLayouts()
+    {
+        var queue = new FeedReviewQueue(
+            new MarkdownDocumentParser(),
+            new ReviewStateStore(),
+            DailyNoteNaming.Create("yyyy.MM.dd"));
+
+        var candidates = queue.Build(
+        [
+            ("Ежедневные/2026.08.23.md", "Текущая дневная запись\n"),
+            ("Ежедневные/2026-08-24.md", "Неподходящий формат\n")
+        ],
+        Envelope("device", 1));
+
+        await Assert.That(candidates).HasSingleItem();
+        await Assert.That(candidates[0].Day).IsEqualTo(new DateOnly(2026, 8, 23));
+        await Assert.That(candidates[0].Block.Raw).Contains("Текущая");
+    }
+
     [Test]
     public async Task Queue_IncludesNestedUnfinishedItemsButExcludesCompletedItems()
     {
