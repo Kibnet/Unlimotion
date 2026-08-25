@@ -6,6 +6,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Unlimotion.Notes.Daily;
 using Unlimotion.Notes.Identity;
 using Unlimotion.Notes.Markdown;
 using Unlimotion.Notes.Vault;
@@ -19,6 +20,172 @@ public class FeedFirstConnectBaselineTests
         WriteIndented = true,
         PropertyNameCaseInsensitive = true
     };
+
+    [Test]
+    public async Task EmptyStartSnapshotPersistsDurableBoundaryWithoutEmptyManifest()
+    {
+        using var directory = new TempNotesDirectory();
+        var vault = new FileNoteVault(directory.Path);
+        var service = new FirstConnectBootstrapService(vault, new MarkdownDocumentParser());
+
+        var result = await service.CreateOrResumeAsync(
+            "vault1",
+            "empty-bootstrap",
+            ["Ежедневные/2026-08-20.md"]);
+        var persistedArtifacts = await vault.ListFilesAsync(".unlimotion/review/bootstrap", "*.json");
+        var manifests = await vault.ListFilesAsync(".unlimotion/review/bootstrap", "manifest.json");
+        var safeComplete = await service.FindSafeCompleteAsync("vault1");
+
+        await Assert.That(result.Manifest.State).IsEqualTo("complete");
+        await Assert.That(result.Manifest.Files).IsEmpty();
+        await Assert.That(result.IndexedFiles).IsZero();
+        await Assert.That(result.PendingCheckboxes).IsZero();
+        await Assert.That(result.ReusedExisting).IsFalse();
+        await Assert.That(persistedArtifacts).HasSingleItem();
+        await Assert.That(persistedArtifacts.Single())
+            .StartsWith(".unlimotion/review/bootstrap/empty/vault1-");
+        await Assert.That((await vault.ReadAsync(persistedArtifacts.Single()))!.Text)
+            .Contains("\"dailyFileNameFormat\": \"yyyy-MM-dd\"");
+        await Assert.That(manifests).IsEmpty();
+        await Assert.That(safeComplete).IsNotNull();
+        await Assert.That(safeComplete!.ReusedExisting).IsTrue();
+    }
+
+    [Test]
+    public async Task EmptyFinalRescanPersistsBoundaryWithoutAnEmptyRecoveryManifest()
+    {
+        using var directory = new TempNotesDirectory();
+        var vault = new FileNoteVault(directory.Path);
+        var service = new FirstConnectBootstrapService(vault, new MarkdownDocumentParser());
+        var startDocument = new BootstrapStartDocument(
+            "Ежедневные/2026-08-20.md",
+            "frozen-revision",
+            "История до удаления\n");
+
+        var result = await service.CreateOrResumeAsync(
+            "vault1",
+            "deleted-before-bootstrap",
+            [startDocument]);
+        var manifests = await vault.ListFilesAsync(".unlimotion/review/bootstrap", "manifest.json");
+        var emptyMarkers = await vault.ListFilesAsync(".unlimotion/review/bootstrap/empty", "*.json");
+
+        await Assert.That(result.Manifest.State).IsEqualTo("complete");
+        await Assert.That(result.IndexedFiles).IsZero();
+        await Assert.That(result.Fingerprints).IsEmpty();
+        await Assert.That(manifests).IsEmpty();
+        await Assert.That(emptyMarkers).HasSingleItem();
+    }
+
+    [Test]
+    public async Task EmptyFirstConnectBoundaryKeepsLaterContentOutOfBaseline()
+    {
+        using var directory = new TempNotesDirectory();
+        var vault = new FileNoteVault(directory.Path);
+        var service = new FirstConnectBootstrapService(vault, new MarkdownDocumentParser());
+        const string dailyPath = "Ежедневные/2026-08-20.md";
+
+        var empty = await service.CreateOrResumeAsync("vault1", "empty-bootstrap", [dailyPath]);
+        await vault.CreateAsync(dailyPath, "Мысль после первого подключения\n");
+        var recovered = await service.FindSafeCompleteAsync("vault1");
+        var resumed = await service.CreateOrResumeAsync("vault1", "another-device", [dailyPath]);
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(empty.Fingerprints).IsEmpty();
+            await Assert.That(recovered).IsNotNull();
+            await Assert.That(recovered!.Fingerprints).IsEmpty();
+            await Assert.That(resumed.ReusedExisting).IsTrue();
+            await Assert.That(resumed.Fingerprints).IsEmpty();
+        }
+    }
+
+    [Test]
+    public async Task MissingLayoutInCurrentEmptyBoundaryKeepsLaterContentOutOfBaseline()
+    {
+        using var directory = new TempNotesDirectory();
+        var vault = new FileNoteVault(directory.Path);
+        var service = new FirstConnectBootstrapService(vault, new MarkdownDocumentParser());
+        const string dailyPath = "Ежедневные/2026-08-20.md";
+
+        await service.CreateOrResumeAsync("vault1", "empty-bootstrap", [dailyPath]);
+        var markerPath = (await vault.ListFilesAsync(".unlimotion/review/bootstrap/empty", "*.json"))
+            .Single();
+        var marker = await vault.ReadAsync(markerPath);
+        await vault.WriteAsync(
+            markerPath,
+            "{\"schemaVersion\":1,\"vaultId\":\"vault1\",\"operationId\":\"empty-bootstrap\",\"completedAt\":\"2026-08-25T00:00:00+00:00\"}\n",
+            marker!.Revision);
+        await vault.CreateAsync(dailyPath, "Мысль после первого подключения\n");
+
+        var recovered = await service.FindSafeCompleteAsync("vault1");
+        var resumed = await service.CreateOrResumeAsync("vault1", "another-device", [dailyPath]);
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(recovered).IsNotNull();
+            await Assert.That(recovered!.Fingerprints).IsEmpty();
+            await Assert.That(resumed.ReusedExisting).IsTrue();
+            await Assert.That(resumed.Fingerprints).IsEmpty();
+        }
+    }
+
+    [Test]
+    public async Task EmptyDefaultLayoutBoundaryDoesNotHideExistingDottedLayoutHistory()
+    {
+        using var directory = new TempNotesDirectory();
+        var vault = new FileNoteVault(directory.Path);
+        var parser = new MarkdownDocumentParser();
+        var defaultLayout = new FirstConnectBootstrapService(vault, parser);
+        const string defaultPath = "Ежедневные/2026-08-20.md";
+        const string dottedPath = "Ежедневные/2026.08.20.md";
+
+        await defaultLayout.CreateOrResumeAsync("vault1", "empty-default", [defaultPath]);
+        await vault.CreateAsync(dottedPath, "История точечного формата\n");
+
+        var dottedLayout = new FirstConnectBootstrapService(
+            vault,
+            parser,
+            DailyNoteNaming.Create("yyyy.MM.dd"));
+        var inheritedBoundary = await dottedLayout.FindSafeCompleteAsync("vault1");
+        var dottedBootstrap = await dottedLayout.CreateOrResumeAsync("vault1", "dotted-history", [dottedPath]);
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(inheritedBoundary).IsNull();
+            await Assert.That(dottedBootstrap.ReusedExisting).IsFalse();
+            await Assert.That(dottedBootstrap.IndexedFiles).IsEqualTo(1);
+            await Assert.That(dottedBootstrap.Fingerprints.Count(static value => value.BaselineKept)).IsEqualTo(1);
+        }
+    }
+
+    [Test]
+    public async Task DottedLayoutKeepsSchemaV1AndSkipsDefaultLayoutManifest()
+    {
+        using var directory = new TempNotesDirectory();
+        var vault = new FileNoteVault(directory.Path);
+        const string defaultPath = "Ежедневные/2026-08-20.md";
+        const string dottedPath = "Ежедневные/2026.08.20.md";
+        await vault.CreateAsync(defaultPath, "Дефисная история\n");
+        await vault.CreateAsync(dottedPath, "Точечная история\n");
+        var parser = new MarkdownDocumentParser();
+        var defaultLayout = new FirstConnectBootstrapService(vault, parser);
+        await defaultLayout.CreateOrResumeAsync("vault1", "legacy-layout", [defaultPath]);
+
+        var dottedLayout = new FirstConnectBootstrapService(
+            vault,
+            parser,
+            DailyNoteNaming.Create("yyyy.MM.dd"));
+        var noApplicableManifest = await dottedLayout.FindSafeCompleteAsync("vault1");
+        var dotted = await dottedLayout.CreateOrResumeAsync("vault1", "dotted-layout", [dottedPath]);
+        var applicable = await dottedLayout.FindSafeCompleteAsync("vault1");
+
+        await Assert.That(noApplicableManifest).IsNull();
+        await Assert.That(dotted.Manifest.SchemaVersion).IsEqualTo(1);
+        await Assert.That(dotted.Manifest.Files).HasSingleItem();
+        await Assert.That(dotted.Manifest.Files[0].RelativePath).IsEqualTo(dottedPath);
+        await Assert.That(applicable).IsNotNull();
+        await Assert.That(applicable!.Manifest.OperationId).IsEqualTo("dotted-layout");
+    }
 
     [Test]
     public async Task ExistingOrdinaryBlocksAreBaselineButUnfinishedCheckboxesStayPending()
@@ -227,6 +394,7 @@ public class FeedFirstConnectBaselineTests
     [Arguments("operation-directory")]
     [Arguments("non-daily-path")]
     [Arguments("noncanonical-batch-path")]
+    [Arguments("empty-file-list")]
     [Arguments("duplicate-file-entry")]
     [Arguments("baseline-count")]
     [Arguments("pending-count")]
@@ -267,6 +435,10 @@ public class FeedFirstConnectBaselineTests
                         BatchPath = ".unlimotion/review/bootstrap/strict-op/files/alias.json"
                     }]
                 };
+                await RewriteManifestAsync(vault, manifest);
+                break;
+            case "empty-file-list":
+                manifest = manifest with { Files = [] };
                 await RewriteManifestAsync(vault, manifest);
                 break;
             case "duplicate-file-entry":

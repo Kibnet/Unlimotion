@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Unlimotion.Notes.Daily;
 using Unlimotion.Notes.Markdown;
 using Unlimotion.Notes.Operations;
 using Unlimotion.Notes.Vault;
@@ -11,6 +13,140 @@ namespace Unlimotion.Test;
 
 public class FeedMoveToTodayTests
 {
+    [Test]
+    public async Task CorruptJournalDestinationOutsideDailyFolderFailsBeforeAnyVaultMutation()
+    {
+        using var directory = new TempNotesDirectory();
+        var vault = new FileNoteVault(directory.Path);
+        const string sourcePath = "Ежедневные/2026-08-23.md";
+        var source = await vault.CreateAsync(sourcePath, "Перенести\n");
+        var journal = new InMemoryFeedOperationJournal();
+        await journal.SaveAsync(new FeedOperationRecord(
+            1,
+            "vault1",
+            "move-corrupt-destination",
+            FeedOperationKind.MoveToToday,
+            FeedOperationState.Pending,
+            sourcePath,
+            ".unlimotion/daily-note-settings.json",
+            null,
+            source.Revision,
+            "unlimotion-move-move-corrupt-destination",
+            DateTimeOffset.UtcNow));
+        var service = new FeedMoveToTodayService(
+            vault,
+            new MarkdownDocumentParser(),
+            new MarkdownMutationService(new MarkdownDocumentParser()),
+            journal);
+        var request = new MoveToTodayRequest(
+            "vault1",
+            "move-corrupt-destination",
+            sourcePath,
+            source.Revision,
+            new MarkdownBlockSelection(0, 1),
+            new DateOnly(2026, 8, 24),
+            null,
+            null,
+            "session1");
+
+        var error = await NotesTestSupport.CaptureAsync<InvalidDataException>(() =>
+            service.MoveAsync(request));
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(error.Message).Contains("safe daily note path");
+            await Assert.That((await vault.ReadAsync(sourcePath))!.Text).IsEqualTo("Перенести\n");
+            await Assert.That(await vault.ReadAsync(".unlimotion/daily-note-settings.json")).IsNull();
+        }
+    }
+
+    [Test]
+    public async Task DottedNamingWritesDottedDestinationAndResumesItsJournalAfterLayoutSwitch()
+    {
+        using var directory = new TempNotesDirectory();
+        var vault = new FileNoteVault(directory.Path);
+        const string sourcePath = "Ежедневные/2026.08.23.md";
+        var source = await vault.CreateAsync(sourcePath, "Перенести в точечный день\n");
+        var parser = new MarkdownDocumentParser();
+        var journal = new InMemoryFeedOperationJournal();
+        var dottedNaming = DailyNoteNaming.Create("yyyy.MM.dd");
+        var dottedService = new FeedMoveToTodayService(
+            vault,
+            parser,
+            new MarkdownMutationService(parser),
+            journal,
+            naming: dottedNaming);
+        var request = new MoveToTodayRequest(
+            "vault1", "move-dotted", sourcePath, source.Revision,
+            new MarkdownBlockSelection(0, 1), new DateOnly(2026, 8, 24), null, null, "session1");
+
+        var first = await dottedService.MoveAsync(request);
+        var pending = (await journal.ListPendingAsync("vault1")).Single();
+        var switchedService = new FeedMoveToTodayService(
+            vault,
+            parser,
+            new MarkdownMutationService(parser),
+            journal,
+            naming: DailyNoteNaming.Default);
+        var resumed = await switchedService.ResumeAsync(pending);
+        var sourceAfterMove = (await vault.ReadAsync(sourcePath))!.Text;
+
+        await Assert.That(first.DestinationPath).IsEqualTo("Ежедневные/2026.08.24.md");
+        await Assert.That(resumed.DestinationPath).IsEqualTo(first.DestinationPath);
+        await Assert.That(sourceAfterMove).Contains("[[Ежедневные/2026.08.24#^unlimotion-move-move-dotted|");
+        await Assert.That(sourceAfterMove).Contains("Перенесено на 2026.08.24");
+        await Assert.That(await vault.ReadAsync("Ежедневные/2026-08-24.md")).IsNull();
+    }
+
+    [Test]
+    public async Task PendingDottedJournalKeepsItsOriginalLinkWhenCurrentLayoutHasChanged()
+    {
+        using var directory = new TempNotesDirectory();
+        var vault = new FileNoteVault(directory.Path);
+        const string sourcePath = "Ежедневные/2026.08.23.md";
+        const string originalText = "Перенести после journal checkpoint\n";
+        var original = await vault.CreateAsync(sourcePath, originalText);
+        var parser = new MarkdownDocumentParser();
+        var journal = new InMemoryFeedOperationJournal();
+        var dottedService = new FeedMoveToTodayService(
+            vault,
+            parser,
+            new MarkdownMutationService(parser),
+            journal,
+            naming: DailyNoteNaming.Create("yyyy.MM.dd"));
+        var initialRequest = new MoveToTodayRequest(
+            "vault1", "move-pending-dotted", sourcePath, original.Revision,
+            new MarkdownBlockSelection(0, 1), new DateOnly(2026, 8, 24), null, null, "session1");
+        var completed = await dottedService.MoveAsync(initialRequest);
+        var movedSource = await vault.ReadAsync(sourcePath);
+        var restoredSource = await vault.WriteAsync(sourcePath, originalText, movedSource!.Revision);
+        var stored = (await journal.LoadAsync("vault1", "move-pending-dotted"))!;
+        await journal.SaveAsync(stored with
+        {
+            State = FeedOperationState.Pending,
+            SourceRevision = null,
+            DestinationRevision = null,
+            RecoveryDescriptor = stored.RecoveryDescriptor! with
+            {
+                ExpectedSourceRevision = restoredSource.Revision
+            }
+        });
+
+        var afterSwitch = new FeedMoveToTodayService(
+            vault,
+            parser,
+            new MarkdownMutationService(parser),
+            journal,
+            naming: DailyNoteNaming.Default);
+        var resumed = await afterSwitch.ResumeAsync((await journal.ListPendingAsync("vault1")).Single());
+        var sourceAfterResume = (await vault.ReadAsync(sourcePath))!.Text;
+
+        await Assert.That(resumed.DestinationPath).IsEqualTo(completed.DestinationPath);
+        await Assert.That(sourceAfterResume).Contains("[[Ежедневные/2026.08.24#^unlimotion-move-move-pending-dotted|");
+        await Assert.That(sourceAfterResume).Contains("Перенесено на 2026.08.24");
+        await Assert.That(await vault.ReadAsync("Ежедневные/2026-08-24.md")).IsNull();
+    }
+
     [Test]
     public async Task MoveIsDestinationFirstLeavesStableSourceLinkAndAnchor()
     {
@@ -135,7 +271,9 @@ public class FeedMoveToTodayTests
         var vault = new FileNoteVault(directory.Path);
         var destination = await vault.CreateAsync("Ежедневные/2026-08-24.md", "Перенести\n^unlimotion-move-move1\n");
         var original = await vault.CreateAsync("Ежедневные/2026-08-23.md", "Перенести\n");
-        var expectedLink = FeedLinkSerializer.MovedBlock(new DateOnly(2026, 8, 24), "unlimotion-move-move1") + "\n";
+        var expectedLink = FeedLinkSerializer.MovedBlock(
+            "Ежедневные/2026-08-24.md",
+            "unlimotion-move-move1") + "\n";
         await vault.WriteAsync("Ежедневные/2026-08-23.md", expectedLink, original.Revision);
         var journal = new InMemoryFeedOperationJournal();
         await journal.SaveAsync(new FeedOperationRecord(

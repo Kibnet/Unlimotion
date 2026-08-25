@@ -1,7 +1,7 @@
-using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Unlimotion.Notes.Daily;
 using Unlimotion.Notes.Markdown;
 using Unlimotion.Notes.Review;
 using Unlimotion.Notes.Vault;
@@ -55,11 +55,19 @@ public sealed record BootstrapResult(
     int PendingCheckboxes,
     bool ReusedExisting);
 
-public sealed class FirstConnectBootstrapService(INoteVault vault, IMarkdownDocumentParser parser)
+public sealed class FirstConnectBootstrapService(
+    INoteVault vault,
+    IMarkdownDocumentParser parser,
+    DailyNoteNaming? naming = null)
 {
     private const string BootstrapRoot = ".unlimotion/review/bootstrap";
+    // An empty first connection is still a durable baseline boundary: content written after it
+    // must never be reclassified as pre-existing history on a later reconnect. This is kept
+    // separate from operation manifests so we never write an empty bootstrap manifest.
+    private const string EmptySnapshotMarkerRoot = BootstrapRoot + "/empty";
     private const string OrphanRecoveryMode = "orphan-safe-intersection";
     private const string FinalRescanRecoveryMode = "final-rescan-reconciliation";
+    private readonly DailyNoteNaming dailyNaming = naming ?? DailyNoteNaming.Default;
 
     private sealed record CapturedBootstrapFile(
         BootstrapFileEntry Entry,
@@ -76,6 +84,13 @@ public sealed class FirstConnectBootstrapService(INoteVault vault, IMarkdownDocu
         IReadOnlyList<PreparedBootstrapFile> Files,
         string? RecoveryOfOperationId = null,
         string? RecoveryMode = null);
+
+    private sealed record EmptySnapshotMarker(
+        int SchemaVersion,
+        string VaultId,
+        string DailyFileNameFormat,
+        string OperationId,
+        DateTimeOffset CompletedAt);
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
@@ -127,6 +142,13 @@ public sealed class FirstConnectBootstrapService(INoteVault vault, IMarkdownDocu
     {
         ValidateId(vaultId, nameof(vaultId));
         ValidateId(operationId, nameof(operationId));
+        var existingEmpty = await TryReadEmptySnapshotMarkerAsync(vaultId, cancellationToken)
+            .ConfigureAwait(false);
+        if (existingEmpty is not null)
+        {
+            return existingEmpty;
+        }
+
         var operationRoot = OperationRoot(operationId);
         var completePath = $"{operationRoot}/manifest.json";
         BootstrapResult? existingComplete = null;
@@ -168,6 +190,12 @@ public sealed class FirstConnectBootstrapService(INoteVault vault, IMarkdownDocu
         }
 
         var prepared = await captureStartSnapshot(cancellationToken).ConfigureAwait(false);
+        if (prepared.Count == 0)
+        {
+            return await PersistEmptySnapshotMarkerAsync(vaultId, operationId, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
         var plan = await SelectOperationPlanAsync(
                 vaultId,
                 operationId,
@@ -225,6 +253,12 @@ public sealed class FirstConnectBootstrapService(INoteVault vault, IMarkdownDocu
             return await CompleteStartedOperationAsync(resumed, cancellationToken).ConfigureAwait(false);
         }
 
+        if (plan.Files.Count == 0)
+        {
+            return await PersistEmptySnapshotMarkerAsync(vaultId, plan.OperationId, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
         var batches = await StagePreparedFilesAsync(plan.OperationId, plan.Files, cancellationToken).ConfigureAwait(false);
         var started = new BootstrapManifest(
             1,
@@ -259,6 +293,15 @@ public sealed class FirstConnectBootstrapService(INoteVault vault, IMarkdownDocu
         BootstrapManifest started,
         CancellationToken cancellationToken)
     {
+        if (started.Files.Count == 0)
+        {
+            return await PersistEmptySnapshotMarkerAsync(
+                    started.VaultId,
+                    started.OperationId,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+
         var batches = await ReadBatchesAsync(started, cancellationToken).ConfigureAwait(false);
         var reconciliation = await CreateFinalRescanPlanAsync(started, batches, cancellationToken)
             .ConfigureAwait(false);
@@ -540,6 +583,12 @@ public sealed class FirstConnectBootstrapService(INoteVault vault, IMarkdownDocu
         CancellationToken cancellationToken = default)
     {
         ValidateId(vaultId, nameof(vaultId));
+        var empty = await TryReadEmptySnapshotMarkerAsync(vaultId, cancellationToken).ConfigureAwait(false);
+        if (empty is not null)
+        {
+            return empty;
+        }
+
         var manifestPaths = await vault.ListFilesAsync(
                 BootstrapRoot,
                 "manifest.json",
@@ -571,6 +620,90 @@ public sealed class FirstConnectBootstrapService(INoteVault vault, IMarkdownDocu
             1 => valid[0] with { ReusedExisting = true },
             _ => IntersectConcurrent(valid)
         };
+    }
+
+    private async Task<BootstrapResult?> TryReadEmptySnapshotMarkerAsync(
+        string vaultId,
+        CancellationToken cancellationToken)
+    {
+        var document = await vault.ReadAsync(EmptySnapshotMarkerPath(vaultId), cancellationToken)
+            .ConfigureAwait(false);
+        if (document is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            var marker = DeserializeEmptySnapshotMarker(document.Text);
+            if (marker.SchemaVersion != 1 ||
+                !string.Equals(marker.VaultId, vaultId, StringComparison.Ordinal) ||
+                !IsValidId(marker.OperationId) ||
+                !DailyNoteNaming.TryCreate(marker.DailyFileNameFormat, out _, out _))
+            {
+                throw new InvalidDataException("The empty bootstrap marker is invalid.");
+            }
+
+            // An empty boundary belongs to the active filename layout. A vault can have had an
+            // empty default-layout connection before the user selects a layout that already has
+            // history, and that history must still receive its own first-connect baseline.
+            if (!string.Equals(marker.DailyFileNameFormat, dailyNaming.FileNameFormat, StringComparison.Ordinal))
+            {
+                return null;
+            }
+
+            return CreateEmptySnapshotResult(
+                vaultId,
+                marker.OperationId,
+                marker.CompletedAt,
+                reusedExisting: true);
+        }
+        catch (InvalidDataException)
+        {
+            // The marker path is keyed by this vault identity and active filename layout. If it
+            // was partially synced or damaged, treating it as a conservative empty boundary is
+            // safe: old content may be shown for review, but no post-connect content can be
+            // silently baselined.
+            return CreateEmptySnapshotResult(
+                vaultId,
+                "empty-safe-" + Hash(vaultId)[..40],
+                DateTimeOffset.UtcNow,
+                reusedExisting: true);
+        }
+    }
+
+    private async Task<BootstrapResult> PersistEmptySnapshotMarkerAsync(
+        string vaultId,
+        string operationId,
+        CancellationToken cancellationToken)
+    {
+        var completedAt = DateTimeOffset.UtcNow;
+        var marker = new EmptySnapshotMarker(
+            1,
+            vaultId,
+            dailyNaming.FileNameFormat,
+            operationId,
+            completedAt);
+        try
+        {
+            await vault.CreateAsync(
+                    EmptySnapshotMarkerPath(vaultId),
+                    Serialize(marker),
+                    cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+            return CreateEmptySnapshotResult(vaultId, operationId, completedAt);
+        }
+        catch (VaultRevisionConflictException)
+        {
+            var concurrent = await TryReadEmptySnapshotMarkerAsync(vaultId, cancellationToken)
+                .ConfigureAwait(false);
+            if (concurrent is not null)
+            {
+                return concurrent;
+            }
+
+            throw;
+        }
     }
 
     private async Task<IReadOnlyList<PreparedBootstrapFile>> CaptureStartSnapshotAsync(
@@ -793,6 +926,28 @@ public sealed class FirstConnectBootstrapService(INoteVault vault, IMarkdownDocu
             reusedExisting);
     }
 
+    private static BootstrapResult CreateEmptySnapshotResult(
+        string vaultId,
+        string operationId,
+        DateTimeOffset? completedAt = null,
+        bool reusedExisting = false)
+    {
+        var completion = completedAt ?? DateTimeOffset.UtcNow;
+        return new BootstrapResult(
+            new BootstrapManifest(
+                1,
+                vaultId,
+                operationId,
+                "complete",
+                completion,
+                completion,
+                []),
+            [],
+            0,
+            0,
+            reusedExisting);
+    }
+
     private static BootstrapManifest DeserializeManifest(string json)
     {
         try
@@ -840,7 +995,23 @@ public sealed class FirstConnectBootstrapService(INoteVault vault, IMarkdownDocu
 
     private static string Serialize(BootstrapManifest manifest) => JsonSerializer.Serialize(manifest, JsonOptions) + "\n";
 
-    private static void ValidateCompleteManifest(
+    private static string Serialize(EmptySnapshotMarker marker) =>
+        JsonSerializer.Serialize(marker, JsonOptions) + "\n";
+
+    private static EmptySnapshotMarker DeserializeEmptySnapshotMarker(string json)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<EmptySnapshotMarker>(json, JsonOptions)
+                ?? throw new InvalidDataException("The empty bootstrap marker is empty.");
+        }
+        catch (Exception exception) when (exception is JsonException or NotSupportedException)
+        {
+            throw new InvalidDataException("The empty bootstrap marker is not valid JSON.", exception);
+        }
+    }
+
+    private void ValidateCompleteManifest(
         BootstrapManifest manifest,
         string manifestPath,
         string vaultId)
@@ -852,7 +1023,7 @@ public sealed class FirstConnectBootstrapService(INoteVault vault, IMarkdownDocu
         }
     }
 
-    private static void ValidateStartedManifest(
+    private void ValidateStartedManifest(
         BootstrapManifest manifest,
         string manifestPath,
         string vaultId,
@@ -865,7 +1036,7 @@ public sealed class FirstConnectBootstrapService(INoteVault vault, IMarkdownDocu
         }
     }
 
-    private static void ValidateManifestCore(
+    private void ValidateManifestCore(
         BootstrapManifest manifest,
         string manifestPath,
         string vaultId,
@@ -910,9 +1081,9 @@ public sealed class FirstConnectBootstrapService(INoteVault vault, IMarkdownDocu
             throw new InvalidDataException("Bootstrap recovery metadata is invalid.");
         }
 
-        if (manifest.Files is null)
+        if (manifest.Files is null || manifest.Files.Count == 0)
         {
-            throw new InvalidDataException("Bootstrap manifest does not contain a file list.");
+            throw new InvalidDataException("Bootstrap manifest must contain at least one daily file.");
         }
 
         var relativePaths = new HashSet<string>(StringComparer.Ordinal);
@@ -987,7 +1158,7 @@ public sealed class FirstConnectBootstrapService(INoteVault vault, IMarkdownDocu
         }
     }
 
-    private static string NormalizeDailyRelativePath(string value, string parameterName)
+    private string NormalizeDailyRelativePath(string value, string parameterName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(value, parameterName);
         var normalized = value.Replace('\\', '/');
@@ -999,27 +1170,10 @@ public sealed class FirstConnectBootstrapService(INoteVault vault, IMarkdownDocu
         return normalized;
     }
 
-    private static bool IsCanonicalDailyRelativePath(string? value)
-    {
-        const string prefix = "Ежедневные/";
-        if (string.IsNullOrEmpty(value)
-            || value.Contains('\\', StringComparison.Ordinal)
-            || !value.StartsWith(prefix, StringComparison.Ordinal)
-            || value.Count(static character => character == '/') != 1)
-        {
-            return false;
-        }
-
-        var fileName = value[prefix.Length..];
-        return fileName.Length == 13
-            && fileName.EndsWith(".md", StringComparison.Ordinal)
-            && DateOnly.TryParseExact(
-                fileName[..10],
-                "yyyy-MM-dd",
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.None,
-                out _);
-    }
+    private bool IsCanonicalDailyRelativePath(string? value) =>
+        value is not null
+        && !value.Contains('\\', StringComparison.Ordinal)
+        && dailyNaming.TryParseRelativePath(value, out _);
 
     private static bool IsContentKind(MarkdownBlockKind value) => value is MarkdownBlockKind.Heading
         or MarkdownBlockKind.Paragraph
@@ -1034,6 +1188,9 @@ public sealed class FirstConnectBootstrapService(INoteVault vault, IMarkdownDocu
         && value.All(static character => character is >= '0' and <= '9' or >= 'a' and <= 'f');
 
     private static string OperationRoot(string operationId) => $"{BootstrapRoot}/{operationId}";
+
+    private string EmptySnapshotMarkerPath(string vaultId) =>
+        $"{EmptySnapshotMarkerRoot}/{vaultId}-{Hash(dailyNaming.FileNameFormat)[..40]}.json";
 
     private static string BatchPath(string operationId, string relativePath) =>
         $"{OperationRoot(operationId)}/files/{Hash(relativePath)}.json";

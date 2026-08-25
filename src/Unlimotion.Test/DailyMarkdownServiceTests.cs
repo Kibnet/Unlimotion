@@ -81,6 +81,34 @@ public class DailyMarkdownServiceTests
         await Assert.That(second.Text.Contains("Вторая мысль", StringComparison.Ordinal)).IsTrue();
     }
 
+    [Test]
+    public async Task DottedDailyFilesAreListedAndCaptureReusesTheirActivePath()
+    {
+        using var directory = new TempNotesDirectory();
+        var vault = new FileNoteVault(directory.Path);
+        await vault.CreateAsync("Ежедневные/2026.08.25.md", "Существующая запись\n");
+        await vault.CreateAsync("Ежедневные/2026-08-25.md", "Другой layout\n");
+        var parser = new MarkdownDocumentParser();
+        var service = new DailyNoteService(
+            vault,
+            parser,
+            new MarkdownMutationService(parser),
+            DailyNoteNaming.Create("yyyy.MM.dd"));
+
+        var opened = await service.OpenDayAsync(new DateOnly(2026, 8, 25));
+        var days = await service.ListDaysAsync();
+        var appended = await service.AppendCaptureAsync(new DateOnly(2026, 8, 25), "Новая мысль");
+
+        await Assert.That(opened).IsNotNull();
+        await Assert.That(days.Count).IsEqualTo(1);
+        await Assert.That(days[0].RelativePath).IsEqualTo("Ежедневные/2026.08.25.md");
+        await Assert.That(appended.RelativePath.Replace('\\', '/')).IsEqualTo("Ежедневные/2026.08.25.md");
+        await Assert.That(appended.Text.Contains("Существующая запись", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(appended.Text.Contains("Новая мысль", StringComparison.Ordinal)).IsTrue();
+        await Assert.That((await vault.ReadAsync("Ежедневные/2026-08-25.md"))!.Text)
+            .IsEqualTo("Другой layout\n");
+    }
+
     private sealed class CountingNoteVault(INoteVault inner) : INoteVault
     {
         private int readCount;
