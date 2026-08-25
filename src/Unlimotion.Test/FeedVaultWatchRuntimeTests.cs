@@ -136,7 +136,7 @@ public sealed class FeedVaultWatchRuntimeTests
     }
 
     [Test]
-    public async Task AreasAndReviewSidecarsRouteToSeparateRefreshCallbacks()
+    public async Task AreasReviewAndDailySettingsSidecarsRouteToSeparateRefreshCallbacks()
     {
         using var directory = new TempNotesDirectory();
         using var recovery = new TempNotesDirectory();
@@ -158,15 +158,23 @@ public sealed class FeedVaultWatchRuntimeTests
         sidecarSource.Emit(new VaultRawChange(VaultRawChangeKind.Changed, areasPath));
         var reviewPath = await WriteExternalAsync(vault, ".unlimotion/review/device/events.jsonl", "{}\n");
         sidecarSource.Emit(new VaultRawChange(VaultRawChangeKind.Changed, reviewPath));
+        var dailySettingsPath = await WriteExternalAsync(
+            vault,
+            ".unlimotion/daily-note-settings.json",
+            "{\"schemaVersion\":1,\"dailyFileNameFormat\":\"yyyy.MM.dd\"}\n");
+        sidecarSource.Emit(new VaultRawChange(VaultRawChangeKind.Changed, dailySettingsPath));
 
         var areas = await sink.WaitForAreaRefreshAsync();
         var review = await sink.WaitForReviewRefreshAsync();
+        var dailySettings = await sink.WaitForDailyNoteSettingsReloadAsync();
         using (Assert.Multiple())
         {
             await Assert.That(areas.SidecarArtifact).IsEqualTo(SidecarArtifactKind.Areas);
             await Assert.That(areas.RelativePath).IsEqualTo(".unlimotion/areas.json");
             await Assert.That(review.SidecarArtifact).IsEqualTo(SidecarArtifactKind.Review);
             await Assert.That(review.RelativePath).IsEqualTo(".unlimotion/review/device/events.jsonl");
+            await Assert.That(dailySettings.SidecarArtifact).IsEqualTo(SidecarArtifactKind.DailyNoteSettings);
+            await Assert.That(dailySettings.RelativePath).IsEqualTo(".unlimotion/daily-note-settings.json");
             await Assert.That(sink.IdentitySignals).IsEmpty();
         }
     }
@@ -271,6 +279,7 @@ public sealed class FeedVaultWatchRuntimeTests
         sidecarSource.Emit(new VaultRawChange(VaultRawChangeKind.RescanRequired, directory.Path));
         await sink.WaitForAreaRefreshAsync();
         await sink.WaitForReviewRefreshAsync();
+        await sink.WaitForDailyNoteSettingsReloadAsync();
 
         var areasPath = await WriteExternalAsync(vault, ".unlimotion/areas.json", "{\"schemaVersion\":1,\"areas\":[]}\n");
         sidecarSource.Emit(new VaultRawChange(VaultRawChangeKind.Changed, areasPath));
@@ -282,6 +291,7 @@ public sealed class FeedVaultWatchRuntimeTests
             await Assert.That(runtime.IsActive).IsTrue();
             await Assert.That(sink.IdentitySignals).IsEmpty();
             await Assert.That(sink.ReviewRefreshes.Count).IsEqualTo(1);
+            await Assert.That(sink.DailyNoteSettingsReloads.Count).IsEqualTo(1);
         }
     }
 
@@ -471,10 +481,12 @@ internal sealed class RecordingFeedVaultWatchRuntimeSink : IFeedVaultWatchRuntim
 
     public ConcurrentQueue<VaultWatchChange> ReviewRefreshes { get; } = new();
 
+    public ConcurrentQueue<VaultWatchChange> DailyNoteSettingsReloads { get; } = new();
+
     public ConcurrentQueue<FeedVaultIdentityFreezeSignal> IdentitySignals { get; } = new();
 
     public int TotalCallbackCount =>
-        Reloads.Count + Conflicts.Count + AreaRefreshes.Count + ReviewRefreshes.Count + IdentitySignals.Count;
+        Reloads.Count + Conflicts.Count + AreaRefreshes.Count + ReviewRefreshes.Count + DailyNoteSettingsReloads.Count + IdentitySignals.Count;
 
     public ValueTask ReloadMarkdownAsync(DocumentReloadSignal signal, CancellationToken cancellationToken)
     {
@@ -500,6 +512,12 @@ internal sealed class RecordingFeedVaultWatchRuntimeSink : IFeedVaultWatchRuntim
         return ValueTask.CompletedTask;
     }
 
+    public ValueTask ReloadDailyNoteSettingsAsync(VaultWatchChange change, CancellationToken cancellationToken)
+    {
+        DailyNoteSettingsReloads.Enqueue(change);
+        return ValueTask.CompletedTask;
+    }
+
     public ValueTask FreezeForIdentityChangeAsync(
         FeedVaultIdentityFreezeSignal signal,
         CancellationToken cancellationToken)
@@ -515,6 +533,8 @@ internal sealed class RecordingFeedVaultWatchRuntimeSink : IFeedVaultWatchRuntim
     public Task<VaultWatchChange> WaitForAreaRefreshAsync() => WaitForAsync(AreaRefreshes);
 
     public Task<VaultWatchChange> WaitForReviewRefreshAsync() => WaitForAsync(ReviewRefreshes);
+
+    public Task<VaultWatchChange> WaitForDailyNoteSettingsReloadAsync() => WaitForAsync(DailyNoteSettingsReloads);
 
     public Task<FeedVaultIdentityFreezeSignal> WaitForIdentitySignalAsync() => WaitForAsync(IdentitySignals);
 

@@ -170,15 +170,25 @@ public sealed class AreaManagementViewModel : ReactiveObject, IDisposable
         private set => this.RaiseAndSetIfChanged(ref hasExternalConflict, value);
     }
 
-    public async Task LoadAsync()
+    public Task LoadAsync() => LoadAsync(CancellationToken.None);
+
+    /// <summary>
+    /// Loads the portable area catalog with a caller-scoped cancellation token.
+    /// This keeps an uncommitted Feed candidate interruptible when another root
+    /// selection supersedes it.
+    /// </summary>
+    public async Task LoadAsync(CancellationToken cancellationToken)
     {
         ThrowIfDisposed();
-        await mutationGate.WaitAsync(lifetime.Token);
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            lifetime.Token,
+            cancellationToken);
+        await mutationGate.WaitAsync(cancellation.Token);
         try
         {
             IsBusy = true;
             ErrorMessage = null;
-            var loaded = await store.LoadAsync(lifetime.Token);
+            var loaded = await store.LoadAsync(cancellation.Token);
             if (snapshot is not null
                 && IsDraftDirty
                 && !string.Equals(loaded.Revision, snapshot.Revision, StringComparison.Ordinal))

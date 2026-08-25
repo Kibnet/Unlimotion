@@ -1,3 +1,4 @@
+using Unlimotion.Notes.Daily;
 using Unlimotion.Notes.Markdown;
 
 namespace Unlimotion.Notes.Review;
@@ -17,8 +18,13 @@ public sealed record FeedReviewCandidate(
     FeedReviewPriority Priority,
     string? DeferredFromSessionId);
 
-public sealed class FeedReviewQueue(IMarkdownDocumentParser parser, ReviewStateStore state)
+public sealed class FeedReviewQueue(
+    IMarkdownDocumentParser parser,
+    ReviewStateStore state,
+    DailyNoteNaming? naming = null)
 {
+    private readonly DailyNoteNaming dailyNaming = naming ?? DailyNoteNaming.Default;
+
     public IReadOnlyList<FeedReviewCandidate> Build(
         IEnumerable<(string RelativePath, string Raw)> dailyFiles,
         CausalEnvelope currentSessionCausality)
@@ -26,7 +32,11 @@ public sealed class FeedReviewQueue(IMarkdownDocumentParser parser, ReviewStateS
         var unresolved = new List<(BlockLocator Locator, MarkdownBlock Block, DateOnly Day)>();
         foreach (var (relativePath, raw) in dailyFiles)
         {
-            var day = ParseDailyDate(relativePath);
+            if (!dailyNaming.TryParseRelativePath(relativePath, out var day))
+            {
+                continue;
+            }
+
             var document = parser.Parse(raw);
             var occurrences = new Dictionary<string, int>(StringComparer.Ordinal);
             var contentBlocks = document.Blocks.Where(static block => block.IsContent).ToArray();
@@ -128,9 +138,4 @@ public sealed class FeedReviewQueue(IMarkdownDocumentParser parser, ReviewStateS
             blockIndex + 1 < contentBlocks.Count ? contentBlocks[blockIndex + 1].ContentHash : null);
     }
 
-    private static DateOnly ParseDailyDate(string relativePath)
-    {
-        var fileName = Path.GetFileNameWithoutExtension(relativePath);
-        return DateOnly.TryParseExact(fileName, "yyyy-MM-dd", out var result) ? result : DateOnly.MinValue;
-    }
 }

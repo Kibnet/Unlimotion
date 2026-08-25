@@ -1,4 +1,3 @@
-using System.Globalization;
 using Unlimotion.Notes.Markdown;
 using Unlimotion.Notes.Vault;
 
@@ -15,15 +14,33 @@ public sealed record DailyNoteSummary(
 
 public sealed record DailyNotePath(DateOnly Date, string RelativePath);
 
-public sealed class DailyNoteService(
-    INoteVault vault,
-    IMarkdownDocumentParser parser,
-    MarkdownMutationService mutations)
+public sealed class DailyNoteService
 {
-    public static string GetRelativePath(DateOnly date) => $"Ежедневные/{date:yyyy-MM-dd}.md";
+    private readonly INoteVault vault;
+    private readonly IMarkdownDocumentParser parser;
+    private readonly MarkdownMutationService mutations;
+
+    public DailyNoteService(
+        INoteVault vault,
+        IMarkdownDocumentParser parser,
+        MarkdownMutationService mutations,
+        DailyNoteNaming? naming = null)
+    {
+        this.vault = vault;
+        this.parser = parser;
+        this.mutations = mutations;
+        Naming = naming ?? DailyNoteNaming.Default;
+    }
+
+    public DailyNoteNaming Naming { get; }
+
+    /// <summary>
+    /// Legacy default path helper. Consumers with an active vault naming should use <see cref="DailyNoteNaming.GetRelativePath"/>.
+    /// </summary>
+    public static string GetRelativePath(DateOnly date) => DailyNoteNaming.Default.GetRelativePath(date);
 
     public Task<VaultDocument?> OpenDayAsync(DateOnly date, CancellationToken cancellationToken = default) =>
-        vault.ReadAsync(GetRelativePath(date), cancellationToken);
+        vault.ReadAsync(Naming.GetRelativePath(date), cancellationToken);
 
     public async Task<IReadOnlyList<DailyNoteSummary>> ListDaysAsync(CancellationToken cancellationToken = default)
     {
@@ -39,8 +56,7 @@ public sealed class DailyNoteService(
         {
             cancellationToken.ThrowIfCancellationRequested();
             var normalized = path.Replace('\\', '/');
-            if (!normalized.StartsWith("Ежедневные/", StringComparison.OrdinalIgnoreCase)
-                || !DateOnly.TryParseExact(Path.GetFileNameWithoutExtension(normalized), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var day))
+            if (!Naming.TryParseRelativePath(normalized, out var day))
             {
                 continue;
             }
@@ -95,7 +111,7 @@ public sealed class DailyNoteService(
         string? expectedRevision = null,
         CancellationToken cancellationToken = default)
     {
-        var path = GetRelativePath(date);
+        var path = Naming.GetRelativePath(date);
         var existing = await vault.ReadAsync(path, cancellationToken).ConfigureAwait(false);
         if (existing is not null && expectedRevision is not null && !string.Equals(existing.Revision, expectedRevision, StringComparison.Ordinal))
         {

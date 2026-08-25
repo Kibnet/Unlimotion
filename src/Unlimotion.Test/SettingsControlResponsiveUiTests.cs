@@ -692,6 +692,151 @@ public class SettingsControlResponsiveUiTests
     }
 
     [Test]
+    public async Task Daily_note_filename_format_has_supported_unsupported_and_applying_states()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var configuration = new ConfigurationBuilder()
+                .AddInMemoryCollection()
+                .Build();
+            const string root = "DailyFormatVault";
+            var completion = new TaskCompletionSource<NoteDailyFileNameFormatApplyResult>();
+            var externallyAppliedState = new NoteDailyFileNameFormatState(
+                "dd.MM.yyyy",
+                root,
+                "revision-external",
+                IsExternalChange: true);
+            var settings = new SettingsViewModel(
+                configuration,
+                isExternalNoteVaultSupported: true)
+            {
+                NoteVaultRootPath = root
+            };
+            settings.ConfigureNoteDailyFileNameFormatBridge(
+                format => format switch
+                {
+                    "yyyy.MM.dd" => new NoteDailyFileNameFormatValidation(
+                        true,
+                        "Ежедневные/2026.08.25.md",
+                        null),
+                    "yyyy-MM-dd" => new NoteDailyFileNameFormatValidation(
+                        true,
+                        "Ежедневные/2026-08-25.md",
+                        null),
+                    "dd.MM.yyyy" => new NoteDailyFileNameFormatValidation(
+                        true,
+                        "Ежедневные/25.08.2026.md",
+                        null),
+                    _ => new NoteDailyFileNameFormatValidation(false, null, "Invalid format.")
+                },
+                _ => completion.Task,
+                () => Task.FromResult(externallyAppliedState));
+            settings.SetNoteDailyFileNameFormatFeedAvailability(
+                isVaultInitialized: true,
+                isBusyOrRecovering: false,
+                activeFeedVaultRootPath: root);
+            var applyCommand = new TestAsyncCommand(settings.ApplyNoteDailyFileNameFormatAsync);
+            settings.ApplyNoteDailyFileNameFormatCommand = applyCommand;
+            var reloadCommand = new TestAsyncCommand(settings.ReloadExternalNoteDailyFileNameFormatAsync);
+            settings.ReloadExternalNoteDailyFileNameFormatCommand = reloadCommand;
+
+            var view = new SettingsControl { DataContext = settings };
+            Window? window = null;
+            try
+            {
+                window = CreateWindow(view, 720, 1000);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var formatInput = FindControlByAutomationId<TextBox>(view, "NoteDailyFileNameFormatTextBox");
+                var preview = FindControlByAutomationId<Label>(view, "NoteDailyFileNameFormatPreviewText");
+                var validation = FindControlByAutomationId<Label>(view, "NoteDailyFileNameFormatValidationText");
+                var apply = FindControlByAutomationId<Button>(view, "ApplyNoteDailyFileNameFormatButton");
+                var status = FindControlByAutomationId<Label>(view, "NoteDailyFileNameFormatStatusText");
+                var reload = FindControlByAutomationId<Button>(view, "ReloadExternalNoteDailyFileNameFormatButton");
+                var rootInput = FindControlByAutomationId<TextBox>(view, "NoteVaultRootPathTextBox");
+                var feedEnabled = FindControlByAutomationId<CheckBox>(view, "FeedEnabledCheckBox");
+                var boundary = FindControlByAutomationId<TimePicker>(view, "NoteDayBoundaryTimePicker");
+
+                using (Assert.Multiple())
+                {
+                    await Assert.That(formatInput.IsVisible).IsTrue();
+                    await Assert.That(formatInput.IsReadOnly).IsFalse();
+                    await Assert.That(preview.Content?.ToString()).Contains("Ежедневные/2026-08-25.md");
+                    await Assert.That(validation.IsVisible).IsFalse();
+                    await Assert.That(apply.IsEnabled).IsFalse();
+                    await Assert.That(status.IsVisible).IsFalse();
+                    await Assert.That(reload.IsVisible).IsFalse();
+                }
+
+                formatInput.Text = "yyyy/MM/dd";
+                Dispatcher.UIThread.RunJobs();
+                await Assert.That(validation.IsVisible).IsTrue();
+                await Assert.That(apply.IsEnabled).IsFalse();
+
+                formatInput.Text = "yyyy.MM.dd";
+                Dispatcher.UIThread.RunJobs();
+                await Assert.That(validation.IsVisible).IsFalse();
+                await Assert.That(preview.Content?.ToString()).Contains("Ежедневные/2026.08.25.md");
+                await Assert.That(apply.IsEnabled).IsTrue();
+
+                apply.Command!.Execute(null);
+                await TestHelpers.WaitUntilAsync(
+                    () => settings.IsApplyingNoteDailyFileNameFormat,
+                    TimeSpan.FromSeconds(2));
+                Dispatcher.UIThread.RunJobs();
+
+                using (Assert.Multiple())
+                {
+                    await Assert.That(formatInput.IsReadOnly).IsTrue();
+                    await Assert.That(apply.IsEnabled).IsFalse();
+                    await Assert.That(rootInput.IsReadOnly).IsTrue();
+                    await Assert.That(feedEnabled.IsEnabled).IsFalse();
+                    await Assert.That(boundary.IsEnabled).IsFalse();
+                    await Assert.That(status.IsVisible).IsTrue();
+                }
+
+                completion.SetResult(new NoteDailyFileNameFormatApplyResult(
+                    true,
+                    new NoteDailyFileNameFormatState("yyyy.MM.dd", root, "revision-2")));
+                await (applyCommand.LastExecution ?? Task.CompletedTask);
+                Dispatcher.UIThread.RunJobs();
+
+                await Assert.That(settings.IsApplyingNoteDailyFileNameFormat).IsFalse();
+                await Assert.That(formatInput.IsReadOnly).IsFalse();
+
+                formatInput.Text = "yyyy-MM-dd";
+                Dispatcher.UIThread.RunJobs();
+                settings.ApplyNoteDailyFileNameFormatState(externallyAppliedState);
+                Dispatcher.UIThread.RunJobs();
+
+                using (Assert.Multiple())
+                {
+                    await Assert.That(reload.IsVisible).IsTrue();
+                    await Assert.That(reload.IsEnabled).IsTrue();
+                    await Assert.That(settings.NoteDailyFileNameFormatDraft).IsEqualTo("yyyy-MM-dd");
+                    await Assert.That(status.IsVisible).IsTrue();
+                }
+
+                reload.Command!.Execute(null);
+                await (reloadCommand.LastExecution ?? Task.CompletedTask);
+                Dispatcher.UIThread.RunJobs();
+
+                using (Assert.Multiple())
+                {
+                    await Assert.That(settings.NoteDailyFileNameFormatDraft).IsEqualTo("dd.MM.yyyy");
+                    await Assert.That(reload.IsVisible).IsFalse();
+                }
+            }
+            finally
+            {
+                window?.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
     public async Task SettingsControl_DisablesExternalNoteVaultInputs_WhenPlatformIsUnsupported()
     {
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
@@ -722,11 +867,16 @@ public class SettingsControlResponsiveUiTests
                 var browseButton = FindControlByAutomationId<Button>(view, "BrowseNoteVaultRootPathButton");
                 var boundaryPicker = FindControlByAutomationId<TimePicker>(view, "NoteDayBoundaryTimePicker");
                 var feedEnabled = FindControlByAutomationId<CheckBox>(view, "FeedEnabledCheckBox");
+                var dailyFormat = FindControlByAutomationId<TextBox>(view, "NoteDailyFileNameFormatTextBox");
+                var applyFormat = FindControlByAutomationId<Button>(view, "ApplyNoteDailyFileNameFormatButton");
 
                 await Assert.That(pathInput.IsReadOnly).IsTrue();
                 await Assert.That(browseButton.IsEnabled).IsFalse();
                 await Assert.That(boundaryPicker.IsEnabled).IsFalse();
                 await Assert.That(feedEnabled.IsVisible).IsFalse();
+                await Assert.That(dailyFormat.IsVisible).IsTrue();
+                await Assert.That(dailyFormat.IsReadOnly).IsTrue();
+                await Assert.That(applyFormat.IsEnabled).IsFalse();
             }
             finally
             {

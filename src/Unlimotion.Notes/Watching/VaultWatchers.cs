@@ -437,11 +437,32 @@ public abstract class CoalescingVaultWatcher : IAsyncDisposable
             }
             else
             {
-                Merge(candidates, new Candidate(
-                    VaultWatchChangeKind.Renamed,
-                    current,
-                    previous,
-                    GetSidecarArtifact(current!)));
+                var currentArtifact = GetSidecarArtifact(current!);
+                var previousArtifact = GetSidecarArtifact(previous!);
+                if (currentArtifact != previousArtifact)
+                {
+                    // A rename between two known sidecars changes two independent contracts.
+                    // Model it as delete/create so the old owner (for example daily settings)
+                    // can reload its missing-file default instead of observing only the target.
+                    Merge(candidates, new Candidate(
+                        VaultWatchChangeKind.Deleted,
+                        previous,
+                        null,
+                        previousArtifact));
+                    Merge(candidates, new Candidate(
+                        VaultWatchChangeKind.Created,
+                        current,
+                        null,
+                        currentArtifact));
+                }
+                else
+                {
+                    Merge(candidates, new Candidate(
+                        VaultWatchChangeKind.Renamed,
+                        current,
+                        previous,
+                        currentArtifact));
+                }
             }
 
             return;
@@ -650,6 +671,11 @@ public sealed class SidecarVaultWatcher : CoalescingVaultWatcher
         if (string.Equals(normalized, ".unlimotion/areas.json", StringComparison.OrdinalIgnoreCase))
         {
             return SidecarArtifactKind.Areas;
+        }
+
+        if (string.Equals(normalized, ".unlimotion/daily-note-settings.json", StringComparison.OrdinalIgnoreCase))
+        {
+            return SidecarArtifactKind.DailyNoteSettings;
         }
 
         return normalized.StartsWith(".unlimotion/review/", StringComparison.OrdinalIgnoreCase)

@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
+using Unlimotion.Notes.Daily;
 using Unlimotion.Notes.Markdown;
 
 namespace Unlimotion.Notes.Search;
@@ -43,7 +44,7 @@ public sealed record FeedSearchQuery(
     DateOnly? To = null,
     FeedSearchDocumentType? Type = null);
 
-public sealed class FeedSearchIndex(IMarkdownDocumentParser parser)
+public sealed class FeedSearchIndex(IMarkdownDocumentParser parser, DailyNoteNaming? naming = null)
 {
     private static readonly Regex FrontMatterAreasKeyRegex = new(
         @"^\s*unlimotion-areas\s*:\s*(?<inline>.*)$",
@@ -52,6 +53,7 @@ public sealed class FeedSearchIndex(IMarkdownDocumentParser parser)
         @"^\s*-\s*(?<id>[A-Za-z0-9_-]+)\s*(?:#.*)?$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private readonly object sync = new();
+    private readonly DailyNoteNaming dailyNaming = naming ?? DailyNoteNaming.Default;
     private readonly Dictionary<string, FeedSearchEntry> entries = new(StringComparer.Ordinal);
     private readonly Dictionary<string, HashSet<string>> keysByPath = new(StringComparer.OrdinalIgnoreCase);
 
@@ -84,9 +86,11 @@ public sealed class FeedSearchIndex(IMarkdownDocumentParser parser)
                 : FeedSearchDocumentType.Note;
             var documentDate = type == FeedSearchDocumentType.Daily
                 ? day
-                : modifiedAt is null
+                : IsInDailyDirectory(normalizedPath)
                     ? null
-                    : DateOnly.FromDateTime(modifiedAt.Value.LocalDateTime);
+                    : modifiedAt is null
+                        ? null
+                        : DateOnly.FromDateTime(modifiedAt.Value.LocalDateTime);
             var documentAreas = type == FeedSearchDocumentType.Note
                 ? ExtractFrontMatterAreaIdentities(raw)
                 : [];
@@ -305,23 +309,20 @@ public sealed class FeedSearchIndex(IMarkdownDocumentParser parser)
         return string.Join(" ", blocks.Skip(Math.Max(0, position - 1)).Take(3).Select(static block => block.Raw.Trim()));
     }
 
-    private static bool IsDaily(string relativePath, out DateOnly? date)
+    private bool IsDaily(string relativePath, out DateOnly? date)
     {
-        date = null;
-        var normalized = relativePath.Replace('\\', '/');
-        if (!normalized.StartsWith("Ежедневные/", StringComparison.OrdinalIgnoreCase))
+        if (!dailyNaming.TryParseRelativePath(relativePath, out var parsed))
         {
-            return false;
-        }
-
-        if (!DateOnly.TryParseExact(Path.GetFileNameWithoutExtension(normalized), "yyyy-MM-dd", out var parsed))
-        {
+            date = null;
             return false;
         }
 
         date = parsed;
         return true;
     }
+
+    private static bool IsInDailyDirectory(string relativePath) =>
+        relativePath.StartsWith(DailyNoteNaming.DailyDirectoryName + "/", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsInternal(string relativePath) => relativePath.Replace('\\', '/').StartsWith(".unlimotion/", StringComparison.OrdinalIgnoreCase);
 

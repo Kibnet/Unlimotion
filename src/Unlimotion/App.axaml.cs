@@ -1,11 +1,13 @@
 //#define LIVE
 
 using System;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reactive;
+using System.Reactive.Disposables;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
@@ -910,6 +912,54 @@ public class App : Application
             viewModel.SelectCurrentTask();
         };
         viewModel.Feed.ChooseVaultAsync = () => BrowseNoteVaultRootPathAsync(settings);
+        settings.ConfigureNoteDailyFileNameFormatBridge(
+            viewModel.Feed.ValidateDailyNoteFileNameFormat,
+            viewModel.Feed.ApplyDailyNoteFileNameFormatAsync,
+            viewModel.Feed.ReloadDailyNoteFileNameFormatAsync);
+        settings.ApplyNoteDailyFileNameFormatCommand = ReactiveCommand.CreateFromTask(
+            settings.ApplyNoteDailyFileNameFormatAsync);
+        settings.ReloadExternalNoteDailyFileNameFormatCommand = ReactiveCommand.CreateFromTask(
+            settings.ReloadExternalNoteDailyFileNameFormatAsync);
+
+        void RefreshDailyNoteFileNameFormatAvailabilityOnUiThread()
+        {
+            settings.SetNoteDailyFileNameFormatFeedAvailability(
+                viewModel.Feed.IsVaultInitialized,
+                viewModel.Feed.IsBusy || viewModel.Feed.IsIdentityFrozen,
+                viewModel.Feed.VaultRootPath);
+        }
+
+        void RefreshDailyNoteFileNameFormatAvailability() =>
+            _ = RunOnUiThreadAsync(RefreshDailyNoteFileNameFormatAvailabilityOnUiThread);
+
+        EventHandler<NoteDailyFileNameFormatState> dailyNoteFileNameFormatChanged = (_, state) =>
+            _ = RunOnUiThreadAsync(() =>
+            {
+                // Feed initialization and watcher work may finish off the UI thread. Read
+                // its settled lifecycle state only after dispatching, then accept the applied
+                // sidecar state in that same UI turn so Settings cannot retain a stale
+                // unavailable snapshot while the Feed surface is already usable.
+                RefreshDailyNoteFileNameFormatAvailabilityOnUiThread();
+                settings.ApplyNoteDailyFileNameFormatState(state);
+            });
+        viewModel.Feed.DailyNoteFileNameFormatChanged += dailyNoteFileNameFormatChanged;
+        Disposable.Create(() =>
+                viewModel.Feed.DailyNoteFileNameFormatChanged -= dailyNoteFileNameFormatChanged)
+            .AddToDispose(viewModel);
+        RefreshDailyNoteFileNameFormatAvailability();
+        PropertyChangedEventHandler feedLifecycleChanged = (_, args) =>
+        {
+            if (args.PropertyName is nameof(FeedViewModel.IsVaultInitialized)
+                or nameof(FeedViewModel.IsBusy)
+                or nameof(FeedViewModel.IsIdentityFrozen)
+                or nameof(FeedViewModel.VaultRootPath))
+            {
+                RefreshDailyNoteFileNameFormatAvailability();
+            }
+        };
+        viewModel.Feed.PropertyChanged += feedLifecycleChanged;
+        Disposable.Create(() => viewModel.Feed.PropertyChanged -= feedLifecycleChanged)
+            .AddToDispose(viewModel);
         settings
             .ObservableForProperty(model => model.NoteVaultRootPath, false, true)
             .Subscribe(change => _ = viewModel.Feed.InitializeVaultAsync(
