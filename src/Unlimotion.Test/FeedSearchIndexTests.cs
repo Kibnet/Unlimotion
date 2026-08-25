@@ -1,5 +1,6 @@
 using System.Linq;
 using System.Threading.Tasks;
+using Unlimotion.Notes.Daily;
 using Unlimotion.Notes.Markdown;
 using Unlimotion.Notes.Search;
 
@@ -7,6 +8,33 @@ namespace Unlimotion.Test;
 
 public class FeedSearchIndexTests
 {
+    [Test]
+    public async Task DottedNamingLeavesInactiveHyphenDailyFileSearchableWithoutDateFilter()
+    {
+        var naming = DailyNoteNaming.Create("yyyy.MM.dd");
+        var index = new FeedSearchIndex(new MarkdownDocumentParser(), naming);
+        index.IndexMarkdown("Ежедневные/2026.08.25.md", "Дневная точечная запись\n");
+        index.IndexMarkdown(
+            "Ежедневные/2026-08-25.md",
+            "Старая запись с дефисом\n",
+            new System.DateTimeOffset(2026, 8, 25, 12, 0, 0, System.TimeSpan.Zero));
+
+        var dotted = index.Search(new FeedSearchQuery("точечная", Type: FeedSearchDocumentType.Daily));
+        var hyphen = index.Search(new FeedSearchQuery("дефисом"));
+        var dateFilteredHyphen = index.Search(new FeedSearchQuery(
+            "дефисом",
+            From: new System.DateOnly(2026, 8, 25),
+            To: new System.DateOnly(2026, 8, 25)));
+
+        await Assert.That(dotted).HasSingleItem();
+        await Assert.That(dotted[0].RelativePath).IsEqualTo("Ежедневные/2026.08.25.md");
+        await Assert.That(dotted[0].Date).IsEqualTo(new System.DateOnly(2026, 8, 25));
+        await Assert.That(hyphen).HasSingleItem();
+        await Assert.That(hyphen[0].Type).IsEqualTo(FeedSearchDocumentType.Note);
+        await Assert.That(hyphen[0].Date).IsNull();
+        await Assert.That(dateFilteredHyphen).IsEmpty();
+    }
+
     [Test]
     public async Task SearchReturnsNewestDailyFragmentWithAreaAndContext()
     {

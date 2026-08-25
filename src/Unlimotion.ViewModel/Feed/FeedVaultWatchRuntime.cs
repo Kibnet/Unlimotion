@@ -24,6 +24,8 @@ public interface IFeedVaultWatchRuntimeSink
 
     ValueTask RefreshReviewAsync(VaultWatchChange change, CancellationToken cancellationToken);
 
+    ValueTask ReloadDailyNoteSettingsAsync(VaultWatchChange change, CancellationToken cancellationToken);
+
     ValueTask FreezeForIdentityChangeAsync(
         FeedVaultIdentityFreezeSignal signal,
         CancellationToken cancellationToken);
@@ -344,6 +346,7 @@ public sealed class FeedVaultWatchRuntime : IAsyncDisposable
 
             await sink.RefreshAreasAsync(change, cancellationToken).ConfigureAwait(false);
             await sink.RefreshReviewAsync(change, cancellationToken).ConfigureAwait(false);
+            await sink.ReloadDailyNoteSettingsAsync(change, cancellationToken).ConfigureAwait(false);
             return;
         }
 
@@ -366,6 +369,9 @@ public sealed class FeedVaultWatchRuntime : IAsyncDisposable
                 break;
             case SidecarArtifactKind.Review:
                 await sink.RefreshReviewAsync(change, cancellationToken).ConfigureAwait(false);
+                break;
+            case SidecarArtifactKind.DailyNoteSettings:
+                await sink.ReloadDailyNoteSettingsAsync(change, cancellationToken).ConfigureAwait(false);
                 break;
             case SidecarArtifactKind.None:
                 break;

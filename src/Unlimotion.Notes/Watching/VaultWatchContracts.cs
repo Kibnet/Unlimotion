@@ -42,7 +42,8 @@ public enum SidecarArtifactKind
     None,
     VaultIdentity,
     Areas,
-    Review
+    Review,
+    DailyNoteSettings
 }
 
 public sealed record VaultWatchChange(

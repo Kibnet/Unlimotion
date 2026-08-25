@@ -1,3 +1,4 @@
+using Unlimotion.Notes.Daily;
 using Unlimotion.Notes.Markdown;
 using Unlimotion.Notes.Review;
 using Unlimotion.Notes.Vault;
@@ -28,21 +29,29 @@ public sealed class FeedMoveToTodayService(
     IMarkdownDocumentParser parser,
     MarkdownMutationService mutations,
     IFeedOperationJournal journal,
-    IRevisionStore? revisions = null)
+    IRevisionStore? revisions = null,
+    DailyNoteNaming? naming = null)
 {
+    private readonly DailyNoteNaming dailyNaming = naming ?? DailyNoteNaming.Default;
+
     public async Task<MoveToTodayResult> MoveAsync(MoveToTodayRequest request, CancellationToken cancellationToken = default)
     {
         FeedLinkSerializer.ValidateStableId(request.VaultId, nameof(request.VaultId));
         FeedLinkSerializer.ValidateStableId(request.OperationId, nameof(request.OperationId));
-        var destinationPath = $"Ежедневные/{request.DestinationDate:yyyy-MM-dd}.md";
+        var operation = await journal.LoadAsync(request.VaultId, request.OperationId, cancellationToken).ConfigureAwait(false);
+        var destinationPath = operation?.DestinationPath ?? dailyNaming.GetRelativePath(request.DestinationDate);
+        if (!IsNormalizedDirectDailyDestinationPath(destinationPath))
+        {
+            throw new InvalidDataException("The move journal destination is not a safe daily note path.");
+        }
+
         if (string.Equals(request.SourcePath.Replace('\\', '/'), destinationPath, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException("Move to today is only available for another daily file.");
         }
 
         var anchor = "unlimotion-move-" + request.OperationId;
-        var operation = await journal.LoadAsync(request.VaultId, request.OperationId, cancellationToken).ConfigureAwait(false);
-        ValidateExistingOperation(operation, request, destinationPath, anchor);
+        ValidateExistingOperation(operation, request, anchor);
         if (operation?.State == FeedOperationState.Completed)
         {
             if (operation.RecoveryDescriptor is { } completedDescriptor)
@@ -99,7 +108,9 @@ public sealed class FeedMoveToTodayService(
 
         var source = await vault.ReadAsync(request.SourcePath, cancellationToken).ConfigureAwait(false)
             ?? throw new FileNotFoundException("The source daily note no longer exists.", request.SourcePath);
-        var outputLink = FeedLinkSerializer.MovedBlock(request.DestinationDate, anchor);
+        var outputLink = FeedLinkSerializer.MovedBlock(
+            destinationPath,
+            anchor);
         VaultDocument? destination = null;
         if (operation?.RecoveryDescriptor is { } storedDescriptor)
         {
@@ -151,7 +162,7 @@ public sealed class FeedMoveToTodayService(
                     true);
             }
 
-            if (source.Text.Contains(outputLink, StringComparison.Ordinal))
+            if (ContainsMoveLink(source.Text, destinationPath, anchor))
             {
                 await ThrowRecoveryConflictAsync(
                     operation,
@@ -161,7 +172,7 @@ public sealed class FeedMoveToTodayService(
             }
         }
         else if (operation?.State == FeedOperationState.DestinationCreated
-                 && source.Text.Contains(outputLink, StringComparison.Ordinal))
+                 && ContainsMoveLink(source.Text, destinationPath, anchor))
         {
             var legacyDestination = await vault.ReadAsync(destinationPath, cancellationToken).ConfigureAwait(false)
                 ?? throw new InvalidDataException("The move source was replaced but the destination daily note is missing.");
@@ -493,7 +504,6 @@ public sealed class FeedMoveToTodayService(
     private static void ValidateExistingOperation(
         FeedOperationRecord? operation,
         MoveToTodayRequest request,
-        string destinationPath,
         string anchor)
     {
         if (operation is null)
@@ -506,13 +516,56 @@ public sealed class FeedMoveToTodayService(
             || !string.Equals(operation.VaultId, request.VaultId, StringComparison.Ordinal)
             || !string.Equals(operation.OperationId, request.OperationId, StringComparison.Ordinal)
             || !string.Equals(operation.SourcePath.Replace('\\', '/'), request.SourcePath.Replace('\\', '/'), StringComparison.Ordinal)
-            || !string.Equals(operation.DestinationPath.Replace('\\', '/'), destinationPath, StringComparison.Ordinal)
+            || !IsNormalizedDirectDailyDestinationPath(operation.DestinationPath)
             || !string.Equals(operation.ResultId, anchor, StringComparison.Ordinal)
             || operation.State == FeedOperationState.Completed
                 && (string.IsNullOrWhiteSpace(operation.SourceRevision) || string.IsNullOrWhiteSpace(operation.DestinationRevision)))
         {
             throw new InvalidDataException("The move journal does not match the requested operation.");
         }
+    }
+
+    private static bool IsNormalizedDirectDailyDestinationPath(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)
+            || value.Contains('\\'))
+        {
+            return false;
+        }
+
+        var prefix = DailyNoteNaming.DailyDirectoryName + "/";
+        if (!value.StartsWith(prefix, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var fileName = value[prefix.Length..];
+        if (!fileName.EndsWith(DailyNoteNaming.DailyFileExtension, StringComparison.Ordinal)
+            || fileName.Length == DailyNoteNaming.DailyFileExtension.Length
+            || fileName.Contains('/'))
+        {
+            return false;
+        }
+
+        var stem = fileName[..^DailyNoteNaming.DailyFileExtension.Length];
+        return stem is not "." and not ".."
+               && !stem.EndsWith(".", StringComparison.Ordinal)
+               && !stem.EndsWith(" ", StringComparison.Ordinal)
+               && stem.IndexOfAny(Path.GetInvalidFileNameChars()) < 0
+               && stem.All(static character => !char.IsControl(character)
+                                            && character is not '#' and not '[' and not ']'
+                                            && character is not '/' and not '\\'
+                                            && character is not '<' and not '>' and not ':' and not '"'
+                                            && character is not '|' and not '?' and not '*');
+    }
+
+    private static bool ContainsMoveLink(string raw, string destinationPath, string anchor)
+    {
+        var normalizedPath = destinationPath.Replace('\\', '/');
+        var target = normalizedPath.EndsWith(".md", StringComparison.OrdinalIgnoreCase)
+            ? normalizedPath[..^3]
+            : normalizedPath;
+        return raw.Contains($"{target}#^{anchor}", StringComparison.Ordinal);
     }
 
     private static void ValidateStoredRequest(

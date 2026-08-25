@@ -8,6 +8,7 @@ using FlaUI.Core.Input;
 using FlaUI.Core.Tools;
 using FlaUI.Core.WindowsAPI;
 using System.ComponentModel;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using TUnit.Assertions;
 using TUnit.Core;
@@ -28,9 +29,13 @@ public sealed class MainWindowFlaUiTests
     {
         var isStatusContract = IsStatusContractScenarioTest;
         var isFeed = IsFeedScenarioTest;
+        var isDailyNoteFilenameFormatScenario = IsDailyNoteFilenameFormatScenarioTest;
         var isFeedScreenshotCapture = isFeed &&
             !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(ScreenshotPathEnvironmentVariable));
-        if (isStatusContract || isFeedScreenshotCapture)
+        var isDailyNoteFilenameFormatScreenshotCapture = isDailyNoteFilenameFormatScenario &&
+            !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(
+                DailyNoteFilenameFormatScreenshotPathEnvironmentVariable));
+        if (isStatusContract || isFeedScreenshotCapture || isDailyNoteFilenameFormatScreenshotCapture)
         {
             EnsurePhysicalPixelDpiAwareness();
         }
@@ -47,7 +52,14 @@ public sealed class MainWindowFlaUiTests
                 buildBeforeLaunch: false,
                 mainWindowTimeout: TimeSpan.FromSeconds(90),
                 theme: isStatusContract ? StatusContractTheme : null,
-                feedVaultPrepared: path => feedVaultPath = path));
+                feedVaultPrepared: path =>
+                {
+                    feedVaultPath = path;
+                    if (isDailyNoteFilenameFormatScenario)
+                    {
+                        SeedDottedDailyNoteForFilenameFormatScenario(path);
+                    }
+                }));
 
         session.MainWindow.Patterns.Window.Pattern.SetWindowVisualState(
             isStatusContract || isFeed ? WindowVisualState.Normal : WindowVisualState.Maximized);
@@ -87,6 +99,17 @@ public sealed class MainWindowFlaUiTests
         {
             return string.Empty;
         }
+    }
+
+    protected override void WriteExternalDailyNoteFilenameFormat(string format)
+    {
+        var root = feedVaultPath
+            ?? throw new InvalidOperationException("Feed automation vault was not captured.");
+        var sidecarPath = Path.Combine(root, ".unlimotion", "daily-note-settings.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(sidecarPath)!);
+        File.WriteAllText(
+            sidecarPath,
+            $"{{\"schemaVersion\":1,\"dailyFileNameFormat\":\"{format}\"}}\n");
     }
 
     protected override FeedTaskGeometrySnapshot GetFeedTaskGeometrySnapshot()
@@ -145,6 +168,137 @@ public sealed class MainWindowFlaUiTests
         }
     }
 
+    protected override void CaptureDailyNoteFilenameFormatScreenshotIfRequested()
+    {
+        var configuredPath = Environment.GetEnvironmentVariable(
+            DailyNoteFilenameFormatScreenshotPathEnvironmentVariable);
+        if (string.IsNullOrWhiteSpace(configuredPath))
+        {
+            return;
+        }
+
+        var mainWindow = Session.Inner.MainWindow;
+        var handle = mainWindow.Properties.NativeWindowHandle.ValueOrDefault;
+        const int captureMargin = 20;
+        var captureWidth = Math.Min(1600, Math.Max(1, GetSystemMetrics(0) - captureMargin));
+        var captureHeight = Math.Min(940, Math.Max(1, GetSystemMetrics(1) - captureMargin));
+        if (handle == IntPtr.Zero || !MoveWindow(handle, 0, 0, captureWidth, captureHeight, true))
+        {
+            throw new Win32Exception(
+                Marshal.GetLastWin32Error(),
+                "Could not place the Settings window for daily note format screenshot capture.");
+        }
+
+        SelectSettingsTab();
+        CloseTaskDetailsPaneForDailyNoteFilenameFormatScreenshot();
+        var settingsSection = RequireProcessElement("NoteDailyFileNameFormatSection");
+        settingsSection.Patterns.ScrollItem.PatternOrDefault?.ScrollIntoView();
+        var formatInput = RequireProcessElement("NoteDailyFileNameFormatTextBox");
+        formatInput.Patterns.ScrollItem.PatternOrDefault?.ScrollIntoView();
+        var preview = RequireProcessElement("NoteDailyFileNameFormatPreviewText");
+        var status = RequireProcessElement("NoteDailyFileNameFormatStatusText");
+        Thread.Sleep(250);
+        if (!IsInsideViewport(formatInput, mainWindow) ||
+            !IsInsideViewport(preview, mainWindow) ||
+            !IsInsideViewport(status, mainWindow))
+        {
+            throw new InvalidOperationException(
+                "Daily note filename format settings were not visible in the Settings viewport before screenshot capture. " +
+                $"window={DescribeViewportElement(mainWindow)}; " +
+                $"input={DescribeViewportElement(formatInput)}; " +
+                $"preview={DescribeViewportElement(preview)}; " +
+                $"status={DescribeViewportElement(status)}.");
+        }
+
+        var outputPath = Path.GetFullPath(configuredPath);
+        Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+        using var screenshot = global::FlaUI.Core.Capturing.Capture.Element(
+            mainWindow,
+            new global::FlaUI.Core.Capturing.CaptureSettings());
+        screenshot.ToFile(outputPath);
+        if (new FileInfo(outputPath).Length == 0)
+        {
+            throw new InvalidOperationException(
+                $"Daily note filename format screenshot '{outputPath}' is empty.");
+        }
+    }
+
+    protected override bool? IsDailyNoteFilenameFormatAppliedInUi(string expectedFormat)
+    {
+        var formatInput = FindProcessElement("NoteDailyFileNameFormatTextBox");
+        var preview = FindProcessElement("NoteDailyFileNameFormatPreviewText");
+        var apply = FindProcessElement("ApplyNoteDailyFileNameFormatButton");
+        var status = FindProcessElement("NoteDailyFileNameFormatStatusText");
+        if (formatInput is null || preview is null || apply is null || status is null)
+        {
+            return false;
+        }
+
+        var expectedStem = DateOnly.FromDateTime(DateTime.Now)
+            .ToString(expectedFormat, CultureInfo.InvariantCulture);
+        var statusText = status.Properties.Name.ValueOrDefault;
+        var previewText = preview.Properties.Name.ValueOrDefault;
+        return string.Equals(formatInput.AsTextBox().Text, expectedFormat, StringComparison.Ordinal) &&
+               !apply.Properties.IsEnabled.ValueOrDefault &&
+               statusText?.Contains(expectedFormat, StringComparison.Ordinal) == true &&
+               previewText?.Contains($"Ежедневные/{expectedStem}.md", StringComparison.Ordinal) == true;
+    }
+
+    protected override void SelectSettingsTab()
+    {
+        var directTab = Session.Inner.MainWindow.FindFirstDescendant(
+            Session.Inner.ConditionFactory.ByAutomationId("SettingsTabItem"));
+        if (directTab is not null && !directTab.Properties.IsOffscreen.ValueOrDefault)
+        {
+            directTab.AsTabItem().Select();
+            return;
+        }
+
+        InvokeMainWindowButton("MainTabsOverflowButton");
+        var overflowItem = WaitUntil(
+            () => FindProcessElement("MainTabsOverflowSettingsTabItem"),
+            static element => element is not null,
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "Main-tabs overflow did not expose Settings.")!;
+        var invoke = overflowItem.Patterns.Invoke.PatternOrDefault;
+        if (invoke is not null)
+        {
+            invoke.Invoke();
+        }
+        else
+        {
+            overflowItem.Click();
+        }
+    }
+
+    protected override void EnterDailyNoteFilenameFormat(ITextBoxControl input, string format)
+    {
+        var textBox = RequireProcessElement("NoteDailyFileNameFormatTextBox");
+        textBox.Patterns.ScrollItem.PatternOrDefault?.ScrollIntoView();
+        textBox.Click();
+        Keyboard.TypeSimultaneously([VirtualKeyShort.CONTROL, VirtualKeyShort.KEY_A]);
+        Keyboard.Type(format);
+    }
+
+    private void CloseTaskDetailsPaneForDailyNoteFilenameFormatScreenshot()
+    {
+        var toggle = RequireProcessElement("DetailsPaneToggleButton");
+        var togglePattern = toggle.Patterns.Toggle.PatternOrDefault
+            ?? throw new InvalidOperationException(
+                "Details pane toggle did not expose the Toggle UI Automation pattern.");
+        if (togglePattern.ToggleState != ToggleState.On)
+        {
+            togglePattern.Toggle();
+        }
+
+        _ = WaitUntil(
+            () => RequireProcessElement("DetailsPaneToggleButton")
+                .Patterns.Toggle.PatternOrDefault?.ToggleState,
+            static state => state == ToggleState.On,
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "Task details pane did not close before the Settings screenshot.");
+    }
+
     protected override FeedNarrowLayoutSnapshot GetFeedNarrowLayoutSnapshot()
     {
         var window = Session.Inner.MainWindow;
@@ -198,6 +352,12 @@ public sealed class MainWindowFlaUiTests
         var bounds = ToFeedBounds(element);
         var viewport = ToFeedBounds(viewportElement);
         return bounds.Width > 0 && bounds.Height > 0 && bounds.IsInside(viewport);
+    }
+
+    private static string DescribeViewportElement(AutomationElement element)
+    {
+        var bounds = element.Properties.BoundingRectangle.ValueOrDefault;
+        return $"bounds=({bounds.Left},{bounds.Top},{bounds.Width},{bounds.Height}),offscreen={element.Properties.IsOffscreen.ValueOrDefault}";
     }
 
     private static FeedElementBounds? TryReadWindowBounds(IntPtr handle)
@@ -707,6 +867,9 @@ public sealed class MainWindowFlaUiTests
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetWindowRect(IntPtr windowHandle, out NativeRect rectangle);
+
+    [DllImport("user32.dll")]
+    private static extern int GetSystemMetrics(int index);
 
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]

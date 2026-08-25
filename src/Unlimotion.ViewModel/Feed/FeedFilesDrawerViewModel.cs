@@ -7,6 +7,7 @@ using System.Reactive;
 using System.Threading;
 using System.Threading.Tasks;
 using ReactiveUI;
+using Unlimotion.Notes.Daily;
 using Unlimotion.Notes.Vault;
 
 namespace Unlimotion.ViewModel.Feed;
@@ -14,16 +15,18 @@ namespace Unlimotion.ViewModel.Feed;
 public sealed class FeedFilesDrawerViewModel : ReactiveObject, IDisposable
 {
     private readonly INoteVault vault;
+    private readonly DailyNoteNaming dailyNoteNaming;
     private readonly CancellationTokenSource lifetime = new();
     private bool isOpen;
     private bool isBusy;
     private string? errorMessage;
     private int disposed;
 
-    public FeedFilesDrawerViewModel(INoteVault vault)
+    public FeedFilesDrawerViewModel(INoteVault vault, DailyNoteNaming? dailyNoteNaming = null)
     {
         this.vault = vault ?? throw new ArgumentNullException(nameof(vault));
-        RefreshCommand = ReactiveCommand.CreateFromTask(RefreshAsync);
+        this.dailyNoteNaming = dailyNoteNaming ?? DailyNoteNaming.Default;
+        RefreshCommand = ReactiveCommand.CreateFromTask(() => RefreshAsync());
         OpenFileCommand = ReactiveCommand.CreateFromTask<FeedFileItemViewModel>(OpenFileAsync);
         CloseCommand = ReactiveCommand.Create(() => { IsOpen = false; });
     }
@@ -64,17 +67,28 @@ public sealed class FeedFilesDrawerViewModel : ReactiveObject, IDisposable
 
     public bool HasFiles => Files.Count > 0;
 
-    public async Task RefreshAsync()
+    public Task RefreshAsync() => RefreshAsync(CancellationToken.None);
+
+    /// <summary>
+    /// Refreshes the drawer using both its lifetime and the caller's operation
+    /// lifetime. Candidate Feed sessions use this overload so a superseding
+    /// root change can stop a pending filesystem read before it holds the
+    /// reconfiguration gate.
+    /// </summary>
+    public async Task RefreshAsync(CancellationToken cancellationToken)
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref disposed) != 0, this);
         IsBusy = true;
         ErrorMessage = null;
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            lifetime.Token,
+            cancellationToken);
         try
         {
-            var paths = await vault.ListMarkdownFilesAsync(lifetime.Token).ConfigureAwait(true);
+            var paths = await vault.ListMarkdownFilesAsync(cancellation.Token).ConfigureAwait(true);
             var files = paths
                 .Select(NormalizePath)
-                .Where(IsThematicMarkdown)
+                .Where(path => IsThematicMarkdown(path, dailyNoteNaming))
                 .Distinct(PathComparer)
                 .OrderBy(static path => path, StringComparer.CurrentCultureIgnoreCase)
                 .Select(static path => new FeedFileItemViewModel(path))
@@ -88,7 +102,8 @@ public sealed class FeedFilesDrawerViewModel : ReactiveObject, IDisposable
 
             this.RaisePropertyChanged(nameof(HasFiles));
         }
-        catch (OperationCanceledException) when (lifetime.IsCancellationRequested)
+        catch (OperationCanceledException) when (
+            lifetime.IsCancellationRequested || cancellationToken.IsCancellationRequested)
         {
         }
         catch (Exception exception)
@@ -136,7 +151,11 @@ public sealed class FeedFilesDrawerViewModel : ReactiveObject, IDisposable
     }
 
     internal static bool IsThematicMarkdown(string path)
+        => IsThematicMarkdown(path, DailyNoteNaming.Default);
+
+    internal static bool IsThematicMarkdown(string path, DailyNoteNaming dailyNoteNaming)
     {
+        ArgumentNullException.ThrowIfNull(dailyNoteNaming);
         if (!string.Equals(Path.GetExtension(path), ".md", StringComparison.OrdinalIgnoreCase))
         {
             return false;
@@ -144,7 +163,7 @@ public sealed class FeedFilesDrawerViewModel : ReactiveObject, IDisposable
 
         var parts = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
         return parts.Length > 0
-               && !string.Equals(parts[0], "Ежедневные", StringComparison.OrdinalIgnoreCase)
+               && !dailyNoteNaming.IsDailyRelativePath(path)
                && !parts.Contains(".unlimotion", StringComparer.OrdinalIgnoreCase);
     }
 
