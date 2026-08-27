@@ -214,6 +214,7 @@
   <data name="AreaDefaultNoteFolderWatermark" xml:space="preserve"><value>Папка заметок по умолчанию</value></data>
   <data name="AreaManagementList" xml:space="preserve"><value>Области</value></data>
   <data name="AreaManagementTitle" xml:space="preserve"><value>Управление областями</value></data>
+  <data name="AreaNameRequired" xml:space="preserve"><value>Название области не может быть пустым.</value></data>
   <data name="AreaNameWatermark" xml:space="preserve"><value>Название области</value></data>
   <data name="AreaParentLabel" xml:space="preserve"><value>Родительская область</value></data>
   <data name="AreaPropertiesTitle" xml:space="preserve"><value>Свойства области</value></data>
