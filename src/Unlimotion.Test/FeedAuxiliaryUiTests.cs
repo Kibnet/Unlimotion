@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -20,6 +21,7 @@ using Unlimotion.Notes.Watching;
 using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
 using Unlimotion.ViewModel.Feed;
+using Unlimotion.ViewModel.Localization;
 using Unlimotion.Views;
 
 namespace Unlimotion.Test;
@@ -79,6 +81,73 @@ public sealed class FeedAuxiliaryUiTests
                 window.Close();
             }
         }, CancellationToken.None);
+    }
+
+    [Test]
+    [Arguments(LocalizationService.RussianLanguage, "Название области не может быть пустым.")]
+    [Arguments(LocalizationService.EnglishLanguage, "An area name cannot be empty.")]
+    public async Task AreaManagement_EmptyNameErrorUsesCurrentUiLanguage(
+        string language,
+        string expectedError)
+    {
+        var previousLocalization = LocalizationService.Current;
+        var previousLanguageMode = previousLocalization.LanguageMode;
+        var cultureSnapshot = CultureSnapshot.Capture();
+        try
+        {
+            var localization = new LocalizationService();
+            LocalizationService.Current = localization;
+            localization.SetLanguage(language);
+
+            await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+            await session.DispatchAsync(async () =>
+            {
+                using var directory = new TempNotesDirectory();
+                var store = new AreaCatalogStore(new FileNoteVault(directory.Path));
+                using var viewModel = new AreaManagementViewModel(store) { IsOpen = true };
+                await viewModel.LoadAsync();
+
+                var view = new AreaManagement { DataContext = viewModel };
+                var window = new Window { Width = 620, Height = 700, Content = view };
+                try
+                {
+                    window.Show();
+                    RunLayoutJobs();
+                    _ = FindControl<TextBox>(view, "AreaManagementNewNameTextBox");
+                    var createRoot = FindControl<Button>(view, "AreaManagementCreateRootButton");
+                    var error = FindControl<TextBlock>(
+                        view,
+                        "AreaManagementErrorText",
+                        requireEnabled: false);
+
+                    RaiseClick(createRoot);
+                    await Assert.That(WaitFor(() => viewModel.HasError && !viewModel.IsBusy)).IsTrue();
+
+                    using (Assert.Multiple())
+                    {
+                        await Assert.That(error.IsEffectivelyVisible).IsTrue();
+                        await Assert.That(error.Text).IsEqualTo(expectedError);
+                        await Assert.That(viewModel.Areas).IsEmpty();
+                    }
+                }
+                finally
+                {
+                    window.Close();
+                }
+            }, CancellationToken.None);
+        }
+        finally
+        {
+            LocalizationService.Current = previousLocalization;
+            try
+            {
+                previousLocalization.SetLanguage(previousLanguageMode);
+            }
+            finally
+            {
+                cultureSnapshot.Restore();
+            }
+        }
     }
 
     [Test]
@@ -437,6 +506,32 @@ public sealed class FeedAuxiliaryUiTests
             Dispatcher.UIThread.RunJobs();
             return predicate();
         }, TimeSpan.FromMilliseconds(timeoutMilliseconds));
+
+    private sealed class CultureSnapshot
+    {
+        private readonly CultureInfo _currentCulture;
+        private readonly CultureInfo _currentUiCulture;
+        private readonly CultureInfo? _defaultThreadCurrentCulture;
+        private readonly CultureInfo? _defaultThreadCurrentUiCulture;
+
+        private CultureSnapshot()
+        {
+            _currentCulture = Thread.CurrentThread.CurrentCulture;
+            _currentUiCulture = Thread.CurrentThread.CurrentUICulture;
+            _defaultThreadCurrentCulture = CultureInfo.DefaultThreadCurrentCulture;
+            _defaultThreadCurrentUiCulture = CultureInfo.DefaultThreadCurrentUICulture;
+        }
+
+        public static CultureSnapshot Capture() => new();
+
+        public void Restore()
+        {
+            CultureInfo.DefaultThreadCurrentCulture = _defaultThreadCurrentCulture;
+            CultureInfo.DefaultThreadCurrentUICulture = _defaultThreadCurrentUiCulture;
+            Thread.CurrentThread.CurrentCulture = _currentCulture;
+            Thread.CurrentThread.CurrentUICulture = _currentUiCulture;
+        }
+    }
 
     private static void RunLayoutJobs()
     {
