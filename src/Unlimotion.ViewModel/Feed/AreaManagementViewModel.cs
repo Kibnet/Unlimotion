@@ -567,7 +567,7 @@ public sealed class AreaManagementViewModel : ReactiveObject, IDisposable
             .Max() + 1;
 
     private static string RequireName(string? value) => string.IsNullOrWhiteSpace(value)
-        ? throw new InvalidDataException("An area name cannot be empty.")
+        ? throw new InvalidDataException(L10n.Get("AreaNameRequired"))
         : value.Trim();
 
     private static string? NormalizeOptional(string? value) =>
