@@ -214,6 +214,7 @@
   <data name="AreaDefaultNoteFolderWatermark" xml:space="preserve"><value>Default note folder</value></data>
   <data name="AreaManagementList" xml:space="preserve"><value>Areas</value></data>
   <data name="AreaManagementTitle" xml:space="preserve"><value>Manage areas</value></data>
+  <data name="AreaNameRequired" xml:space="preserve"><value>An area name cannot be empty.</value></data>
   <data name="AreaNameWatermark" xml:space="preserve"><value>Area name</value></data>
   <data name="AreaParentLabel" xml:space="preserve"><value>Parent area</value></data>
   <data name="AreaPropertiesTitle" xml:space="preserve"><value>Area properties</value></data>
