@@ -2881,136 +2881,7 @@ public class RoadmapGraphUiTests
         }, CancellationToken.None);
     }
 
-    [Test]
-    public async Task RoadmapGraph_SearchText_HighlightsAndClearsMatchingNode()
-    {
-        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
-        await session.DispatchAsync(async () =>
-        {
-            var fixture = new MainWindowViewModelFixture();
-            Window? window = null;
 
-            try
-            {
-                var vm = fixture.MainWindowViewModelTest;
-                await vm.Connect();
-                vm.AllTasksMode = false;
-                vm.GraphMode = true;
-
-                var targetTask = TestHelpers.GetTask(vm, MainWindowViewModelFixture.RootTask2Id);
-                await Assert.That(targetTask).IsNotNull();
-                targetTask!.Wanted = false;
-                targetTask.Title = "Roadmap fuzzy match target";
-                vm.Graph.Search.IsFuzzySearch = false;
-
-                var view = new MainControl { DataContext = vm };
-                window = CreateWindow(view);
-                window.Show();
-                Dispatcher.UIThread.RunJobs();
-
-                var graphControl = OpenRoadmapTabAndWaitForGraphControl(view);
-                await Assert.That(graphControl).IsNotNull();
-
-                var graphText = WaitForTaskTitleTextBlock(
-                    graphControl!,
-                    MainWindowViewModelFixture.RootTask2Id);
-                var targetNode = FindRoadmapNode(graphControl, MainWindowViewModelFixture.RootTask2Id);
-
-                ApplyRoadmapClickSelectionForTest(
-                    graphControl,
-                    graphText,
-                    targetTask,
-                    KeyModifiers.None);
-                await Assert.That(targetNode?.IsSelected).IsTrue();
-
-                WaitForStableRoadmapUpdates(graphControl);
-                var updateCountBeforeSearch = graphControl.RoadmapGraphUpdateCount;
-                var buildStartCountBeforeSearch = graphControl.RoadmapGraphBackgroundBuildStartCount;
-                var nodeCountBeforeSearch = graphControl.RoadmapNodes.Count;
-                var connectionCountBeforeSearch = graphControl.RoadmapConnections.Count;
-
-                vm.Graph.Search.SearchText = targetTask.OnlyTextTitle;
-                var highlighted = WaitFor(() => targetTask.IsHighlighted);
-
-                await Assert.That(highlighted).IsTrue();
-                await AssertNoRoadmapRebuildAsync(
-                    graphControl,
-                    updateCountBeforeSearch,
-                    buildStartCountBeforeSearch,
-                    nodeCountBeforeSearch,
-                    connectionCountBeforeSearch);
-                await Assert.That(targetNode?.IsSelected).IsTrue();
-                await Assert.That(ReferenceEquals(targetNode, FindRoadmapNode(
-                    graphControl,
-                    MainWindowViewModelFixture.RootTask2Id))).IsTrue();
-                await Assert.That(graphText.FontWeight).IsEqualTo(FontWeight.Bold);
-                await Assert.That(graphText.Foreground is ISolidColorBrush brush && brush.Color == Color.Parse("#2F80ED"))
-                    .IsTrue();
-
-                var updateCountBeforeFuzzy = graphControl.RoadmapGraphUpdateCount;
-                var buildStartCountBeforeFuzzy = graphControl.RoadmapGraphBackgroundBuildStartCount;
-                vm.Graph.Search.SearchText = "fuzxy";
-                var exactCleared = WaitFor(() => !targetTask.IsHighlighted);
-                await Assert.That(exactCleared).IsTrue();
-                await AssertNoRoadmapRebuildAsync(
-                    graphControl,
-                    updateCountBeforeFuzzy,
-                    buildStartCountBeforeFuzzy,
-                    nodeCountBeforeSearch,
-                    connectionCountBeforeSearch);
-
-                updateCountBeforeFuzzy = graphControl.RoadmapGraphUpdateCount;
-                buildStartCountBeforeFuzzy = graphControl.RoadmapGraphBackgroundBuildStartCount;
-                vm.Graph.Search.IsFuzzySearch = true;
-                var fuzzyHighlighted = WaitFor(() => targetTask.IsHighlighted);
-                await Assert.That(fuzzyHighlighted).IsTrue();
-                await AssertNoRoadmapRebuildAsync(
-                    graphControl,
-                    updateCountBeforeFuzzy,
-                    buildStartCountBeforeFuzzy,
-                    nodeCountBeforeSearch,
-                    connectionCountBeforeSearch);
-
-                var updateCountBeforeClear = graphControl.RoadmapGraphUpdateCount;
-                var buildStartCountBeforeClear = graphControl.RoadmapGraphBackgroundBuildStartCount;
-                vm.Graph.Search.SearchText = "";
-                var cleared = WaitFor(() => !targetTask.IsHighlighted);
-
-                await Assert.That(cleared).IsTrue();
-                await AssertNoRoadmapRebuildAsync(
-                    graphControl,
-                    updateCountBeforeClear,
-                    buildStartCountBeforeClear,
-                    nodeCountBeforeSearch,
-                    connectionCountBeforeSearch);
-                await Assert.That(targetNode?.IsSelected).IsTrue();
-            }
-            finally
-            {
-                await CloseWindowAndDrainRoadmapAsync(window);
-                await CleanTasksAndDrainAsync(fixture);
-            }
-        }, CancellationToken.None);
-
-        static async Task AssertNoRoadmapRebuildAsync(
-            GraphControl graphControl,
-            int updateCountBefore,
-            int buildStartCountBefore,
-            int nodeCountBefore,
-            int connectionCountBefore)
-        {
-            var rebuilt = await WaitForRoadmapUpdateAsync(
-                graphControl,
-                updateCountBefore,
-                1200);
-
-            await Assert.That(rebuilt).IsFalse();
-            await Assert.That(graphControl.RoadmapGraphUpdateCount).IsEqualTo(updateCountBefore);
-            await Assert.That(graphControl.RoadmapGraphBackgroundBuildStartCount).IsEqualTo(buildStartCountBefore);
-            await Assert.That(graphControl.RoadmapNodes.Count).IsEqualTo(nodeCountBefore);
-            await Assert.That(graphControl.RoadmapConnections.Count).IsEqualTo(connectionCountBefore);
-        }
-    }
 
     private static async Task RunWithRussianLocalizationAsync(Func<Task> body)
     {
@@ -4209,5 +4080,137 @@ public class RoadmapGraphUiTests
 
         public Task RemoveParentChildConnection(TaskItemViewModel parent, TaskItemViewModel child) =>
             throw new NotSupportedException();
+    }
+    internal static class SearchScenario
+    {
+        public static async Task RoadmapGraph_SearchText_HighlightsAndClearsMatchingNode()
+        {
+            await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+            await session.DispatchAsync(async () =>
+            {
+                var fixture = new MainWindowViewModelFixture();
+                Window? window = null;
+
+                try
+                {
+                    var vm = fixture.MainWindowViewModelTest;
+                    await vm.Connect();
+                    vm.AllTasksMode = false;
+                    vm.GraphMode = true;
+
+                    var targetTask = TestHelpers.GetTask(vm, MainWindowViewModelFixture.RootTask2Id);
+                    await Assert.That(targetTask).IsNotNull();
+                    targetTask!.Wanted = false;
+                    targetTask.Title = "Roadmap fuzzy match target";
+                    vm.Graph.Search.IsFuzzySearch = false;
+
+                    var view = new MainControl { DataContext = vm };
+                    window = CreateWindow(view);
+                    window.Show();
+                    Dispatcher.UIThread.RunJobs();
+
+                    var graphControl = OpenRoadmapTabAndWaitForGraphControl(view);
+                    await Assert.That(graphControl).IsNotNull();
+
+                    var graphText = WaitForTaskTitleTextBlock(
+                        graphControl!,
+                        MainWindowViewModelFixture.RootTask2Id);
+                    var targetNode = FindRoadmapNode(graphControl, MainWindowViewModelFixture.RootTask2Id);
+
+                    ApplyRoadmapClickSelectionForTest(
+                        graphControl,
+                        graphText,
+                        targetTask,
+                        KeyModifiers.None);
+                    await Assert.That(targetNode?.IsSelected).IsTrue();
+
+                    WaitForStableRoadmapUpdates(graphControl);
+                    var updateCountBeforeSearch = graphControl.RoadmapGraphUpdateCount;
+                    var buildStartCountBeforeSearch = graphControl.RoadmapGraphBackgroundBuildStartCount;
+                    var nodeCountBeforeSearch = graphControl.RoadmapNodes.Count;
+                    var connectionCountBeforeSearch = graphControl.RoadmapConnections.Count;
+
+                    vm.Graph.Search.SearchText = targetTask.OnlyTextTitle;
+                    var highlighted = WaitFor(() => targetTask.IsHighlighted);
+
+                    await Assert.That(highlighted).IsTrue();
+                    await AssertNoRoadmapRebuildAsync(
+                        graphControl,
+                        updateCountBeforeSearch,
+                        buildStartCountBeforeSearch,
+                        nodeCountBeforeSearch,
+                        connectionCountBeforeSearch);
+                    await Assert.That(targetNode?.IsSelected).IsTrue();
+                    await Assert.That(ReferenceEquals(targetNode, FindRoadmapNode(
+                        graphControl,
+                        MainWindowViewModelFixture.RootTask2Id))).IsTrue();
+                    await Assert.That(graphText.FontWeight).IsEqualTo(FontWeight.Bold);
+                    await Assert.That(graphText.Foreground is ISolidColorBrush brush && brush.Color == Color.Parse("#2F80ED"))
+                        .IsTrue();
+
+                    var updateCountBeforeFuzzy = graphControl.RoadmapGraphUpdateCount;
+                    var buildStartCountBeforeFuzzy = graphControl.RoadmapGraphBackgroundBuildStartCount;
+                    vm.Graph.Search.SearchText = "fuzxy";
+                    var exactCleared = WaitFor(() => !targetTask.IsHighlighted);
+                    await Assert.That(exactCleared).IsTrue();
+                    await AssertNoRoadmapRebuildAsync(
+                        graphControl,
+                        updateCountBeforeFuzzy,
+                        buildStartCountBeforeFuzzy,
+                        nodeCountBeforeSearch,
+                        connectionCountBeforeSearch);
+
+                    updateCountBeforeFuzzy = graphControl.RoadmapGraphUpdateCount;
+                    buildStartCountBeforeFuzzy = graphControl.RoadmapGraphBackgroundBuildStartCount;
+                    vm.Graph.Search.IsFuzzySearch = true;
+                    var fuzzyHighlighted = WaitFor(() => targetTask.IsHighlighted);
+                    await Assert.That(fuzzyHighlighted).IsTrue();
+                    await AssertNoRoadmapRebuildAsync(
+                        graphControl,
+                        updateCountBeforeFuzzy,
+                        buildStartCountBeforeFuzzy,
+                        nodeCountBeforeSearch,
+                        connectionCountBeforeSearch);
+
+                    var updateCountBeforeClear = graphControl.RoadmapGraphUpdateCount;
+                    var buildStartCountBeforeClear = graphControl.RoadmapGraphBackgroundBuildStartCount;
+                    vm.Graph.Search.SearchText = "";
+                    var cleared = WaitFor(() => !targetTask.IsHighlighted);
+
+                    await Assert.That(cleared).IsTrue();
+                    await AssertNoRoadmapRebuildAsync(
+                        graphControl,
+                        updateCountBeforeClear,
+                        buildStartCountBeforeClear,
+                        nodeCountBeforeSearch,
+                        connectionCountBeforeSearch);
+                    await Assert.That(targetNode?.IsSelected).IsTrue();
+                }
+                finally
+                {
+                    await CloseWindowAndDrainRoadmapAsync(window);
+                    await CleanTasksAndDrainAsync(fixture);
+                }
+            }, CancellationToken.None);
+
+            static async Task AssertNoRoadmapRebuildAsync(
+                GraphControl graphControl,
+                int updateCountBefore,
+                int buildStartCountBefore,
+                int nodeCountBefore,
+                int connectionCountBefore)
+            {
+                var rebuilt = await WaitForRoadmapUpdateAsync(
+                    graphControl,
+                    updateCountBefore,
+                    1200);
+
+                await Assert.That(rebuilt).IsFalse();
+                await Assert.That(graphControl.RoadmapGraphUpdateCount).IsEqualTo(updateCountBefore);
+                await Assert.That(graphControl.RoadmapGraphBackgroundBuildStartCount).IsEqualTo(buildStartCountBefore);
+                await Assert.That(graphControl.RoadmapNodes.Count).IsEqualTo(nodeCountBefore);
+                await Assert.That(graphControl.RoadmapConnections.Count).IsEqualTo(connectionCountBefore);
+            }
+        }
     }
 }

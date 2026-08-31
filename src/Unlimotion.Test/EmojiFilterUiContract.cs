@@ -6,23 +6,21 @@ internal static class EmojiFilterUiContract
 {
     public static async Task<EmojiFilterScenarioResult> ExecuteEmojiFilterScenarioAsync()
     {
-        var result = new EmojiFilterScenarioResult();
-        var tests = new MainControlFilterToolbarResponsiveUiTests();
+        await IndependentScenarioCases.RunAsync(
+            ("Toolbar_EmojiFilters_OpenFullListThenSearchAndToggleWithoutClosing", MainControlFilterToolbarResponsiveUiTests.EmojiScenarios.Toolbar_EmojiFilters_OpenFullListThenSearchAndToggleWithoutClosing),
+            ("Toolbar_EmojiFilters_AllItemTogglesEveryEmojiFilter", MainControlFilterToolbarResponsiveUiTests.EmojiScenarios.Toolbar_EmojiFilters_AllItemTogglesEveryEmojiFilter),
+            ("Toolbar_EmojiFilters_NoMatchesShowsWarningAndKeepsFullList", MainControlFilterToolbarResponsiveUiTests.EmojiScenarios.Toolbar_EmojiFilters_NoMatchesShowsWarningAndKeepsFullList),
+            ("Toolbar_EmojiFilters_KeyboardFlowOpensSearchTogglesAndClosesPopup", MainControlFilterToolbarResponsiveUiTests.EmojiScenarios.Toolbar_EmojiFilters_KeyboardFlowOpensSearchTogglesAndClosesPopup),
+            ("RoadmapToolbar_EmojiFilters_UsesSearchableMultiSelectDropdown", MainControlFilterToolbarResponsiveUiTests.EmojiScenarios.RoadmapToolbar_EmojiFilters_UsesSearchableMultiSelectDropdown));
 
-        await tests.Toolbar_EmojiFilters_OpenFullListThenSearchAndToggleWithoutClosing();
-        result.IncludeExcludeSearchAndFlyoutSemanticsPassed = true;
-
-        await tests.Toolbar_EmojiFilters_AllItemTogglesEveryEmojiFilter();
-        result.AllItemTogglePassed = true;
-
-        await tests.Toolbar_EmojiFilters_NoMatchesShowsWarningAndKeepsFullList();
-        result.NoMatchesBehaviorPassed = true;
-
-        await tests.Toolbar_EmojiFilters_KeyboardFlowOpensSearchTogglesAndClosesPopup();
-        result.KeyboardFlowPassed = true;
-
-        await tests.RoadmapToolbar_EmojiFilters_UsesSearchableMultiSelectDropdown();
-        result.RoadmapFlyoutPassed = true;
+        var result = new EmojiFilterScenarioResult
+        {
+            IncludeExcludeSearchAndFlyoutSemanticsPassed = true,
+            AllItemTogglePassed = true,
+            NoMatchesBehaviorPassed = true,
+            KeyboardFlowPassed = true,
+            RoadmapFlyoutPassed = true
+        };
 
         return result;
     }

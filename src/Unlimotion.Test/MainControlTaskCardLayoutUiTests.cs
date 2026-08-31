@@ -147,6 +147,7 @@ public class MainControlTaskCardLayoutUiTests
     [Test]
     public async Task CurrentTaskCard_PlanningDatePickers_UseDurationFieldPadding()
     {
+        using var phases = new TestScenarioPhases(nameof(CurrentTaskCard_PlanningDatePickers_UseDurationFieldPadding));
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
@@ -158,6 +159,7 @@ public class MainControlTaskCardLayoutUiTests
             {
                 var (view, createdWindow) = await CreateArrangedMainControlAsync(fixture, 1400, 900);
                 window = createdWindow;
+                phases.Next("body");
 
                 var beginPicker = FindControlByAutomationId<CalendarDatePicker>(
                     view,
@@ -176,6 +178,7 @@ public class MainControlTaskCardLayoutUiTests
             }
             finally
             {
+                phases.Next("cleanup");
                 CloseWindow(window);
                 await fixture.CleanTasksAsync();
             }
@@ -185,6 +188,7 @@ public class MainControlTaskCardLayoutUiTests
     [Test]
     public async Task CurrentTaskCard_DarkTheme_UsesThemeAwareAccentButtonChrome()
     {
+        using var phases = new TestScenarioPhases(nameof(CurrentTaskCard_DarkTheme_UsesThemeAwareAccentButtonChrome));
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
@@ -199,6 +203,7 @@ public class MainControlTaskCardLayoutUiTests
             {
                 var (view, createdWindow) = await CreateArrangedMainControlAsync(fixture, 1400, 900);
                 window = createdWindow;
+                phases.Next("body");
                 app.RequestedThemeVariant = ThemeVariant.Dark;
                 ArrangeMainControlForTest(createdWindow, view, createdWindow.Width, createdWindow.Height);
 
@@ -227,6 +232,7 @@ public class MainControlTaskCardLayoutUiTests
             }
             finally
             {
+                phases.Next("cleanup");
                 try
                 {
                     CloseWindow(window);

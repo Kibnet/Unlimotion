@@ -24,6 +24,7 @@ public static class HeadlessSessionExtensions
         {
             await session.Dispatch<bool>(async () =>
             {
+                using var resourceTrace = TestExecutionTrace.Resource("AvaloniaDispatcher");
                 try
                 {
                     await action();
@@ -68,15 +69,19 @@ public static class HeadlessSessionExtensions
 public sealed class SafeHeadlessUnitTestSession : IAsyncDisposable
 {
     private readonly HeadlessUnitTestSession _session;
+    private readonly IDisposable _resourceTrace;
 
-    private SafeHeadlessUnitTestSession(HeadlessUnitTestSession session)
+    private SafeHeadlessUnitTestSession(HeadlessUnitTestSession session, IDisposable resourceTrace)
     {
         _session = session;
+        _resourceTrace = resourceTrace;
     }
 
     public static SafeHeadlessUnitTestSession StartNew(Type appType)
     {
-        return new SafeHeadlessUnitTestSession(HeadlessUnitTestSession.StartNew(appType));
+        var trace = TestExecutionTrace.Resource("AvaloniaHeadless");
+        try { return new SafeHeadlessUnitTestSession(HeadlessUnitTestSession.StartNew(appType), trace); }
+        catch { trace.Dispose(); throw; }
     }
 
     public Task<TResult> Dispatch<TResult>(
@@ -96,8 +101,9 @@ public sealed class SafeHeadlessUnitTestSession : IAsyncDisposable
         return _session.DispatchAsync(action, cancellationToken);
     }
 
-    public ValueTask DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
-        return _session.DisposeIgnoringHeadlessTeardownNullReferenceAsync();
+        try { await _session.DisposeIgnoringHeadlessTeardownNullReferenceAsync(); }
+        finally { _resourceTrace.Dispose(); }
     }
 }

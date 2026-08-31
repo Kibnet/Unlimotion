@@ -6,15 +6,14 @@ internal static class SearchBehaviorUiContract
 {
     public static async Task<SearchBehaviorScenarioResult> ExecuteSearchBehaviorScenarioAsync()
     {
-        var result = new SearchBehaviorScenarioResult();
-
-        var treeTests = new MainControlTreeCommandsUiTests();
-        await treeTests.TreeSearch_AllTasksSearchEditor_FiltersVisibleTree();
-        result.TreeSearchEditorFiltersVisibleTreePassed = true;
-
-        var roadmapTests = new RoadmapGraphUiTests();
-        await roadmapTests.RoadmapGraph_SearchText_HighlightsAndClearsMatchingNode();
-        result.RoadmapExactAndFuzzySearchPassed = true;
+        await IndependentScenarioCases.RunAsync(
+            ("TreeSearch_AllTasksSearchEditor_FiltersVisibleTree", MainControlTreeCommandsUiTests.SearchScenario.TreeSearch_AllTasksSearchEditor_FiltersVisibleTree),
+            ("RoadmapGraph_SearchText_HighlightsAndClearsMatchingNode", RoadmapGraphUiTests.SearchScenario.RoadmapGraph_SearchText_HighlightsAndClearsMatchingNode));
+        var result = new SearchBehaviorScenarioResult
+        {
+            TreeSearchEditorFiltersVisibleTreePassed = true,
+            RoadmapExactAndFuzzySearchPassed = true
+        };
 
         return result;
     }

@@ -40,8 +40,9 @@ internal static class WorkspaceBreadcrumbsLastOpenedUiContract
                     var childTask = TestHelpers.GetTask(vm, MainWindowViewModelFixture.SubTask22Id)
                         ?? throw new InvalidOperationException("Child task was not found.");
 
-                    parentTask.Title = "BDD Last Opened Parent";
-                    childTask.Title = "BDD Last Opened Child";
+                    parentTask.Title = "📚 BDD Last Opened Parent";
+                    childTask.Title = "🧪 BDD Last Opened Child";
+                    var expectedBreadcrumbs = parentTask.Title + " / " + childTask.Title;
 
                     var view = new MainControl { DataContext = vm };
                     window = CreateWindow(view);
@@ -62,7 +63,7 @@ internal static class WorkspaceBreadcrumbsLastOpenedUiContract
 
                     result.BreadcrumbsShowCurrentPath = await WaitUntilAsync(() =>
                         GetBreadcrumbsText(breadcrumbs)
-                            .Contains("BDD Last Opened Parent / BDD Last Opened Child", StringComparison.Ordinal));
+                            .Contains(expectedBreadcrumbs, StringComparison.Ordinal));
 
                     SelectTab(view, "LastOpenedTabItem");
                     result.LastOpenedProjectionAvailable = await WaitUntilAsync(() =>
@@ -94,7 +95,7 @@ internal static class WorkspaceBreadcrumbsLastOpenedUiContract
                         vm.CurrentTaskItem?.Id == MainWindowViewModelFixture.SubTask22Id);
                     result.BreadcrumbsReturnToNestedPath = await WaitUntilAsync(() =>
                         GetBreadcrumbsText(breadcrumbs)
-                            .Contains("BDD Last Opened Parent / BDD Last Opened Child", StringComparison.Ordinal));
+                            .Contains(expectedBreadcrumbs, StringComparison.Ordinal));
                 }
                 finally
                 {

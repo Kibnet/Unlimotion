@@ -610,7 +610,9 @@ namespace Unlimotion.ViewModel
             AllEmojiFilter.WhenAnyValue(f => f.ShowTasks)
                 .Subscribe(b =>
                 {
-                    foreach (var filter in EmojiFilters)
+                    // A task update can regroup emoji during a ShowTasks notification.
+                    // Snapshot the filters at entry to this notification handler.
+                    foreach (var filter in EmojiFilters.ToArray())
                     {
                         filter.ShowTasks = b;
                     }
@@ -620,7 +622,7 @@ namespace Unlimotion.ViewModel
             AllEmojiExcludeFilter.WhenAnyValue(f => f.ShowTasks)
                 .Subscribe(b =>
                 {
-                    foreach (var filter in EmojiExcludeFilters)
+                    foreach (var filter in EmojiExcludeFilters.ToArray())
                     {
                         filter.ShowTasks = b;
                     }

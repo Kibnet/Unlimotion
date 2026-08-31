@@ -35,25 +35,22 @@ internal static class ServerStorageCrudRealtimeContract
 {
     public static async Task<ServerStorageCrudRealtimeScenarioResult> ExecuteCrudRealtimeScenarioAsync()
     {
-        var result = new ServerStorageCrudRealtimeScenarioResult();
-
-        await AssertTaskEndpointsRequireAuthenticatedRequestsAsync();
-        result.TaskEndpointsRequireAuthenticatedRequests = true;
-
-        await AssertGetAllAndBulkInsertPreserveAuthenticatedUserScopeAsync();
-        result.GetAllAndBulkInsertPreserveAuthenticatedUserScope = true;
-
-        await AssertGetTaskPreservesAuthenticatedUserScopeAsync();
-        result.GetTaskPreservesAuthenticatedUserScope = true;
-
-        await AssertSignalRHandlersMapRemoteTaskUpdatesToStorageEventsAsync();
-        result.SignalRHandlersMapRemoteTaskUpdates = true;
-
-        await AssertLiveSignalRSaveTaskDeliversUpdateToSecondClientForSameUserAsync();
-        result.LiveSignalRDeliveryVerified = true;
-
-        await AssertLiveServiceStackTaskApiRoundTripsAuthenticatedUserTasksAsync();
-        result.LiveServiceStackTaskApiRoundTripVerified = true;
+        await IndependentScenarioCases.RunAsync(
+            ("AssertTaskEndpointsRequireAuthenticatedRequestsAsync", AssertTaskEndpointsRequireAuthenticatedRequestsAsync),
+            ("AssertGetAllAndBulkInsertPreserveAuthenticatedUserScopeAsync", AssertGetAllAndBulkInsertPreserveAuthenticatedUserScopeAsync),
+            ("AssertGetTaskPreservesAuthenticatedUserScopeAsync", AssertGetTaskPreservesAuthenticatedUserScopeAsync),
+            ("AssertSignalRHandlersMapRemoteTaskUpdatesToStorageEventsAsync", AssertSignalRHandlersMapRemoteTaskUpdatesToStorageEventsAsync),
+            ("AssertLiveSignalRSaveTaskDeliversUpdateToSecondClientForSameUserAsync", AssertLiveSignalRSaveTaskDeliversUpdateToSecondClientForSameUserAsync),
+            ("AssertLiveServiceStackTaskApiRoundTripsAuthenticatedUserTasksAsync", AssertLiveServiceStackTaskApiRoundTripsAuthenticatedUserTasksAsync));
+        var result = new ServerStorageCrudRealtimeScenarioResult
+        {
+            TaskEndpointsRequireAuthenticatedRequests = true,
+            GetAllAndBulkInsertPreserveAuthenticatedUserScope = true,
+            GetTaskPreservesAuthenticatedUserScope = true,
+            SignalRHandlersMapRemoteTaskUpdates = true,
+            LiveSignalRDeliveryVerified = true,
+            LiveServiceStackTaskApiRoundTripVerified = true
+        };
 
         return result;
     }
@@ -105,6 +102,7 @@ internal static class ServerStorageCrudRealtimeContract
     public static async Task AssertLiveSignalRSaveTaskDeliversUpdateToSecondClientForSameUserAsync()
     {
         await using var fixture = await ServerStorageLiveIntegrationFixture.StartAsync();
+        using var bodyTrace = TestExecutionTrace.Phase("LiveSignalR/body-and-client-cleanup");
         string accessToken = await fixture.CreateAuthenticatedUserTokenAsync();
         string taskId = $"TaskItem/live-signalr-{Guid.NewGuid():N}";
 
@@ -153,6 +151,7 @@ internal static class ServerStorageCrudRealtimeContract
     {
         await using var fixture = await ServerStorageLiveIntegrationFixture.StartAsync(
             LiveIntegrationHostMode.ServiceStackTaskApiNarrow);
+        using var bodyTrace = TestExecutionTrace.Phase("LiveServiceStack/body-and-client-cleanup");
         string ownerToken = await fixture.CreateAuthenticatedUserTokenAsync();
         string otherUserToken = await fixture.CreateAuthenticatedUserTokenAsync();
         string localTaskId = $"live-api-{Guid.NewGuid():N}";
@@ -294,6 +293,7 @@ internal static class ServerStorageCrudRealtimeContract
         public static async Task<ServerStorageLiveIntegrationFixture> StartAsync(
             LiveIntegrationHostMode mode = LiveIntegrationHostMode.SignalR)
         {
+            using var setupTrace = TestExecutionTrace.Phase("LiveHost/" + mode + "/setup");
             string tempRoot = Path.Combine(
                 Path.GetTempPath(),
                 "Unlimotion.LiveIntegration",
@@ -400,6 +400,7 @@ internal static class ServerStorageCrudRealtimeContract
 
         public async ValueTask DisposeAsync()
         {
+            using var cleanupTrace = TestExecutionTrace.Phase("LiveHost/cleanup");
             await _host.StopAsync(TimeSpan.FromSeconds(5));
             _host.Dispose();
 
