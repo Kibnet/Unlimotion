@@ -17,6 +17,9 @@ concurrency:
 env:
   DOTNET_CLI_TELEMETRY_OPTOUT: "1"
   DOTNET_NOLOGO: "1"
+  TEST_RESULTS_ROOT: artifacts/test-results/${{ github.run_id }}-${{ github.run_attempt }}
+  TEST_ANALYSIS_ROOT: artifacts/test-analysis/${{ github.run_id }}-${{ github.run_attempt }}
+  TEST_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   all-tests:
@@ -26,12 +29,14 @@ jobs:
 
     steps:
     - name: Checkout
+      id: checkout
       uses: actions/checkout@v4
       with:
         ref: ${{ github.sha }}
         submodules: recursive
 
     - name: Setup .NET 10 SDK
+      id: sdk
       uses: actions/setup-dotnet@v4
       with:
         global-json-file: global.json
@@ -43,39 +48,79 @@ jobs:
         key: nuget-${{ runner.os }}-sdk-${{ hashFiles('global.json') }}-projects-${{ hashFiles('src/Directory.Packages.props', 'src/nuget.config', 'src/**/*.csproj', 'tests/**/*.csproj') }}
 
     - name: Prepare Local NuGet Feed Directory
+      id: feed
       shell: pwsh
       run: New-Item -ItemType Directory -Force artifacts/nuget-local | Out-Null
 
-    - name: Restore Test Projects
+    - name: Restore Main Tests
+      id: restore-main
+      if: ${{ !cancelled() && steps.sdk.outcome == 'success' && steps.feed.outcome == 'success' }}
       shell: pwsh
-      run: |
-        $projects = @(
-          "src/Unlimotion.Test/Unlimotion.Test.csproj",
-          "tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj"
-        )
+      run: ./scripts/ci/Invoke-TestStage.ps1 -Stage restore -Project main -ResultsRoot $env:TEST_RESULTS_ROOT
 
-        foreach ($project in $projects) {
-          dotnet restore $project
-        }
+    - name: Restore Headless Tests
+      id: restore-headless
+      if: ${{ !cancelled() && steps.sdk.outcome == 'success' && steps.feed.outcome == 'success' }}
+      shell: pwsh
+      run: ./scripts/ci/Invoke-TestStage.ps1 -Stage restore -Project headless -ResultsRoot $env:TEST_RESULTS_ROOT
+
+    - name: Build Main Tests
+      id: build-main
+      if: ${{ !cancelled() && steps.restore-main.outcome == 'success' }}
+      shell: pwsh
+      run: ./scripts/ci/Invoke-TestStage.ps1 -Stage build -Project main -ResultsRoot $env:TEST_RESULTS_ROOT
+
+    - name: Build Headless Tests
+      id: build-headless
+      if: ${{ !cancelled() && steps.restore-headless.outcome == 'success' }}
+      shell: pwsh
+      run: ./scripts/ci/Invoke-TestStage.ps1 -Stage build -Project headless -ResultsRoot $env:TEST_RESULTS_ROOT
 
     - name: Run Unlimotion Tests
+      id: test-main
+      if: ${{ !cancelled() && steps.build-main.outcome == 'success' }}
       shell: pwsh
-      run: >
-        dotnet test --project src/Unlimotion.Test/Unlimotion.Test.csproj
-        -c Debug
-        --no-restore
-        -p:UseSharedCompilation=false
-        --
-        --maximum-parallel-tests 1
-        --output Detailed
+      run: ./scripts/ci/Invoke-TestStage.ps1 -Stage test -Project main -ResultsRoot $env:TEST_RESULTS_ROOT
 
     - name: Run Headless UI Tests
+      id: test-headless
+      if: ${{ !cancelled() && steps.build-headless.outcome == 'success' }}
       shell: pwsh
-      run: >
-        dotnet test --project tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj
-        -c Debug
-        --no-restore
-        -p:UseSharedCompilation=false
-        --
-        --maximum-parallel-tests 1
-        --output Detailed
+      run: ./scripts/ci/Invoke-TestStage.ps1 -Stage test -Project headless -ResultsRoot $env:TEST_RESULTS_ROOT
+
+    - name: Summarize Test Results
+      if: ${{ always() && steps.checkout.outcome == 'success' }}
+      shell: pwsh
+      run: ./scripts/ci/Write-TestReport.ps1 -ResultsRoot $env:TEST_RESULTS_ROOT -OutputRoot $env:TEST_ANALYSIS_ROOT -PipelineOutcome '${{ job.status }}'
+
+    - name: Upload Main Test Reports
+      if: ${{ always() && steps.checkout.outcome == 'success' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: tests-${{ github.run_id }}-${{ github.run_attempt }}-main
+        retention-days: 14
+        if-no-files-found: error
+        path: |
+          ${{ env.TEST_RESULTS_ROOT }}/main/**/*.trx
+          ${{ env.TEST_RESULTS_ROOT }}/main/**/*report.html
+          ${{ env.TEST_RESULTS_ROOT }}/main/**/diagnostics-*.jsonl
+          ${{ env.TEST_RESULTS_ROOT }}/main/invocation-test.json
+          ${{ env.TEST_RESULTS_ROOT }}/main/stage-*.json
+          ${{ env.TEST_ANALYSIS_ROOT }}/main/*.json
+          ${{ env.TEST_ANALYSIS_ROOT }}/main/*.md
+
+    - name: Upload Headless Test Reports
+      if: ${{ always() && steps.checkout.outcome == 'success' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: tests-${{ github.run_id }}-${{ github.run_attempt }}-headless
+        retention-days: 14
+        if-no-files-found: error
+        path: |
+          ${{ env.TEST_RESULTS_ROOT }}/headless/**/*.trx
+          ${{ env.TEST_RESULTS_ROOT }}/headless/**/*report.html
+          ${{ env.TEST_RESULTS_ROOT }}/headless/**/diagnostics-*.jsonl
+          ${{ env.TEST_RESULTS_ROOT }}/headless/invocation-test.json
+          ${{ env.TEST_RESULTS_ROOT }}/headless/stage-*.json
+          ${{ env.TEST_ANALYSIS_ROOT }}/headless/*.json
+          ${{ env.TEST_ANALYSIS_ROOT }}/headless/*.md

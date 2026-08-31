@@ -9,6 +9,8 @@ internal static class CiReadmeMediaContract
     {
         var workflow = await File.ReadAllTextAsync(
             PlatformShellProjectContracts.GetRepositoryPath(".github/workflows/tests.yml"));
+        var testStageScript = await File.ReadAllTextAsync(
+            PlatformShellProjectContracts.GetRepositoryPath("scripts/ci/Invoke-TestStage.ps1"));
         var mediaScript = await File.ReadAllTextAsync(
             PlatformShellProjectContracts.GetRepositoryPath("scripts/update-readme-media.ps1"));
         var mediaReadme = await File.ReadAllTextAsync(
@@ -17,9 +19,10 @@ internal static class CiReadmeMediaContract
             PlatformShellProjectContracts.GetRepositoryPath("tests/Unlimotion.UiTests.Headless/Tests/ReadmeDemoHeadlessTests.cs"));
 
         await Assert.That(workflow).Contains("all-tests:");
-        await Assert.That(workflow).Contains("tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj");
+        await Assert.That(workflow).Contains("./scripts/ci/Invoke-TestStage.ps1 -Stage test -Project headless");
         await Assert.That(workflow).Contains("Run Headless UI Tests");
-        await Assert.That(workflow).Contains("--maximum-parallel-tests 1");
+        await Assert.That(testStageScript).Contains("tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj");
+        await Assert.That(testStageScript).Contains("'--maximum-parallel-tests', '1'");
 
         await Assert.That(mediaScript).Contains("tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj");
         await Assert.That(mediaScript).Contains("tests/Unlimotion.UiTests.FlaUI/Unlimotion.UiTests.FlaUI.csproj");
