@@ -39,7 +39,10 @@ foreach ($project in $Projects) {
     $stages = @{}
     foreach ($stage in @('restore','build','test')) {
         $stagePath = Join-Path $inputDirectory "stage-$stage.json"
-        if (Test-Path -LiteralPath $stagePath) { $stages[$stage] = Get-Content -Raw -LiteralPath $stagePath | ConvertFrom-Json -AsHashtable }
+        if (Test-Path -LiteralPath $stagePath) {
+            try { $stages[$stage] = Get-Content -Raw -LiteralPath $stagePath | ConvertFrom-Json -AsHashtable }
+            catch { $errors.Add("${project}: malformed stage metadata '$([IO.Path]::GetFileName($stagePath))': $($_.Exception.Message)") }
+        }
     }
     $trxFiles = @(Get-ChildItem -LiteralPath $inputDirectory -Filter '*.trx' -File -Recurse -ErrorAction SilentlyContinue)
     $htmlFiles = @(Get-ChildItem -LiteralPath $inputDirectory -Filter '*report.html' -File -Recurse -ErrorAction SilentlyContinue | Where-Object Length -gt 0)
@@ -48,11 +51,17 @@ foreach ($project in $Projects) {
     $invocation = $null
     $manifestPath = Join-Path $inputDirectory 'invocation-test.json'
     if (Test-Path -LiteralPath $manifestPath) {
-        $invocation = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json -AsHashtable
-        if ($invocation.schemaVersion -ne 1 -or $invocation.project -ne $project) { throw "${project}: invalid invocation manifest" }
-        if ([string]::IsNullOrWhiteSpace([string]$invocation.invocationId)) { $errors.Add("${project}: missing invocation identity") }
-        if (!(Test-InvocationArguments $invocation.arguments)) { $errors.Add("${project}: missing or invalid invocation arguments") }
-        $invocations.Add($invocation)
+        try {
+            $candidate = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json -AsHashtable
+            if ($candidate.schemaVersion -ne 1 -or $candidate.project -ne $project) { throw 'Unexpected schema version or project' }
+            $invocation = $candidate
+            if ([string]::IsNullOrWhiteSpace([string]$invocation.invocationId)) { $errors.Add("${project}: missing invocation identity") }
+            if (!(Test-InvocationArguments $invocation.arguments)) { $errors.Add("${project}: missing or invalid invocation arguments") }
+            $invocations.Add($invocation)
+        } catch {
+            $invocation = $null
+            $errors.Add("${project}: invalid invocation manifest '$([IO.Path]::GetFileName($manifestPath))': $($_.Exception.Message)")
+        }
     }
     $countersComplete = $true
     foreach ($trace in @(Get-ChildItem -LiteralPath $inputDirectory -Filter 'diagnostics-*.jsonl' -File -Recurse -ErrorAction SilentlyContinue)) {

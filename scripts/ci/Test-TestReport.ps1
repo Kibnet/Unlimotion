@@ -125,4 +125,26 @@ Write-Fixture 'partial-trace' $trx
 Invoke-Report 'partial-trace' 1 'failure'
 $partial = Get-Content -Raw (Join-Path $root 'partial-trace-out/run.json') | ConvertFrom-Json
 Assert-True (!$partial.projects[0].telemetryComplete) 'Failed pipeline hid incomplete diagnostic trace'
+foreach ($metadataCase in @('stage','manifest')) {
+    $fixtureName = "malformed-$metadataCase-multi-project"
+    Write-Fixture $fixtureName $allPassed
+    $mainDirectory = Join-Path $root "$fixtureName/main"
+    $headlessDirectory = Join-Path $root "$fixtureName/headless"
+    Copy-Item -LiteralPath $mainDirectory -Destination $headlessDirectory -Recurse
+    $headlessManifestPath = Join-Path $headlessDirectory 'invocation-test.json'
+    $headlessManifest = Get-Content -Raw -LiteralPath $headlessManifestPath | ConvertFrom-Json -AsHashtable
+    $headlessManifest.project = 'headless'
+    $headlessManifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $headlessManifestPath
+    $corruptedPath = if ($metadataCase -eq 'stage') {Join-Path $mainDirectory 'stage-test.json'} else {Join-Path $mainDirectory 'invocation-test.json'}
+    '{"truncated":' | Set-Content -LiteralPath $corruptedPath
+    & pwsh -NoProfile -File $reporter -ResultsRoot (Join-Path $root $fixtureName) -OutputRoot (Join-Path $root "$fixtureName-out") -PipelineOutcome failure *> (Join-Path $root "$fixtureName.log")
+    Assert-True ($LASTEXITCODE -eq 1) "$fixtureName did not report damaged metadata"
+    $run = Get-Content -Raw -LiteralPath (Join-Path $root "$fixtureName-out/run.json") | ConvertFrom-Json
+    $main = $run.projects | Where-Object project -eq 'main'
+    $headless = $run.projects | Where-Object project -eq 'headless'
+    Assert-True ($main.status -eq 'incomplete' -and !$main.telemetryComplete) "$fixtureName did not mark main incomplete"
+    Assert-True ($headless.status -eq 'passed' -and $headless.telemetryComplete) "$fixtureName damaged the healthy project report"
+    Assert-True (Test-Path -LiteralPath (Join-Path $root "$fixtureName-out/headless/tests.json")) "$fixtureName lost the healthy project tests"
+    Assert-True (Test-Path -LiteralPath (Join-Path $root "$fixtureName-out/summary.md")) "$fixtureName lost the combined summary"
+}
 Write-Output "PASS: reporter contracts, including phase identity join and multi-process fingerprints; fixtures/logs: $root"
