@@ -255,6 +255,13 @@ namespace Unlimotion.ViewModel
                     .AddToDispose(this);
             }
 
+            // Loading an authoritative model (including legacy data) must not clear its repeater.
+            this.WhenAnyValue(m => m.PlannedBeginDateTime)
+                .Skip(1)
+                .Where(begin => !begin.HasValue && !_isUpdatingFromModel)
+                .Subscribe(_ => Repeater = null)
+                .AddToDispose(this);
+
             //При изменении начала
             this.WhenAnyValue(m => m.PlannedBeginDateTime)
                 .Subscribe(b =>

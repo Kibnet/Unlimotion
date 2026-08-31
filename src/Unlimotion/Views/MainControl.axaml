@@ -2044,7 +2044,8 @@
                                     <Border Classes="TaskCardSection"
                                             AutomationProperties.ControlTypeOverride="Group"
                                             AutomationProperties.IsControlElementOverride="True"
-                                            AutomationProperties.AutomationId="CurrentTaskRepeaterSection">
+                                            AutomationProperties.AutomationId="CurrentTaskRepeaterSection"
+                                            IsVisible="{Binding PlannedBeginDateTime, Converter={x:Static ObjectConverters.IsNotNull}}">
                                         <StackPanel Classes="TaskCardSectionContent">
                                             <Grid Classes="RepeaterControls RepeaterPatternControls"
                                                   ColumnDefinitions="*,*,Auto,*"
