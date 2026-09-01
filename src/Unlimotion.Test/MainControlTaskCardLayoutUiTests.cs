@@ -116,8 +116,8 @@ public class MainControlTaskCardLayoutUiTests
 
                 AssertTaskDetailsPanelFrameUsesVisibleBorder(detailsPanelFrame);
                 AssertTaskCardIsContentContainer(card);
-                AssertHasClass(createMenuButton, "TaskCreateMenuButton");
-                AssertIconOnlyDropDownButton(createMenuButton, "➕", 42);
+                AssertHasClass(createMenuButton, "GlobalCreateButton");
+                AssertIconOnlyButton(createMenuButton, "➕", 42);
                 AssertCreateMenuContainsTaskCommands(createMenuButton);
                 AssertHasClass(actionsMenuButton, "TaskActionsMenuButton");
                 AssertIconOnlyDropDownButton(actionsMenuButton, "⚙", 36);
@@ -524,9 +524,9 @@ public class MainControlTaskCardLayoutUiTests
                     FindControlByAutomationId<Button>(view, "CurrentTaskParentsRelationAddButton"),
                     FindControlByAutomationId<Button>(view, "CurrentTaskBlockingRelationAddButton"),
                     FindControlByAutomationId<Button>(view, "CurrentTaskContainingRelationAddButton"),
-                    FindControlByAutomationId<Button>(view, "CurrentTaskBlockedRelationAddButton"),
-                    FindControlByAutomationId<DropDownButton>(view, "GlobalTaskCreateMenuButton")
+                    FindControlByAutomationId<Button>(view, "CurrentTaskBlockedRelationAddButton")
                 ];
+                var globalCreateButton = FindControlByAutomationId<Button>(view, "GlobalCreateMenuButton");
 
                 AssertTaskDetailsPanelFrameUsesVisibleBorder(detailsPanelFrame);
                 AssertTaskCardIsContentContainer(card);
@@ -535,6 +535,9 @@ public class MainControlTaskCardLayoutUiTests
                     AssertDoesNotUseLightThemeAccentBackground(button);
                     AssertHasClass(button, "TaskAccentOutlineButton");
                 }
+
+                AssertDoesNotUseLightThemeAccentBackground(globalCreateButton);
+                AssertHasClass(globalCreateButton, "GlobalCreateButton");
             }
             finally
             {
@@ -951,7 +954,7 @@ public class MainControlTaskCardLayoutUiTests
                 RunLayoutJobs();
                 await Assert.That(splitView.IsPaneOpen).IsFalse();
 
-                var createMenuButton = FindControlByAutomationId<DropDownButton>(view, "GlobalTaskCreateMenuButton");
+                var createMenuButton = FindControlByAutomationId<Button>(view, "GlobalCreateMenuButton");
                 await Assert.That(IsVisibleAndArranged(createMenuButton)).IsTrue();
 
                 var handled = vm.TryHandleTaskCardBackGesture();
@@ -1080,7 +1083,7 @@ public class MainControlTaskCardLayoutUiTests
                 var (view, createdWindow) = await CreateArrangedMainControlAsync(fixture, width, 844);
                 window = createdWindow;
 
-                var createMenuButton = FindControlByAutomationId<DropDownButton>(view, "GlobalTaskCreateMenuButton");
+                var createMenuButton = FindControlByAutomationId<Button>(view, "GlobalCreateMenuButton");
                 AssertCreateMenuContainsTaskCommands(createMenuButton);
                 AssertCreateMenuUsesTouchFriendlyItems(createMenuButton);
                 AssertHorizontallyContained(view, createMenuButton);
@@ -2148,7 +2151,7 @@ public class MainControlTaskCardLayoutUiTests
         currentTask.PlannedBeginDateTime ??= DateTime.Today;
         configureCurrentTask?.Invoke(currentTask);
 
-        var view = new MainControl
+        var shell = new MainScreen
         {
             DataContext = vm,
             Width = width,
@@ -2156,28 +2159,29 @@ public class MainControlTaskCardLayoutUiTests
         };
         if (fontSize.HasValue)
         {
-            view.FontSize = fontSize.Value;
+            shell.FontSize = fontSize.Value;
         }
         var window = new Window
         {
             Width = width,
             Height = height,
-            Content = view
+            Content = shell
         };
 
         window.Show();
         try
         {
+            RunLayoutJobs();
+            var view = shell.GetVisualDescendants().OfType<MainControl>().Single();
             ArrangeMainControlForTest(window, view, width, height);
             EnsureDetailsPaneArranged(window, view, width, height);
+            return (view, window);
         }
         catch
         {
             window.Close();
             throw;
         }
-
-        return (view, window);
     }
 
     private const int LongEmojiAncestorCount = 8;
@@ -2409,6 +2413,13 @@ public class MainControlTaskCardLayoutUiTests
                     AutomationProperties.GetAutomationId(candidate),
                     automationId,
                     StringComparison.Ordinal));
+
+        control ??= TopLevel.GetTopLevel(root)?.GetVisualDescendants()
+            .OfType<T>()
+            .FirstOrDefault(candidate => string.Equals(
+                AutomationProperties.GetAutomationId(candidate),
+                automationId,
+                StringComparison.Ordinal));
 
         return control ?? throw new InvalidOperationException($"Control with AutomationId '{automationId}' was not found.");
     }
@@ -2753,7 +2764,7 @@ public class MainControlTaskCardLayoutUiTests
         return Colors.Transparent;
     }
 
-    private static void AssertCreateMenuContainsTaskCommands(DropDownButton createMenuButton)
+    private static void AssertCreateMenuContainsTaskCommands(Button createMenuButton)
     {
         if (createMenuButton.Flyout is not MenuFlyout menuFlyout)
         {
@@ -2783,7 +2794,7 @@ public class MainControlTaskCardLayoutUiTests
         }
     }
 
-    private static void AssertCreateMenuUsesTouchFriendlyItems(DropDownButton createMenuButton)
+    private static void AssertCreateMenuUsesTouchFriendlyItems(Button createMenuButton)
     {
         if (createMenuButton.Flyout is not MenuFlyout menuFlyout)
         {

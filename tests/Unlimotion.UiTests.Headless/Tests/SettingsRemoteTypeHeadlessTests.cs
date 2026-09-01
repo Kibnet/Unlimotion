@@ -43,7 +43,7 @@ public sealed class SettingsRemoteTypeHeadlessTests
     public async Task Settings_remote_type_switch_creates_ssh_copy_for_single_http_remote()
     {
         using var presentation = new HeadlessWindowPresentation(Session.Inner.MainWindow);
-        Page.SelectTabItem(static page => page.SettingsTabItem, timeoutMs: 10_000);
+        Page.ClickButton(static page => page.GlobalSettingsButton);
         _ = WaitUntil(
             () => TryResolveDuringWait(() => Page.SettingsRoot),
             static control => control is not null,
@@ -138,7 +138,7 @@ public sealed class SettingsRemoteTypeHeadlessTests
     [NotInParallel(DesktopUiConstraint)]
     public async Task Settings_refresh_metadata_fills_empty_remote_url_from_current_local_storage()
     {
-        Page.SelectTabItem(static page => page.SettingsTabItem, timeoutMs: 10_000);
+        Page.ClickButton(static page => page.GlobalSettingsButton);
         _ = WaitUntil(
             () => TryResolveDuringWait(() => Page.SettingsRoot),
             static control => control is not null,

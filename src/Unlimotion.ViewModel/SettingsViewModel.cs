@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -304,6 +305,12 @@ public class SettingsViewModel
         Password = storage.Password;
         IsServerMode = storage.IsServerMode;
 
+        var note = _configuration.GetSection(NoteVaultSectionName);
+        NoteVaultRootPath = note.GetSection(NoteVaultRootPathKey).Get<string>();
+        IsFeedEnabled = note.GetSection(NoteVaultIsFeedEnabledKey).Get<bool?>() ?? true;
+        NoteDayBoundary = TimeSpan.FromMinutes(NormalizeDayBoundaryMinutes(
+            note.GetSection(NoteVaultDayBoundaryMinutesKey).Get<int?>() ?? 0));
+
         var git = _configuration.Get<GitSettings>("Git") ?? new GitSettings();
         GitBackupEnabled = git.BackupEnabled;
         GitShowStatusToasts = git.ShowStatusToasts;
@@ -324,6 +331,48 @@ public class SettingsViewModel
         ReloadGitMetadata();
         RefreshStorageSelectionState();
         RefreshStorageStatusText();
+    }
+
+    private void PersistActiveNoteProfile()
+    {
+        var sourceId = _configuration
+            .GetSection(TaskSourcesSettings.SectionName)
+            .GetSection(nameof(TaskSourcesSettings.ActiveSourceId))
+            .Get<string>();
+        if (string.IsNullOrWhiteSpace(sourceId))
+        {
+            return;
+        }
+
+        var serialized = _configuration.Get<string>(TaskSourcesSettings.NoteProfilesSectionName);
+        List<TaskSourceNoteSettings> profiles;
+        try
+        {
+            profiles = string.IsNullOrWhiteSpace(serialized)
+                ? []
+                : JsonSerializer.Deserialize<List<TaskSourceNoteSettings>>(serialized) ?? [];
+        }
+        catch (JsonException)
+        {
+            return;
+        }
+
+        var profile = profiles.FirstOrDefault(candidate => string.Equals(
+            candidate.SourceId,
+            sourceId,
+            StringComparison.Ordinal));
+        if (profile is null)
+        {
+            profile = new TaskSourceNoteSettings { SourceId = sourceId };
+            profiles.Add(profile);
+        }
+
+        profile.RootPath = _noteVaultRootPath;
+        profile.IsFeedEnabled = _isFeedEnabled;
+        profile.DayBoundaryMinutes = (int)_noteDayBoundary.TotalMinutes;
+        _configuration.Set(
+            TaskSourcesSettings.NoteProfilesSectionName,
+            JsonSerializer.Serialize(profiles));
     }
 
     public void UseDeferredTaskSpaceSettingsPersistence() =>
@@ -479,6 +528,7 @@ public class SettingsViewModel
             HasExternalNoteDailyFileNameFormatChange = false;
             NoteDailyFileNameFormatStatusText = null;
             _noteVaultSettings.GetSection(NoteVaultRootPathKey).Set(value);
+            PersistActiveNoteProfile();
         }
     }
 
@@ -627,6 +677,7 @@ public class SettingsViewModel
             AdvanceNoteDailyFileNameFormatApplyContextGeneration();
             ResetNoteDailyFileNameFormatFeedSession();
             _noteVaultSettings.GetSection(NoteVaultIsFeedEnabledKey).Set(value);
+            PersistActiveNoteProfile();
         }
     }
 
@@ -645,6 +696,7 @@ public class SettingsViewModel
             _noteVaultSettings
                 .GetSection(NoteVaultDayBoundaryMinutesKey)
                 .Set((int)normalized.TotalMinutes);
+            PersistActiveNoteProfile();
         }
     }
 
