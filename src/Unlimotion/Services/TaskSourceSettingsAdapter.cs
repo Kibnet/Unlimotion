@@ -83,6 +83,7 @@ public static class TaskSourceSettingsAdapter
         foreach (var source in settings.Sources)
         {
             EnsureSyncSettings(settings, source.Id);
+            EnsureNoteSettings(settings, source.Id, configuration);
         }
 
         validateBeforePersistence?.Invoke(settings);
@@ -155,6 +156,30 @@ public static class TaskSourceSettingsAdapter
             Git = CloneGitSettings(legacyGitSettings ?? new GitSettings())
         };
         settings.SyncSettings.Add(created);
+        return created;
+    }
+
+    public static TaskSourceNoteSettings EnsureNoteSettings(
+        TaskSourcesSettings settings,
+        string sourceId,
+        IConfiguration? legacyConfiguration = null)
+    {
+        var existing = settings.NoteSettings.FirstOrDefault(note =>
+            string.Equals(note.SourceId, sourceId, StringComparison.Ordinal));
+        if (existing != null)
+        {
+            return existing;
+        }
+
+        var legacy = legacyConfiguration?.GetSection("NoteVault");
+        var created = new TaskSourceNoteSettings
+        {
+            SourceId = sourceId,
+            RootPath = legacy?.GetSection("RootPath").Get<string>(),
+            IsFeedEnabled = legacy?.GetSection("IsFeedEnabled").Get<bool?>() ?? true,
+            DayBoundaryMinutes = legacy?.GetSection("DayBoundaryMinutes").Get<int?>() ?? 0
+        };
+        settings.NoteSettings.Add(created);
         return created;
     }
 
@@ -233,6 +258,9 @@ public static class TaskSourceSettingsAdapter
         }
 
         SaveSyncSettings(configuration, settings.SyncSettings);
+        configuration.Set(
+            TaskSourcesSettings.NoteProfilesSectionName,
+            JsonSerializer.Serialize(settings.NoteSettings));
         section.GetSection("SourcesCount").Set(settings.Sources.Count);
         section.GetSection("ServerSettingsCount").Set(settings.ServerSettings.Count);
         section.GetSection(nameof(TaskSourcesSettings.ActiveSourceId)).Set(settings.ActiveSourceId);
@@ -291,6 +319,11 @@ public static class TaskSourceSettingsAdapter
 
         configuration.Set("TaskStorage", targetStorage);
         configuration.Set("Git", targetGit);
+        var note = EnsureNoteSettings(settings, activeSource.Id, configuration);
+        var noteSection = configuration.GetSection("NoteVault");
+        noteSection.GetSection("RootPath").Set(note.RootPath ?? string.Empty);
+        noteSection.GetSection("IsFeedEnabled").Set(note.IsFeedEnabled);
+        noteSection.GetSection("DayBoundaryMinutes").Set(note.DayBoundaryMinutes);
         if (serverSettings != null)
         {
             WriteClientSettings(configuration, ToClientSettings(serverSettings));
@@ -483,6 +516,7 @@ public static class TaskSourceSettingsAdapter
         settings.ActiveSourceId = TaskSourceDescriptor.DefaultSourceId;
         settings.ServerSettings.Clear();
         settings.SyncSettings.Clear();
+        settings.NoteSettings.Clear();
         settings.LegacyProjection = new TaskSourceLegacyProjectionState();
     }
 
@@ -517,6 +551,10 @@ public static class TaskSourceSettingsAdapter
             settings.SyncSettings.Select(sync => sync.SourceId),
             sourceIds,
             "sync settings");
+        ValidateScopedIds(
+            settings.NoteSettings.Select(note => note.SourceId),
+            sourceIds,
+            "note settings");
 
         if (settings.Sources.Count > 0 &&
             (string.IsNullOrWhiteSpace(settings.ActiveSourceId) || !sourceIds.Contains(settings.ActiveSourceId)))
@@ -961,6 +999,7 @@ public static class TaskSourceSettingsAdapter
                             SourceId = profile.Key,
                             Git = CloneGitSettings(profile.Value)
                         }));
+                    ReadNoteSettings(configuration, settings);
                     settings.LegacyProjection = ReadProjection(configuration);
                     return settings;
                 }
@@ -1000,8 +1039,36 @@ public static class TaskSourceSettingsAdapter
             });
         }
 
+        ReadNoteSettings(configuration, settings);
         settings.LegacyProjection = ReadProjection(configuration);
         return settings;
+    }
+
+    private static void ReadNoteSettings(IConfiguration configuration, TaskSourcesSettings settings)
+    {
+        var serialized = configuration.Get<string>(TaskSourcesSettings.NoteProfilesSectionName);
+        if (string.IsNullOrWhiteSpace(serialized))
+        {
+            return;
+        }
+
+        try
+        {
+            var profiles = JsonSerializer.Deserialize<List<TaskSourceNoteSettings>>(serialized);
+            if (profiles != null)
+            {
+                settings.NoteSettings.AddRange(profiles.Where(static profile =>
+                    !string.IsNullOrWhiteSpace(profile.SourceId)));
+            }
+        }
+        catch (JsonException error)
+        {
+            throw new TaskSpaceCatalogException(
+                TaskSpaceCatalogIssue.InvalidSourceConfiguration,
+                [TaskSourcesSettings.NoteProfilesSectionName],
+                "The persisted task-space note profiles are corrupt.",
+                error);
+        }
     }
 
     private static T? DeserializeSlot<T>(string? serialized)

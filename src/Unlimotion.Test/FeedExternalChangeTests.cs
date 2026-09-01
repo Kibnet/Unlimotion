@@ -139,8 +139,14 @@ public class FeedExternalChangeTests
         var write = await vault.CreateAsync(relativePath, "own\n");
         var fullPath = vault.ResolveSafePath(relativePath);
         source.Emit(new VaultRawChange(VaultRawChangeKind.Created, fullPath));
-        await Task.Delay(60);
-        await Assert.That(sink.Changes).IsEmpty();
+        const string barrierRelativePath = "Ежедневные/watcher-barrier.md";
+        var barrierFullPath = vault.ResolveSafePath(barrierRelativePath);
+        await File.WriteAllTextAsync(barrierFullPath, "barrier\n", new UTF8Encoding(false));
+        source.Emit(new VaultRawChange(VaultRawChangeKind.Created, barrierFullPath));
+        _ = await sink.WaitForAsync(change =>
+            string.Equals(change.RelativePath, barrierRelativePath, StringComparison.Ordinal));
+        await Assert.That(sink.Changes.Any(change =>
+            string.Equals(change.RelativePath, relativePath, StringComparison.Ordinal))).IsFalse();
         await Assert.That(ownWrites.TryMatch(relativePath, write.Revision, out var match)).IsTrue();
         await Assert.That(match!.OperationId.Length).IsGreaterThan(0);
 
@@ -153,7 +159,8 @@ public class FeedExternalChangeTests
         await vault.DeleteAsync(relativePath, current!.Revision);
         source.Emit(new VaultRawChange(VaultRawChangeKind.Deleted, fullPath));
         await Task.Delay(60);
-        await Assert.That(sink.Changes.Count).IsEqualTo(1);
+        await Assert.That(sink.Changes.Count(change =>
+            string.Equals(change.RelativePath, relativePath, StringComparison.Ordinal))).IsEqualTo(1);
     }
 
     [Test]

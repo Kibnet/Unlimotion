@@ -101,6 +101,20 @@ namespace Unlimotion.ViewModel
             Settings = settings ?? new SettingsViewModel(_configuration);
             Feed = new FeedViewModel();
             Disposables.Add(Feed);
+            OpenQuickCaptureCommand = ReactiveCommand.Create(() => OpenQuickCapture(isTask: false))
+                .AddToDisposeAndReturn(this);
+            OpenQuickTaskCaptureCommand = ReactiveCommand.Create(() => OpenQuickCapture(isTask: true))
+                .AddToDisposeAndReturn(this);
+            CloseQuickCaptureCommand = ReactiveCommand.Create(CloseQuickCapture)
+                .AddToDisposeAndReturn(this);
+            SaveQuickCaptureCommand = ReactiveCommand.CreateFromTask(SaveQuickCaptureCoreAsync)
+                .AddToDisposeAndReturn(this);
+            OpenSettingsCommand = ReactiveCommand.Create(OpenSettings)
+                .AddToDisposeAndReturn(this);
+            CloseSettingsCommand = ReactiveCommand.Create(CloseSettings)
+                .AddToDisposeAndReturn(this);
+            OpenReviewCommand = ReactiveCommand.CreateFromTask(OpenReviewCoreAsync)
+                .AddToDisposeAndReturn(this);
             Graph = graph ?? new GraphViewModel();
             CurrentAllTasksItems = EmptyTaskWrappers;
             UnlockedItems = EmptyTaskWrappers;
@@ -3063,6 +3077,95 @@ namespace Unlimotion.ViewModel
 
         public SettingsViewModel Settings { get; set; }
         public FeedViewModel Feed { get; }
+
+        public ICommand OpenQuickCaptureCommand { get; }
+
+        public ICommand OpenQuickTaskCaptureCommand { get; }
+
+        public ICommand CloseQuickCaptureCommand { get; }
+
+        public ICommand SaveQuickCaptureCommand { get; }
+
+        public ICommand OpenSettingsCommand { get; }
+
+        public ICommand CloseSettingsCommand { get; }
+
+        public ICommand OpenReviewCommand { get; }
+
+        public bool IsQuickCaptureOpen { get; private set; }
+
+        public bool IsQuickCaptureTask { get; set; }
+
+        public bool IsSettingsOpen { get; private set; }
+
+        public void OpenQuickCapture(bool isTask)
+        {
+            IsSettingsOpen = false;
+            Feed.ResetQuickCaptureTaskResult();
+            IsQuickCaptureTask = isTask;
+            IsQuickCaptureOpen = true;
+        }
+
+        public void CloseQuickCapture()
+        {
+            IsQuickCaptureOpen = false;
+        }
+
+        public void OpenSettings()
+        {
+            IsQuickCaptureOpen = false;
+            IsSettingsOpen = true;
+        }
+
+        public void CloseSettings()
+        {
+            IsSettingsOpen = false;
+        }
+
+        public bool CloseTopmostOverlay()
+        {
+            if (IsSettingsOpen)
+            {
+                CloseSettings();
+                return true;
+            }
+
+            if (IsQuickCaptureOpen)
+            {
+                CloseQuickCapture();
+                return true;
+            }
+
+            if (Feed.IsReviewActive)
+            {
+                Feed.FinishReviewCommand.Execute(null);
+                return true;
+            }
+
+            return false;
+        }
+
+        private async Task SaveQuickCaptureCoreAsync()
+        {
+            if (IsQuickCaptureTask)
+            {
+                await Feed.CaptureTaskAsync();
+                return;
+            }
+
+            await Feed.CaptureAsync();
+            if (string.IsNullOrEmpty(Feed.QuickCaptureText) && !Feed.HasError)
+            {
+                CloseQuickCapture();
+            }
+        }
+
+        private async Task OpenReviewCoreAsync()
+        {
+            IsQuickCaptureOpen = false;
+            IsSettingsOpen = false;
+            await Feed.StartReviewAsync();
+        }
 
         [AlsoNotifyFor(nameof(IsTasksMode), nameof(IsFeedMode))]
         public WorkspaceMode SelectedWorkspaceMode { get; set; } = WorkspaceMode.Tasks;

@@ -74,8 +74,12 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
     private FeedDocumentConflictViewModel? documentConflict;
     private FeedVaultIdentityConflictViewModel? identityConflict;
     private FeedReviewRecoveryViewModel? reviewRecovery;
+    private FeedHeadingAreaConversionViewModel? headingAreaConversion;
+    private MarkdownLivePreviewEditorViewModel? headingAreaConversionEditor;
+    private int headingAreaConversionBlockIndex = -1;
     private FeedThematicDocumentViewModel? openedThematicFile;
     private FeedTaskReferenceViewModel? createdTaskReference;
+    private FeedTaskReferenceViewModel? quickCaptureCreatedTaskReference;
     private IDisposable? taskSearchSubscription;
     private ITaskStorage? indexedTaskStorage;
     private PropertyChangedEventHandler? taskOwnerPropertyChangedHandler;
@@ -93,11 +97,14 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
     private MarkdownBlockSelection? currentReviewSelection;
     private int currentReviewAnchorBlockIndex;
     private string? currentReviewOperationId;
+    private int currentReviewIndex;
     private Func<string, TaskItemViewModel?>? taskResolver;
     private MainWindowViewModel? taskOwner;
     private FeedDayViewModel? selectedDay;
     private FeedSearchAreaOptionViewModel? selectedSearchArea;
     private FeedSearchTypeOptionViewModel? selectedSearchType;
+    private FeedAreaFilterOptionViewModel? selectedFeedAreaFilter;
+    private bool isUpdatingFeedAreaFilter;
     private DateTimeOffset? searchFromDate;
     private DateTimeOffset? searchToDate;
     private string searchQuery = string.Empty;
@@ -157,6 +164,18 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
             FeedSearchDocumentType.Task,
             "FeedSearchTypeTask"));
         SelectedSearchType = SearchTypeOptions[0];
+        FeedAreaFilterOptions.Add(new FeedAreaFilterOptionViewModel(
+            identity: null,
+            L10n.Get("FeedAreaFilterAll"),
+            isAll: true,
+            isSelected: true,
+            selectionChanged: HandleFeedAreaFilterOptionChanged));
+        FeedAreaFilterOptions.Add(new FeedAreaFilterOptionViewModel(
+            string.Empty,
+            L10n.Get("FeedNoArea"),
+            isSelected: true,
+            selectionChanged: HandleFeedAreaFilterOptionChanged));
+        selectedFeedAreaFilter = FeedAreaFilterOptions[0];
 
         var chooseVaultCommand = ReactiveCommand.CreateFromTask(ChooseVaultCoreAsync);
         ChooseVaultCommand = chooseVaultCommand;
@@ -210,6 +229,14 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
         ContinueReviewCommand = continueReviewCommand;
         disposables.Add(continueReviewCommand);
 
+        var previousReviewCommand = ReactiveCommand.CreateFromTask(() => NavigateReviewAsync(-1));
+        PreviousReviewCommand = previousReviewCommand;
+        disposables.Add(previousReviewCommand);
+
+        var nextReviewCommand = ReactiveCommand.CreateFromTask(() => NavigateReviewAsync(1));
+        NextReviewCommand = nextReviewCommand;
+        disposables.Add(nextReviewCommand);
+
         var openSearchResultCommand = ReactiveCommand.CreateFromTask<FeedSearchResultViewModel?>(OpenSearchResultCoreAsync);
         OpenSearchResultCommand = openSearchResultCommand;
         disposables.Add(openSearchResultCommand);
@@ -222,9 +249,15 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
         OpenFilesCommand = new FeedActionCommand(_ => OpenFilesDrawer());
         OpenAreasCommand = new FeedActionCommand(_ => OpenAreaManagement());
         CloseThematicFileCommand = new FeedActionCommand(_ => CloseThematicFile());
+        ShowReviewTaskStageCommand = new FeedActionCommand(_ => ReviewDecisionStage = FeedReviewDecisionStage.Task);
+        ShowReviewNoteStageCommand = new FeedActionCommand(_ => ReviewDecisionStage = FeedReviewDecisionStage.Note);
+        DismissReviewReminderCommand = new FeedActionCommand(_ => IsReviewReminderDismissed = true);
+        ResetFeedAreaFilterCommand = new FeedActionCommand(_ => ResetFeedAreaFilter());
     }
 
     public ObservableCollection<FeedDayViewModel> Days { get; } = new();
+
+    public ObservableCollection<FeedDayViewModel> VisibleDays { get; } = new();
 
     public ObservableCollection<FeedSearchResultViewModel> SearchResults { get; } = new();
 
@@ -233,6 +266,8 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
     public ObservableCollection<FeedSearchAreaOptionViewModel> SearchAreaOptions { get; } = new();
 
     public ObservableCollection<FeedSearchTypeOptionViewModel> SearchTypeOptions { get; } = new();
+
+    public ObservableCollection<FeedAreaFilterOptionViewModel> FeedAreaFilterOptions { get; } = new();
 
     public void SetNotificationDispatcher(Action<Action>? dispatcher)
     {
@@ -280,6 +315,10 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
 
     public ICommand ContinueReviewCommand { get; }
 
+    public ICommand PreviousReviewCommand { get; }
+
+    public ICommand NextReviewCommand { get; }
+
     public ICommand OpenSearchResultCommand { get; }
 
     public ICommand ExpandSelectionUpCommand { get; }
@@ -297,6 +336,14 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
     public ICommand OpenAreasCommand { get; }
 
     public ICommand CloseThematicFileCommand { get; }
+
+    public ICommand ShowReviewTaskStageCommand { get; }
+
+    public ICommand ShowReviewNoteStageCommand { get; }
+
+    public ICommand DismissReviewReminderCommand { get; }
+
+    public ICommand ResetFeedAreaFilterCommand { get; }
 
     public Func<Task>? ChooseVaultAsync { get; set; }
 
@@ -373,6 +420,18 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
         get => reviewRecovery;
         private set => reviewRecovery = value;
     }
+
+    public FeedHeadingAreaConversionViewModel? HeadingAreaConversion
+    {
+        get => headingAreaConversion;
+        private set
+        {
+            this.RaiseAndSetIfChanged(ref headingAreaConversion, value);
+            this.RaisePropertyChanged(nameof(HasHeadingAreaConversion));
+        }
+    }
+
+    public bool HasHeadingAreaConversion => HeadingAreaConversion is not null;
 
     [AlsoNotifyFor(nameof(HasOpenedThematicFile))]
     public FeedThematicDocumentViewModel? OpenedThematicFile
@@ -511,7 +570,25 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
 
     public bool IsContentVisible => IsVaultInitialized;
 
-    [AlsoNotifyFor(nameof(CanCapture), nameof(CanStartReview), nameof(IsVaultChoiceEnabled))]
+    public bool IsBoundToVaultRoot(string? expectedRootPath)
+    {
+        if (string.IsNullOrWhiteSpace(expectedRootPath))
+        {
+            return !IsVaultInitialized && string.IsNullOrWhiteSpace(VaultRootPath);
+        }
+
+        return IsVaultInitialized
+            && !string.IsNullOrWhiteSpace(VaultRootPath)
+            && AreEquivalentVaultRoots(expectedRootPath, VaultRootPath);
+    }
+
+    [AlsoNotifyFor(
+        nameof(CanCapture),
+        nameof(CanStartReview),
+        nameof(IsVaultChoiceEnabled),
+        nameof(CanModifyReviewSource),
+        nameof(CanNavigateReviewPrevious),
+        nameof(CanNavigateReviewNext))]
     public bool IsBusy { get; private set; }
 
     [AlsoNotifyFor(nameof(HasError))]
@@ -603,7 +680,20 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
     [AlsoNotifyFor(nameof(IsChronologyEmpty))]
     public bool HasDays { get; private set; }
 
-    public bool IsChronologyEmpty => !HasDays;
+    [AlsoNotifyFor(nameof(IsChronologyEmpty), nameof(IsFilteredChronologyEmpty), nameof(IsUnfilteredChronologyEmpty))]
+    public bool HasVisibleDays { get; private set; }
+
+    public bool IsChronologyEmpty => !HasVisibleDays;
+
+    public bool IsFeedAreaFilterActive =>
+        FeedAreaFilterOptions.FirstOrDefault(static option => option.IsAll)?.IsSelected == false;
+
+    public bool IsFilteredChronologyEmpty => IsChronologyEmpty && IsFeedAreaFilterActive;
+
+    public bool IsUnfilteredChronologyEmpty => IsChronologyEmpty && !IsFeedAreaFilterActive;
+
+    public string ChronologyAutomationName =>
+        L10n.Format("FeedChronologyAutomationName", VisibleDays.Count);
 
     public int LoadedDayCount { get; private set; }
 
@@ -614,6 +704,42 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
     }
 
     public bool HasMoreDays { get; private set; }
+
+    public bool IsLoadingOlderDays { get; private set; }
+
+    public bool HasOlderDaysLoadError { get; private set; }
+
+    public FeedAreaFilterOptionViewModel? SelectedFeedAreaFilter
+    {
+        get => selectedFeedAreaFilter;
+        set
+        {
+            if (ReferenceEquals(selectedFeedAreaFilter, value))
+            {
+                return;
+            }
+
+            selectedFeedAreaFilter = value;
+            ApplyExclusiveFeedAreaFilter(value);
+        }
+    }
+
+    public string FeedAreaFilterSummary
+    {
+        get
+        {
+            var selectable = FeedAreaFilterOptions.Where(static option => !option.IsAll).ToArray();
+            var selected = selectable.Count(static option => option.IsSelected);
+            if (selectable.Length == 0 || selected == selectable.Length)
+            {
+                return L10n.Get("FeedAreaFilterAll");
+            }
+
+            return selected == 0
+                ? L10n.Get("FeedAreaFilterNone")
+                : L10n.Format("FeedAreaFilterSelected", selected);
+        }
+    }
 
     public bool IsSearchIndexing { get; private set; }
 
@@ -664,7 +790,10 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
 
     public bool HasPendingReview => PendingReviewBlocks > 0;
 
-    public bool IsReviewBannerVisible => HasPendingReview || IsReviewActive;
+    public bool IsReviewBannerVisible => HasPendingReview && !IsReviewReminderDismissed && !IsReviewActive;
+
+    [AlsoNotifyFor(nameof(IsReviewBannerVisible))]
+    public bool IsReviewReminderDismissed { get; private set; }
 
     public bool CanStartReview => IsVaultInitialized
         && HasPendingReview
@@ -682,6 +811,23 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
     public bool IsReviewActive { get; private set; }
 
     public bool IsReviewSelectionVisible => IsReviewActive && CurrentReview is not null;
+
+    public int CurrentReviewPosition => IsReviewSelectionVisible ? currentReviewIndex + 1 : 0;
+
+    public int CurrentReviewCount => reviewQueueSnapshot.Candidates.Count;
+
+    public bool CanNavigateReviewPrevious => IsReviewSelectionVisible && currentReviewIndex > 0 && !IsBusy;
+
+    public bool CanNavigateReviewNext => IsReviewSelectionVisible
+        && currentReviewIndex + 1 < reviewQueueSnapshot.Candidates.Count
+        && !IsBusy;
+
+    [AlsoNotifyFor(nameof(IsReviewTaskStage), nameof(IsReviewNoteStage))]
+    public FeedReviewDecisionStage ReviewDecisionStage { get; private set; }
+
+    public bool IsReviewTaskStage => ReviewDecisionStage == FeedReviewDecisionStage.Task;
+
+    public bool IsReviewNoteStage => ReviewDecisionStage == FeedReviewDecisionStage.Note;
 
     [AlsoNotifyFor(
         nameof(IsReviewSelectionVisible),
@@ -728,11 +874,31 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
 
     public bool HasCreatedTask => CreatedTaskReference is not null;
 
+    [AlsoNotifyFor(nameof(HasQuickCaptureCreatedTask))]
+    public FeedTaskReferenceViewModel? QuickCaptureCreatedTaskReference
+    {
+        get => quickCaptureCreatedTaskReference;
+        private set
+        {
+            if (ReferenceEquals(quickCaptureCreatedTaskReference, value))
+            {
+                return;
+            }
+
+            quickCaptureCreatedTaskReference?.Dispose();
+            quickCaptureCreatedTaskReference = value;
+            this.RaisePropertyChanged(nameof(QuickCaptureCreatedTaskReference));
+            this.RaisePropertyChanged(nameof(HasQuickCaptureCreatedTask));
+        }
+    }
+
+    public bool HasQuickCaptureCreatedTask => QuickCaptureCreatedTaskReference is not null;
+
     public bool CanCreateReviewTask => IsReviewSelectionVisible
         && !HasCreatedTask
         && TaskCreationTarget?.SupportsClassification == true;
 
-    public bool CanModifyReviewSource => IsReviewSelectionVisible && !HasCreatedTask;
+    public bool CanModifyReviewSource => IsReviewSelectionVisible && !HasCreatedTask && !IsBusy;
 
     public bool IsTaskConversionUnavailable => IsReviewSelectionVisible
         && TaskCreationTarget is not null
@@ -951,6 +1117,7 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
                         ScheduleRefreshAfterMarkdownCommit,
                         nextRuntime,
                         () => !IsIdentityFrozen,
+                        OpenEditorSelectionActionAsync,
                         loadedDayCount,
                         request.CancellationToken).ConfigureAwait(false);
                     var bootstrapService = new FirstConnectBootstrapService(
@@ -1340,15 +1507,95 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
         return RefreshCoreAsync();
     }
 
+    public Task StartReviewAsync()
+    {
+        ThrowIfDisposed();
+        return StartReviewCoreAsync();
+    }
+
+    public Task CaptureTaskAsync()
+    {
+        ThrowIfDisposed();
+        return CaptureTaskCoreAsync();
+    }
+
+    public async Task CommitActiveEditorsAsync(CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        foreach (var editor in Days.Select(static day => day.MarkdownEditor)
+                     .Append(OpenedThematicFile?.MarkdownEditor)
+                     .Where(static editor => editor?.ActiveBlock is not null)
+                     .Cast<MarkdownLivePreviewEditorViewModel>())
+        {
+            if (!await editor.CommitActiveAsync(cancellationToken).ConfigureAwait(true))
+            {
+                throw new InvalidOperationException(
+                    editor.ActiveBlock?.ErrorMessage ?? L10n.Get("MarkdownBlockSaveFailed"));
+            }
+        }
+    }
+
+    public void ResetQuickCaptureTaskResult()
+    {
+        ThrowIfDisposed();
+        QuickCaptureCreatedTaskReference = null;
+    }
+
     private async Task LoadOlderDaysCoreAsync()
     {
-        if (!IsVaultInitialized || IsBusy || !HasMoreDays)
+        if (!IsVaultInitialized || IsBusy || IsLoadingOlderDays || !HasMoreDays)
         {
             return;
         }
 
-        loadedDayCount = Math.Min(TotalDayCount, loadedDayCount + DayPageSize);
-        await RefreshCoreAsync().ConfigureAwait(true);
+        var cancellationToken = GetSessionToken();
+        IsLoadingOlderDays = true;
+        HasOlderDaysLoadError = false;
+        try
+        {
+            var page = await BuildOlderDayPageAsync(LoadedDayCount, DayPageSize, cancellationToken)
+                .ConfigureAwait(true);
+            var existingPaths = Days
+                .Select(static day => NormalizePath(day.RelativePath))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var day in page.Days)
+            {
+                if (existingPaths.Add(NormalizePath(day.RelativePath)))
+                {
+                    Days.Add(day);
+                }
+                else
+                {
+                    day.Dispose();
+                }
+            }
+
+            loadedDayCount = Days.Count;
+            LoadedDayCount = Days.Count;
+            TotalDayCount = page.TotalCount;
+            HasMoreDays = LoadedDayCount < TotalDayCount;
+            snapshotAreas = snapshotAreas
+                .Concat(page.Areas)
+                .DistinctBy(static area => area.Identity, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            RebuildVisibleAreas();
+            ApplyFeedAreaFilter();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            HasOlderDaysLoadError = true;
+            ErrorMessage = exception.Message;
+        }
+        finally
+        {
+            if (!cancellationToken.IsCancellationRequested)
+            {
+                IsLoadingOlderDays = false;
+            }
+        }
     }
 
     public void OpenTaskReference(string taskId)
@@ -1575,6 +1822,7 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
                         ScheduleRefreshAfterMarkdownCommit,
                         watchRuntime,
                         () => !IsIdentityFrozen,
+                        OpenEditorSelectionActionAsync,
                         loadedDayCount,
                         cancellationToken).ConfigureAwait(false);
                 }, cancellationToken).ConfigureAwait(false);
@@ -1636,6 +1884,7 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
                         ScheduleRefreshAfterMarkdownCommit,
                         watchRuntime,
                         () => !IsIdentityFrozen,
+                        OpenEditorSelectionActionAsync,
                         loadedDayCount,
                         cancellationToken).ConfigureAwait(false);
                 }, cancellationToken);
@@ -1753,6 +2002,24 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
         await AdvanceReviewAsync(cancellationToken);
     });
 
+    private Task NavigateReviewAsync(int delta) => ExecuteReviewOperationAsync(async cancellationToken =>
+    {
+        if (!IsReviewSelectionVisible || HasCreatedTask || delta == 0)
+        {
+            return;
+        }
+
+        var snapshot = await RefreshReviewSummaryAsync(cancellationToken).ConfigureAwait(true);
+        var targetIndex = Math.Clamp(currentReviewIndex + delta, 0, Math.Max(0, snapshot.Candidates.Count - 1));
+        if (snapshot.Candidates.Count == 0 || targetIndex == currentReviewIndex)
+        {
+            return;
+        }
+
+        currentReviewIndex = targetIndex;
+        await SelectReviewCandidateAsync(snapshot.Candidates[targetIndex], cancellationToken).ConfigureAwait(true);
+    });
+
     private Task CompleteReviewDecisionAsync(ReviewDecision decision) => ExecuteReviewOperationAsync(async cancellationToken =>
     {
         if (HasCreatedTask)
@@ -1794,15 +2061,27 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
             throw new InvalidOperationException("The active review day is no longer available.");
         }
 
-        var service = new FeedAreaAssignmentService(vault, markdownParser, new MarkdownMutationService(markdownParser));
-        var result = await service.AssignAsync(
-                new FeedAreaAssignmentRequest(
-                    day.RelativePath,
-                    day.Revision,
-                    currentReviewSelection,
-                    ReviewDestinationArea.Area),
-                cancellationToken)
-            ;
+        var confirmedArea = ResolveDestinationAreaOption(currentCandidate.Locator.AreaIdentity)
+            ?? FeedAreaOptionViewModel.NoArea;
+        FeedAreaAssignmentResult result;
+        try
+        {
+            var service = new FeedAreaAssignmentService(vault, markdownParser, new MarkdownMutationService(markdownParser));
+            result = await service.AssignAsync(
+                    new FeedAreaAssignmentRequest(
+                        day.RelativePath,
+                        day.Revision,
+                        currentReviewSelection,
+                        ReviewDestinationArea.Area),
+                    cancellationToken)
+                ;
+        }
+        catch
+        {
+            ReviewDestinationArea = confirmedArea;
+            throw;
+        }
+
         await ReloadSnapshotAsync(cancellationToken);
 
         var updatedDay = FindDay(day.RelativePath)
@@ -1819,8 +2098,16 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
             updatedDay.Date,
             FeedReviewPriority.Other,
             null);
+        InvalidateReviewQueue();
+        var snapshot = await RefreshReviewSummaryAsync(cancellationToken).ConfigureAwait(true);
+        var remappedIndex = snapshot.Candidates
+            .Select((candidate, index) => (candidate, index))
+            .FirstOrDefault(value => value.candidate.Locator == locator)
+            .index;
+        currentReviewIndex = Math.Clamp(remappedIndex, 0, Math.Max(0, snapshot.Candidates.Count - 1));
         RebuildReviewTaskAreas(preserveExistingSelection: false);
         UpdateReviewSelectionViewModel();
+        RaiseReviewNavigationChanged();
     });
 
     private Task CreateTaskCoreAsync() => ExecuteReviewOperationAsync(async cancellationToken =>
@@ -1887,6 +2174,7 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
             .ConfigureAwait(true);
 
         var task = TaskResolver?.Invoke(result.TaskId);
+        ReviewDecisionStage = FeedReviewDecisionStage.None;
         CreatedTaskReference = new FeedTaskReferenceViewModel(result.TaskId, result.Title, task);
         RebuildReviewTaskAreas(task);
         currentReviewDocument = markdownParser.Parse(updatedDay.Text);
@@ -2116,7 +2404,8 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
             return;
         }
 
-        await SelectReviewCandidateAsync(snapshot.Candidates[0], cancellationToken);
+        currentReviewIndex = Math.Min(currentReviewIndex, snapshot.Candidates.Count - 1);
+        await SelectReviewCandidateAsync(snapshot.Candidates[currentReviewIndex], cancellationToken);
     }
 
     private async Task SelectReviewCandidateAsync(
@@ -2133,6 +2422,14 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
         var day = FindDay(candidate.Locator.RelativePath)
             ?? throw new InvalidOperationException("The review candidate source is no longer available.");
         currentCandidate = candidate;
+        currentReviewIndex = Math.Max(
+            0,
+            reviewQueueSnapshot.Candidates
+                .Select((value, index) => (value, index))
+                .Where(value => value.value.Locator == candidate.Locator)
+                .Select(static value => value.index)
+                .DefaultIfEmpty(currentReviewIndex)
+                .First());
         currentReviewDocument = markdownParser.Parse(day.Text);
         var block = currentReviewDocument.Blocks.FirstOrDefault(value =>
                 value.Index == candidate.Block.Index
@@ -2145,6 +2442,7 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
         currentReviewAnchorBlockIndex = block.Index;
         currentReviewOperationId = null;
         CreatedTaskReference = null;
+        ReviewDecisionStage = FeedReviewDecisionStage.None;
         ReviewTaskIsGoal = false;
         ReviewNoteTitle = SuggestTitle(block.Raw);
         ReviewDestinationArea = ResolveDestinationAreaOption(candidate.Locator.AreaIdentity)
@@ -2157,6 +2455,7 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
             : string.Empty;
         RebuildReviewTaskAreas(preserveExistingSelection: false);
         UpdateReviewSelectionViewModel();
+        RaiseReviewNavigationChanged();
         ReviewNavigationRequested?.Invoke(
             this,
             new FeedSearchNavigationRequestedEventArgs(
@@ -2272,6 +2571,7 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
 
                 PendingReviewBlocks = snapshot.Candidates.Count;
                 PendingReviewDays = snapshot.PendingDays;
+                RaiseReviewNavigationChanged();
                 applied = true;
             }).WaitAsync(cancellationToken).ConfigureAwait(false);
             if (applied && IsReviewQueueSnapshotCurrent(snapshot))
@@ -2444,6 +2744,9 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
             reviewQueueBuild = null;
         }
 
+        IsReviewReminderDismissed = false;
+        RaiseReviewNavigationChanged();
+
         canceledBuild?.CancelAndDisposeWhenCompleted();
     }
 
@@ -2477,7 +2780,18 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
         currentReviewDocument = null;
         currentReviewSelection = null;
         currentReviewOperationId = null;
+        currentReviewIndex = 0;
+        ReviewDecisionStage = FeedReviewDecisionStage.None;
         CreatedTaskReference = null;
+        RaiseReviewNavigationChanged();
+    }
+
+    private void RaiseReviewNavigationChanged()
+    {
+        this.RaisePropertyChanged(nameof(CurrentReviewPosition));
+        this.RaisePropertyChanged(nameof(CurrentReviewCount));
+        this.RaisePropertyChanged(nameof(CanNavigateReviewPrevious));
+        this.RaisePropertyChanged(nameof(CanNavigateReviewNext));
     }
 
     private void ApplyReviewHighlight(
@@ -2531,6 +2845,7 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
                     ScheduleRefreshAfterMarkdownCommit,
                     watchRuntime,
                     () => !IsIdentityFrozen,
+                    OpenEditorSelectionActionAsync,
                     loadedDayCount,
                     cancellationToken),
                 cancellationToken)
@@ -2610,12 +2925,17 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
                 failures.Add($"{pendingOperation.OperationId}: {exception.Message}");
                 AddPendingRecovery(new FeedPendingRecoveryViewModel(
                     pendingOperation.OperationId,
-                    pendingOperation.Kind == FeedOperationKind.NoteExtraction
-                        ? FeedPendingRecoveryKind.NoteExtraction
-                        : FeedPendingRecoveryKind.MoveToToday,
+                    pendingOperation.Kind switch
+                    {
+                        FeedOperationKind.NoteExtraction => FeedPendingRecoveryKind.NoteExtraction,
+                        FeedOperationKind.MoveToToday => FeedPendingRecoveryKind.MoveToToday,
+                        FeedOperationKind.HeadingAreaConversion => FeedPendingRecoveryKind.HeadingAreaConversion,
+                        _ => throw new ArgumentOutOfRangeException()
+                    },
                     pendingOperation.SourcePath,
                     exception.Message,
-                    pendingOperation.State is FeedOperationState.DestinationCreated or FeedOperationState.Completed,
+                    pendingOperation.Kind != FeedOperationKind.HeadingAreaConversion
+                    && pendingOperation.State is FeedOperationState.DestinationCreated or FeedOperationState.Completed,
                     FinishPendingRecoveryAsync,
                     KeepBothPendingRecoveryAsync));
             }
@@ -2860,6 +3180,23 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
         if (pending.SchemaVersion != 2 || pending.RecoveryDescriptor is null)
         {
             throw new InvalidDataException("The Markdown operation journal requires explicit legacy recovery.");
+        }
+
+        if (pending.Kind == FeedOperationKind.HeadingAreaConversion)
+        {
+            await new FeedHeadingAreaConversionService(
+                    vault,
+                    markdownParser,
+                    new MarkdownMutationService(markdownParser),
+                    journal)
+                .ResumeAsync(pending, cancellationToken)
+                .ConfigureAwait(true);
+            if (AreaManagement is not null)
+            {
+                await AreaManagement.LoadAsync(cancellationToken).ConfigureAwait(true);
+            }
+
+            return;
         }
 
         switch (pending.Kind)
@@ -3164,6 +3501,101 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
         return Regex.Replace(line, @"^\s*(?:[-*+]\s+)?(?:\[[ xX]\]\s*)?", string.Empty).Trim();
     }
 
+    private async Task<FeedDayPage> BuildOlderDayPageAsync(
+        int skip,
+        int take,
+        CancellationToken cancellationToken)
+    {
+        if (vault is not { } sourceVault
+            || dailyNotes is not { } sourceDailyNotes
+            || markdownParser is not { } parser)
+        {
+            throw new InvalidOperationException("The feed vault is not initialized.");
+        }
+
+        var areaCatalog = await new AreaCatalogStore(sourceVault).LoadAsync(cancellationToken)
+            .ConfigureAwait(false);
+        var activeCatalogAreas = areaCatalog.Catalog.Areas
+            .Where(static area => !area.IsArchived)
+            .ToArray();
+        var activeCatalogAreaIds = activeCatalogAreas
+            .Select(static area => area.Id)
+            .ToHashSet(StringComparer.Ordinal);
+        var resolveAreaName = CreateUniqueAreaNameResolver(activeCatalogAreas);
+        var page = await sourceDailyNotes.ListDaysPageAsync(skip, take, cancellationToken)
+            .ConfigureAwait(false);
+        var latestRecoveryDrafts = watchRuntime is null
+            ? new Dictionary<string, FeedDraft>(StringComparer.OrdinalIgnoreCase)
+            : (await watchRuntime.Drafts.ListAsync(watchRuntime.VaultId, cancellationToken).ConfigureAwait(false))
+                .GroupBy(static value => NormalizePath(value.RelativePath), StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(
+                    static group => group.Key,
+                    static group => group.OrderByDescending(static value => value.UpdatedAt).First(),
+                    StringComparer.OrdinalIgnoreCase);
+        var days = new List<FeedDayViewModel>(page.Days.Count);
+        var areas = new Dictionary<string, FeedAreaOptionViewModel>(StringComparer.OrdinalIgnoreCase);
+        foreach (var summary in page.Days)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var document = new VaultDocument(
+                summary.RelativePath,
+                summary.Text,
+                summary.Revision,
+                summary.HasUtf8Bom,
+                summary.NewLine);
+            var taskReferences = ExtractTaskReferences(document.Text, taskResolver);
+            var markdownEditor = CreateMarkdownEditor(
+                sourceVault,
+                document,
+                summary.RelativePath,
+                $"FeedDay-{summary.Date:yyyyMMdd}-Markdown",
+                ScheduleRefreshAfterMarkdownCommit,
+                watchRuntime,
+                () => !IsIdentityFrozen,
+                OpenEditorSelectionActionAsync);
+            markdownEditor.SetTaskReferences(taskReferences);
+            if (latestRecoveryDrafts.TryGetValue(NormalizePath(summary.RelativePath), out var recoveryDraft))
+            {
+                markdownEditor.OfferRecoveryDraft(recoveryDraft);
+            }
+
+            days.Add(new FeedDayViewModel(
+                summary.Date,
+                summary.RelativePath,
+                document.Text,
+                document.Revision,
+                summary.ContentBlockCount,
+                taskReferences,
+                markdownEditor));
+
+            foreach (var heading in parser.Parse(document.Text).Blocks
+                         .Where(static block => block.Kind == MarkdownBlockKind.AreaHeading))
+            {
+                var name = heading.AreaName?.Trim();
+                if (string.IsNullOrWhiteSpace(name))
+                {
+                    continue;
+                }
+
+                var stableAreaId = string.IsNullOrWhiteSpace(heading.AreaId)
+                    ? resolveAreaName(name)
+                    : heading.AreaId;
+                var identity = stableAreaId ?? CreateHeadingDestinationIdentity(name);
+                areas.TryAdd(identity, new FeedAreaOptionViewModel(
+                    new AreaReference(stableAreaId, name)
+                    {
+                        MatchUnmarkedByName = string.IsNullOrWhiteSpace(heading.AreaId)
+                    },
+                    identity,
+                    isExistingHeadingDestination: true,
+                    isClassificationSelectable: stableAreaId is not null
+                        && activeCatalogAreaIds.Contains(stableAreaId)));
+            }
+        }
+
+        return new FeedDayPage(days, areas.Values.ToArray(), page.TotalCount);
+    }
+
     private static async Task<FeedSnapshot> BuildSnapshotAsync(
         INoteVault sourceVault,
         DailyNoteService sourceDailyNotes,
@@ -3172,6 +3604,7 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
         Action? afterMarkdownCommit,
         FeedVaultWatchRuntime? runtime,
         Func<bool> canWrite,
+        Func<MarkdownLivePreviewEditorViewModel, IReadOnlyList<int>, MarkdownSelectionSemanticAction, CancellationToken, Task> selectionActionAsync,
         int dayLimit,
         CancellationToken cancellationToken)
     {
@@ -3224,7 +3657,8 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
                 $"FeedDay-{summary.Date:yyyyMMdd}-Markdown",
                 afterMarkdownCommit,
                 runtime,
-                canWrite);
+                canWrite,
+                selectionActionAsync);
             markdownEditor.SetTaskReferences(taskReferences);
             if (latestRecoveryDrafts.TryGetValue(NormalizePath(summary.RelativePath), out var recoveryDraft))
             {
@@ -3371,6 +3805,8 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
                 currentReviewAnchorBlockIndex,
                 CurrentReview.SelectedMarkdown);
         }
+
+        ApplyFeedAreaFilter();
     }
 
     private void StartBackgroundSearchIndexing(
@@ -3582,6 +4018,224 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
         ReviewDestinationArea = Areas.FirstOrDefault(area => string.Equals(area.Identity, reviewAreaIdentity, StringComparison.OrdinalIgnoreCase))
             ?? Areas[0];
         RebuildSearchAreaOptions(searchAreaIdentity, searchAllAreas);
+        RebuildFeedAreaFilterOptions();
+    }
+
+    private void RebuildFeedAreaFilterOptions()
+    {
+        var previousOptions = FeedAreaFilterOptions.ToArray();
+        var previouslyAll = previousOptions.FirstOrDefault(static option => option.IsAll)?.IsSelected != false;
+        var selectedIdentities = previousOptions
+            .Where(static option => !option.IsAll && option.IsSelected)
+            .Select(static option => option.Identity ?? string.Empty)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        isUpdatingFeedAreaFilter = true;
+        FeedAreaFilterOptions.Clear();
+        FeedAreaFilterOptions.Add(new FeedAreaFilterOptionViewModel(
+            identity: null,
+            L10n.Get("FeedAreaFilterAll"),
+            isAll: true,
+            isSelected: previouslyAll,
+            selectionChanged: HandleFeedAreaFilterOptionChanged));
+        FeedAreaFilterOptions.Add(new FeedAreaFilterOptionViewModel(
+            string.Empty,
+            L10n.Get("FeedNoArea"),
+            isSelected: previouslyAll || selectedIdentities.Contains(string.Empty),
+            selectionChanged: HandleFeedAreaFilterOptionChanged));
+        var managementAreas = AreaManagement?.Areas
+            .Where(static area => !area.IsArchived)
+            .ToArray() ?? [];
+        var managementById = managementAreas.ToDictionary(static area => area.Id, StringComparer.Ordinal);
+        var orderedAreas = managementAreas
+            .Select(management => Areas.FirstOrDefault(area => string.Equals(
+                area.Identity,
+                management.Id,
+                StringComparison.Ordinal)))
+            .Where(static area => area is not null)
+            .Cast<FeedAreaOptionViewModel>()
+            .Concat(Areas.Where(area => area.Area is not null && !managementById.ContainsKey(area.Identity)))
+            .DistinctBy(static area => area.Identity);
+        var areaIds = Areas.Where(static area => area.Area is not null)
+            .Select(static area => area.Identity)
+            .ToHashSet(StringComparer.Ordinal);
+        foreach (var area in orderedAreas)
+        {
+            managementById.TryGetValue(area.Identity, out var hierarchy);
+            FeedAreaFilterOptions.Add(new FeedAreaFilterOptionViewModel(
+                area.Identity,
+                area.DisplayName,
+                area.Area?.Name,
+                parentId: hierarchy?.ParentId,
+                depth: hierarchy?.Depth ?? 0,
+                hasChildren: managementAreas.Any(candidate => string.Equals(
+                    candidate.ParentId,
+                    area.Identity,
+                    StringComparison.Ordinal) && areaIds.Contains(candidate.Id)),
+                isSelected: previouslyAll || selectedIdentities.Contains(area.Identity),
+                selectionChanged: HandleFeedAreaFilterOptionChanged));
+        }
+
+        var leafOptions = FeedAreaFilterOptions.Where(static option => !option.IsAll).ToArray();
+        var allSelected = leafOptions.Length == 0 || leafOptions.All(static option => option.IsSelected);
+        RecomputeFeedAreaFilterVisualStates();
+        selectedFeedAreaFilter = allSelected
+            ? FeedAreaFilterOptions[0]
+            : leafOptions.FirstOrDefault(static option => option.IsSelected);
+        isUpdatingFeedAreaFilter = false;
+        this.RaisePropertyChanged(nameof(SelectedFeedAreaFilter));
+        this.RaisePropertyChanged(nameof(FeedAreaFilterSummary));
+        RaiseFeedAreaFilterStateChanged();
+        ApplyFeedAreaFilter();
+    }
+
+    private void ResetFeedAreaFilter()
+    {
+        isUpdatingFeedAreaFilter = true;
+        try
+        {
+            foreach (var option in FeedAreaFilterOptions)
+            {
+                option.SetSelected(true, notifyOwner: false);
+                option.SetChecked(true);
+            }
+
+            selectedFeedAreaFilter = FeedAreaFilterOptions.FirstOrDefault(static option => option.IsAll);
+        }
+        finally
+        {
+            isUpdatingFeedAreaFilter = false;
+        }
+
+        this.RaisePropertyChanged(nameof(SelectedFeedAreaFilter));
+        this.RaisePropertyChanged(nameof(FeedAreaFilterSummary));
+        RaiseFeedAreaFilterStateChanged();
+        ApplyFeedAreaFilter();
+    }
+
+    private void ApplyExclusiveFeedAreaFilter(FeedAreaFilterOptionViewModel? selected)
+    {
+        if (selected is null || isUpdatingFeedAreaFilter)
+        {
+            return;
+        }
+
+        isUpdatingFeedAreaFilter = true;
+        foreach (var option in FeedAreaFilterOptions)
+        {
+            option.SetSelected(selected.IsAll || ReferenceEquals(option, selected), notifyOwner: false);
+        }
+
+        selectedFeedAreaFilter = selected;
+        isUpdatingFeedAreaFilter = false;
+        this.RaisePropertyChanged(nameof(FeedAreaFilterSummary));
+        RaiseFeedAreaFilterStateChanged();
+        ApplyFeedAreaFilter();
+    }
+
+    private void HandleFeedAreaFilterOptionChanged(FeedAreaFilterOptionViewModel option, bool isSelected)
+    {
+        if (isUpdatingFeedAreaFilter)
+        {
+            return;
+        }
+
+        isUpdatingFeedAreaFilter = true;
+        var allOption = FeedAreaFilterOptions.First(static candidate => candidate.IsAll);
+        var leafOptions = FeedAreaFilterOptions.Where(static candidate => !candidate.IsAll).ToArray();
+        if (option.IsAll)
+        {
+            foreach (var leaf in leafOptions)
+            {
+                leaf.SetSelected(isSelected, notifyOwner: false);
+            }
+        }
+        else
+        {
+            foreach (var descendant in leafOptions.Where(candidate => IsFeedAreaFilterDescendant(candidate, option)))
+            {
+                descendant.SetSelected(isSelected, notifyOwner: false);
+            }
+        }
+
+        RecomputeFeedAreaFilterVisualStates();
+        selectedFeedAreaFilter = allOption.IsSelected
+            ? allOption
+            : leafOptions.FirstOrDefault(static candidate => candidate.IsSelected);
+        isUpdatingFeedAreaFilter = false;
+        this.RaisePropertyChanged(nameof(SelectedFeedAreaFilter));
+        this.RaisePropertyChanged(nameof(FeedAreaFilterSummary));
+        RaiseFeedAreaFilterStateChanged();
+        ApplyFeedAreaFilter();
+    }
+
+    private void RaiseFeedAreaFilterStateChanged()
+    {
+        this.RaisePropertyChanged(nameof(IsFeedAreaFilterActive));
+        this.RaisePropertyChanged(nameof(IsFilteredChronologyEmpty));
+        this.RaisePropertyChanged(nameof(IsUnfilteredChronologyEmpty));
+    }
+
+    private void RecomputeFeedAreaFilterVisualStates()
+    {
+        var allOption = FeedAreaFilterOptions.First(static candidate => candidate.IsAll);
+        var leafOptions = FeedAreaFilterOptions.Where(static candidate => !candidate.IsAll).ToArray();
+        foreach (var parent in leafOptions.Where(static candidate => candidate.HasChildren))
+        {
+            var subtree = leafOptions
+                .Where(candidate => ReferenceEquals(candidate, parent) || IsFeedAreaFilterDescendant(candidate, parent))
+                .ToArray();
+            var selectedCount = subtree.Count(static candidate => candidate.IsSelected);
+            parent.SetChecked(selectedCount == 0 ? false : selectedCount == subtree.Length ? true : null);
+        }
+
+        var totalSelected = leafOptions.Count(static candidate => candidate.IsSelected);
+        allOption.SetSelected(totalSelected == leafOptions.Length, notifyOwner: false);
+        allOption.SetChecked(totalSelected == 0 ? false : totalSelected == leafOptions.Length ? true : null);
+    }
+
+    private bool IsFeedAreaFilterDescendant(
+        FeedAreaFilterOptionViewModel candidate,
+        FeedAreaFilterOptionViewModel ancestor)
+    {
+        if (string.IsNullOrWhiteSpace(candidate.ParentId) || string.IsNullOrWhiteSpace(ancestor.Identity))
+        {
+            return false;
+        }
+
+        var currentParentId = candidate.ParentId;
+        var visited = new HashSet<string>(StringComparer.Ordinal);
+        while (!string.IsNullOrWhiteSpace(currentParentId) && visited.Add(currentParentId))
+        {
+            if (string.Equals(currentParentId, ancestor.Identity, StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            currentParentId = FeedAreaFilterOptions.FirstOrDefault(option => string.Equals(
+                option.Identity,
+                currentParentId,
+                StringComparison.Ordinal))?.ParentId;
+        }
+
+        return false;
+    }
+
+    private void ApplyFeedAreaFilter()
+    {
+        var allSelected = FeedAreaFilterOptions.FirstOrDefault(static option => option.IsAll)?.IsSelected != false;
+        var selectedAreas = FeedAreaFilterOptions
+            .Where(static option => !option.IsAll && option.IsSelected)
+            .Select(static option => new FeedAreaFilterSelection(option.Identity ?? string.Empty, option.AreaName))
+            .ToArray();
+        foreach (var day in Days)
+        {
+            day.ApplyAreaFilter(selectedAreas, allSelected);
+        }
+
+        Replace(VisibleDays, Days.Where(static day => day.IsVisibleByAreaFilter));
+        HasVisibleDays = VisibleDays.Count > 0;
+        this.RaisePropertyChanged(nameof(ChronologyAutomationName));
     }
 
     private void RebuildSearchAreaOptions(string? selectedIdentity, bool selectedAll)
@@ -3629,6 +4283,83 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
         }
 
         return new FeedAuxiliaryViewModels(nextFiles, nextAreas);
+    }
+
+    private async Task CaptureTaskCoreAsync()
+    {
+        if (!CanCapture
+            || dailyNotes is null
+            || vault is null
+            || vaultId is null
+            || markdownParser is null
+            || TaskCreationTarget?.SupportsClassification != true)
+        {
+            return;
+        }
+
+        var cancellationToken = GetSessionToken();
+        var capture = QuickCaptureText;
+        var area = SelectedArea?.Area;
+        var areaIds = string.IsNullOrWhiteSpace(SelectedArea?.StableAreaId)
+            ? Array.Empty<string>()
+            : new[] { SelectedArea!.StableAreaId! };
+        var operationId = Guid.NewGuid().ToString("N");
+        IsBusy = true;
+        ErrorMessage = null;
+        try
+        {
+            await operationGate.WaitAsync(cancellationToken).ConfigureAwait(true);
+            try
+            {
+                var today = EffectiveToday;
+                var expectedRevision = Days.FirstOrDefault(day => day.Date == today)?.Revision;
+                var service = new FeedTaskCaptureService(
+                    vault,
+                    dailyNotes,
+                    markdownParser,
+                    new MarkdownMutationService(markdownParser),
+                    TaskCreationTarget,
+                    taskJournalFactory(vaultId),
+                    revisionStore);
+                var result = await service.CaptureAsync(
+                        new FeedTaskCaptureRequest(
+                            vaultId,
+                            operationId,
+                            today,
+                            capture,
+                            area,
+                            expectedRevision,
+                            areaIds),
+                        cancellationToken)
+                    .ConfigureAwait(true);
+
+                await ReloadSnapshotAsync(cancellationToken).ConfigureAwait(true);
+                QuickCaptureText = string.Empty;
+                QuickCaptureCreatedTaskReference = new FeedTaskReferenceViewModel(
+                    result.TaskId,
+                    result.Title,
+                    TaskResolver?.Invoke(result.TaskId));
+                await RefreshReviewSummaryAsync(cancellationToken).ConfigureAwait(true);
+            }
+            finally
+            {
+                operationGate.Release();
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            ErrorMessage = exception.Message;
+        }
+        finally
+        {
+            if (!cancellationToken.IsCancellationRequested)
+            {
+                IsBusy = false;
+            }
+        }
     }
 
     private void InstallPreparedAuxiliaryViewModels(FeedAuxiliaryViewModels auxiliary)
@@ -3682,7 +4413,8 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
             $"FeedFile-{pathHash}-Markdown",
             ScheduleRefreshAfterMarkdownCommit,
             watchRuntime,
-            () => !IsIdentityFrozen);
+            () => !IsIdentityFrozen,
+            OpenEditorSelectionActionAsync);
         if (watchRuntime is not null)
         {
             await OfferLatestRecoveryDraftAsync(editor, watchRuntime, relativePath, cancellationToken)
@@ -4926,6 +5658,7 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
             day.Dispose();
         }
         Days.Clear();
+        VisibleDays.Clear();
         HasDays = false;
         loadedDayCount = InitialDayPageSize;
         LoadedDayCount = 0;
@@ -4940,6 +5673,7 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
         PendingReviewBlocks = 0;
         PendingReviewDays = 0;
         ClearReviewSelection();
+        QuickCaptureCreatedTaskReference = null;
         ScheduleSearchResultsRefresh();
         Areas.Clear();
         Areas.Add(FeedAreaOptionViewModel.NoArea);
@@ -5066,11 +5800,62 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
         string automationIdPrefix,
         Action? afterMarkdownCommit,
         FeedVaultWatchRuntime? runtime,
-        Func<bool> canWrite)
+        Func<bool> canWrite,
+        Func<MarkdownLivePreviewEditorViewModel, IReadOnlyList<int>, MarkdownSelectionSemanticAction, CancellationToken, Task>? selectionActionAsync = null)
     {
         var editor = new MarkdownLivePreviewEditorViewModel(
             automationIdPrefix: automationIdPrefix);
         editor.CommitAccepted = _ => afterMarkdownCommit?.Invoke();
+        editor.SelectionActionAsync = selectionActionAsync;
+        editor.MoveBlocksAsync = async (move, cancellationToken) =>
+        {
+            if (!canWrite())
+            {
+                return MarkdownBlocksMoveResult.Rejected(L10n.Get("FeedVaultIdentityFrozen"));
+            }
+
+            try
+            {
+                var parser = new MarkdownDocumentParser();
+                var parsed = parser.Parse(move.Snapshot.Raw);
+                var selectedLocators = move.SelectedBlockIndices
+                    .Select(blockIndex => CreateMoveLocator(
+                        move.Snapshot.RelativePath,
+                        parsed,
+                        blockIndex))
+                    .ToArray();
+                var insertBefore = move.InsertBeforeBlockIndex is { } insertBeforeIndex
+                    ? CreateMoveLocator(
+                        move.Snapshot.RelativePath,
+                        parsed,
+                        insertBeforeIndex)
+                    : null;
+                var result = await new FeedMarkdownBlockMoveService(sourceVault, parser).MoveAsync(
+                        new FeedMarkdownBlockMoveRequest(
+                            move.Snapshot.RelativePath,
+                            move.Snapshot.ExpectedRevisionHash,
+                            selectedLocators,
+                            insertBefore,
+                            move.DestinationArea),
+                        cancellationToken)
+                    .ConfigureAwait(false);
+                return MarkdownBlocksMoveResult.Accepted(
+                    new MarkdownLiveDocumentSnapshot(
+                        result.UpdatedText,
+                        result.SourceRevision,
+                        result.HasUtf8Bom,
+                        move.Snapshot.RelativePath),
+                    result.OutputBlockIndices);
+            }
+            catch (VaultRevisionConflictException exception)
+            {
+                return MarkdownBlocksMoveResult.Rejected(exception.Message);
+            }
+            catch (Exception exception)
+            {
+                return MarkdownBlocksMoveResult.Rejected(exception.Message);
+            }
+        };
         editor.CommitBlockAsync = async (patch, cancellationToken) =>
         {
             if (!canWrite())
@@ -5155,6 +5940,264 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
             document.HasUtf8Bom,
             relativePath));
         return editor;
+    }
+
+    private static BlockLocator CreateMoveLocator(
+        string relativePath,
+        MarkdownDocument document,
+        int blockIndex)
+    {
+        var target = document.Blocks.FirstOrDefault(block => block.Index == blockIndex)
+            ?? throw new InvalidOperationException("The selected Markdown block is no longer available.");
+        var candidates = document.Blocks.Where(static block => block.Kind is not (
+            MarkdownBlockKind.Blank or MarkdownBlockKind.FrontMatter)).ToArray();
+        var targetPosition = Array.FindIndex(candidates, block => block.Index == target.Index);
+        if (targetPosition < 0)
+        {
+            throw new InvalidOperationException("The selected Markdown block cannot be moved.");
+        }
+
+        var occurrence = candidates.Take(targetPosition).Count(block =>
+            block.Kind == target.Kind
+            && block.ContentHash == target.ContentHash
+            && string.Equals(block.AreaId ?? block.AreaName, target.AreaId ?? target.AreaName, StringComparison.Ordinal));
+        return new BlockLocator(
+            relativePath,
+            target.AreaId ?? target.AreaName,
+            target.Kind,
+            target.ContentHash,
+            occurrence,
+            targetPosition > 0 ? candidates[targetPosition - 1].ContentHash : null,
+            targetPosition + 1 < candidates.Length ? candidates[targetPosition + 1].ContentHash : null);
+    }
+
+    private async Task OpenEditorSelectionActionAsync(
+        MarkdownLivePreviewEditorViewModel editor,
+        IReadOnlyList<int> selectedBlockIndices,
+        MarkdownSelectionSemanticAction action,
+        CancellationToken cancellationToken)
+    {
+        if (action == MarkdownSelectionSemanticAction.ConvertHeadingToArea)
+        {
+            await OpenHeadingAreaConversionAsync(editor, selectedBlockIndices).ConfigureAwait(true);
+            return;
+        }
+
+        if (markdownParser is null || reviewCoordinator is null || selectedBlockIndices.Count == 0)
+        {
+            return;
+        }
+
+        var day = Days.FirstOrDefault(candidate => ReferenceEquals(candidate.MarkdownEditor, editor))
+            ?? throw new InvalidOperationException("The selected daily note is no longer available.");
+        if (!IsReviewActive)
+        {
+            await reviewCoordinator.OpenOrResumeAsync(cancellationToken).ConfigureAwait(true);
+            InvalidateReviewQueue();
+            IsReviewActive = true;
+            await RefreshReviewSummaryAsync(cancellationToken).ConfigureAwait(true);
+        }
+
+        currentReviewDocument = markdownParser.Parse(day.Text);
+        var ordered = selectedBlockIndices.Distinct().Order().ToArray();
+        var start = ordered[0];
+        var end = ordered[^1];
+        if (start < 0 || end >= currentReviewDocument.Blocks.Count)
+        {
+            throw new InvalidOperationException("The selected Markdown blocks are no longer available.");
+        }
+
+        currentReviewSelection = new MarkdownBlockSelection(start, end - start + 1);
+        currentReviewAnchorBlockIndex = start;
+        var anchor = currentReviewDocument.Blocks[start];
+        currentCandidate = new FeedReviewCandidate(
+            CreateLocator(day.RelativePath, currentReviewDocument, anchor),
+            anchor,
+            day.Date,
+            FeedReviewPriority.Other,
+            null);
+        currentReviewOperationId = null;
+        CreatedTaskReference = null;
+        ReviewTaskIsGoal = false;
+        ReviewNoteTitle = SuggestTitle(anchor.Raw);
+        ReviewDestinationArea = ResolveDestinationAreaOption(anchor.AreaId ?? anchor.AreaName)
+            ?? FeedAreaOptionViewModel.NoArea;
+        ReviewNoteFolder = ReviewDestinationArea.Area is { Id: { } areaId }
+            ? AreaManagement?.Areas.FirstOrDefault(value => string.Equals(value.Id, areaId, StringComparison.Ordinal))
+                ?.DefaultNoteFolder ?? string.Empty
+            : string.Empty;
+        RebuildReviewTaskAreas(preserveExistingSelection: false);
+        ReviewDecisionStage = action switch
+        {
+            MarkdownSelectionSemanticAction.Task => FeedReviewDecisionStage.Task,
+            MarkdownSelectionSemanticAction.Note => FeedReviewDecisionStage.Note,
+            _ => FeedReviewDecisionStage.None
+        };
+        UpdateReviewSelectionViewModel();
+        RaiseReviewNavigationChanged();
+        ReviewNavigationRequested?.Invoke(
+            this,
+            new FeedSearchNavigationRequestedEventArgs(day.RelativePath, editor, anchor.Index, day));
+    }
+
+    private async Task OpenHeadingAreaConversionAsync(
+        MarkdownLivePreviewEditorViewModel editor,
+        IReadOnlyList<int> selectedBlockIndices)
+    {
+        if (selectedBlockIndices.Count != 1 || AreaManagement is null)
+        {
+            return;
+        }
+
+        var block = editor.Blocks.FirstOrDefault(candidate => candidate.Index == selectedBlockIndices[0]);
+        if (block?.Kind != MarkdownBlockKind.Heading)
+        {
+            return;
+        }
+
+        var name = Regex.Replace(block.Block.Raw.Trim(), @"^#{1,6}\s*", string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            throw new InvalidOperationException(L10n.Get("AreaNameRequired"));
+        }
+
+        await AreaManagement.LoadAsync().ConfigureAwait(true);
+        headingAreaConversionEditor = editor;
+        headingAreaConversionBlockIndex = block.Index;
+        HeadingAreaConversion = new FeedHeadingAreaConversionViewModel(
+            name,
+            AreaManagement.Areas.Where(static area => !area.IsArchived),
+            ConfirmHeadingAreaConversionAsync,
+            CancelHeadingAreaConversion);
+    }
+
+    private async Task ConfirmHeadingAreaConversionAsync()
+    {
+        var conversion = HeadingAreaConversion;
+        var editor = headingAreaConversionEditor;
+        var areaManagement = AreaManagement;
+        if (conversion is null || editor is null || areaManagement is null || conversion.IsBusy)
+        {
+            return;
+        }
+
+        conversion.ErrorMessage = null;
+        conversion.IsBusy = true;
+        try
+        {
+            var block = editor.Blocks.FirstOrDefault(candidate =>
+                candidate.Index == headingAreaConversionBlockIndex);
+            if (block?.Kind != MarkdownBlockKind.Heading)
+            {
+                throw new InvalidOperationException(L10n.Get("MarkdownSelectedHeadingUnavailable"));
+            }
+
+            AreaManagementAreaViewModel? existingArea = null;
+            string areaId;
+            string areaName;
+            string? parentId;
+            var createArea = false;
+            if (conversion.SelectedExistingArea?.AreaId is { Length: > 0 } existingAreaId)
+            {
+                existingArea = areaManagement.Areas.FirstOrDefault(candidate =>
+                           !candidate.IsArchived
+                           && string.Equals(candidate.Id, existingAreaId, StringComparison.Ordinal))
+                       ?? throw new InvalidOperationException(L10n.Get("MarkdownSelectedAreaUnavailable"));
+                areaId = existingArea.Id;
+                areaName = existingArea.Name;
+                parentId = existingArea.ParentId;
+            }
+            else
+            {
+                areaName = conversion.Name.Trim();
+                if (string.IsNullOrWhiteSpace(areaName))
+                {
+                    throw new InvalidOperationException(L10n.Get("AreaNameRequired"));
+                }
+
+                parentId = conversion.SelectedParent?.Id;
+                existingArea = areaManagement.Areas.FirstOrDefault(candidate =>
+                           !candidate.IsArchived
+                           && string.Equals(candidate.Name, areaName, StringComparison.CurrentCultureIgnoreCase)
+                           && string.Equals(candidate.ParentId, parentId, StringComparison.Ordinal));
+                if (existingArea is null)
+                {
+                    areaId = Guid.NewGuid().ToString("N");
+                    createArea = true;
+                }
+                else
+                {
+                    areaId = existingArea.Id;
+                    areaName = existingArea.Name;
+                }
+            }
+
+            var day = Days.FirstOrDefault(candidate => ReferenceEquals(candidate.MarkdownEditor, editor))
+                ?? throw new InvalidOperationException("The selected daily note is no longer available.");
+            if (vault is null || vaultId is null || markdownParser is null)
+            {
+                throw new InvalidOperationException("Feed vault is not initialized.");
+            }
+
+            await operationGate.WaitAsync(GetSessionToken()).ConfigureAwait(true);
+            FeedHeadingAreaConversionResult result;
+            try
+            {
+                result = await new FeedHeadingAreaConversionService(
+                        vault,
+                        markdownParser,
+                        new MarkdownMutationService(markdownParser),
+                        operationJournalFactory(vaultId))
+                    .ConvertAsync(
+                        new FeedHeadingAreaConversionRequest(
+                            vaultId,
+                            Guid.NewGuid().ToString("N"),
+                            day.RelativePath,
+                            day.Revision,
+                            new MarkdownBlockSelection(block.Index, 1),
+                            FeedOperationHash.Compute(block.Block.Raw),
+                            areaId,
+                            areaName,
+                            parentId,
+                            createArea),
+                        GetSessionToken())
+                    .ConfigureAwait(true);
+            }
+            finally
+            {
+                operationGate.Release();
+            }
+
+            await areaManagement.LoadAsync().ConfigureAwait(true);
+            await ReloadSnapshotAsync(GetSessionToken()).ConfigureAwait(true);
+            var updatedDay = Days.FirstOrDefault(candidate =>
+                string.Equals(candidate.RelativePath, day.RelativePath, StringComparison.Ordinal));
+            var updatedBlock = updatedDay?.MarkdownEditor.Blocks.FirstOrDefault(candidate =>
+                candidate.Index == result.OutputBlockIndex
+                && candidate.Kind == MarkdownBlockKind.AreaHeading
+                && string.Equals(candidate.Block.AreaId, result.AreaId, StringComparison.Ordinal));
+            if (updatedBlock is not null)
+            {
+                updatedDay!.MarkdownEditor.SelectMoveBlock(updatedBlock, toggle: false, extendRange: false);
+            }
+
+            CancelHeadingAreaConversion();
+        }
+        catch (Exception exception)
+        {
+            conversion.ErrorMessage = exception.Message;
+        }
+        finally
+        {
+            conversion.IsBusy = false;
+        }
+    }
+
+    private void CancelHeadingAreaConversion()
+    {
+        HeadingAreaConversion = null;
+        headingAreaConversionEditor = null;
+        headingAreaConversionBlockIndex = -1;
     }
 
     private static async Task OfferLatestRecoveryDraftAsync(
@@ -5388,6 +6431,7 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
             }
 
             Days.Clear();
+            VisibleDays.Clear();
             disposables.Dispose();
         }
     }
@@ -5567,6 +6611,11 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
         int TotalDayCount,
         IReadOnlyList<FeedReviewDocument> ReviewDocuments);
 
+    private sealed record FeedDayPage(
+        IReadOnlyList<FeedDayViewModel> Days,
+        IReadOnlyList<FeedAreaOptionViewModel> Areas,
+        int TotalCount);
+
     private sealed record FeedSearchAreaResolution(
         string? SelectedIdentity,
         IReadOnlyDictionary<string, string> UniqueAreaIdsByName)
@@ -5703,6 +6752,8 @@ public sealed class FeedDayViewModel(
 
     public bool IsReviewTarget { get; private set; }
 
+    public bool IsVisibleByAreaFilter { get; private set; } = true;
+
     public string CollapseAutomationId => $"FeedDay-{Date:yyyyMMdd}-CollapseToggle";
 
     public string AutomationId => $"FeedDay-{Date:yyyyMMdd}";
@@ -5710,6 +6761,11 @@ public sealed class FeedDayViewModel(
     public string AutomationName => DisplayDate;
 
     public override string ToString() => AutomationName;
+
+    public void ApplyAreaFilter(IReadOnlyCollection<FeedAreaFilterSelection> selectedAreas, bool showAll)
+    {
+        IsVisibleByAreaFilter = MarkdownEditor.ApplyAreaFilter(selectedAreas, showAll);
+    }
 
     public void SetReviewTarget(
         IEnumerable<int> selectedBlockIndices,
@@ -5810,6 +6866,90 @@ public sealed class FeedAreaOptionViewModel
     public string DestinationDisplayName => IsUnclassifiedHeadingDestination
         ? $"{DisplayName} · {L10n.Get("FeedNoArea")}"
         : DisplayName;
+}
+
+public sealed class FeedAreaFilterOptionViewModel : ReactiveObject
+{
+    public static FeedAreaFilterOptionViewModel All { get; } =
+        new(null, L10n.Get("FeedAreaFilterAll"), isAll: true, isSelected: true);
+
+    public static FeedAreaFilterOptionViewModel NoArea { get; } =
+        new(string.Empty, L10n.Get("FeedNoArea"), isSelected: true);
+
+    private readonly Action<FeedAreaFilterOptionViewModel, bool>? selectionChanged;
+    private bool isSelected;
+    private bool? isChecked;
+
+    public FeedAreaFilterOptionViewModel(
+        string? identity,
+        string displayName,
+        string? areaName = null,
+        string? parentId = null,
+        int depth = 0,
+        bool hasChildren = false,
+        bool isAll = false,
+        bool isSelected = false,
+        Action<FeedAreaFilterOptionViewModel, bool>? selectionChanged = null)
+    {
+        Identity = identity;
+        DisplayName = displayName;
+        AreaName = areaName;
+        ParentId = parentId;
+        Depth = Math.Max(0, depth);
+        HasChildren = hasChildren;
+        IsAll = isAll;
+        this.isSelected = isSelected;
+        isChecked = isSelected;
+        this.selectionChanged = selectionChanged;
+    }
+
+    public string? Identity { get; }
+
+    public string DisplayName { get; }
+
+    public string? AreaName { get; }
+
+    public string? ParentId { get; }
+
+    public int Depth { get; }
+
+    public bool HasChildren { get; }
+
+    public string HierarchyDisplayName => IsAll || Depth == 0
+        ? DisplayName
+        : $"{new string('\u00A0', Depth * 3)}↳ {DisplayName}";
+
+    public bool IsAll { get; }
+
+    public bool IsSelected
+    {
+        get => isSelected;
+        set => SetSelected(value, notifyOwner: true);
+    }
+
+    public bool? IsChecked
+    {
+        get => isChecked;
+        set => SetSelected(value == true, notifyOwner: true);
+    }
+
+    internal void SetSelected(bool value, bool notifyOwner)
+    {
+        if (isSelected == value && isChecked == value)
+        {
+            return;
+        }
+
+        this.RaiseAndSetIfChanged(ref isSelected, value);
+        this.RaiseAndSetIfChanged(ref isChecked, value, nameof(IsChecked));
+        if (notifyOwner)
+        {
+            selectionChanged?.Invoke(this, value);
+        }
+    }
+
+    internal void SetChecked(bool? value) =>
+        this.RaiseAndSetIfChanged(ref isChecked, value, nameof(IsChecked));
 }
 
 [AddINotifyPropertyChangedInterface]
@@ -5988,6 +7128,13 @@ public sealed class FeedTaskAreaOptionViewModel
     }
 }
 
+public enum FeedReviewDecisionStage
+{
+    None,
+    Task,
+    Note
+}
+
 public enum FeedBrokenTaskReferenceAction
 {
     Find,
@@ -6046,6 +7193,67 @@ public sealed class FeedTaskReferenceViewModel : ReactiveObject, IDisposable
     }
 }
 
+[AddINotifyPropertyChangedInterface]
+public sealed class FeedHeadingAreaConversionViewModel
+{
+    public FeedHeadingAreaConversionViewModel(
+        string name,
+        IEnumerable<AreaManagementAreaViewModel> areas,
+        Func<Task> confirmAsync,
+        Action cancel)
+    {
+        Name = name;
+        var availableAreas = areas.ToArray();
+        ParentOptions.Add(AreaParentOptionViewModel.NoParent);
+        foreach (var area in availableAreas)
+        {
+            ParentOptions.Add(new AreaParentOptionViewModel(area.Id, area.DisplayName));
+        }
+
+        SelectedParent = ParentOptions[0];
+        ExistingAreas.Add(new FeedHeadingAreaChoice(null, L10n.Get("MarkdownCreateNewArea")));
+        foreach (var area in availableAreas)
+        {
+            ExistingAreas.Add(new FeedHeadingAreaChoice(area.Id, area.DisplayName));
+        }
+
+        SelectedExistingArea = ExistingAreas.FirstOrDefault(choice =>
+                                   choice.AreaId is { } id
+                                   && availableAreas.Any(area =>
+                                       string.Equals(area.Id, id, StringComparison.Ordinal)
+                                       && string.Equals(area.Name, name, StringComparison.CurrentCultureIgnoreCase)))
+                               ?? ExistingAreas[0];
+        ConfirmCommand = new FeedAsyncActionCommand(confirmAsync);
+        CancelCommand = new FeedActionCommand(_ => cancel());
+    }
+
+    public ObservableCollection<AreaParentOptionViewModel> ParentOptions { get; } = new();
+
+    public ObservableCollection<FeedHeadingAreaChoice> ExistingAreas { get; } = new();
+
+    public string Name { get; set; }
+
+    public AreaParentOptionViewModel? SelectedParent { get; set; }
+
+    [AlsoNotifyFor(nameof(IsCreatingNew))]
+    public FeedHeadingAreaChoice? SelectedExistingArea { get; set; }
+
+    public bool IsCreatingNew => SelectedExistingArea?.AreaId is null;
+
+    public bool IsBusy { get; set; }
+
+    [AlsoNotifyFor(nameof(HasError))]
+    public string? ErrorMessage { get; set; }
+
+    public bool HasError => !string.IsNullOrWhiteSpace(ErrorMessage);
+
+    public ICommand ConfirmCommand { get; }
+
+    public ICommand CancelCommand { get; }
+}
+
+public sealed record FeedHeadingAreaChoice(string? AreaId, string DisplayName);
+
 internal sealed class FeedActionCommand(Action<object?> execute, Func<object?, bool>? canExecute = null) : ICommand
 {
     public event EventHandler? CanExecuteChanged
@@ -6057,4 +7265,17 @@ internal sealed class FeedActionCommand(Action<object?> execute, Func<object?, b
     public bool CanExecute(object? parameter) => canExecute?.Invoke(parameter) ?? true;
 
     public void Execute(object? parameter) => execute(parameter);
+}
+
+internal sealed class FeedAsyncActionCommand(Func<Task> execute) : ICommand
+{
+    public event EventHandler? CanExecuteChanged
+    {
+        add { }
+        remove { }
+    }
+
+    public bool CanExecute(object? parameter) => true;
+
+    public async void Execute(object? parameter) => await execute().ConfigureAwait(true);
 }

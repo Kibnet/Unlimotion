@@ -387,6 +387,26 @@ public static class UnlimotionAutomationScenarioData
                     PushRefSpec = "refs/heads/space-b"
                 }
             });
+            var scenarioRoot = Path.GetDirectoryName(tasksPath)!;
+            var notesA = Path.Combine(scenarioRoot, "Notes-A");
+            var notesB = Path.Combine(scenarioRoot, "Notes-B");
+            SeedTaskSpaceNoteVault(notesA, "Space A note");
+            SeedTaskSpaceNoteVault(notesB, "Space B note");
+            settings.NoteSettings.Clear();
+            settings.NoteSettings.Add(new TaskSourceNoteSettings
+            {
+                SourceId = settings.Sources[0].Id,
+                RootPath = notesA,
+                IsFeedEnabled = true,
+                DayBoundaryMinutes = 0
+            });
+            settings.NoteSettings.Add(new TaskSourceNoteSettings
+            {
+                SourceId = "space-b",
+                RootPath = notesB,
+                IsFeedEnabled = true,
+                DayBoundaryMinutes = 0
+            });
             TaskSourceSettingsAdapter.Save(configuration, settings);
             TaskSourceSettingsAdapter.SyncLegacy(configuration, settings, settings.Sources[0]);
             configuration.GetSection("TaskStatusModel:MigrationNoticeShown").Set(true);
@@ -395,6 +415,15 @@ public static class UnlimotionAutomationScenarioData
         {
             (configuration as IDisposable)?.Dispose();
         }
+    }
+
+    private static void SeedTaskSpaceNoteVault(string rootPath, string marker)
+    {
+        var dailyDirectory = Path.Combine(rootPath, "Ежедневные");
+        Directory.CreateDirectory(dailyDirectory);
+        File.WriteAllText(
+            Path.Combine(dailyDirectory, $"{DateTime.Now:yyyy-MM-dd}.md"),
+            $"## Space\n{marker}\n");
     }
 
     private static void WriteCorruptTaskSpacesConfig(

@@ -248,6 +248,20 @@ public sealed class MainWindowHeadlessTests
         HeadlessRuntime.Dispatch(static () => Dispatcher.UIThread.RunJobs());
     }
 
+    protected override void OpenQuickCapture()
+    {
+        HeadlessRuntime.Dispatch(() =>
+        {
+            GetHeadlessMainWindowViewModel().OpenQuickCapture(isTask: false);
+            Dispatcher.UIThread.RunJobs();
+        });
+    }
+
+    protected override bool IsQuickCaptureClosedAfterSave() =>
+        HeadlessRuntime.Dispatch(() =>
+            !GetHeadlessMainWindowViewModel().IsQuickCaptureOpen
+            && string.IsNullOrEmpty(GetHeadlessMainWindowViewModel().Feed.QuickCaptureText));
+
     protected override bool? GetDailyNoteFilenameFormatCanApply() =>
         HeadlessRuntime.Dispatch(
             () => GetHeadlessMainWindowViewModel().Settings.CanApplyNoteDailyFileNameFormat);
@@ -358,8 +372,15 @@ public sealed class MainWindowHeadlessTests
         var feedRoot = GetNativeControl<Control>(Page.FeedRoot);
         var feedModeButton = GetNativeControl<Control>(Page.FeedModeButton);
         var tasksModeButton = GetNativeControl<Control>(Page.TasksModeButton);
-        var quickCapture = GetNativeControl<Control>(Page.FeedQuickCaptureTextBox);
+        var quickCapture = GetNativeControl<Control>(Page.GlobalCreateMenuButton);
         var reviewAction = GetNativeControl<Control>(Page.FeedStartReviewButton);
+        var areaFilter = GetNativeControl<Control>(Page.FeedAreaFilterButton);
+        var areaActions = new[]
+        {
+            GetNativeControl<Control>(Page.FeedAreasButton),
+            GetNativeControl<Control>(Page.FeedFilesButton),
+            GetNativeControl<Control>(Page.FeedRefreshButton)
+        };
         return HeadlessRuntime.Dispatch(() =>
         {
             var window = Session.Inner.MainWindow;
@@ -388,6 +409,8 @@ public sealed class MainWindowHeadlessTests
                 GetBounds(tasksModeButton, window),
                 GetBounds(quickCapture, window),
                 GetBounds(reviewAction, window),
+                GetBounds(areaFilter, window),
+                areaActions.Select(action => GetBounds(action, window)).ToArray(),
                 hasHorizontalOverflow);
         });
     }
@@ -419,6 +442,7 @@ public sealed class MainWindowHeadlessTests
             DateOnly.FromDateTime(DateTime.Now));
 
         OpenFeedForUnifiedScenario();
+        OpenQuickCapture();
         Page.FeedQuickCaptureTextBox.Enter(UnlimotionAutomationScenarioData.FeedQuickCaptureMarker);
         Page.FeedCaptureButton.Invoke();
         WaitUntil(
@@ -571,7 +595,7 @@ public sealed class MainWindowHeadlessTests
             timeoutMessage: "Unified Feed search did not find the converted capture.");
         Page.FeedSearchBox.Enter(string.Empty);
         WaitUntil(
-            () => TryResolveHeadless(() => Page.FeedChronologyList.Items)?.Count ?? 0,
+            () => HeadlessRuntime.Dispatch(() => GetHeadlessMainWindowViewModel().Feed.VisibleDays.Count),
             count => count >= 2,
             timeout: TimeSpan.FromSeconds(10),
             timeoutMessage: "Unified Feed search clear did not restore chronology.");
@@ -710,7 +734,6 @@ public sealed class MainWindowHeadlessTests
                 "FeedReviewShrinkUpButton",
                 "FeedReviewShrinkDownButton",
                 "FeedReviewAreaPicker",
-                "FeedReviewAssignAreaButton",
                 "FeedReviewLeaveButton",
                 "FeedReviewSkipButton",
                 "FeedReviewMoveTodayButton",

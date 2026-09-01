@@ -24,28 +24,70 @@ public partial class FeedControl : UserControl
     public FeedControl()
     {
         InitializeComponent();
-        QuickCaptureTextBox.AddHandler(
-            InputElement.KeyDownEvent,
-            OnQuickCaptureKeyDown,
-            RoutingStrategies.Tunnel,
+        ChronologyScroller.AddHandler(
+            ScrollViewer.ScrollChangedEvent,
+            OnChronologyScrollChanged,
+            RoutingStrategies.Bubble,
             handledEventsToo: true);
         DataContextChanged += (_, _) => ObserveDataContext();
-        AttachedToVisualTree += (_, _) => ObserveDataContext();
+        AttachedToVisualTree += (_, _) =>
+        {
+            ObserveDataContext();
+            UpdateLocalToolbarLayout();
+        };
         DetachedFromVisualTree += (_, _) => StopObservingDataContext();
+        SizeChanged += (_, _) => UpdateLocalToolbarLayout();
     }
 
-    private void OnQuickCaptureKeyDown(object? sender, KeyEventArgs e)
+    private void UpdateLocalToolbarLayout()
     {
-        if (e.Key != Key.Enter
-            || !e.KeyModifiers.HasFlag(KeyModifiers.Control)
-            || DataContext is not FeedViewModel viewModel
-            || !viewModel.CaptureCommand.CanExecute(null))
+        if (FeedLocalToolbar is null || FeedAreaFilterButton is null)
         {
             return;
         }
 
-        viewModel.CaptureCommand.Execute(null);
-        e.Handled = true;
+        var compact = Bounds.Width > 0 && Bounds.Width < 620;
+        Grid.SetRow(FeedAreaFilterButton, 0);
+        Grid.SetColumn(FeedAreaFilterButton, 0);
+        Grid.SetColumnSpan(FeedAreaFilterButton, compact ? 4 : 1);
+        FeedAreaFilterButton.Width = compact ? double.NaN : 220;
+        FeedAreaFilterButton.HorizontalAlignment = compact
+            ? Avalonia.Layout.HorizontalAlignment.Stretch
+            : Avalonia.Layout.HorizontalAlignment.Left;
+
+        SetToolbarButtonPosition(FeedAreasButton, compact, 1);
+        SetToolbarButtonPosition(FeedFilesButton, compact, 2);
+        SetToolbarButtonPosition(FeedRefreshButton, compact, 3);
+    }
+
+    private static void SetToolbarButtonPosition(Control button, bool compact, int column)
+    {
+        Grid.SetRow(button, compact ? 1 : 0);
+        Grid.SetColumn(button, column);
+    }
+
+    private void OnChronologyScrollChanged(object? sender, ScrollChangedEventArgs e)
+    {
+        if (DataContext is not FeedViewModel viewModel
+            || !viewModel.HasMoreDays
+            || viewModel.IsLoadingOlderDays
+            || e.ExtentDelta == default && e.OffsetDelta == default)
+        {
+            return;
+        }
+
+        var scrollViewer = FindChronologyScrollViewer();
+        if (scrollViewer is null
+            || scrollViewer.Extent.Height - scrollViewer.Offset.Y - scrollViewer.Viewport.Height
+                > scrollViewer.Viewport.Height)
+        {
+            return;
+        }
+
+        if (viewModel.LoadOlderDaysCommand.CanExecute(null))
+        {
+            viewModel.LoadOlderDaysCommand.Execute(null);
+        }
     }
 
     private void OnMarkdownLinkInvoked(object? sender, MarkdownLinkInvokedEventArgs e)
@@ -205,35 +247,66 @@ public partial class FeedControl : UserControl
             {
                 if (e.Day is not null)
                 {
-                    ChronologyList.SelectedItem = e.Day;
+                    if (DataContext is FeedViewModel viewModel)
+                    {
+                        viewModel.SelectedDay = e.Day;
+                    }
+
                     ChronologyList.ScrollIntoView(e.Day);
+                    var dayControl = this.GetVisualDescendants()
+                        .OfType<Control>()
+                        .FirstOrDefault(control => string.Equals(
+                            AutomationProperties.GetAutomationId(control),
+                            e.Day.AutomationId,
+                            StringComparison.Ordinal));
+                    dayControl?.BringIntoView();
                 }
 
                 Dispatcher.UIThread.Post(
-                    () =>
-                    {
-                        var block = e.Editor.Blocks.FirstOrDefault(candidate => candidate.Index == e.BlockIndex);
-                        if (block is null)
-                        {
-                            return;
-                        }
-
-                        var preview = this.GetVisualDescendants()
-                            .OfType<Control>()
-                            .FirstOrDefault(control => string.Equals(
-                                AutomationProperties.GetAutomationId(control),
-                                block.PreviewAutomationId,
-                                StringComparison.Ordinal));
-                        preview?.BringIntoView();
-                        preview?.Focus();
-                    },
+                    () => FocusNavigatedBlock(e, remainingAttempts: 8),
                     DispatcherPriority.Loaded);
             },
             DispatcherPriority.Loaded);
     }
 
-    private ScrollViewer? FindChronologyScrollViewer() => ChronologyList
-        .GetVisualDescendants()
-        .OfType<ScrollViewer>()
-        .FirstOrDefault();
+    private void FocusNavigatedBlock(FeedSearchNavigationRequestedEventArgs e, int remainingAttempts)
+    {
+        ChronologyList.UpdateLayout();
+        var block = e.Editor.Blocks.FirstOrDefault(candidate => candidate.Index == e.BlockIndex);
+        if (block is null)
+        {
+            return;
+        }
+
+        var preview = this.GetVisualDescendants()
+            .OfType<Control>()
+            .FirstOrDefault(control => string.Equals(
+                AutomationProperties.GetAutomationId(control),
+                block.PreviewAutomationId,
+                StringComparison.Ordinal));
+        if (preview is not null)
+        {
+            preview.BringIntoView();
+            if (preview.Focus())
+            {
+                return;
+            }
+        }
+
+        if (remainingAttempts <= 0)
+        {
+            return;
+        }
+
+        if (e.Day is not null)
+        {
+            ChronologyList.ScrollIntoView(e.Day);
+        }
+
+        Dispatcher.UIThread.Post(
+            () => FocusNavigatedBlock(e, remainingAttempts - 1),
+            DispatcherPriority.Loaded);
+    }
+
+    private ScrollViewer? FindChronologyScrollViewer() => ChronologyScroller;
 }

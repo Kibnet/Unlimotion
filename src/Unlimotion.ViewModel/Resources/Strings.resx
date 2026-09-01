@@ -153,10 +153,37 @@
   <data name="FeedEmptyDayList" xml:space="preserve"><value>No daily notes yet</value></data>
   <data name="FeedMode" xml:space="preserve"><value>Feed</value></data>
   <data name="FeedNoArea" xml:space="preserve"><value>No area</value></data>
+  <data name="FeedAreaFilterAll" xml:space="preserve"><value>All areas</value></data>
+  <data name="FeedAreaFilterNone" xml:space="preserve"><value>No areas</value></data>
+  <data name="FeedAreaFilterSelected" xml:space="preserve"><value>{0} areas</value></data>
+  <data name="FeedAreaFilterEmpty" xml:space="preserve"><value>No entries in the selected areas</value></data>
+  <data name="FeedAreaFilterReset" xml:space="preserve"><value>Reset area filter</value></data>
+  <data name="FeedBlockMoveHandle" xml:space="preserve"><value>Select and drag block</value></data>
+  <data name="FeedBlockMoveHelp" xml:space="preserve"><value>Click to select. Ctrl adds a block, Shift selects a range. Drag to reorder; Alt+Up or Alt+Down moves by keyboard.</value></data>
+  <data name="FeedBlockMoveFailed" xml:space="preserve"><value>The selected blocks could not be moved.</value></data>
+  <data name="FeedBlockToolbar" xml:space="preserve"><value>Selected block actions</value></data>
+  <data name="FeedBlockMoveUp" xml:space="preserve"><value>Move up</value></data>
+  <data name="FeedBlockMoveDown" xml:space="preserve"><value>Move down</value></data>
+  <data name="FeedBlockBulletedList" xml:space="preserve"><value>Bulleted list</value></data>
+  <data name="FeedBlockNumberedList" xml:space="preserve"><value>Numbered list</value></data>
+  <data name="FeedBlockChecklist" xml:space="preserve"><value>Checklist</value></data>
+  <data name="FeedBlockChangeArea" xml:space="preserve"><value>Change area</value></data>
+  <data name="FeedBlockConvertToArea" xml:space="preserve"><value>Make area</value></data>
+  <data name="TaskSpaceNoteVaultActivationFailed" xml:space="preserve"><value>The note database for this space could not be activated.</value></data>
   <data name="FeedOnboardingDescription" xml:space="preserve"><value>Choose the root folder of an existing Obsidian vault. Files stay in place and are edited as Markdown.</value></data>
   <data name="FeedOnboardingTitle" xml:space="preserve"><value>Connect your note vault</value></data>
   <data name="FeedQuickCaptureTitle" xml:space="preserve"><value>Quick capture</value></data>
   <data name="FeedQuickCaptureWatermark" xml:space="preserve"><value>Write a thought, task, or Markdown note...</value></data>
+  <data name="FeedQuickCaptureAsTask" xml:space="preserve"><value>Create as a task in today's note</value></data>
+  <data name="FeedQuickCaptureTask" xml:space="preserve"><value>Task in daily note</value></data>
+  <data name="FeedQuickCaptureNote" xml:space="preserve"><value>New entry</value></data>
+  <data name="FeedQuickCaptureCreated" xml:space="preserve"><value>Task created</value></data>
+  <data name="FeedQuickCaptureDone" xml:space="preserve"><value>Done</value></data>
+  <data name="GlobalCreate" xml:space="preserve"><value>Create</value></data>
+  <data name="GlobalReview" xml:space="preserve"><value>Review</value></data>
+  <data name="GlobalSettings" xml:space="preserve"><value>Settings</value></data>
+  <data name="GlobalSearchWatermark" xml:space="preserve"><value>Search tasks and notes</value></data>
+  <data name="GlobalClose" xml:space="preserve"><value>Close</value></data>
   <data name="FeedRefresh" xml:space="preserve"><value>Refresh</value></data>
   <data name="FeedSearchArea" xml:space="preserve"><value>Area</value></data>
   <data name="FeedSearchAreaAll" xml:space="preserve"><value>All areas</value></data>
@@ -193,6 +220,12 @@
   <data name="FeedReviewNoteFolder" xml:space="preserve"><value>Thematic folder</value></data>
   <data name="FeedReviewCreateNote" xml:space="preserve"><value>Create note</value></data>
   <data name="FeedReviewContinue" xml:space="preserve"><value>Continue</value></data>
+  <data name="FeedReviewPrevious" xml:space="preserve"><value>← Previous</value></data>
+  <data name="FeedReviewNext" xml:space="preserve"><value>Next →</value></data>
+  <data name="FeedReviewTaskAction" xml:space="preserve"><value>Task</value></data>
+  <data name="FeedReviewNoteAction" xml:space="preserve"><value>Note</value></data>
+  <data name="FeedReviewMoveTodayShort" xml:space="preserve"><value>Today</value></data>
+  <data name="Retry" xml:space="preserve"><value>Retry</value></data>
   <data name="FeedIdentityConflictTitle" xml:space="preserve"><value>Vault identity changed</value></data>
   <data name="FeedIdentityConflictDescription" xml:space="preserve"><value>Writing is paused. Both identity and review branches were preserved; choose how to reconnect this root.</value></data>
   <data name="FeedIdentityConflictAccepted" xml:space="preserve"><value>Connected identity:</value></data>
@@ -720,10 +753,23 @@
   <data name="FeedPendingRecoveryKindTask" xml:space="preserve"><value>Task</value></data>
   <data name="FeedPendingRecoveryKindNote" xml:space="preserve"><value>Note</value></data>
   <data name="FeedPendingRecoveryKindMove" xml:space="preserve"><value>Move</value></data>
+  <data name="FeedPendingRecoveryKindArea" xml:space="preserve"><value>Area</value></data>
   <data name="AreaExternalConflict" xml:space="preserve"><value>Areas were changed both in Unlimotion and externally. Choose which version to keep.</value></data>
   <data name="AreaUseLocalDraft" xml:space="preserve"><value>Use Unlimotion version</value></data>
   <data name="AreaUseExternal" xml:space="preserve"><value>Use external version</value></data>
   <data name="TaskGoalFilterAll" xml:space="preserve"><value>All</value></data>
   <data name="TaskGoalFilterGoals" xml:space="preserve"><value>Goals</value></data>
   <data name="TaskGoalFilterRegular" xml:space="preserve"><value>Regular</value></data>
+  <data name="FeedChronologyAutomationName" xml:space="preserve">
+    <value>Chronology: {0} days</value>
+  </data>
+  <data name="MarkdownHeadingAreaTitle" xml:space="preserve"><value>Turn heading into area</value></data>
+  <data name="MarkdownHeadingAreaDescription" xml:space="preserve"><value>Create an area with an optional parent, or link the heading to an existing area.</value></data>
+  <data name="MarkdownHeadingAreaExisting" xml:space="preserve"><value>Area</value></data>
+  <data name="MarkdownHeadingAreaName" xml:space="preserve"><value>Name</value></data>
+  <data name="MarkdownHeadingAreaParent" xml:space="preserve"><value>Parent</value></data>
+  <data name="MarkdownHeadingAreaConfirm" xml:space="preserve"><value>Turn into area</value></data>
+  <data name="MarkdownCreateNewArea" xml:space="preserve"><value>Create new area</value></data>
+  <data name="MarkdownSelectedHeadingUnavailable" xml:space="preserve"><value>The selected heading is no longer available.</value></data>
+  <data name="MarkdownSelectedAreaUnavailable" xml:space="preserve"><value>The selected area is no longer available.</value></data>
 </root>

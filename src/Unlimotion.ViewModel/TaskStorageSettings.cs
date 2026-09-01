@@ -70,12 +70,22 @@ public sealed class TaskSourceLegacyProjectionState
 public class TaskSourcesSettings
 {
     public const string SectionName = "TaskSources";
+    public const string NoteProfilesSectionName = "TaskSourceNoteProfiles";
 
     public string ActiveSourceId { get; set; } = TaskSourceDescriptor.DefaultSourceId;
     public List<TaskSourceDescriptor> Sources { get; set; } = new();
     public List<TaskSourceServerSettings> ServerSettings { get; set; } = new();
     public List<TaskSourceSyncSettings> SyncSettings { get; set; } = new();
+    public List<TaskSourceNoteSettings> NoteSettings { get; set; } = new();
     public TaskSourceLegacyProjectionState LegacyProjection { get; set; } = new();
+}
+
+public sealed class TaskSourceNoteSettings
+{
+    public string SourceId { get; set; } = TaskSourceDescriptor.DefaultSourceId;
+    public string? RootPath { get; set; }
+    public bool IsFeedEnabled { get; set; } = true;
+    public int DayBoundaryMinutes { get; set; }
 }
 
 public sealed class TaskSpaceSettingsDraft

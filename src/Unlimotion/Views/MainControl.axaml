@@ -757,7 +757,7 @@
 
     <Grid RowDefinitions="Auto,*">
         <!--Адрес-->
-        <Grid Grid.Row="0" Grid.ColumnSpan="2" Margin="10,5" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+        <Grid Grid.Row="0" Grid.ColumnSpan="2" Margin="10,5" ColumnDefinitions="*" ColumnSpacing="8">
             <unlimotion:EmojiTextBlock x:Name="BreadcrumbsTextBlock"
                                        AutomationProperties.AutomationId="BreadcrumbsTextBlock"
                                        EmojiText="{Binding BreadScrumbs}"
@@ -769,49 +769,6 @@
                                        FontWeight="Bold"
                                        HorizontalAlignment="Stretch"
                                        VerticalAlignment="Center"/>
-            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                <ComboBox Width="170"
-                          ItemsSource="{Binding Settings.TaskSpaces}"
-                          SelectedItem="{Binding Settings.HeaderTaskSpace, Mode=TwoWay}"
-                          IsEnabled="{Binding !Settings.IsTaskSpaceSwitching}"
-                          ToolTip.Tip="{DynamicResource TaskSpaceSelectorHint}"
-                          AutomationProperties.AutomationId="TaskSpaceSelector">
-                    <ComboBox.ItemTemplate>
-                        <DataTemplate DataType="viewModel:TaskSpaceOptionViewModel">
-                            <TextBlock Text="{Binding DisplayName}"
-                                       TextTrimming="CharacterEllipsis"
-                                       AutomationProperties.Name="{Binding DisplayName}"
-                                       ToolTip.Tip="{Binding SourceSummary}"/>
-                        </DataTemplate>
-                    </ComboBox.ItemTemplate>
-                </ComboBox>
-                <DropDownButton Classes="TaskCreateMenuButton TaskAccentOutlineButton TaskIconOnlyDropDownButton"
-                                Content="➕"
-                                ToolTip.Tip="{DynamicResource CreateTaskMenuTip}"
-                                AutomationProperties.Name="{DynamicResource CreateTaskMenuTip}"
-                                AutomationProperties.AutomationId="GlobalTaskCreateMenuButton">
-                    <DropDownButton.Flyout>
-                        <MenuFlyout>
-                            <MenuItem Classes="TaskCreateMenuItem"
-                                      Header="{DynamicResource NewTask}"
-                                      Command="{Binding Create}"
-                                      AutomationProperties.AutomationId="GlobalTaskCreateTaskMenuItem"/>
-                            <MenuItem Classes="TaskCreateMenuItem"
-                                      Header="{DynamicResource NewSibling}"
-                                      Command="{Binding CreateSibling}"
-                                      AutomationProperties.AutomationId="GlobalTaskCreateSiblingMenuItem"/>
-                            <MenuItem Classes="TaskCreateMenuItem"
-                                      Header="{DynamicResource NewBlockedSibling}"
-                                      Command="{Binding CreateBlockedSibling}"
-                                      AutomationProperties.AutomationId="GlobalTaskCreateBlockedSiblingMenuItem"/>
-                            <MenuItem Classes="TaskCreateMenuItem"
-                                      Header="{DynamicResource NewInner}"
-                                      Command="{Binding CreateInner}"
-                                      AutomationProperties.AutomationId="GlobalTaskCreateInnerMenuItem"/>
-                        </MenuFlyout>
-                    </DropDownButton.Flyout>
-                </DropDownButton>
-            </StackPanel>
         </Grid>
 
         <!--Панель навигации-->
@@ -1620,7 +1577,12 @@
                                                             <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterDate}"/>
                                                             <WrapPanel>
                                                                 <CheckBox Content="{DynamicResource CustomPeriod}" IsChecked="{Binding ArchivedDateFilter.IsCustom}" Margin="0,0,12,6" VerticalAlignment="Center" />
-                                                                <ComboBox IsVisible="{Binding !ArchivedDateFilter.IsCustom}" ItemsSource="{Binding DateFilterDefinitions}" SelectedItem="{Binding ArchivedDateFilter.CurrentOption}" VerticalAlignment="Center" Margin="0,0,8,6" />
+                                                                <ComboBox IsVisible="{Binding !ArchivedDateFilter.IsCustom}"
+                                                                          ItemsSource="{Binding DateFilterDefinitions}"
+                                                                          SelectedItem="{Binding ArchivedDateFilter.CurrentOption}"
+                                                                          VerticalAlignment="Center"
+                                                                          Margin="0,0,8,6"
+                                                                          AutomationProperties.AutomationId="ArchivedDateFilterComboBox" />
                                                             </WrapPanel>
                                                             <WrapPanel IsVisible="{Binding ArchivedDateFilter.IsCustom}">
                                                                 <Label Content="{DynamicResource From}" Margin="0,0,6,6" VerticalAlignment="Center"/>
@@ -1797,10 +1759,6 @@
                         <views:GraphControl DataContext="{Binding Graph}"/>
                     </TabItem>
                     <!--Settings-->
-                    <TabItem Header="{DynamicResource Settings}" IsSelected="{Binding SettingsMode, Mode=OneWayToSource}"
-                             AutomationProperties.AutomationId="SettingsTabItem">
-                        <views:SettingsControl DataContext="{Binding Settings}"/>
-                    </TabItem>
                 </TabControl>
                 <Button x:Name="MainTabsOverflowButton"
                         Classes="MainTabsOverflowButton"

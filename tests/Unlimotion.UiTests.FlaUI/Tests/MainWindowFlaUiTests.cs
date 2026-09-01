@@ -22,6 +22,9 @@ namespace Unlimotion.UiTests.FlaUI.Tests;
 public sealed class MainWindowFlaUiTests
     : FeedScenariosBase<MainWindowFlaUiTests.FlaUiRuntimeSession>
 {
+    private const string FeedScreenshotThemeEnvironmentVariable = "UNLIMOTION_FEED_SCREENSHOT_THEME";
+    private const string FeedScreenshotWidthEnvironmentVariable = "UNLIMOTION_FEED_SCREENSHOT_WIDTH";
+    private const string UiRecordingPauseEnvironmentVariable = "UNLIMOTION_UI_RECORDING_PAUSE_MS";
     private static int _physicalPixelDpiAwarenessConfigured;
     private string? feedVaultPath;
 
@@ -35,7 +38,10 @@ public sealed class MainWindowFlaUiTests
         var isDailyNoteFilenameFormatScreenshotCapture = isDailyNoteFilenameFormatScenario &&
             !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(
                 DailyNoteFilenameFormatScreenshotPathEnvironmentVariable));
-        if (isStatusContract || isFeedScreenshotCapture || isDailyNoteFilenameFormatScreenshotCapture)
+        if (isStatusContract
+            || isFeedScreenshotCapture
+            || isDailyNoteFilenameFormatScreenshotCapture
+            || IsEditorDragScenarioTest)
         {
             EnsurePhysicalPixelDpiAwareness();
         }
@@ -49,15 +55,22 @@ public sealed class MainWindowFlaUiTests
                     : UnlimotionAutomationScenario.Smoke,
                 language: isStatusContract ? StatusContractLanguage : null,
                 currentTaskId: isStatusContract ? StatusContractCurrentTaskId : null,
-                buildBeforeLaunch: false,
+                buildBeforeLaunch: true,
                 mainWindowTimeout: TimeSpan.FromSeconds(90),
-                theme: isStatusContract ? StatusContractTheme : null,
+                theme: isStatusContract
+                    ? StatusContractTheme
+                    : Environment.GetEnvironmentVariable(FeedScreenshotThemeEnvironmentVariable),
                 feedVaultPrepared: path =>
                 {
                     feedVaultPath = path;
                     if (isDailyNoteFilenameFormatScenario)
                     {
                         SeedDottedDailyNoteForFilenameFormatScenario(path);
+                    }
+
+                    if (IsEditorDragScenarioTest)
+                    {
+                        SeedEditorDragSection(path);
                     }
                 }));
 
@@ -131,7 +144,14 @@ public sealed class MainWindowFlaUiTests
 
         var mainWindow = Session.Inner.MainWindow;
         var handle = mainWindow.Properties.NativeWindowHandle.ValueOrDefault;
-        const int captureWidth = 1280;
+        const int defaultCaptureWidth = 1280;
+        var captureWidth = int.TryParse(
+            Environment.GetEnvironmentVariable(FeedScreenshotWidthEnvironmentVariable),
+            NumberStyles.Integer,
+            CultureInfo.InvariantCulture,
+            out var configuredWidth)
+                ? Math.Clamp(configuredWidth, 480, 2560)
+                : defaultCaptureWidth;
         if (handle == IntPtr.Zero || !MoveWindow(handle, 0, 0, captureWidth, 2000, true))
         {
             throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not place the Feed window for screenshot capture.");
@@ -189,7 +209,7 @@ public sealed class MainWindowFlaUiTests
                 "Could not place the Settings window for daily note format screenshot capture.");
         }
 
-        SelectSettingsTab();
+        OpenSettings();
         CloseTaskDetailsPaneForDailyNoteFilenameFormatScreenshot();
         var settingsSection = RequireProcessElement("NoteDailyFileNameFormatSection");
         settingsSection.Patterns.ScrollItem.PatternOrDefault?.ScrollIntoView();
@@ -244,31 +264,9 @@ public sealed class MainWindowFlaUiTests
                previewText?.Contains($"Ежедневные/{expectedStem}.md", StringComparison.Ordinal) == true;
     }
 
-    protected override void SelectSettingsTab()
+    protected override void OpenSettings()
     {
-        var directTab = Session.Inner.MainWindow.FindFirstDescendant(
-            Session.Inner.ConditionFactory.ByAutomationId("SettingsTabItem"));
-        if (directTab is not null && !directTab.Properties.IsOffscreen.ValueOrDefault)
-        {
-            directTab.AsTabItem().Select();
-            return;
-        }
-
-        InvokeMainWindowButton("MainTabsOverflowButton");
-        var overflowItem = WaitUntil(
-            () => FindProcessElement("MainTabsOverflowSettingsTabItem"),
-            static element => element is not null,
-            timeout: TimeSpan.FromSeconds(10),
-            timeoutMessage: "Main-tabs overflow did not expose Settings.")!;
-        var invoke = overflowItem.Patterns.Invoke.PatternOrDefault;
-        if (invoke is not null)
-        {
-            invoke.Invoke();
-        }
-        else
-        {
-            overflowItem.Click();
-        }
+        InvokeMainWindowButton("GlobalSettingsButton");
     }
 
     protected override void EnterDailyNoteFilenameFormat(ITextBoxControl input, string format)
@@ -332,9 +330,129 @@ public sealed class MainWindowFlaUiTests
             viewport,
             ToFeedBounds(RequireProcessElement("FeedModeButton")),
             ToFeedBounds(RequireProcessElement("TasksModeButton")),
-            ToFeedBounds(RequireProcessElement("FeedQuickCaptureTextBox")),
+            ToFeedBounds(RequireProcessElement("GlobalCreateMenuButton")),
             ToFeedBounds(RequireProcessElement("FeedStartReviewButton")),
+            ToFeedBounds(RequireProcessElement("FeedAreaFilterButton")),
+            new[]
+            {
+                ToFeedBounds(RequireProcessElement("FeedAreasButton")),
+                ToFeedBounds(RequireProcessElement("FeedFilesButton")),
+                ToFeedBounds(RequireProcessElement("FeedRefreshButton"))
+            },
             hasHorizontalOverflow);
+    }
+
+    [Test]
+    [NotInParallel(DesktopUiConstraint)]
+    public async Task Feed_editor_pointer_drag_reorders_blocks()
+    {
+        const string dragSectionMarker = "Pointer drag section";
+        Page.FeedModeButton.IsChecked = true;
+        _ = WaitUntil(
+            () => FindProcessElement("FeedRoot"),
+            static element => element is not null,
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "Feed root did not become available for the pointer-drag scenario.");
+
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        var prefix = $"FeedDay-{today:yyyyMMdd}-Markdown";
+        var handlePrefix = prefix + "-BlockMoveHandle-";
+        var movableHandles = WaitUntil(
+            () => Session.Inner.MainWindow.FindAllDescendants()
+                .Where(element => element.IsEnabled
+                    && element.Properties.AutomationId.ValueOrDefault?.StartsWith(
+                        handlePrefix,
+                        StringComparison.Ordinal) == true)
+                .OrderBy(element => int.Parse(
+                    element.Properties.AutomationId.ValueOrDefault![handlePrefix.Length..],
+                    CultureInfo.InvariantCulture))
+                .ToArray(),
+            handles => handles.Length >= 4,
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "Feed move handles did not become available for pointer drag.");
+        var sourceHandle = movableHandles[^2];
+        var targetBlock = movableHandles[1];
+        targetBlock.Patterns.ScrollItem.PatternOrDefault?.ScrollIntoView();
+        sourceHandle.Patterns.ScrollItem.PatternOrDefault?.ScrollIntoView();
+        _ = WaitUntil(
+            () => (!sourceHandle.Properties.IsOffscreen.ValueOrDefault,
+                !targetBlock.Properties.IsOffscreen.ValueOrDefault),
+            static visibility => visibility.Item1 && visibility.Item2,
+            timeout: TimeSpan.FromSeconds(5),
+            timeoutMessage: "Feed drag controls did not become pointer-visible after scrolling.");
+        var sourceBounds = sourceHandle.Properties.BoundingRectangle.ValueOrDefault;
+        var targetBounds = targetBlock.Properties.BoundingRectangle.ValueOrDefault;
+        if (sourceBounds.Width <= 0 || sourceBounds.Height <= 0 || targetBounds.Width <= 0 || targetBounds.Height <= 0)
+        {
+            throw new InvalidOperationException("Feed drag controls did not expose usable screen bounds.");
+        }
+
+        var start = new System.Drawing.Point(
+            (int)Math.Round(sourceBounds.Left + sourceBounds.Width / 2d),
+            (int)Math.Round(sourceBounds.Top + sourceBounds.Height / 2d));
+        var finish = new System.Drawing.Point(
+            (int)Math.Round(targetBounds.Left + targetBounds.Width / 2d),
+            (int)Math.Round(targetBounds.Top + targetBounds.Height * 0.05d));
+        if (int.TryParse(
+                Environment.GetEnvironmentVariable(UiRecordingPauseEnvironmentVariable),
+                CultureInfo.InvariantCulture,
+                out var recordingPauseMilliseconds))
+        {
+            var remainingPause = Math.Clamp(recordingPauseMilliseconds, 0, 15000);
+            while (remainingPause > 0)
+            {
+                Session.Inner.MainWindow.Focus();
+                var interval = Math.Min(remainingPause, 250);
+                Thread.Sleep(interval);
+                remainingPause -= interval;
+            }
+        }
+
+        Mouse.MoveTo(start);
+        Mouse.Down(MouseButton.Left);
+        try
+        {
+            Thread.Sleep(TimeSpan.FromMilliseconds(120));
+            for (var step = 1; step <= 12; step++)
+            {
+                Mouse.MoveTo(new System.Drawing.Point(
+                    start.X + (finish.X - start.X) * step / 12,
+                    start.Y + (finish.Y - start.Y) * step / 12));
+                Thread.Sleep(TimeSpan.FromMilliseconds(35));
+            }
+        }
+        finally
+        {
+            Mouse.Up(MouseButton.Left);
+        }
+
+        var relativePath = UnlimotionAutomationScenarioData.GetFeedDailyRelativePath(today);
+        var reordered = WaitUntil(
+            () => ReadFeedVaultText(relativePath),
+            text => text.IndexOf(dragSectionMarker, StringComparison.Ordinal)
+                    < text.IndexOf(UnlimotionAutomationScenarioData.FeedNewestMarker, StringComparison.Ordinal),
+            timeout: TimeSpan.FromSeconds(15),
+            timeoutMessage: "Pointer drag did not persist the new Markdown block order. "
+                + $"Source={sourceHandle.Properties.AutomationId.ValueOrDefault}; "
+                + $"target={targetBlock.Properties.AutomationId.ValueOrDefault}.");
+
+        await Assert.That(reordered.IndexOf(
+                dragSectionMarker,
+                StringComparison.Ordinal))
+            .IsLessThan(reordered.IndexOf(
+                UnlimotionAutomationScenarioData.FeedNewestMarker,
+                StringComparison.Ordinal));
+    }
+
+    private static void SeedEditorDragSection(string vaultPath)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        var relativePath = UnlimotionAutomationScenarioData.GetFeedDailyRelativePath(today)
+            .Replace('/', Path.DirectorySeparatorChar);
+        File.AppendAllText(
+            Path.Combine(vaultPath, relativePath),
+            "\n## Drag section <!-- unlimotion-area:area-drag -->\nPointer drag section\n",
+            new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
     }
 
     private AutomationElement RequireProcessElement(string automationId) =>
@@ -504,10 +622,13 @@ public sealed class MainWindowFlaUiTests
         var blockedCompleted = ObserveOpenStatusOption("TaskStatusOptionCompleted");
         const string blockerReason = "Сначала выполните прямые блокирующие задачи.";
         var blockerReasonElementCount = CountProcessElementsNamed(blockerReason);
-        HoverStatusOption("TaskStatusOptionInProgress");
+        using var beforeTooltipHover = Session.Inner.MainWindow.Capture();
+        var hoveredOptionBounds = HoverStatusOption("TaskStatusOptionInProgress");
         var blockedTooltipOpened = WaitForAdditionalNamedElement(
             blockerReason,
-            blockerReasonElementCount);
+            blockerReasonElementCount,
+            beforeTooltipHover,
+            hoveredOptionBounds);
         CaptureStatusContractScreenshot(Path.Combine(
             ResolveArtifactDirectory(),
             "after-blocked.png"));
@@ -529,7 +650,7 @@ public sealed class MainWindowFlaUiTests
             .Because("Pointer hover must open the tooltip for a disabled status row.");
     }
 
-    private void HoverStatusOption(string automationId)
+    private (double Left, double Top, double Right, double Bottom) HoverStatusOption(string automationId)
     {
         var option = FindProcessElement(automationId)
             ?? throw new InvalidOperationException(
@@ -544,20 +665,110 @@ public sealed class MainWindowFlaUiTests
         Mouse.MoveTo(
             (int)Math.Round(bounds.Left + bounds.Width / 2d),
             (int)Math.Round(bounds.Top + bounds.Height / 2d));
+        return (bounds.Left, bounds.Top, bounds.Right, bounds.Bottom);
     }
 
-    private bool WaitForAdditionalNamedElement(string expectedText, int baselineCount)
+    private bool WaitForAdditionalNamedElement(
+        string expectedText,
+        int baselineCount,
+        System.Drawing.Bitmap beforeHover,
+        (double Left, double Top, double Right, double Bottom) optionBounds)
     {
         try
         {
             _ = WaitUntil(
-                () => CountProcessElementsNamed(expectedText),
-                count => count > baselineCount,
+                () => (NamedElementCount: CountProcessElementsNamed(expectedText),
+                    HasVisibleTooltip: IsNamedTooltipVisible(expectedText),
+                    HasTooltipVisualChange: HasTooltipVisualChange(beforeHover, optionBounds)),
+                state => state.NamedElementCount > baselineCount
+                    || state.HasVisibleTooltip
+                    || state.HasTooltipVisualChange,
                 timeout: TimeSpan.FromSeconds(5),
-                timeoutMessage: "Tooltip did not add its text to the process UIA tree.");
+                timeoutMessage: "Tooltip was neither exposed through UIA nor rendered beside the hovered status row.");
             return true;
         }
         catch (TimeoutException)
+        {
+            return false;
+        }
+    }
+
+    private bool HasTooltipVisualChange(
+        System.Drawing.Bitmap beforeHover,
+        (double Left, double Top, double Right, double Bottom) optionBounds)
+    {
+        using var afterHover = Session.Inner.MainWindow.Capture();
+        if (beforeHover.Width != afterHover.Width || beforeHover.Height != afterHover.Height)
+        {
+            return false;
+        }
+
+        var windowBounds = Session.Inner.MainWindow.Properties.BoundingRectangle.ValueOrDefault;
+        var optionHeight = optionBounds.Bottom - optionBounds.Top;
+        var left = Math.Clamp(
+            (int)Math.Floor(optionBounds.Right - windowBounds.Left + 4),
+            0,
+            afterHover.Width);
+        var top = Math.Clamp(
+            (int)Math.Floor(optionBounds.Top - windowBounds.Top - optionHeight / 2d),
+            0,
+            afterHover.Height);
+        var bottom = Math.Clamp(
+            (int)Math.Ceiling(optionBounds.Bottom - windowBounds.Top + optionHeight * 1.5d),
+            0,
+            afterHover.Height);
+        if (left >= afterHover.Width || top >= bottom)
+        {
+            return false;
+        }
+
+        const int requiredChangedSamples = 150;
+        var changedSamples = 0;
+        for (var y = top; y < bottom; y += 2)
+        {
+            for (var x = left; x < afterHover.Width; x += 2)
+            {
+                var before = beforeHover.GetPixel(x, y);
+                var after = afterHover.GetPixel(x, y);
+                var colorDistance = Math.Abs(before.R - after.R)
+                    + Math.Abs(before.G - after.G)
+                    + Math.Abs(before.B - after.B);
+                if (colorDistance < 48)
+                {
+                    continue;
+                }
+
+                changedSamples++;
+                if (changedSamples >= requiredChangedSamples)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private bool IsNamedTooltipVisible(string expectedText)
+    {
+        try
+        {
+            var processId = Session.Inner.MainWindow.Properties.ProcessId.ValueOrDefault;
+            var processCondition = Session.Inner.ConditionFactory.ByProcessId(processId);
+            return Session.Inner.MainWindow.Automation
+                .GetDesktop()
+                .FindAllDescendants(processCondition)
+                .Where(element =>
+                    element.Properties.ControlType.ValueOrDefault == ControlType.ToolTip
+                    && !element.Properties.IsOffscreen.ValueOrDefault)
+                .Any(element =>
+                    string.Equals(element.Properties.Name.ValueOrDefault, expectedText, StringComparison.Ordinal)
+                    || element.FindAllDescendants().Any(descendant => string.Equals(
+                        descendant.Properties.Name.ValueOrDefault,
+                        expectedText,
+                        StringComparison.Ordinal)));
+        }
+        catch
         {
             return false;
         }
@@ -655,7 +866,11 @@ public sealed class MainWindowFlaUiTests
             static element => element is not null && !element.Properties.IsOffscreen.ValueOrDefault,
             timeout: TimeSpan.FromSeconds(10),
             timeoutMessage: "Archived filter panel did not expose its status filter.")!;
-        var dateFilterElement = FindArchivedDateFilterElement(statusFilter);
+        var dateFilterElement = WaitUntil(
+            () => FindProcessElement("ArchivedDateFilterComboBox"),
+            static element => element is not null && !element.Properties.IsOffscreen.ValueOrDefault,
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "Archived filter panel did not expose its date filter.")!;
         var selectedItem = dateFilterElement.AsComboBox().Select("All Time")
             ?? throw new InvalidOperationException("Archived date filter did not expose the All Time option.");
         if (!string.Equals(selectedItem.Text, "All Time", StringComparison.Ordinal))
@@ -682,31 +897,6 @@ public sealed class MainWindowFlaUiTests
             static filter => filter is null || filter.Properties.IsOffscreen.ValueOrDefault,
             timeout: TimeSpan.FromSeconds(10),
             timeoutMessage: "Archived filter panel remained open after selecting All Time.");
-    }
-
-    private AutomationElement FindArchivedDateFilterElement(AutomationElement statusFilter)
-    {
-        var processId = Session.Inner.MainWindow.Properties.ProcessId.ValueOrDefault;
-        var comboBoxCondition = Session.Inner.ConditionFactory.ByControlType(ControlType.ComboBox);
-        for (var ancestor = statusFilter.Parent;
-             ancestor is not null && ancestor.Properties.ProcessId.ValueOrDefault == processId;
-             ancestor = ancestor.Parent)
-        {
-            var dateFilter = ancestor
-                .FindAllDescendants(comboBoxCondition)
-                .FirstOrDefault(element =>
-                    !element.Properties.IsOffscreen.ValueOrDefault &&
-                    !string.Equals(
-                        element.Properties.AutomationId.ValueOrDefault,
-                        "ArchivedStatusFilterComboBox",
-                        StringComparison.Ordinal));
-            if (dateFilter is not null)
-            {
-                return dateFilter;
-            }
-        }
-
-        throw new InvalidOperationException("Archived date filter combo box was not exposed by UIA.");
     }
 
     protected override string DescribeStatusContractRuntimeState()

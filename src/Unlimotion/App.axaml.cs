@@ -98,6 +98,7 @@ public class App : Application
     private bool _isAutomaticUpdateCheckRunning;
     private TaskSpaceCatalogException? _startupTaskSpaceCatalogError;
     private Exception? _lastReportedTaskSpaceSettingsPersistenceError;
+    private bool _isTaskSpaceFeedRebindInProgress;
     
     public override void Initialize()
     {
@@ -962,8 +963,14 @@ public class App : Application
             .AddToDispose(viewModel);
         settings
             .ObservableForProperty(model => model.NoteVaultRootPath, false, true)
-            .Subscribe(change => _ = viewModel.Feed.InitializeVaultAsync(
-                settings.IsFeedEnabled ? change.Value : null))
+            .Subscribe(change =>
+            {
+                if (!_isTaskSpaceFeedRebindInProgress)
+                {
+                    _ = viewModel.Feed.InitializeVaultAsync(
+                        settings.IsFeedEnabled ? change.Value : null);
+                }
+            })
             .AddToDispose(viewModel);
         settings
             .ObservableForProperty(model => model.NoteDayBoundary, false, true)
@@ -978,8 +985,11 @@ public class App : Application
                     viewModel.SelectedWorkspaceMode = WorkspaceMode.Tasks;
                 }
 
-                _ = viewModel.Feed.InitializeVaultAsync(
-                    change.Value ? settings.NoteVaultRootPath : null);
+                if (!_isTaskSpaceFeedRebindInProgress)
+                {
+                    _ = viewModel.Feed.InitializeVaultAsync(
+                        change.Value ? settings.NoteVaultRootPath : null);
+                }
             })
             .AddToDispose(viewModel);
     }
@@ -1230,9 +1240,21 @@ public class App : Application
             return false;
         }
 
+        var previousSourceId = manager.ActiveSource?.Descriptor.Id
+            ?? throw new InvalidOperationException("There is no active task space to restore.");
+        var previousVaultRoot = settings.IsFeedEnabled && settings.IsExternalNoteVaultSupported
+            ? settings.NoteVaultRootPath
+            : null;
+        var taskSourceSwitched = false;
         settings.IsTaskSpaceSwitching = true;
+        _isTaskSpaceFeedRebindInProgress = true;
         try
         {
+            if (_mainWindowViewModel is not null)
+            {
+                await _mainWindowViewModel.Feed.CommitActiveEditorsAsync().ConfigureAwait(true);
+            }
+
             var descriptor = manager.ConfiguredSources.FirstOrDefault(source =>
                 string.Equals(source.Id, sourceId, StringComparison.Ordinal));
             if (descriptor?.Kind == TaskSourceKind.File)
@@ -1246,10 +1268,10 @@ public class App : Application
             }
 
             await _taskSpaceCoordinator.SwitchAsync(sourceId).ConfigureAwait(true);
+            taskSourceSwitched = true;
             settings.IsTaskSpaceRecoveryRequired = false;
             settings.TaskSpaceRecoveryMessage = string.Empty;
-            settings.ReloadActiveTaskSpaceSettings();
-            WireSettingsToActiveStorage(settings);
+            await RebindFeedToActiveTaskSpaceAsync(settings).ConfigureAwait(true);
             settings.SetStorageConnectionState(SettingsConnectionState.Connected);
             RefreshTaskSpaces(settings);
             return true;
@@ -1268,13 +1290,62 @@ public class App : Application
         }
         catch (Exception ex)
         {
+            if (taskSourceSwitched)
+            {
+                try
+                {
+                    await _taskSpaceCoordinator!.SwitchAsync(previousSourceId).ConfigureAwait(true);
+                    settings.ReloadActiveTaskSpaceSettings();
+                    WireSettingsToActiveStorage(settings);
+                    if (_mainWindowViewModel is not null)
+                    {
+                        await _mainWindowViewModel.Feed.InitializeVaultAsync(previousVaultRoot)
+                            .ConfigureAwait(true);
+                        if (!_mainWindowViewModel.Feed.IsBoundToVaultRoot(previousVaultRoot))
+                        {
+                            throw new InvalidOperationException(
+                                _mainWindowViewModel.Feed.ErrorMessage
+                                ?? L10n.Get("TaskSpaceNoteVaultActivationFailed"));
+                        }
+                    }
+                }
+                catch (Exception rollbackError)
+                {
+                    SetTaskSpaceRecoveryState(settings, new TaskSpaceRecoveryException(ex, rollbackError));
+                    RefreshTaskSpaces(settings);
+                    return false;
+                }
+            }
+
             RefreshTaskSpaces(settings);
             _notificationManager?.ErrorToast(L10n.Format("ConnectStorageFailed", ex.Message, string.Empty));
             return false;
         }
         finally
         {
+            _isTaskSpaceFeedRebindInProgress = false;
             settings.IsTaskSpaceSwitching = false;
+        }
+    }
+
+    private async Task RebindFeedToActiveTaskSpaceAsync(SettingsViewModel settings)
+    {
+        settings.ReloadActiveTaskSpaceSettings();
+        WireSettingsToActiveStorage(settings);
+        if (_mainWindowViewModel is null)
+        {
+            return;
+        }
+
+        var expectedRoot = settings.IsFeedEnabled && settings.IsExternalNoteVaultSupported
+            ? settings.NoteVaultRootPath
+            : null;
+        await _mainWindowViewModel.Feed.InitializeVaultAsync(expectedRoot).ConfigureAwait(true);
+        if (!_mainWindowViewModel.Feed.IsBoundToVaultRoot(expectedRoot))
+        {
+            throw new InvalidOperationException(
+                _mainWindowViewModel.Feed.ErrorMessage
+                ?? L10n.Get("TaskSpaceNoteVaultActivationFailed"));
         }
     }
 

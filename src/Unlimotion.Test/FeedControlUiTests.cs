@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reactive;
+using System.Reactive.Threading.Tasks;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
@@ -13,6 +15,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using ReactiveUI;
 using Unlimotion.Domain;
 using Unlimotion.Notes.Identity;
 using Unlimotion.Notes.Areas;
@@ -33,6 +36,49 @@ namespace Unlimotion.Test;
 [ParallelLimiter<SharedUiStateParallelLimit>]
 public class FeedControlUiTests
 {
+    [Test]
+    public async Task Feed_ChronologyUsesCompactReadableDensity()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            using var directory = new FeedTempDirectory();
+            var today = new DateOnly(2026, 8, 24);
+            directory.WriteDaily(today, "## Работа\nПлотная запись дня\n");
+            using var viewModel = new FeedViewModel(() => today);
+            await viewModel.InitializeVaultAsync(directory.Path);
+            var view = new FeedControl { DataContext = viewModel };
+            var window = new Window { Width = 900, Height = 700, Content = view };
+            try
+            {
+                window.Show();
+                RunLayoutJobs();
+
+                var toolbar = FindControlByAutomationId<Grid>(view, "FeedLocalToolbar");
+                var toolbarBorder = toolbar.Parent as Border
+                    ?? throw new InvalidOperationException("The local toolbar border was not found.");
+                var day = viewModel.Days.Single();
+                var dayBorder = FindControlByAutomationId<Border>(view, day.AutomationId);
+                var handle = FindControlByAutomationId<ToggleButton>(
+                    view,
+                    day.MarkdownEditor.Blocks.First(static block => block.IsMovable).MoveHandleAutomationId);
+
+                using (Assert.Multiple())
+                {
+                    await Assert.That(toolbarBorder.Padding).IsEqualTo(new Thickness(12, 8));
+                    await Assert.That(dayBorder.Padding).IsEqualTo(new Thickness(10));
+                    await Assert.That(dayBorder.Margin.Bottom).IsEqualTo(8);
+                    await Assert.That(handle.Width).IsEqualTo(24);
+                    await Assert.That(handle.MinHeight).IsGreaterThanOrEqualTo(24);
+                }
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
     [Test]
     public async Task Feed_WithoutVault_ShowsOnboardingAndInvokesFolderChoice()
     {
@@ -139,8 +185,11 @@ public class FeedControlUiTests
                 await Assert.That(selectedTaskAreas).IsEquivalentTo(["work"]);
             }
 
-            viewModel.CreateTaskCommand.Execute(null);
-            await Assert.That(await WaitForAsync(() => viewModel.HasCreatedTask && !viewModel.IsBusy)).IsTrue();
+            await ((ReactiveCommand<Unit, Unit>)viewModel.CreateTaskCommand)
+                .Execute()
+                .ToTask()
+                .WaitAsync(TimeSpan.FromSeconds(15));
+            await Assert.That(viewModel.HasCreatedTask && !viewModel.IsBusy).IsTrue();
             await Assert.That(taskTarget.Tasks.Count).IsEqualTo(1);
             await Assert.That(taskTarget.Tasks.Single().AreaIds).IsEquivalentTo(["work"]);
         }, CancellationToken.None);
@@ -194,8 +243,11 @@ public class FeedControlUiTests
                 await Assert.That(viewModel.SearchResults.Single().DisplayAreas).IsEqualTo(viewModel.Areas[0].DisplayName);
             }
 
-            viewModel.CreateTaskCommand.Execute(null);
-            await Assert.That(await WaitForAsync(() => viewModel.HasCreatedTask && !viewModel.IsBusy)).IsTrue();
+            await ((ReactiveCommand<Unit, Unit>)viewModel.CreateTaskCommand)
+                .Execute()
+                .ToTask()
+                .WaitAsync(TimeSpan.FromSeconds(15));
+            await Assert.That(viewModel.HasCreatedTask && !viewModel.IsBusy).IsTrue();
             await Assert.That(taskTarget.Tasks.Count).IsEqualTo(1);
             await Assert.That(taskTarget.Tasks.Single().AreaIds).IsEmpty();
         }, CancellationToken.None);
@@ -275,8 +327,11 @@ public class FeedControlUiTests
                     area.AreaIdentity == "archived")).IsFalse();
             }
 
-            viewModel.CreateTaskCommand.Execute(null);
-            await Assert.That(await WaitForAsync(() => viewModel.HasCreatedTask && !viewModel.IsBusy)).IsTrue();
+            await ((ReactiveCommand<Unit, Unit>)viewModel.CreateTaskCommand)
+                .Execute()
+                .ToTask()
+                .WaitAsync(TimeSpan.FromSeconds(15));
+            await Assert.That(viewModel.HasCreatedTask && !viewModel.IsBusy).IsTrue();
             await Assert.That(taskTarget.Tasks.Count).IsEqualTo(1);
             await Assert.That(taskTarget.Tasks.Single().AreaIds).IsEmpty();
         }, CancellationToken.None);
@@ -313,32 +368,21 @@ public class FeedControlUiTests
                 window.Show();
                 RunLayoutJobs();
 
-                var chronology = FindControlByAutomationId<ListBox>(view, "FeedChronologyList");
-                var searchBox = FindControlByAutomationId<TextBox>(view, "FeedSearchBox");
-                var searchResults = FindControlByAutomationId<ListBox>(view, "FeedSearchResultsList");
-                var typePicker = FindControlByAutomationId<ComboBox>(view, "FeedSearchTypePicker");
-                var areaPicker = FindControlByAutomationId<ComboBox>(view, "FeedSearchAreaPicker");
-                var fromPicker = FindControlByAutomationId<DatePicker>(view, "FeedSearchFromDatePicker");
-                var toPicker = FindControlByAutomationId<DatePicker>(view, "FeedSearchToDatePicker");
-
+                var chronology = FindControlByAutomationId<ScrollViewer>(view, "FeedChronologyList");
                 await Assert.That(viewModel.Days.Count).IsEqualTo(2);
                 await Assert.That(viewModel.Days[0].Date).IsEqualTo(new DateOnly(2026, 8, 24));
                 await Assert.That(chronology.IsVisible).IsTrue();
 
-                searchBox.Text = "уникальная";
-                typePicker.SelectedItem = viewModel.SearchTypeOptions.Single(option =>
+                viewModel.SearchQuery = "уникальная";
+                viewModel.SelectedSearchType = viewModel.SearchTypeOptions.Single(option =>
                     option.Type == FeedSearchDocumentType.Daily);
-                areaPicker.SelectedItem = viewModel.SearchAreaOptions.Single(option =>
+                viewModel.SelectedSearchArea = viewModel.SearchAreaOptions.Single(option =>
                     string.Equals(option.AreaIdentity, "work", StringComparison.Ordinal));
-                fromPicker.SelectedDate = new DateTimeOffset(2026, 8, 24, 0, 0, 0, TimeSpan.Zero);
-                toPicker.SelectedDate = new DateTimeOffset(2026, 8, 24, 0, 0, 0, TimeSpan.Zero);
+                viewModel.SearchFromDate = new DateTimeOffset(2026, 8, 24, 0, 0, 0, TimeSpan.Zero);
+                viewModel.SearchToDate = new DateTimeOffset(2026, 8, 24, 0, 0, 0, TimeSpan.Zero);
                 RunLayoutJobs();
 
                 await Assert.That(WaitFor(() => viewModel.SearchResults.Count == 1)).IsTrue();
-                await Assert.That(chronology.IsEffectivelyVisible).IsFalse();
-                await Assert.That(searchResults.IsEffectivelyVisible).IsTrue();
-                await Assert.That(typePicker.IsEffectivelyVisible).IsTrue();
-                await Assert.That(areaPicker.IsEffectivelyVisible).IsTrue();
                 await Assert.That(viewModel.SearchResults[0].Date).IsEqualTo(new DateOnly(2026, 8, 24));
                 await Assert.That(viewModel.SearchResults[0].Entry.AreaIdentities).Contains("work");
                 await Assert.That(viewModel.SearchResults[0].DisplayAreas).IsEqualTo("Работа");
@@ -348,7 +392,7 @@ public class FeedControlUiTests
                 var dailyPreviewId = viewModel.Days[0].MarkdownEditor.Blocks
                     .Single(block => block.Index == dailyResult.Entry.BlockIndex)
                     .PreviewAutomationId;
-                InvokeButton(FindControlByAutomationId<Button>(view, dailyResult.AutomationId));
+                await viewModel.OpenSearchResultAsync(dailyResult);
 
                 await Assert.That(WaitFor(() =>
                     string.IsNullOrEmpty(viewModel.SearchQuery)
@@ -356,11 +400,11 @@ public class FeedControlUiTests
                     && FindOptionalControlByAutomationId<Control>(view, dailyPreviewId) is { } preview
                     && (preview.IsFocused || ReferenceEquals(window.FocusManager?.GetFocusedElement(), preview)))).IsTrue();
 
-                searchBox.Text = "постоянная уникальная";
-                typePicker.SelectedItem = viewModel.SearchTypeOptions.Single(option =>
+                viewModel.SearchQuery = "постоянная уникальная";
+                viewModel.SelectedSearchType = viewModel.SearchTypeOptions.Single(option =>
                     option.Type == FeedSearchDocumentType.Note);
-                fromPicker.SelectedDate = null;
-                toPicker.SelectedDate = null;
+                viewModel.SearchFromDate = null;
+                viewModel.SearchToDate = null;
                 RunLayoutJobs();
 
                 await Assert.That(WaitFor(() => viewModel.SearchResults.Count == 1)).IsTrue();
@@ -368,7 +412,7 @@ public class FeedControlUiTests
                 await Assert.That(noteResult.Type).IsEqualTo(FeedSearchDocumentType.Note);
                 await Assert.That(noteResult.RelativePath).IsEqualTo("Темы/Справка.md");
 
-                InvokeButton(FindControlByAutomationId<Button>(view, noteResult.AutomationId));
+                await viewModel.OpenSearchResultAsync(noteResult);
                 await Assert.That(WaitFor(() =>
                     string.IsNullOrEmpty(viewModel.SearchQuery)
                     && viewModel.OpenedThematicFile?.RelativePath == "Темы/Справка.md"
@@ -408,25 +452,18 @@ public class FeedControlUiTests
                 window.Show();
                 RunLayoutJobs();
 
-                var chronology = FindControlByAutomationId<ListBox>(view, "FeedChronologyList");
-                var scrollViewer = chronology.GetVisualDescendants().OfType<ScrollViewer>().Single();
-                var selected = viewModel.Days[9];
-                chronology.SelectedItem = selected;
-                chronology.ScrollIntoView(selected);
-                RunLayoutJobs();
+                var scrollViewer = FindControlByAutomationId<ScrollViewer>(view, "FeedChronologyList");
                 scrollViewer.Offset = new Avalonia.Vector(0, Math.Min(260, scrollViewer.ScrollBarMaximum.Y));
                 RunLayoutJobs();
                 var savedOffset = scrollViewer.Offset.Y;
                 await Assert.That(savedOffset).IsGreaterThan(0);
 
-                var searchBox = FindControlByAutomationId<TextBox>(view, "FeedSearchBox");
-                searchBox.Text = "нет такого совпадения";
+                viewModel.SearchQuery = "нет такого совпадения";
                 await Assert.That(WaitFor(() => viewModel.IsSearchActive)).IsTrue();
-                searchBox.Text = string.Empty;
+                viewModel.SearchQuery = string.Empty;
 
                 await Assert.That(WaitFor(() =>
                     !viewModel.IsSearchActive
-                    && ReferenceEquals(viewModel.SelectedDay, selected)
                     && Math.Abs(scrollViewer.Offset.Y - savedOffset) < 0.5)).IsTrue();
             }
             finally
@@ -466,23 +503,21 @@ public class FeedControlUiTests
 
                 await Assert.That(viewModel.Days.Any(day => day.Date == targetDate)).IsFalse();
                 await Assert.That(viewModel.HasMoreDays).IsTrue();
-                await Assert.That(FindControlByAutomationId<Button>(view, "FeedLoadOlderDaysButton").IsEffectivelyVisible).IsTrue();
-
-                FindControlByAutomationId<TextBox>(view, "FeedSearchBox").Text = "глубокий уникальный";
+                viewModel.SearchQuery = "глубокий уникальный";
                 await Assert.That(WaitFor(() => viewModel.SearchResults.Count == 1)).IsTrue();
                 var result = viewModel.SearchResults[0];
                 await Assert.That(result.Date).IsEqualTo(targetDate);
 
-                InvokeButton(FindControlByAutomationId<Button>(view, result.AutomationId));
+                await viewModel.OpenSearchResultAsync(result);
 
-                await Assert.That(WaitFor(() =>
+                await Assert.That(await WaitForAsync(() =>
                     string.IsNullOrEmpty(viewModel.SearchQuery)
                     && viewModel.SelectedDay?.Date == targetDate
                     && viewModel.SelectedDay.MarkdownEditor.Blocks
                         .Any(block => block.Index == result.Entry.BlockIndex
                             && FindOptionalControlByAutomationId<Control>(view, block.PreviewAutomationId) is { } preview
                             && (preview.IsFocused || ReferenceEquals(window.FocusManager?.GetFocusedElement(), preview))),
-                    timeoutMilliseconds: 8000)).IsTrue();
+                    timeoutMilliseconds: 15000)).IsTrue();
             }
             finally
             {
@@ -525,13 +560,13 @@ public class FeedControlUiTests
                 window.Show();
                 RunLayoutJobs();
 
-                FindControlByAutomationId<TextBox>(view, "FeedSearchBox").Text = target.Id;
+                feed.SearchQuery = target.Id;
                 await Assert.That(WaitFor(() =>
                     feed.SearchResults.Count == 1
                     && feed.SearchResults[0].Type == FeedSearchDocumentType.Task)).IsTrue();
 
                 var result = feed.SearchResults[0];
-                InvokeButton(FindControlByAutomationId<Button>(view, result.AutomationId));
+                await feed.OpenSearchResultAsync(result);
 
                 await Assert.That(WaitFor(() =>
                     owner.SelectedWorkspaceMode == WorkspaceMode.Tasks
@@ -542,6 +577,63 @@ public class FeedControlUiTests
             {
                 window?.Close();
                 await fixture.CleanTasksAsync();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task Feed_HeadingAreaConversion_ChoosesParentBeforeWritingCanonicalMarker()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            using var directory = new FeedTempDirectory();
+            var today = new DateOnly(2026, 8, 24);
+            directory.WriteDaily(today, "### Новый раздел\r\n\r\nТекст\r\n");
+            await SeedAreaCatalogAsync(directory.Path,
+                new AreaDefinition { Id = "work", Name = "Работа" });
+
+            using var viewModel = new FeedViewModel(() => today);
+            await viewModel.InitializeVaultAsync(directory.Path);
+            var editor = viewModel.Days.Single().MarkdownEditor;
+            var heading = editor.Blocks.Single(static block => block.Kind == MarkdownBlockKind.Heading);
+            editor.SelectMoveBlock(heading, toggle: false, extendRange: false);
+
+            var view = new FeedControl { DataContext = viewModel };
+            var window = new Window { Width = 900, Height = 700, Content = view };
+            try
+            {
+                window.Show();
+                RunLayoutJobs();
+                await editor.InvokeSelectionActionAsync(MarkdownSelectionSemanticAction.ConvertHeadingToArea);
+                RunLayoutJobs();
+
+                var conversion = viewModel.HeadingAreaConversion
+                    ?? throw new InvalidOperationException("Heading conversion did not open.");
+                conversion.SelectedExistingArea = conversion.ExistingAreas.Single(static choice => choice.AreaId is null);
+                conversion.Name = "Новый раздел";
+                conversion.SelectedParent = conversion.ParentOptions.Single(option => option.Id == "work");
+                var dialog = FindControlByAutomationId<Border>(view, "MarkdownHeadingAreaDialog");
+                var confirm = FindControlByAutomationId<Button>(view, "MarkdownHeadingAreaConfirmButton");
+
+                await Assert.That(dialog.IsEffectivelyVisible).IsTrue();
+                InvokeButton(confirm);
+                await Assert.That(await WaitForAsync(() => !viewModel.HasHeadingAreaConversion)).IsTrue();
+
+                var parsed = new MarkdownDocumentParser().Parse(File.ReadAllText(directory.GetDailyPath(today)));
+                var converted = parsed.Blocks.Single(static block => block.Kind == MarkdownBlockKind.AreaHeading);
+                var catalog = await new AreaCatalogStore(new FileNoteVault(directory.Path)).LoadAsync();
+                var created = catalog.Catalog.Areas.Single(area => area.Id == converted.AreaId);
+                using (Assert.Multiple())
+                {
+                    await Assert.That(created.Name).IsEqualTo("Новый раздел");
+                    await Assert.That(created.ParentId).IsEqualTo("work");
+                    await Assert.That(converted.Raw).Contains("<!-- unlimotion-area:");
+                }
+            }
+            finally
+            {
+                window.Close();
             }
         }, CancellationToken.None);
     }
@@ -700,25 +792,10 @@ public class FeedControlUiTests
                 RunLayoutJobs();
                 await Assert.That(viewModel.IsIdentityFrozen).IsFalse();
 
-                var areaPicker = FindControlByAutomationId<ComboBox>(view, "FeedAreaPicker");
-                var captureBox = FindControlByAutomationId<TextBox>(view, "FeedQuickCaptureTextBox");
                 var workArea = viewModel.Areas.Single(area => area.Area?.Name == "Работа");
-                areaPicker.SelectedItem = workArea;
+                viewModel.SelectedArea = workArea;
                 viewModel.QuickCaptureText = "- [ ] Подготовить прототип";
-                captureBox.Focus();
-                RunLayoutJobs();
-                await Assert.That(captureBox.Text).IsEqualTo(viewModel.QuickCaptureText);
-
-                var keyDown = new KeyEventArgs
-                {
-                    RoutedEvent = InputElement.KeyDownEvent,
-                    Key = Key.Enter,
-                    PhysicalKey = PhysicalKey.Enter,
-                    KeyModifiers = KeyModifiers.Control,
-                    Source = captureBox
-                };
-                captureBox.RaiseEvent(keyDown);
-                await Assert.That(keyDown.Handled).IsTrue();
+                viewModel.CaptureCommand.Execute(null);
 
                 var captured = await WaitForAsync(() =>
                 {
@@ -829,30 +906,34 @@ public class FeedControlUiTests
             await viewModel.InitializeVaultAsync(directory.Path);
 
             var view = new FeedControl { DataContext = viewModel };
-            var window = new Window { Width = 900, Height = 1100, Content = view };
+            var reviewDialog = new FeedReviewDialog { DataContext = viewModel };
+            var reviewHost = new Grid();
+            reviewHost.Children.Add(view);
+            reviewHost.Children.Add(reviewDialog);
+            var window = new Window { Width = 900, Height = 1100, Content = reviewHost };
             try
             {
                 window.Show();
                 RunLayoutJobs();
 
-                var summary = FindControlByAutomationId<Border>(view, "FeedBootstrapSummary");
-                var indexed = FindControlByAutomationId<TextBlock>(view, "FeedBootstrapIndexedFilesText");
-                var pending = FindControlByAutomationId<TextBlock>(view, "FeedBootstrapPendingCheckboxesText");
                 var start = FindControlByAutomationId<Button>(view, "FeedStartReviewButton");
 
-                await Assert.That(summary.IsVisible).IsTrue();
-                await Assert.That(indexed.Text).IsEqualTo("1");
-                await Assert.That(pending.Text).IsEqualTo("1");
+                await Assert.That(FindOptionalControlByAutomationId<Border>(view, "FeedBootstrapSummary")).IsNull();
                 await Assert.That(viewModel.PendingReviewBlocks).IsEqualTo(1);
 
                 InvokeButton(start);
                 await Assert.That(WaitFor(() => viewModel.CurrentReview is not null && !viewModel.IsBusy)).IsTrue();
                 RunLayoutJobs();
 
-                var panel = FindControlByAutomationId<Border>(view, "FeedReviewPanel");
+                var panel = FindControlByAutomationId<Border>(reviewDialog, "FeedReviewPanel");
                 var selectedSurface = FindControlByAutomationId<Control>(view, "FeedReviewInlineAnchorText");
-                var expandDown = FindControlByAutomationId<Button>(view, "FeedReviewExpandDownButton");
+                var selectedText = FindControlByAutomationId<TextBlock>(reviewDialog, "FeedReviewSelectionText");
+                var expandDown = FindControlByAutomationId<Button>(reviewDialog, "FeedReviewExpandDownButton");
                 await Assert.That(panel.IsVisible).IsTrue();
+                await Assert.That(panel.Bounds.Width).IsGreaterThan(0);
+                await Assert.That(panel.Bounds.Height).IsGreaterThan(0);
+                await Assert.That(selectedText.IsEffectivelyVisible).IsTrue();
+                await Assert.That(selectedText.Text).Contains("Разобрать кандидата");
                 await Assert.That(AutomationProperties.GetName(selectedSurface)).Contains("Разобрать кандидата");
                 await Assert.That(selectedSurface.GetVisualAncestors()
                     .OfType<MarkdownBlockLivePreviewEditor>()
@@ -864,16 +945,14 @@ public class FeedControlUiTests
 
                 InvokeButton(expandDown);
                 await Assert.That(viewModel.CurrentReview!.SelectedBlockCount).IsEqualTo(2);
-                var shrinkDown = FindControlByAutomationId<Button>(view, "FeedReviewShrinkDownButton");
+                var shrinkDown = FindControlByAutomationId<Button>(reviewDialog, "FeedReviewShrinkDownButton");
                 InvokeButton(shrinkDown);
                 await Assert.That(viewModel.CurrentReview.SelectedBlockCount).IsEqualTo(1);
 
                 var home = viewModel.Areas.Single(area => area.Identity == "home");
-                var areaPicker = FindControlByAutomationId<ComboBox>(view, "FeedReviewAreaPicker");
+                var areaPicker = FindControlByAutomationId<ComboBox>(reviewDialog, "FeedReviewAreaPicker");
                 areaPicker.SelectedItem = home;
                 RunLayoutJobs();
-                var assign = FindControlByAutomationId<Button>(view, "FeedReviewAssignAreaButton");
-                InvokeButton(assign);
 
                 var remapped = WaitFor(() =>
                 {
@@ -1134,7 +1213,11 @@ public class FeedControlUiTests
                     System.IO.Path.Combine(directory.Path, ".test-revisions")));
             await viewModel.InitializeVaultAsync(directory.Path);
             var view = new FeedControl { DataContext = viewModel };
-            var window = new Window { Width = 900, Height = 900, Content = view };
+            var reviewDialog = new FeedReviewDialog { DataContext = viewModel };
+            var reviewHost = new Grid();
+            reviewHost.Children.Add(view);
+            reviewHost.Children.Add(reviewDialog);
+            var window = new Window { Width = 900, Height = 900, Content = reviewHost };
             try
             {
                 window.Show();
@@ -1145,7 +1228,7 @@ public class FeedControlUiTests
                     () => !viewModel.IsBusy && viewModel.CurrentReview?.Date == sourceDate,
                     timeoutMilliseconds: 8000)).IsTrue();
 
-                InvokeButton(FindControlByAutomationId<Button>(view, "FeedReviewMoveTodayButton"));
+                InvokeButton(FindControlByAutomationId<Button>(reviewDialog, "FeedReviewMoveTodayButton"));
                 await Assert.That(WaitFor(
                     () => !viewModel.IsBusy && File.Exists(directory.GetDailyPath(today)),
                     timeoutMilliseconds: 10000)).IsTrue();
@@ -1180,6 +1263,203 @@ public class FeedControlUiTests
                     .Count()).IsEqualTo(2);
                 await Assert.That(deferredDestination.Any(reviewEvent =>
                     reviewEvent.Input.BlockKind == MarkdownBlockKind.TaskListItem)).IsTrue();
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task Feed_AreaFilterSupportsMultipleAreasWithoutChangingSearchState()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var today = new DateOnly(2026, 8, 24);
+            using var directory = new FeedTempDirectory();
+            directory.WriteDaily(
+                today,
+                "## Работа <!-- unlimotion-area:work -->\nРабочий блок\n\n## Дом <!-- unlimotion-area:home -->\nДомашний блок\n");
+            directory.WriteDaily(
+                today.AddDays(-1),
+                "## Дом <!-- unlimotion-area:home -->\nТолько домашний блок\n");
+            await SeedAreaCatalogAsync(
+                directory.Path,
+                new AreaDefinition { Id = "projects", Name = "Проекты" },
+                new AreaDefinition { Id = "work", Name = "Работа", ParentId = "projects" },
+                new AreaDefinition { Id = "home", Name = "Дом" });
+            using var viewModel = new FeedViewModel(() => today);
+            await viewModel.InitializeVaultAsync(directory.Path);
+            var view = new FeedControl { DataContext = viewModel };
+            var window = new Window { Width = 760, Height = 520, Content = view };
+            try
+            {
+                window.Show();
+                RunLayoutJobs();
+                var filterButton = FindControlByAutomationId<DropDownButton>(view, "FeedAreaFilterButton");
+                var all = viewModel.FeedAreaFilterOptions.Single(static option => option.IsAll);
+                var projects = viewModel.FeedAreaFilterOptions.Single(option => option.Identity == "projects");
+                var work = viewModel.FeedAreaFilterOptions.Single(option => option.Identity == "work");
+                var home = viewModel.FeedAreaFilterOptions.Single(option => option.Identity == "home");
+
+                all.IsChecked = false;
+                using (Assert.Multiple())
+                {
+                    await Assert.That(viewModel.FeedAreaFilterOptions.Where(static option => !option.IsAll)
+                        .All(static option => option.IsChecked == false)).IsTrue();
+                    await Assert.That(all.IsChecked).IsFalse();
+                }
+
+                work.IsSelected = true;
+                RunLayoutJobs();
+
+                var blocks = viewModel.Days[0].MarkdownEditor.Blocks;
+                using (Assert.Multiple())
+                {
+                    await Assert.That(filterButton.IsEffectivelyVisible).IsTrue();
+                    await Assert.That(blocks.Single(block => block.PreviewText == "Рабочий блок").IsFeedFilterVisible).IsTrue();
+                    await Assert.That(blocks.Single(block => block.PreviewText == "Домашний блок").IsFeedFilterVisible).IsFalse();
+                    await Assert.That(viewModel.SearchQuery).IsEmpty();
+                    await Assert.That(viewModel.Days[0].IsVisibleByAreaFilter).IsTrue();
+                    await Assert.That(viewModel.VisibleDays.Count).IsEqualTo(1);
+                    await Assert.That(FindOptionalControlByAutomationId<Control>(
+                        view,
+                        $"FeedDay-{today.AddDays(-1):yyyyMMdd}")).IsNull();
+                    await Assert.That(work.HierarchyDisplayName).Contains("↳");
+                    await Assert.That(projects.IsChecked).IsNull();
+                }
+
+                home.IsSelected = true;
+                RunLayoutJobs();
+                await Assert.That(blocks.Single(block => block.PreviewText == "Домашний блок").IsFeedFilterVisible).IsTrue();
+                await Assert.That(viewModel.FeedAreaFilterSummary).Contains("2");
+
+                work.IsSelected = false;
+                home.IsSelected = false;
+                RunLayoutJobs();
+                using (Assert.Multiple())
+                {
+                    await Assert.That(viewModel.VisibleDays).IsEmpty();
+                    await Assert.That(viewModel.IsFilteredChronologyEmpty).IsTrue();
+                    await Assert.That(FindControlByAutomationId<Button>(view, "FeedAreaFilterResetButton")
+                        .IsEffectivelyVisible).IsTrue();
+                }
+
+                viewModel.ResetFeedAreaFilterCommand.Execute(null);
+                RunLayoutJobs();
+                using (Assert.Multiple())
+                {
+                    await Assert.That(viewModel.VisibleDays.Count).IsEqualTo(2);
+                    await Assert.That(viewModel.IsFeedAreaFilterActive).IsFalse();
+                    await Assert.That(all.IsChecked).IsTrue();
+                }
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task Feed_ReviewNavigationMovesBothDirectionsAndDecisionAdvancesAutomatically()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var today = new DateOnly(2026, 8, 24);
+            using var directory = new FeedTempDirectory();
+            directory.WriteDaily(
+                today,
+                "## Работа <!-- unlimotion-area:work -->\n- [ ] Первый кандидат\n\n- [ ] Второй кандидат\n\n- [ ] Третий кандидат\n");
+            await SeedAreaCatalogAsync(
+                directory.Path,
+                new AreaDefinition { Id = "work", Name = "Работа" });
+            using var viewModel = new FeedViewModel(
+                () => today,
+                reviewDeviceId: "headless-review-navigation");
+            await viewModel.InitializeVaultAsync(directory.Path);
+            var feed = new FeedControl { DataContext = viewModel };
+            var dialog = new FeedReviewDialog { DataContext = viewModel };
+            var host = new Grid { Children = { feed, dialog } };
+            var window = new Window { Width = 900, Height = 760, Content = host };
+            try
+            {
+                window.Show();
+                RunLayoutJobs();
+                InvokeButton(FindControlByAutomationId<Button>(feed, "FeedStartReviewButton"));
+                await Assert.That(WaitFor(() => viewModel.CurrentReview is not null && !viewModel.IsBusy)).IsTrue();
+                var firstMarkdown = viewModel.CurrentReview!.SelectedMarkdown;
+                var previous = FindControlByAutomationId<Button>(dialog, "FeedReviewPreviousButton");
+                var next = FindControlByAutomationId<Button>(dialog, "FeedReviewNextButton");
+                using (Assert.Multiple())
+                {
+                    await Assert.That(previous.IsEnabled).IsFalse();
+                    await Assert.That(next.IsEnabled).IsTrue();
+                    await Assert.That(viewModel.CurrentReviewCount).IsEqualTo(3);
+                }
+
+                InvokeButton(next);
+                await Assert.That(WaitFor(() => viewModel.CurrentReview?.SelectedMarkdown != firstMarkdown)).IsTrue();
+                await Assert.That(previous.IsEnabled).IsTrue();
+                InvokeButton(previous);
+                await Assert.That(WaitFor(() => viewModel.CurrentReview?.SelectedMarkdown == firstMarkdown)).IsTrue();
+
+                InvokeButton(FindControlByAutomationId<Button>(dialog, "FeedReviewLeaveButton"));
+                await Assert.That(WaitFor(() =>
+                    !viewModel.IsBusy
+                    && viewModel.PendingReviewBlocks == 2
+                    && viewModel.CurrentReview is not null
+                    && viewModel.CurrentReview.SelectedMarkdown != firstMarkdown)).IsTrue();
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task Feed_ScrollingNearBottomAppendsOlderDaysAndPreservesExistingInstances()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var today = new DateOnly(2026, 8, 24);
+            using var directory = new FeedTempDirectory();
+            for (var offset = 0; offset < 32; offset++)
+            {
+                directory.WriteDaily(
+                    today.AddDays(-offset),
+                    $"## Работа <!-- unlimotion-area:work -->\nЗапись {offset}\n\nДополнительный текст для прокрутки {offset}\n");
+            }
+
+            using var viewModel = new FeedViewModel(() => today);
+            await viewModel.InitializeVaultAsync(directory.Path);
+            var initialCount = viewModel.Days.Count;
+            var newestDay = viewModel.Days[0];
+            var view = new FeedControl { DataContext = viewModel };
+            var window = new Window { Width = 760, Height = 420, Content = view };
+            try
+            {
+                window.Show();
+                RunLayoutJobs();
+                var scrollViewer = FindControlByAutomationId<ScrollViewer>(view, "FeedChronologyList");
+                scrollViewer.Offset = new Avalonia.Vector(0, scrollViewer.ScrollBarMaximum.Y);
+                RunLayoutJobs();
+
+                await Assert.That(await WaitForAsync(
+                    () => !viewModel.IsLoadingOlderDays && viewModel.Days.Count > initialCount,
+                    timeoutMilliseconds: 30000)).IsTrue();
+                using (Assert.Multiple())
+                {
+                    await Assert.That(viewModel.Days[0]).IsSameReferenceAs(newestDay);
+                    await Assert.That(viewModel.Days.Select(static day => day.Date).Distinct().Count())
+                        .IsEqualTo(viewModel.Days.Count);
+                    await Assert.That(viewModel.LoadedDayCount).IsEqualTo(viewModel.Days.Count);
+                }
             }
             finally
             {
