@@ -89,7 +89,7 @@ public class RepeaterPatternViewModel
 
     public bool WorkDays
     {
-        get => Monday && Tuesday && Wednesday && Thursday && Friday;
+        get => Monday && Tuesday && Wednesday && Thursday && Friday && !Saturday && !Sunday;
         set
         {
             Monday = value;

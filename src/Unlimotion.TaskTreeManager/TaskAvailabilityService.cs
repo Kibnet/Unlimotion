@@ -150,6 +150,8 @@ public sealed class TaskAvailabilityService
             ValidateRelation(referenceIssues, task, nameof(TaskItem.BlockedByTasks), task.BlockedByTasks, nameof(TaskItem.BlocksTasks));
         }
 
+        ValidateContainmentCycles(referenceIssues);
+
         var availabilityMismatches = _tasks.Values
             .Select(Analyze)
             .Where(analysis => analysis.StoredIsCanBeCompleted != analysis.IsCanBeCompleted)
@@ -181,6 +183,76 @@ public sealed class TaskAvailabilityService
             DuplicateIdIssues = duplicateIds
         };
     }
+
+    private void ValidateContainmentCycles(ICollection<TaskGraphReferenceIssue> issues)
+    {
+        var states = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var start in _tasks.Values.OrderBy(static task => task.Id, StringComparer.Ordinal))
+        {
+            if (states.ContainsKey(start.Id))
+            {
+                continue;
+            }
+
+            states[start.Id] = 1;
+            var stack = new Stack<ContainmentTraversalFrame>();
+            stack.Push(CreateContainmentFrame(start));
+            while (stack.Count > 0)
+            {
+                var frame = stack.Pop();
+                if (frame.NextChildIndex >= frame.ChildIds.Length)
+                {
+                    states[frame.TaskId] = 2;
+                    continue;
+                }
+
+                var childId = frame.ChildIds[frame.NextChildIndex];
+                stack.Push(frame with { NextChildIndex = frame.NextChildIndex + 1 });
+                if (!_tasks.TryGetValue(childId, out var child) ||
+                    string.Equals(frame.TaskId, childId, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                if (!states.TryGetValue(childId, out var childState))
+                {
+                    states[childId] = 1;
+                    stack.Push(CreateContainmentFrame(child));
+                    continue;
+                }
+
+                if (childState == 1)
+                {
+                    var source = _tasks[frame.TaskId];
+                    issues.Add(new TaskGraphReferenceIssue
+                    {
+                        Kind = TaskGraphReferenceIssueKind.ContainmentCycle,
+                        SourceTaskId = source.Id,
+                        SourceTaskTitle = source.Title,
+                        Relation = nameof(TaskItem.ContainsTasks),
+                        TargetTaskId = child.Id,
+                        TargetTaskTitle = child.Title,
+                        InverseRelation = nameof(TaskItem.ParentTasks),
+                        Details = $"{nameof(TaskItem.ContainsTasks)} contains a cycle through task '{child.Id}'."
+                    });
+                }
+            }
+        }
+    }
+
+    private static ContainmentTraversalFrame CreateContainmentFrame(TaskItem task) => new(
+        task.Id,
+        task.ContainsTasks?
+            .Where(static id => !string.IsNullOrWhiteSpace(id))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(static id => id, StringComparer.Ordinal)
+            .ToArray() ?? Array.Empty<string>(),
+        0);
+
+    private readonly record struct ContainmentTraversalFrame(
+        string TaskId,
+        string[] ChildIds,
+        int NextChildIndex);
 
     private void ValidateRelation(
         ICollection<TaskGraphReferenceIssue> issues,

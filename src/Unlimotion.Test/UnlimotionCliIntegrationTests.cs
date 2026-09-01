@@ -61,7 +61,7 @@ public sealed class UnlimotionCliIntegrationTests
     }
 
     [Test]
-    public async Task Complete_RepeatingTaskCreatesNextOccurrenceAndRestoresReverseLinks()
+    public async Task Complete_RepeatingTaskCreatesIndependentOccurrenceSubtree()
     {
         using var temp = TempTaskDirectory.Create();
         var plannedBegin = DateTimeOffset.UtcNow.AddDays(-1);
@@ -92,18 +92,21 @@ public sealed class UnlimotionCliIntegrationTests
         await Assert.That(result.ExitCode).IsEqualTo(0);
         var allTasks = await LoadAllTasks(temp.DirectoryPath);
         var clone = allTasks.Single(task => task.Id != source.Id && task.Title == source.Title);
+        var childClone = allTasks.Single(task => task.Id != child.Id && task.Title == child.Title);
         var childAfter = await LoadTask(temp.DirectoryPath, child.Id);
         var blockerAfter = await LoadTask(temp.DirectoryPath, blocker.Id);
         var blockedAfter = await LoadTask(temp.DirectoryPath, blocked.Id);
 
         await Assert.That(clone.Status).IsEqualTo(DomainTaskStatus.Prepared);
         await Assert.That(clone.PlannedBeginDateTime!.Value.ToUnixTimeSeconds()).IsEqualTo(plannedBegin.AddDays(1).ToUnixTimeSeconds());
-        await Assert.That(clone.ContainsTasks).Contains(child.Id);
-        await Assert.That(clone.BlockedByTasks).Contains(blocker.Id);
-        await Assert.That(clone.BlocksTasks).Contains(blocked.Id);
-        await Assert.That(childAfter.ParentTasks).Contains(clone.Id);
-        await Assert.That(blockerAfter.BlocksTasks).Contains(clone.Id);
-        await Assert.That(blockedAfter.BlockedByTasks).Contains(clone.Id);
+        await Assert.That(clone.ContainsTasks).IsEquivalentTo([childClone.Id]);
+        await Assert.That(clone.BlockedByTasks).IsEmpty();
+        await Assert.That(clone.BlocksTasks).IsEmpty();
+        await Assert.That(childClone.Status).IsEqualTo(DomainTaskStatus.NotReady);
+        await Assert.That(childClone.ParentTasks).IsEquivalentTo([clone.Id]);
+        await Assert.That(childAfter.ParentTasks).IsEquivalentTo([source.Id]);
+        await Assert.That(blockerAfter.BlocksTasks).IsEquivalentTo([source.Id]);
+        await Assert.That(blockedAfter.BlockedByTasks).IsEquivalentTo([source.Id]);
     }
 
     [Test]

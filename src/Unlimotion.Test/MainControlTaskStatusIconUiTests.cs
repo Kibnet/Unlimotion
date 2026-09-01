@@ -931,13 +931,24 @@ public class MainControlTaskStatusIconUiTests
         {
             var storage = new InMemoryStorage();
             var repository = new UnifiedTaskStorage(new TaskTreeManager(storage));
+            var storedChild = new TaskItem
+            {
+                Id = "status-picker-immediate-repeat-child",
+                Title = "Daily review child",
+                Status = DomainTaskStatus.Completed,
+                IsCanBeCompleted = true,
+                ParentTasks = ["status-picker-immediate-repeat"]
+            };
+            storedChild.EnsureStatusHistory("owner");
             var storedTask = new TaskItem
             {
                 Id = "status-picker-immediate-repeat",
                 Status = DomainTaskStatus.Prepared,
-                IsCanBeCompleted = true
+                IsCanBeCompleted = true,
+                ContainsTasks = [storedChild.Id]
             };
             storedTask.EnsureStatusHistory("owner");
+            await storage.Save(storedChild);
             await storage.Save(storedTask);
             await repository.Init();
             Window? window = null;
@@ -977,9 +988,11 @@ public class MainControlTaskStatusIconUiTests
                 var completed = await TestHelpers.WaitUntilAsync(() =>
                 {
                     Dispatcher.UIThread.RunJobs();
-                    return task.Status == DomainTaskStatus.Completed && repository.Tasks.Count == 2;
+                    return task.Status == DomainTaskStatus.Completed && repository.Tasks.Count == 4;
                 }, TimeSpan.FromSeconds(2));
-                var next = repository.Tasks.Items.Single(item => item.Id != task.Id);
+                var next = repository.Tasks.Items.Single(item => item.Id != task.Id && item.Title == "Daily review");
+                var nextChild = repository.Tasks.Items.Single(item =>
+                    item.Id != storedChild.Id && item.Title == storedChild.Title);
 
                 using (Assert.Multiple())
                 {
@@ -991,6 +1004,10 @@ public class MainControlTaskStatusIconUiTests
                     await Assert.That(next.Status).IsEqualTo(DomainTaskStatus.Prepared);
                     await Assert.That(next.PlannedBeginDateTime).IsEqualTo(plannedBegin.AddDays(1));
                     await Assert.That(next.Repeater?.Type).IsEqualTo(RepeaterType.Daily);
+                    await Assert.That(next.Contains).IsEquivalentTo([nextChild.Id]);
+                    await Assert.That(nextChild.Parents).IsEquivalentTo([next.Id]);
+                    await Assert.That(nextChild.Status).IsEqualTo(DomainTaskStatus.NotReady);
+                    await Assert.That(nextChild.Id).IsNotEqualTo(storedChild.Id);
                 }
             }
             finally

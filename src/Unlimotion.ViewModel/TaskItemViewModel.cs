@@ -59,6 +59,7 @@ namespace Unlimotion.ViewModel
 
         private readonly ObservableCollectionExtended<TaskItemViewModel> _containsTasksSource = new();
         private readonly ObservableCollectionExtended<TaskItemViewModel> _parentsTasksSource = new();
+        private readonly IReadOnlyList<RepeaterPatternViewModel> _repeaters = CreateRepeaterTemplates();
         private readonly ObservableCollectionExtended<TaskItemViewModel> _blocksTasksSource = new();
         private readonly ObservableCollectionExtended<TaskItemViewModel> _blockedByTasksSource = new();
         private readonly ReadOnlyObservableCollection<TaskItemViewModel> _containsTasks;
@@ -255,6 +256,13 @@ namespace Unlimotion.ViewModel
                     .AddToDispose(this);
             }
 
+            // Loading an authoritative model (including legacy data) must not clear its repeater.
+            this.WhenAnyValue(m => m.PlannedBeginDateTime)
+                .Skip(1)
+                .Where(begin => !begin.HasValue && !_isUpdatingFromModel)
+                .Subscribe(_ => Repeater = null)
+                .AddToDispose(this);
+
             //При изменении начала
             this.WhenAnyValue(m => m.PlannedBeginDateTime)
                 .Subscribe(b =>
@@ -355,6 +363,7 @@ namespace Unlimotion.ViewModel
             OnPropertyChanged(nameof(IsHaveRepeater));
             OnPropertyChanged(nameof(RepeaterListMarker));
             OnPropertyChanged(nameof(RepeaterListMarkerToolTip));
+            OnPropertyChanged(nameof(SelectedRepeaterTemplate));
         }
 
         private void OnPropertyChanged(string propertyName)
@@ -778,7 +787,7 @@ namespace Unlimotion.ViewModel
             return orderedParents;
         }
 
-        [AlsoNotifyFor(nameof(IsHaveRepeater), nameof(RepeaterListMarker), nameof(RepeaterListMarkerToolTip))]
+        [AlsoNotifyFor(nameof(IsHaveRepeater), nameof(RepeaterListMarker), nameof(RepeaterListMarkerToolTip), nameof(SelectedRepeaterTemplate))]
         public RepeaterPatternViewModel? Repeater { get; set; }
 
         public bool IsHaveRepeater => Repeater != null && Repeater.Type != RepeaterType.None;
@@ -787,15 +796,55 @@ namespace Unlimotion.ViewModel
 
         public string? RepeaterListMarkerToolTip => IsHaveRepeater ? Repeater!.Title : null;
 
-        public List<RepeaterPatternViewModel> Repeaters => new()
+        public IReadOnlyList<RepeaterPatternViewModel> Repeaters => _repeaters;
+
+        public RepeaterPatternViewModel SelectedRepeaterTemplate
         {
-            new RepeaterPatternViewModel { Type = RepeaterType.None },
-            new RepeaterPatternViewModel { Type = RepeaterType.Daily },
-            new RepeaterPatternViewModel { Type = RepeaterType.Weekly, WorkDays = true },
-            new RepeaterPatternViewModel { Type = RepeaterType.Weekly },
-            new RepeaterPatternViewModel { Type = RepeaterType.Monthly },
-            new RepeaterPatternViewModel { Type = RepeaterType.Yearly },
-        };
+            get
+            {
+                var repeater = Repeater;
+                if (repeater == null || repeater.Type == RepeaterType.None)
+                {
+                    return _repeaters[0];
+                }
+
+                if (repeater.Type == RepeaterType.Weekly)
+                {
+                    return IsExactWorkDays(repeater) ? _repeaters[2] : _repeaters[3];
+                }
+
+                return _repeaters.FirstOrDefault(template => template.Type == repeater.Type) ?? _repeaters[0];
+            }
+            set
+            {
+                if (value == null || ReferenceEquals(value, SelectedRepeaterTemplate))
+                {
+                    return;
+                }
+
+                Repeater = new RepeaterPatternViewModel(value.Model);
+            }
+        }
+
+        private static IReadOnlyList<RepeaterPatternViewModel> CreateRepeaterTemplates() =>
+            Array.AsReadOnly(new[]
+            {
+                new RepeaterPatternViewModel { Type = RepeaterType.None },
+                new RepeaterPatternViewModel { Type = RepeaterType.Daily },
+                new RepeaterPatternViewModel { Type = RepeaterType.Weekly, WorkDays = true },
+                new RepeaterPatternViewModel { Type = RepeaterType.Weekly },
+                new RepeaterPatternViewModel { Type = RepeaterType.Monthly },
+                new RepeaterPatternViewModel { Type = RepeaterType.Yearly },
+            });
+
+        private static bool IsExactWorkDays(RepeaterPatternViewModel repeater) =>
+            repeater.Monday &&
+            repeater.Tuesday &&
+            repeater.Wednesday &&
+            repeater.Thursday &&
+            repeater.Friday &&
+            !repeater.Saturday &&
+            !repeater.Sunday;
 
         /// <summary>
         /// Команды для быстрого выбора дат, ленивая загрузка

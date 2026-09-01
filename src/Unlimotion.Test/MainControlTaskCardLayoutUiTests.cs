@@ -911,6 +911,8 @@ public class MainControlTaskCardLayoutUiTests
         vm.AllTasksMode = true;
         vm.DetailsAreOpen = true;
         var currentTask = TestHelpers.SetCurrentTask(vm, selectedTaskId);
+        // Full-card layout checks include the repeater section, which requires a start date.
+        currentTask.PlannedBeginDateTime ??= DateTime.Today;
         configureCurrentTask?.Invoke(currentTask);
 
         var view = new MainControl
