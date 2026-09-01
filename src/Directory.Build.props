@@ -1,10 +1,6 @@
 <Project>
   <PropertyGroup>
     <Nullable>enable</Nullable>
+    <DefaultItemExcludesInProjectFolder>$(DefaultItemExcludesInProjectFolder);**/obj/**;**/obj-*/**</DefaultItemExcludesInProjectFolder>
   </PropertyGroup>
-
-  <ItemGroup>
-    <Compile Remove="**\obj\**\*.cs" />
-    <Compile Remove="**\obj-*\**\*.cs" />
-  </ItemGroup>
 </Project>
