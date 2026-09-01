@@ -392,15 +392,47 @@ public static class UnlimotionAppLaunchHost
 
         async Task Activate(TaskSpaceOptionViewModel target)
         {
+            var previousSourceId = sourceManager.ActiveSource?.Descriptor.Id
+                ?? throw new InvalidOperationException("There is no active task space to restore.");
+            var previousVaultRoot = settings.IsFeedEnabled
+                ? settings.NoteVaultRootPath
+                : null;
+            var taskSourceSwitched = false;
             await RunOnUiThread(() => settings.IsTaskSpaceSwitching = true);
             try
             {
+                await vm.Feed.CommitActiveEditorsAsync();
                 await coordinator.SwitchAsync(target.SourceId);
+                taskSourceSwitched = true;
                 await RunOnUiThread(() =>
                 {
                     settings.ReloadActiveTaskSpaceSettings();
                     Refresh();
                 });
+                var expectedRoot = settings.IsFeedEnabled
+                    ? settings.NoteVaultRootPath
+                    : null;
+                await vm.Feed.InitializeVaultAsync(expectedRoot);
+                if (!vm.Feed.IsBoundToVaultRoot(expectedRoot))
+                {
+                    throw new InvalidOperationException(
+                        vm.Feed.ErrorMessage ?? "The note vault did not switch with its task space.");
+                }
+            }
+            catch
+            {
+                if (taskSourceSwitched)
+                {
+                    await coordinator.SwitchAsync(previousSourceId);
+                    await RunOnUiThread(() =>
+                    {
+                        settings.ReloadActiveTaskSpaceSettings();
+                        Refresh();
+                    });
+                    await vm.Feed.InitializeVaultAsync(previousVaultRoot);
+                }
+
+                await RunOnUiThread(Refresh);
             }
             finally
             {

@@ -17,7 +17,7 @@ public sealed class TaskSpacesStartupRecoveryFlaUiTests
     {
         var launchOptions = UnlimotionAppLaunchHost.CreateDesktopLaunchOptions(
             scenario,
-            buildBeforeLaunch: false,
+            buildBeforeLaunch: true,
             mainWindowTimeout: TimeSpan.FromSeconds(90));
         var configPath = launchOptions.Arguments
             .Single(argument => argument.StartsWith("--config=", StringComparison.Ordinal))

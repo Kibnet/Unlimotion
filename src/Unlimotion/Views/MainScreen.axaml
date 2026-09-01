@@ -14,6 +14,27 @@
     <Design.DataContext>
         <viewModel:MainWindowViewModel/>
     </Design.DataContext>
+    <UserControl.Styles>
+        <Style Selector="Button.GlobalCreateButton">
+            <Setter Property="Width" Value="42" />
+            <Setter Property="Height" Value="42" />
+            <Setter Property="MinWidth" Value="42" />
+            <Setter Property="MinHeight" Value="42" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="FontSize" Value="22" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="CornerRadius" Value="12" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentButtonBackground}" />
+            <Setter Property="Background" Value="{DynamicResource ThemeControlLowBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentButtonBackground}" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+        <Style Selector="Button.GlobalCreateButton:pointerover">
+            <Setter Property="Background" Value="{DynamicResource ThemeControlMidBrush}" />
+        </Style>
+    </UserControl.Styles>
     <Panel>
         <dialogHostAvalonia:DialogHost CloseOnClickAway="True" Identifier="Ask">
             <dialogHostAvalonia:DialogHost.DataTemplates>
@@ -58,22 +79,239 @@
             <Grid RowDefinitions="Auto,*">
                 <Border Padding="12,8"
                         BorderBrush="{DynamicResource ThemeBorderLowBrush}"
-                        BorderThickness="0,0,0,1">
-                    <StackPanel Orientation="Horizontal"
-                                HorizontalAlignment="Center"
-                                Spacing="6"
-                                AutomationProperties.AutomationId="ShellModeSelector">
-                        <RadioButton GroupName="WorkspaceMode"
-                                     IsChecked="{Binding IsFeedMode, Mode=TwoWay}"
-                                     IsVisible="{Binding Settings.IsFeedEnabled}"
-                                     IsEnabled="{Binding Settings.IsFeedEnabled}"
-                                     Content="{DynamicResource FeedMode}"
-                                     AutomationProperties.AutomationId="FeedModeButton" />
-                        <RadioButton GroupName="WorkspaceMode"
-                                     IsChecked="{Binding IsTasksMode, Mode=OneWay}"
-                                     Content="{DynamicResource TasksMode}"
-                                     AutomationProperties.AutomationId="TasksModeButton" />
-                    </StackPanel>
+                        BorderThickness="0,0,0,1"
+                        AutomationProperties.AutomationId="ShellAppBar">
+                    <Grid x:Name="ShellAppBarGrid"
+                          RowDefinitions="Auto,Auto"
+                          ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto"
+                          ColumnSpacing="10">
+                        <Button x:Name="GlobalCreateMenuButton"
+                                Classes="GlobalCreateButton"
+                                Content="➕"
+                                ToolTip.Tip="{DynamicResource GlobalCreate}"
+                                AutomationProperties.Name="{DynamicResource GlobalCreate}"
+                                AutomationProperties.AutomationId="GlobalCreateMenuButton">
+                            <Button.Flyout>
+                                <MenuFlyout>
+                                    <MenuItem Header="{DynamicResource FeedQuickCaptureNote}"
+                                              MinHeight="44"
+                                              Padding="12,10"
+                                              Command="{Binding OpenQuickCaptureCommand}"
+                                              AutomationProperties.AutomationId="GlobalCreateNoteMenuItem" />
+                                    <MenuItem Header="{DynamicResource FeedQuickCaptureTask}"
+                                              MinHeight="44"
+                                              Padding="12,10"
+                                              Command="{Binding OpenQuickTaskCaptureCommand}"
+                                              AutomationProperties.AutomationId="GlobalCreateFeedTaskMenuItem" />
+                                    <Separator />
+                                    <MenuItem Header="{DynamicResource NewTask}"
+                                              Classes="TaskCreateMenuItem"
+                                              MinHeight="44"
+                                              Padding="12,10"
+                                              Command="{Binding Create}"
+                                              AutomationProperties.AutomationId="GlobalTaskCreateTaskMenuItem" />
+                                    <MenuItem Header="{DynamicResource NewSibling}"
+                                              Classes="TaskCreateMenuItem"
+                                              MinHeight="44"
+                                              Padding="12,10"
+                                              Command="{Binding CreateSibling}"
+                                              AutomationProperties.AutomationId="GlobalTaskCreateSiblingMenuItem" />
+                                    <MenuItem Header="{DynamicResource NewBlockedSibling}"
+                                              Classes="TaskCreateMenuItem"
+                                              MinHeight="44"
+                                              Padding="12,10"
+                                              Command="{Binding CreateBlockedSibling}"
+                                              AutomationProperties.AutomationId="GlobalTaskCreateBlockedSiblingMenuItem" />
+                                    <MenuItem Header="{DynamicResource NewInner}"
+                                              Classes="TaskCreateMenuItem"
+                                              MinHeight="44"
+                                              Padding="12,10"
+                                              Command="{Binding CreateInner}"
+                                              AutomationProperties.AutomationId="GlobalTaskCreateInnerMenuItem" />
+                                </MenuFlyout>
+                            </Button.Flyout>
+                        </Button>
+
+                        <ComboBox x:Name="TaskSpaceSelector"
+                                  Grid.Column="1"
+                                  MinWidth="110"
+                                  MaxWidth="190"
+                                  ItemsSource="{Binding Settings.TaskSpaces}"
+                                  SelectedItem="{Binding Settings.HeaderTaskSpace, Mode=TwoWay}"
+                                  IsEnabled="{Binding !Settings.IsTaskSpaceSwitching}"
+                                  ToolTip.Tip="{DynamicResource TaskSpaceSelectorHint}"
+                                  AutomationProperties.AutomationId="TaskSpaceSelector">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate DataType="viewModel:TaskSpaceOptionViewModel">
+                                    <TextBlock Text="{Binding DisplayName}"
+                                               TextTrimming="CharacterEllipsis"
+                                               AutomationProperties.Name="{Binding DisplayName}"
+                                               ToolTip.Tip="{Binding SourceSummary}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+
+                        <StackPanel x:Name="ShellModeSelector"
+                                    Grid.Column="2"
+                                    Orientation="Horizontal"
+                                    Spacing="6"
+                                    AutomationProperties.AutomationId="ShellModeSelector">
+                            <RadioButton GroupName="WorkspaceMode"
+                                         IsChecked="{Binding IsFeedMode, Mode=TwoWay}"
+                                         IsVisible="{Binding Settings.IsFeedEnabled}"
+                                         IsEnabled="{Binding Settings.IsFeedEnabled}"
+                                         Content="{DynamicResource FeedMode}"
+                                         AutomationProperties.AutomationId="FeedModeButton" />
+                            <RadioButton GroupName="WorkspaceMode"
+                                         IsChecked="{Binding IsTasksMode, Mode=OneWay}"
+                                         Content="{DynamicResource TasksMode}"
+                                         AutomationProperties.AutomationId="TasksModeButton" />
+                        </StackPanel>
+
+                        <Grid x:Name="GlobalSearchHost" Grid.Column="3">
+                            <TextBox x:Name="GlobalSearchBox"
+                                     MinWidth="0"
+                                     HorizontalAlignment="Stretch"
+                                     Text="{Binding Feed.SearchQuery, Mode=TwoWay}"
+                                     PlaceholderText="{DynamicResource GlobalSearchWatermark}"
+                                     AutomationProperties.AutomationId="GlobalSearchBox" />
+                            <Popup IsOpen="{Binding Feed.IsSearchActive}"
+                                   Placement="Bottom"
+                                   PlacementTarget="{Binding #GlobalSearchBox}"
+                                   HorizontalOffset="0"
+                                   VerticalOffset="6"
+                                   AutomationProperties.AutomationId="GlobalSearchFlyout">
+                                <Border Width="620"
+                                        MaxHeight="520"
+                                        Padding="12"
+                                        CornerRadius="10"
+                                        Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
+                                        BorderBrush="{DynamicResource ThemeBorderMidBrush}"
+                                        BorderThickness="1">
+                                    <Grid RowDefinitions="Auto,*" RowSpacing="10">
+                                        <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="8">
+                                            <ComboBox ItemsSource="{Binding Feed.SearchTypeOptions}"
+                                                      SelectedItem="{Binding Feed.SelectedSearchType, Mode=TwoWay}"
+                                                      AutomationProperties.Name="{DynamicResource FeedSearchType}"
+                                                      AutomationProperties.AutomationId="GlobalSearchTypePicker">
+                                                <ComboBox.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock Text="{Binding DisplayName}" />
+                                                    </DataTemplate>
+                                                </ComboBox.ItemTemplate>
+                                            </ComboBox>
+                                            <ComboBox Grid.Column="1"
+                                                      ItemsSource="{Binding Feed.SearchAreaOptions}"
+                                                      SelectedItem="{Binding Feed.SelectedSearchArea, Mode=TwoWay}"
+                                                      AutomationProperties.Name="{DynamicResource FeedSearchArea}"
+                                                      AutomationProperties.AutomationId="GlobalSearchAreaPicker">
+                                                <ComboBox.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock Text="{Binding DisplayName}" />
+                                                    </DataTemplate>
+                                                </ComboBox.ItemTemplate>
+                                            </ComboBox>
+                                            <DatePicker Grid.Column="2"
+                                                        SelectedDate="{Binding Feed.SearchFromDate, Mode=TwoWay}"
+                                                        AutomationProperties.Name="{DynamicResource FeedSearchDateFrom}"
+                                                        AutomationProperties.AutomationId="GlobalSearchFromDatePicker" />
+                                            <DatePicker Grid.Column="3"
+                                                        SelectedDate="{Binding Feed.SearchToDate, Mode=TwoWay}"
+                                                        AutomationProperties.Name="{DynamicResource FeedSearchDateTo}"
+                                                        AutomationProperties.AutomationId="GlobalSearchToDatePicker" />
+                                        </Grid>
+                                        <Grid Grid.Row="1">
+                                            <TextBlock IsVisible="{Binding Feed.IsSearchEmpty}"
+                                                       Margin="12"
+                                                       HorizontalAlignment="Center"
+                                                       Text="{DynamicResource FeedSearchNoResults}" />
+                                            <ListBox ItemsSource="{Binding Feed.SearchResults}"
+                                                     MaxHeight="420"
+                                                     Background="Transparent"
+                                                     BorderThickness="0"
+                                                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                                     AutomationProperties.AutomationId="GlobalSearchResultsList">
+                                                <ListBox.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Button Margin="0,0,0,6"
+                                                                Padding="10"
+                                                                HorizontalContentAlignment="Stretch"
+                                                                Background="Transparent"
+                                                                BorderThickness="0"
+                                                                Click="OnGlobalSearchResultClick"
+                                                                AutomationProperties.AutomationId="{Binding AutomationId}"
+                                                                AutomationProperties.Name="{Binding AutomationName}">
+                                                            <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                                                <TextBlock FontWeight="SemiBold" Text="{Binding TypeDisplayName}" />
+                                                                <TextBlock Grid.Column="1" Text="{Binding Text}" TextTrimming="CharacterEllipsis" />
+                                                                <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Opacity="0.7" Text="{Binding DisplaySource}" />
+                                                            </Grid>
+                                                        </Button>
+                                                    </DataTemplate>
+                                                </ListBox.ItemTemplate>
+                                            </ListBox>
+                                        </Grid>
+                                    </Grid>
+                                </Border>
+                            </Popup>
+                        </Grid>
+
+                        <Button x:Name="GlobalReviewButton"
+                                Grid.Column="4"
+                                Command="{Binding OpenReviewCommand}"
+                                AutomationProperties.AutomationId="GlobalReviewButton">
+                            <StackPanel Orientation="Horizontal" Spacing="5">
+                                <TextBlock Text="{DynamicResource GlobalReview}" />
+                                <TextBlock Text="{Binding Feed.PendingReviewBlocks}"
+                                           FontWeight="SemiBold" />
+                            </StackPanel>
+                        </Button>
+
+                        <Button x:Name="GlobalSettingsButton"
+                                Grid.Column="5"
+                                Padding="10,4"
+                                Content="⚙"
+                                Command="{Binding OpenSettingsCommand}"
+                                AutomationProperties.Name="{DynamicResource GlobalSettings}"
+                                AutomationProperties.AutomationId="GlobalSettingsButton" />
+
+                        <DropDownButton x:Name="GlobalOverflowMenuButton"
+                                        Grid.Column="6"
+                                        Padding="10,4"
+                                        Content="⋯"
+                                        AutomationProperties.AutomationId="GlobalOverflowMenuButton">
+                            <DropDownButton.Flyout>
+                                <MenuFlyout>
+                                    <MenuItem x:Name="GlobalTaskSpaceMenuItem"
+                                              Header="{DynamicResource TaskSpacesTitle}"
+                                              AutomationProperties.AutomationId="GlobalTaskSpaceMenuItem" />
+                                    <MenuItem x:Name="GlobalFeedModeMenuItem"
+                                              Header="{DynamicResource FeedMode}"
+                                              ToggleType="Radio"
+                                              GroupName="WorkspaceModeOverflow"
+                                              IsChecked="{Binding IsFeedMode, Mode=OneWay}"
+                                              Click="OnFeedModeMenuItemClick"
+                                              AutomationProperties.AutomationId="GlobalFeedModeMenuItem" />
+                                    <MenuItem x:Name="GlobalTasksModeMenuItem"
+                                              Header="{DynamicResource TasksMode}"
+                                              ToggleType="Radio"
+                                              GroupName="WorkspaceModeOverflow"
+                                              IsChecked="{Binding IsTasksMode, Mode=OneWay}"
+                                              Click="OnTasksModeMenuItemClick"
+                                              AutomationProperties.AutomationId="GlobalTasksModeMenuItem" />
+                                    <Separator x:Name="GlobalOverflowContextSeparator" />
+                                    <MenuItem x:Name="GlobalReviewMenuItem"
+                                              Header="{DynamicResource GlobalReview}"
+                                              Command="{Binding OpenReviewCommand}"
+                                              AutomationProperties.AutomationId="GlobalReviewMenuItem" />
+                                    <MenuItem x:Name="GlobalSettingsMenuItem"
+                                              Header="{DynamicResource GlobalSettings}"
+                                              Command="{Binding OpenSettingsCommand}"
+                                              AutomationProperties.AutomationId="GlobalSettingsMenuItem" />
+                                </MenuFlyout>
+                            </DropDownButton.Flyout>
+                        </DropDownButton>
+                    </Grid>
                 </Border>
 
                 <Grid Grid.Row="1"
@@ -175,6 +413,154 @@
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
+
+                <Grid Grid.RowSpan="2"
+                      Panel.ZIndex="120"
+                      IsVisible="{Binding IsQuickCaptureOpen}"
+                      Background="#99000000"
+                      AutomationProperties.AutomationId="GlobalQuickCaptureOverlay">
+                    <Border Width="620"
+                            MaxWidth="{Binding $parent[Grid].Bounds.Width}"
+                            Margin="24"
+                            Padding="20"
+                            CornerRadius="12"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
+                            BorderBrush="{DynamicResource ThemeBorderLowBrush}"
+                            BorderThickness="1">
+                        <StackPanel Spacing="14">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <TextBlock FontSize="20"
+                                           FontWeight="SemiBold"
+                                           Text="{DynamicResource FeedQuickCaptureTitle}" />
+                                <Button Grid.Column="1"
+                                        Padding="8,2"
+                                        Content="×"
+                                        Command="{Binding CloseQuickCaptureCommand}"
+                                        AutomationProperties.Name="{DynamicResource GlobalClose}"
+                                        AutomationProperties.AutomationId="GlobalQuickCaptureCloseButton" />
+                            </Grid>
+
+                            <StackPanel IsVisible="{Binding !Feed.HasQuickCaptureCreatedTask}"
+                                        Spacing="12">
+                                <ToggleSwitch IsChecked="{Binding IsQuickCaptureTask, Mode=TwoWay}"
+                                              Content="{DynamicResource FeedQuickCaptureAsTask}"
+                                              AutomationProperties.AutomationId="GlobalQuickCaptureTaskToggle" />
+                                <ComboBox ItemsSource="{Binding Feed.Areas}"
+                                          SelectedItem="{Binding Feed.SelectedArea, Mode=TwoWay}"
+                                          AutomationProperties.AutomationId="GlobalQuickCaptureAreaPicker">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding DisplayName}" />
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                                <TextBox MinHeight="120"
+                                         AcceptsReturn="True"
+                                         TextWrapping="Wrap"
+                                         Text="{Binding Feed.QuickCaptureText, Mode=TwoWay}"
+                                         PlaceholderText="{DynamicResource FeedQuickCaptureWatermark}"
+                                         AutomationProperties.AutomationId="GlobalQuickCaptureTextBox" />
+                                <TextBlock IsVisible="{Binding Feed.HasError}"
+                                           Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+                                           Text="{Binding Feed.ErrorMessage}"
+                                           TextWrapping="Wrap" />
+                                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                                    <Button Grid.Column="1"
+                                            Command="{Binding CloseQuickCaptureCommand}"
+                                            Content="{DynamicResource Cancel}" />
+                                    <Button Grid.Column="2"
+                                            Command="{Binding SaveQuickCaptureCommand}"
+                                            IsEnabled="{Binding Feed.CanCapture}"
+                                            Content="{DynamicResource FeedCapture}"
+                                            AutomationProperties.AutomationId="GlobalQuickCaptureSaveButton" />
+                                </Grid>
+                            </StackPanel>
+
+                            <Border IsVisible="{Binding Feed.HasQuickCaptureCreatedTask}"
+                                    Padding="12"
+                                    CornerRadius="8"
+                                    BorderBrush="{DynamicResource SystemAccentColor}"
+                                    BorderThickness="1"
+                                    AutomationProperties.AutomationId="GlobalQuickCaptureCreatedTaskSurface">
+                                <StackPanel Spacing="12">
+                                    <TextBlock Text="{DynamicResource FeedQuickCaptureCreated}"
+                                               FontWeight="SemiBold" />
+                                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                                        <unlimotion:TaskStatusPicker Task="{Binding Feed.QuickCaptureCreatedTaskReference.Task}"
+                                                                     VerticalAlignment="Center"
+                                                                     AutomationProperties.AutomationId="GlobalQuickCaptureTaskStatusPicker" />
+                                        <TextBlock Grid.Column="1"
+                                                   VerticalAlignment="Center"
+                                                   Text="{Binding Feed.QuickCaptureCreatedTaskReference.DisplayTitle}"
+                                                   TextWrapping="Wrap"
+                                                   FontWeight="SemiBold" />
+                                        <ToggleSwitch Grid.Column="2"
+                                                      IsChecked="{Binding Feed.QuickCaptureCreatedTaskReference.Task.IsGoal, Mode=TwoWay}"
+                                                      Content="{DynamicResource FeedReviewGoal}" />
+                                    </Grid>
+                                    <views:TaskRelationsControl Owner="{Binding}"
+                                                                TargetTask="{Binding Feed.QuickCaptureCreatedTaskReference.Task}"
+                                                                AutomationIdPrefix="GlobalQuickCaptureTaskParentsRelation"
+                                                                ParentsTreeAutomationId="GlobalQuickCaptureTaskParentsTree"
+                                                                OpenParentTaskOnDoubleTap="False" />
+                                    <Button HorizontalAlignment="Right"
+                                            Command="{Binding CloseQuickCaptureCommand}"
+                                            Content="{DynamicResource FeedQuickCaptureDone}"
+                                            AutomationProperties.AutomationId="GlobalQuickCaptureDoneButton" />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+
+                <Grid Grid.RowSpan="2"
+                      Panel.ZIndex="110"
+                      IsVisible="{Binding IsSettingsOpen}"
+                      Background="#99000000"
+                      AutomationProperties.AutomationId="GlobalSettingsOverlay">
+                    <Border Width="1040"
+                            MaxWidth="{Binding $parent[Grid].Bounds.Width}"
+                            MaxHeight="760"
+                            Margin="24"
+                            Padding="16"
+                            CornerRadius="12"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
+                            BorderBrush="{DynamicResource ThemeBorderLowBrush}"
+                            BorderThickness="1">
+                        <Grid RowDefinitions="Auto,*" RowSpacing="10">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <Button Grid.Column="1"
+                                        Padding="8,2"
+                                        Content="×"
+                                        Command="{Binding CloseSettingsCommand}"
+                                        AutomationProperties.Name="{DynamicResource GlobalClose}"
+                                        AutomationProperties.AutomationId="GlobalSettingsCloseButton" />
+                            </Grid>
+                            <ScrollViewer Grid.Row="1"
+                                          VerticalScrollBarVisibility="Auto">
+                                <views:SettingsControl DataContext="{Binding Settings}" />
+                            </ScrollViewer>
+                        </Grid>
+                    </Border>
+                </Grid>
+
+                <Grid Grid.RowSpan="2"
+                      Panel.ZIndex="105"
+                      IsVisible="{Binding Feed.IsReviewActive}"
+                      Background="#99000000"
+                      AutomationProperties.AutomationId="GlobalReviewOverlay">
+                    <views:FeedReviewDialog Width="760"
+                                            MaxWidth="{Binding $parent[Grid].Bounds.Width}"
+                                            MaxHeight="{Binding $parent[Grid].Bounds.Height}"
+                                            Margin="24"
+                                            HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"
+                                            DataContext="{Binding Feed}" />
+                </Grid>
             </Grid>
         </dialogHostAvalonia:DialogHost>
     </Panel>

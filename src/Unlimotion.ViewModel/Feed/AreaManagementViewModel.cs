@@ -237,6 +237,40 @@ public sealed class AreaManagementViewModel : ReactiveObject, IDisposable
 
     public Task RestoreAsync(string areaId) => MutateAsync(areaId, area => area.IsArchived = false);
 
+    public async Task DeleteLeafAsync(string areaId)
+    {
+        ThrowIfDisposed();
+        ArgumentException.ThrowIfNullOrWhiteSpace(areaId);
+        await mutationGate.WaitAsync(lifetime.Token);
+        try
+        {
+            IsBusy = true;
+            ErrorMessage = null;
+            snapshot ??= await store.LoadAsync(lifetime.Token);
+            var candidate = Clone(snapshot.Catalog);
+            if (candidate.Areas.Any(area => string.Equals(area.ParentId, areaId, StringComparison.Ordinal)))
+            {
+                throw new InvalidOperationException($"Area '{areaId}' has children and cannot be removed.");
+            }
+
+            var removed = candidate.Areas.RemoveAll(area =>
+                string.Equals(area.Id, areaId, StringComparison.Ordinal));
+            if (removed == 0)
+            {
+                return;
+            }
+
+            candidate.Validate();
+            snapshot = await store.SaveAsync(candidate, snapshot.Revision, lifetime.Token);
+            ApplySnapshot(snapshot, selectedAreaId: null);
+        }
+        finally
+        {
+            IsBusy = false;
+            mutationGate.Release();
+        }
+    }
+
     public async Task SaveSelectedAsync()
     {
         var areaId = SelectedArea?.Id ?? throw new InvalidOperationException("Select an area before saving it.");

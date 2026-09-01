@@ -56,7 +56,7 @@ public class SettingsControlResponsiveUiTests
                     }
                 ],
                 "personal");
-                var mainView = new MainControl { DataContext = vm };
+                var mainView = new MainScreen { DataContext = vm };
                 var settingsView = new SettingsControl { DataContext = vm.Settings };
                 mainWindow = CreateWindow(mainView, 900, 700);
                 settingsWindow = CreateWindow(settingsView, 720, 800);

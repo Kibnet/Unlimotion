@@ -159,16 +159,23 @@ public sealed class MarkdownBlockPreviewControl : ContentControl
         Control marker;
         if (isTask)
         {
-            marker = new CheckBox
+            var checkBox = new CheckBox
             {
                 IsChecked = block.IsTaskCompleted,
-                IsHitTestVisible = false,
-                Focusable = false,
+                IsHitTestVisible = true,
+                Focusable = true,
                 VerticalAlignment = VerticalAlignment.Top
             };
+            checkBox.Click += async (_, args) =>
+            {
+                args.Handled = true;
+                await block.Owner.ToggleTaskCompletionAsync(block);
+            };
+            marker = checkBox;
             AutomationProperties.SetName(
                 marker,
                 L10n.Get(block.IsTaskCompleted ? "MarkdownTaskCompleted" : "MarkdownTaskIncomplete"));
+            AutomationProperties.SetAutomationId(marker, block.TaskCheckboxAutomationId);
         }
         else
         {

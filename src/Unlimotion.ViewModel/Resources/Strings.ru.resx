@@ -153,10 +153,37 @@
   <data name="FeedEmptyDayList" xml:space="preserve"><value>Ежедневных заметок пока нет</value></data>
   <data name="FeedMode" xml:space="preserve"><value>Лента</value></data>
   <data name="FeedNoArea" xml:space="preserve"><value>Без области</value></data>
+  <data name="FeedAreaFilterAll" xml:space="preserve"><value>Все области</value></data>
+  <data name="FeedAreaFilterNone" xml:space="preserve"><value>Ни одной области</value></data>
+  <data name="FeedAreaFilterSelected" xml:space="preserve"><value>Областей: {0}</value></data>
+  <data name="FeedAreaFilterEmpty" xml:space="preserve"><value>Нет записей в выбранных областях</value></data>
+  <data name="FeedAreaFilterReset" xml:space="preserve"><value>Сбросить фильтр областей</value></data>
+  <data name="FeedBlockMoveHandle" xml:space="preserve"><value>Выделить и перетащить блок</value></data>
+  <data name="FeedBlockMoveHelp" xml:space="preserve"><value>Щелчок выделяет блок. Ctrl добавляет блок, Shift выделяет диапазон. Перетащите для перемещения; Alt+Вверх или Alt+Вниз перемещает с клавиатуры.</value></data>
+  <data name="FeedBlockMoveFailed" xml:space="preserve"><value>Не удалось переместить выбранные блоки.</value></data>
+  <data name="FeedBlockToolbar" xml:space="preserve"><value>Действия с выбранными блоками</value></data>
+  <data name="FeedBlockMoveUp" xml:space="preserve"><value>Переместить выше</value></data>
+  <data name="FeedBlockMoveDown" xml:space="preserve"><value>Переместить ниже</value></data>
+  <data name="FeedBlockBulletedList" xml:space="preserve"><value>Маркированный список</value></data>
+  <data name="FeedBlockNumberedList" xml:space="preserve"><value>Нумерованный список</value></data>
+  <data name="FeedBlockChecklist" xml:space="preserve"><value>Чекбоксы</value></data>
+  <data name="FeedBlockChangeArea" xml:space="preserve"><value>Изменить область</value></data>
+  <data name="FeedBlockConvertToArea" xml:space="preserve"><value>Сделать областью</value></data>
+  <data name="TaskSpaceNoteVaultActivationFailed" xml:space="preserve"><value>Не удалось подключить базу заметок этого пространства.</value></data>
   <data name="FeedOnboardingDescription" xml:space="preserve"><value>Выберите корневую папку существующей базы Obsidian. Файлы останутся на месте и будут редактироваться как Markdown.</value></data>
   <data name="FeedOnboardingTitle" xml:space="preserve"><value>Подключите базу заметок</value></data>
   <data name="FeedQuickCaptureTitle" xml:space="preserve"><value>Быстрая запись</value></data>
   <data name="FeedQuickCaptureWatermark" xml:space="preserve"><value>Запишите мысль, задачу или Markdown-заметку...</value></data>
+  <data name="FeedQuickCaptureAsTask" xml:space="preserve"><value>Создать как задачу в сегодняшней заметке</value></data>
+  <data name="FeedQuickCaptureTask" xml:space="preserve"><value>Задача в ежедневной заметке</value></data>
+  <data name="FeedQuickCaptureNote" xml:space="preserve"><value>Новая запись</value></data>
+  <data name="FeedQuickCaptureCreated" xml:space="preserve"><value>Задача создана</value></data>
+  <data name="FeedQuickCaptureDone" xml:space="preserve"><value>Готово</value></data>
+  <data name="GlobalCreate" xml:space="preserve"><value>Создать</value></data>
+  <data name="GlobalReview" xml:space="preserve"><value>Разбор</value></data>
+  <data name="GlobalSettings" xml:space="preserve"><value>Настройки</value></data>
+  <data name="GlobalSearchWatermark" xml:space="preserve"><value>Поиск по задачам и заметкам</value></data>
+  <data name="GlobalClose" xml:space="preserve"><value>Закрыть</value></data>
   <data name="FeedRefresh" xml:space="preserve"><value>Обновить</value></data>
   <data name="FeedSearchArea" xml:space="preserve"><value>Область</value></data>
   <data name="FeedSearchAreaAll" xml:space="preserve"><value>Все области</value></data>
@@ -193,6 +220,12 @@
   <data name="FeedReviewNoteFolder" xml:space="preserve"><value>Тематическая папка</value></data>
   <data name="FeedReviewCreateNote" xml:space="preserve"><value>Создать заметку</value></data>
   <data name="FeedReviewContinue" xml:space="preserve"><value>Продолжить</value></data>
+  <data name="FeedReviewPrevious" xml:space="preserve"><value>← Предыдущий</value></data>
+  <data name="FeedReviewNext" xml:space="preserve"><value>Следующий →</value></data>
+  <data name="FeedReviewTaskAction" xml:space="preserve"><value>Задача</value></data>
+  <data name="FeedReviewNoteAction" xml:space="preserve"><value>Заметка</value></data>
+  <data name="FeedReviewMoveTodayShort" xml:space="preserve"><value>На сегодня</value></data>
+  <data name="Retry" xml:space="preserve"><value>Повторить</value></data>
   <data name="FeedIdentityConflictTitle" xml:space="preserve"><value>Изменилась identity базы</value></data>
   <data name="FeedIdentityConflictDescription" xml:space="preserve"><value>Запись приостановлена. Обе ветви identity и разбора сохранены; выберите, как переподключить эту папку.</value></data>
   <data name="FeedIdentityConflictAccepted" xml:space="preserve"><value>Подключённая identity:</value></data>
@@ -720,10 +753,23 @@
   <data name="FeedPendingRecoveryKindTask" xml:space="preserve"><value>Задача</value></data>
   <data name="FeedPendingRecoveryKindNote" xml:space="preserve"><value>Заметка</value></data>
   <data name="FeedPendingRecoveryKindMove" xml:space="preserve"><value>Перенос</value></data>
+  <data name="FeedPendingRecoveryKindArea" xml:space="preserve"><value>Область</value></data>
   <data name="AreaExternalConflict" xml:space="preserve"><value>Области были изменены и в Unlimotion, и извне. Выберите, какую версию сохранить.</value></data>
   <data name="AreaUseLocalDraft" xml:space="preserve"><value>Использовать версию Unlimotion</value></data>
   <data name="AreaUseExternal" xml:space="preserve"><value>Использовать внешнюю версию</value></data>
   <data name="TaskGoalFilterAll" xml:space="preserve"><value>Все</value></data>
   <data name="TaskGoalFilterGoals" xml:space="preserve"><value>Цели</value></data>
   <data name="TaskGoalFilterRegular" xml:space="preserve"><value>Обычные</value></data>
+  <data name="FeedChronologyAutomationName" xml:space="preserve">
+    <value>Хронология: дней — {0}</value>
+  </data>
+  <data name="MarkdownHeadingAreaTitle" xml:space="preserve"><value>Превратить заголовок в область</value></data>
+  <data name="MarkdownHeadingAreaDescription" xml:space="preserve"><value>Создайте область с необязательным родителем или свяжите заголовок с существующей областью.</value></data>
+  <data name="MarkdownHeadingAreaExisting" xml:space="preserve"><value>Область</value></data>
+  <data name="MarkdownHeadingAreaName" xml:space="preserve"><value>Название</value></data>
+  <data name="MarkdownHeadingAreaParent" xml:space="preserve"><value>Родитель</value></data>
+  <data name="MarkdownHeadingAreaConfirm" xml:space="preserve"><value>Превратить в область</value></data>
+  <data name="MarkdownCreateNewArea" xml:space="preserve"><value>Создать новую область</value></data>
+  <data name="MarkdownSelectedHeadingUnavailable" xml:space="preserve"><value>Выбранный заголовок больше недоступен.</value></data>
+  <data name="MarkdownSelectedAreaUnavailable" xml:space="preserve"><value>Выбранная область больше недоступна.</value></data>
 </root>
