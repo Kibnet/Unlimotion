@@ -12,7 +12,8 @@ public enum FeedPendingRecoveryKind
 {
     TaskConversion,
     NoteExtraction,
-    MoveToToday
+    MoveToToday,
+    HeadingAreaConversion
 }
 
 [AddINotifyPropertyChangedInterface]
@@ -59,6 +60,7 @@ public sealed class FeedPendingRecoveryViewModel : IDisposable
         FeedPendingRecoveryKind.TaskConversion => L10n.Get("FeedPendingRecoveryKindTask"),
         FeedPendingRecoveryKind.NoteExtraction => L10n.Get("FeedPendingRecoveryKindNote"),
         FeedPendingRecoveryKind.MoveToToday => L10n.Get("FeedPendingRecoveryKindMove"),
+        FeedPendingRecoveryKind.HeadingAreaConversion => L10n.Get("FeedPendingRecoveryKindArea"),
         _ => Kind.ToString()
     };
 

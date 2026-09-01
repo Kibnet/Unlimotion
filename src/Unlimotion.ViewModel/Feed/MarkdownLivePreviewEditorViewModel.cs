@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using ReactiveUI;
 using Unlimotion.Notes.Markdown;
+using Unlimotion.Notes.Operations;
 using Unlimotion.Notes.Recovery;
 using L10n = Unlimotion.ViewModel.Localization.Localization;
 
@@ -21,6 +22,8 @@ public sealed record MarkdownLiveDocumentSnapshot(
     string RelativePath);
 
 public sealed record MarkdownBlockTextRange(int Start, int Length);
+
+public sealed record FeedAreaFilterSelection(string Identity, string? AreaName);
 
 public sealed record MarkdownBlockPatch(
     string RelativePath,
@@ -57,6 +60,32 @@ public sealed record MarkdownBlockCommitResult(
     public static MarkdownBlockCommitResult Rejected(string errorMessage) => new(false, null, errorMessage);
 }
 
+public sealed record MarkdownBlocksMoveRequest(
+    MarkdownLiveDocumentSnapshot Snapshot,
+    IReadOnlyList<int> SelectedBlockIndices,
+    int? InsertBeforeBlockIndex,
+    AreaReference? DestinationArea = null);
+
+public sealed record MarkdownBlocksMoveResult(
+    bool IsAccepted,
+    MarkdownLiveDocumentSnapshot? Snapshot = null,
+    IReadOnlyList<int>? OutputBlockIndices = null,
+    string? ErrorMessage = null)
+{
+    public static MarkdownBlocksMoveResult Accepted(
+        MarkdownLiveDocumentSnapshot snapshot,
+        IReadOnlyList<int> outputBlockIndices) => new(true, snapshot, outputBlockIndices);
+
+    public static MarkdownBlocksMoveResult Rejected(string errorMessage) =>
+        new(false, ErrorMessage: errorMessage);
+}
+
+public sealed record MarkdownBlockMergeResult(
+    bool IsApplicable,
+    bool IsMerged,
+    MarkdownLiveBlockViewModel? TargetBlock = null,
+    int CaretIndex = 0);
+
 public enum MarkdownLiveBlockRenderKind
 {
     Blank,
@@ -77,6 +106,29 @@ public enum MarkdownInlineTokenKind
     Strong,
     Link,
     WikiLink
+}
+
+public enum MarkdownMoveDropTarget
+{
+    None,
+    Before,
+    After
+}
+
+public enum MarkdownBlockListStyle
+{
+    Bulleted,
+    Numbered,
+    Checklist
+}
+
+public enum MarkdownSelectionSemanticAction
+{
+    Task,
+    Note,
+    Area,
+    MoveToday,
+    ConvertHeadingToArea
 }
 
 public sealed record MarkdownInlineToken(
@@ -119,12 +171,15 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
     private const string TaskUriPrefix = "unlimotion://task/";
     private static readonly TimeSpan DefaultAutosaveDelay = TimeSpan.FromSeconds(2);
     private readonly IMarkdownDocumentParser parser;
+    private readonly FeedMarkdownBlockMergeService mergeService;
     private readonly TimeSpan autosaveDelay;
     private readonly Func<TimeSpan, CancellationToken, Task> autosaveDelayAsync;
+    private readonly SynchronizationContext? synchronizationContext;
     private readonly SemaphoreSlim commitGate = new(1, 1);
     private readonly Dictionary<string, FeedTaskReferenceViewModel> taskReferences =
         new(StringComparer.Ordinal);
     private readonly HashSet<int> reviewSelectionIndices = [];
+    private readonly HashSet<int> moveSelectionIndices = [];
     private readonly object autosaveSync = new();
     private readonly object draftPersistenceSync = new();
     private readonly HashSet<int> persistedDraftBlocks = [];
@@ -136,14 +191,19 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
     private MarkdownLiveBlockViewModel? activeBlock;
     private FeedDraft? recoveryDraft;
     private Func<MarkdownBlockPatch, CancellationToken, Task<MarkdownBlockCommitResult>>? commitBlockAsync;
+    private Func<MarkdownBlocksMoveRequest, CancellationToken, Task<MarkdownBlocksMoveResult>>? moveBlocksAsync;
+    private Func<MarkdownLivePreviewEditorViewModel, IReadOnlyList<int>, MarkdownSelectionSemanticAction, CancellationToken, Task>? selectionActionAsync;
     private IFeedDraftStore? draftStore;
     private string? draftVaultId;
     private TimeProvider draftTimeProvider = TimeProvider.System;
     private string? draftPersistenceError;
     private int? reviewAnchorBlockIndex;
+    private int? moveSelectionAnchorBlockIndex;
     private string? reviewSelectionAutomationName;
     private long autosaveGeneration;
     private bool hasDeferredCommitNotification;
+    private bool isMoveInProgress;
+    private string? moveErrorMessage;
     private bool isDisposed;
 
     public MarkdownLivePreviewEditorViewModel(
@@ -153,6 +213,7 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
         Func<TimeSpan, CancellationToken, Task>? autosaveDelayAsync = null)
     {
         this.parser = parser ?? new MarkdownDocumentParser();
+        mergeService = new FeedMarkdownBlockMergeService(this.parser);
         this.autosaveDelay = autosaveDelay ?? DefaultAutosaveDelay;
         if (this.autosaveDelay < TimeSpan.Zero)
         {
@@ -160,12 +221,54 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
         }
 
         this.autosaveDelayAsync = autosaveDelayAsync ?? Task.Delay;
+        synchronizationContext = SynchronizationContext.Current;
         AutomationIdPrefix = NormalizeAutomationIdPrefix(automationIdPrefix);
         RestoreRecoveryDraftCommand = ReactiveCommand.Create(RestoreRecoveryDraft);
         DiscardRecoveryDraftCommand = ReactiveCommand.CreateFromTask(DiscardRecoveryDraftAsync);
     }
 
     public ObservableCollection<MarkdownLiveBlockViewModel> Blocks { get; } = new();
+
+    public bool ApplyAreaFilter(string? areaIdentity, string? areaName)
+    {
+        return areaIdentity is null
+            ? ApplyAreaFilter([], showAll: true)
+            : ApplyAreaFilter([new FeedAreaFilterSelection(areaIdentity, areaName)], showAll: false);
+    }
+
+    public bool ApplyAreaFilter(
+        IReadOnlyCollection<FeedAreaFilterSelection> selectedAreas,
+        bool showAll)
+    {
+        ArgumentNullException.ThrowIfNull(selectedAreas);
+        var hasVisibleContent = false;
+        foreach (var block in Blocks)
+        {
+            var belongsToArea = showAll || selectedAreas.Any(selection => MatchesArea(
+                block.Block,
+                selection.Identity,
+                selection.AreaName));
+            var isVisible = showAll
+                || block.Block.IsContent && belongsToArea
+                || block.Block.Kind == MarkdownBlockKind.AreaHeading && belongsToArea;
+            block.SetFeedFilterVisible(isVisible);
+            hasVisibleContent |= block.Block.IsContent && isVisible;
+        }
+
+        return showAll ? Blocks.Any(static block => block.Block.IsContent) : hasVisibleContent;
+    }
+
+    private static bool MatchesArea(MarkdownBlock block, string? areaIdentity, string? areaName)
+    {
+        if (string.IsNullOrEmpty(areaIdentity))
+        {
+            return string.IsNullOrWhiteSpace(block.AreaId) && string.IsNullOrWhiteSpace(block.AreaName);
+        }
+
+        return string.Equals(block.AreaId, areaIdentity, StringComparison.OrdinalIgnoreCase)
+            || string.IsNullOrWhiteSpace(block.AreaId)
+            && string.Equals(block.AreaName, areaName, StringComparison.CurrentCultureIgnoreCase);
+    }
 
     public event EventHandler? DirtyStateChanged;
 
@@ -200,6 +303,120 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
     public bool HasDocument => Snapshot is not null;
 
     public bool CanEdit => CommitBlockAsync is not null && !isDisposed;
+
+    public Func<MarkdownBlocksMoveRequest, CancellationToken, Task<MarkdownBlocksMoveResult>>? MoveBlocksAsync
+    {
+        get => moveBlocksAsync;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref moveBlocksAsync, value);
+            RaiseMoveStateChanged();
+        }
+    }
+
+    public int SelectedMoveBlockCount => moveSelectionIndices.Count;
+
+    public bool HasMoveSelection => SelectedMoveBlockCount > 0;
+
+    public bool IsMoveInProgress
+    {
+        get => isMoveInProgress;
+        private set
+        {
+            this.RaiseAndSetIfChanged(ref isMoveInProgress, value);
+            RaiseMoveStateChanged();
+        }
+    }
+
+    public string? MoveErrorMessage
+    {
+        get => moveErrorMessage;
+        private set
+        {
+            this.RaiseAndSetIfChanged(ref moveErrorMessage, value);
+            this.RaisePropertyChanged(nameof(HasMoveError));
+        }
+    }
+
+    public bool HasMoveError => !string.IsNullOrWhiteSpace(MoveErrorMessage);
+
+    public bool CanMoveSelection => HasMoveSelection
+        && MoveBlocksAsync is not null
+        && ActiveBlock is null
+        && !IsMoveInProgress;
+
+    public bool CanMoveSelectionUp => CanMoveSelection && FindAdjacentMoveTarget(-1) is not null;
+
+    public bool CanMoveSelectionDown => CanMoveSelection && FindAdjacentMoveTarget(1) is not null;
+
+    public bool CanTransformSelection => HasMoveSelection
+        && ActiveBlock is null
+        && !IsMoveInProgress
+        && SelectedMoveBlocks().All(static block => block.Kind is MarkdownBlockKind.Paragraph
+            or MarkdownBlockKind.ListItem
+            or MarkdownBlockKind.TaskListItem);
+
+    public bool CanOpenSelectionActions => HasMoveSelection
+        && ActiveBlock is null
+        && !IsMoveInProgress
+        && SelectionActionAsync is not null;
+
+    public bool CanConvertSelectionToArea => CanOpenSelectionActions
+        && SelectedMoveBlockCount == 1
+        && SelectedMoveBlocks().Single().Kind == MarkdownBlockKind.Heading;
+
+    internal bool CanMoveBlockFromToolbar(MarkdownLiveBlockViewModel block, int delta)
+    {
+        if (block.IsMoveSelected)
+        {
+            return delta < 0 ? CanMoveSelectionUp : CanMoveSelectionDown;
+        }
+
+        if (!block.IsMovable
+            || MoveBlocksAsync is null
+            || ActiveBlock is not null
+            || IsMoveInProgress)
+        {
+            return false;
+        }
+
+        var movable = Blocks.Where(static candidate => candidate.IsMovable);
+        return delta < 0
+            ? movable.Any(candidate => candidate.Index < block.Index)
+            : movable.Any(candidate => candidate.Index > block.Index);
+    }
+
+    internal bool CanTransformBlockFromToolbar(MarkdownLiveBlockViewModel block) =>
+        block.IsMoveSelected
+            ? CanTransformSelection
+            : ActiveBlock is null
+              && !IsMoveInProgress
+              && block.Kind is MarkdownBlockKind.Paragraph
+                  or MarkdownBlockKind.ListItem
+                  or MarkdownBlockKind.TaskListItem;
+
+    internal bool CanOpenBlockActionsFromToolbar(MarkdownLiveBlockViewModel block) =>
+        block.IsMoveSelected
+            ? CanOpenSelectionActions
+            : block.IsMovable
+              && ActiveBlock is null
+              && !IsMoveInProgress
+              && SelectionActionAsync is not null;
+
+    internal bool CanConvertBlockToAreaFromToolbar(MarkdownLiveBlockViewModel block) =>
+        block.IsMoveSelected
+            ? CanConvertSelectionToArea
+            : CanOpenBlockActionsFromToolbar(block) && block.Kind == MarkdownBlockKind.Heading;
+
+    public Func<MarkdownLivePreviewEditorViewModel, IReadOnlyList<int>, MarkdownSelectionSemanticAction, CancellationToken, Task>? SelectionActionAsync
+    {
+        get => selectionActionAsync;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref selectionActionAsync, value);
+            RaiseMoveStateChanged();
+        }
+    }
 
     public FeedDraft? RecoveryDraft
     {
@@ -349,7 +566,7 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
                 draft.RelativePath,
                 draft.BlockIndex,
                 () => RecoveryDraft = null)
-            .ConfigureAwait(false);
+            .ConfigureAwait(true);
     }
 
     public Task FlushDraftPersistenceAsync()
@@ -413,6 +630,8 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
         ActiveBlock = null;
         Snapshot = documentSnapshot;
         Blocks.Clear();
+        moveSelectionIndices.Clear();
+        moveSelectionAnchorBlockIndex = null;
 
         var document = parser.Parse(documentSnapshot.Raw);
         foreach (var block in document.Blocks)
@@ -421,12 +640,406 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
         }
 
         ApplyReviewSelection();
+        ApplyMoveSelection();
 
         this.RaisePropertyChanged(nameof(HasDocument));
         this.RaisePropertyChanged(nameof(CanEdit));
         this.RaisePropertyChanged(nameof(CanRestoreRecoveryDraft));
         this.RaisePropertyChanged(nameof(IsRecoveryDraftStale));
         DirtyStateChanged?.Invoke(this, EventArgs.Empty);
+        RaiseMoveStateChanged();
+    }
+
+    public bool SelectMoveBlock(MarkdownLiveBlockViewModel block, bool toggle, bool extendRange)
+    {
+        ObjectDisposedException.ThrowIf(isDisposed, this);
+        ArgumentNullException.ThrowIfNull(block);
+        if (!ReferenceEquals(block.Owner, this) || !block.IsMovable || IsMoveInProgress)
+        {
+            return false;
+        }
+
+        MoveErrorMessage = null;
+        if (extendRange && moveSelectionAnchorBlockIndex is { } anchor)
+        {
+            if (!toggle)
+            {
+                moveSelectionIndices.Clear();
+            }
+
+            var start = Math.Min(anchor, block.Index);
+            var end = Math.Max(anchor, block.Index);
+            foreach (var candidate in Blocks.Where(candidate => candidate.IsMovable
+                         && candidate.Index >= start
+                         && candidate.Index <= end))
+            {
+                moveSelectionIndices.Add(candidate.Index);
+            }
+        }
+        else if (toggle)
+        {
+            if (!moveSelectionIndices.Remove(block.Index))
+            {
+                moveSelectionIndices.Add(block.Index);
+            }
+
+            moveSelectionAnchorBlockIndex = block.Index;
+        }
+        else
+        {
+            moveSelectionIndices.Clear();
+            moveSelectionIndices.Add(block.Index);
+            moveSelectionAnchorBlockIndex = block.Index;
+        }
+
+        NormalizeAreaSectionSelection();
+        ApplyMoveSelection();
+        RaiseMoveStateChanged();
+        return true;
+    }
+
+    public void SetPointerOverBlock(MarkdownLiveBlockViewModel block, bool value)
+    {
+        ObjectDisposedException.ThrowIf(isDisposed, this);
+        ArgumentNullException.ThrowIfNull(block);
+        if (ReferenceEquals(block.Owner, this))
+        {
+            block.SetPointerOver(value);
+        }
+    }
+
+    public void SetToolbarFlyoutOpen(MarkdownLiveBlockViewModel block, bool value)
+    {
+        ObjectDisposedException.ThrowIf(isDisposed, this);
+        ArgumentNullException.ThrowIfNull(block);
+        if (!ReferenceEquals(block.Owner, this))
+        {
+            return;
+        }
+
+        block.SetToolbarFlyoutOpen(value);
+    }
+
+    public void ClearMoveSelection()
+    {
+        moveSelectionIndices.Clear();
+        moveSelectionAnchorBlockIndex = null;
+        foreach (var block in Blocks)
+        {
+            block.SetMoveSelected(false);
+            block.SetMoveDropTarget(MarkdownMoveDropTarget.None);
+        }
+
+        RaiseMoveStateChanged();
+    }
+
+    public void SetMoveDropTarget(MarkdownLiveBlockViewModel? target, bool after)
+    {
+        foreach (var block in Blocks)
+        {
+            block.SetMoveDropTarget(ReferenceEquals(block, target) && !moveSelectionIndices.Contains(block.Index)
+                ? after ? MarkdownMoveDropTarget.After : MarkdownMoveDropTarget.Before
+                : MarkdownMoveDropTarget.None);
+        }
+    }
+
+    public Task<bool> MoveSelectionToTargetAsync(
+        MarkdownLiveBlockViewModel target,
+        bool after,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        if (!target.IsMovable || moveSelectionIndices.Contains(target.Index))
+        {
+            return Task.FromResult(false);
+        }
+
+        var insertBefore = after
+            ? Blocks.Where(candidate => candidate.IsMovable
+                        && candidate.Index > target.Index
+                        && !moveSelectionIndices.Contains(candidate.Index))
+                .Select(static candidate => (int?)candidate.Index)
+                .FirstOrDefault()
+            : target.Index;
+        return ExecuteMoveAsync(insertBefore, destinationArea: null, cancellationToken);
+    }
+
+    public Task<bool> MoveSelectionByOffsetAsync(int delta, CancellationToken cancellationToken = default)
+    {
+        var target = FindAdjacentMoveTarget(delta);
+        if (target is null)
+        {
+            return Task.FromResult(false);
+        }
+
+        return MoveSelectionToTargetAsync(target, after: delta > 0, cancellationToken);
+    }
+
+    public Task<bool> MoveSelectionToAreaAsync(
+        AreaReference? destinationArea,
+        CancellationToken cancellationToken = default) =>
+        ExecuteMoveAsync(insertBeforeBlockIndex: null, destinationArea, cancellationToken);
+
+    public async Task<bool> TransformSelectionAsync(
+        MarkdownBlockListStyle style,
+        CancellationToken cancellationToken = default)
+    {
+        var currentSnapshot = Snapshot;
+        var callback = CommitBlockAsync;
+        var selected = SelectedMoveBlocks().OrderBy(static block => block.Index).ToArray();
+        if (!CanTransformSelection || currentSnapshot is null || callback is null || selected.Length == 0)
+        {
+            return false;
+        }
+
+        IsMoveInProgress = true;
+        MoveErrorMessage = null;
+        await commitGate.WaitAsync(cancellationToken).ConfigureAwait(true);
+        try
+        {
+            var updated = currentSnapshot.Raw;
+            for (var ordinal = selected.Length - 1; ordinal >= 0; ordinal--)
+            {
+                var block = selected[ordinal];
+                var replacement = TransformListPrefix(block, style, ordinal + 1);
+                updated = updated[..block.Block.Start]
+                    + replacement
+                    + updated[(block.Block.Start + block.Block.Length)..];
+            }
+
+            if (string.Equals(updated, currentSnapshot.Raw, StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            var selectedIndices = selected.Select(static block => block.Index).ToArray();
+            var patch = new MarkdownBlockPatch(
+                currentSnapshot.RelativePath,
+                currentSnapshot.ExpectedRevisionHash,
+                currentSnapshot.HasUtf8Bom,
+                selectedIndices[0],
+                new MarkdownBlockTextRange(0, currentSnapshot.Raw.Length),
+                currentSnapshot.Raw,
+                updated,
+                updated);
+            var result = await callback(patch, cancellationToken).ConfigureAwait(true);
+            if (!result.IsAccepted
+                || result.Snapshot is not { } accepted
+                || !IsValidAcknowledgement(currentSnapshot, patch, accepted))
+            {
+                MoveErrorMessage = string.IsNullOrWhiteSpace(result.ErrorMessage)
+                    ? L10n.Get("MarkdownBlockSaveFailed")
+                    : result.ErrorMessage;
+                return false;
+            }
+
+            Load(accepted);
+            foreach (var index in selectedIndices.Where(index => index < Blocks.Count))
+            {
+                moveSelectionIndices.Add(index);
+            }
+
+            moveSelectionAnchorBlockIndex = selectedIndices[0];
+            ApplyMoveSelection();
+            RaiseMoveStateChanged();
+            CommitAccepted?.Invoke(accepted);
+            return true;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return false;
+        }
+        catch (Exception exception)
+        {
+            MoveErrorMessage = exception.Message;
+            return false;
+        }
+        finally
+        {
+            commitGate.Release();
+            IsMoveInProgress = false;
+        }
+    }
+
+    public async Task InvokeSelectionActionAsync(
+        MarkdownSelectionSemanticAction action,
+        CancellationToken cancellationToken = default)
+    {
+        var callback = SelectionActionAsync;
+        var indices = SelectedMoveBlocks().OrderBy(static block => block.Index).Select(static block => block.Index).ToArray();
+        if (callback is null
+            || indices.Length == 0
+            || action == MarkdownSelectionSemanticAction.ConvertHeadingToArea && !CanConvertSelectionToArea)
+        {
+            return;
+        }
+
+        MoveErrorMessage = null;
+        IsMoveInProgress = true;
+        try
+        {
+            await callback(this, indices, action, cancellationToken).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            MoveErrorMessage = exception.Message;
+        }
+        finally
+        {
+            IsMoveInProgress = false;
+        }
+    }
+
+    private IEnumerable<MarkdownLiveBlockViewModel> SelectedMoveBlocks() =>
+        Blocks.Where(block => moveSelectionIndices.Contains(block.Index));
+
+    private static string TransformListPrefix(
+        MarkdownLiveBlockViewModel block,
+        MarkdownBlockListStyle style,
+        int ordinal)
+    {
+        var raw = block.Block.Raw;
+        var lineEnd = raw.IndexOfAny(['\r', '\n']);
+        var firstLine = lineEnd < 0 ? raw : raw[..lineEnd];
+        var suffix = lineEnd < 0 ? string.Empty : raw[lineEnd..];
+        var match = Regex.Match(
+            firstLine,
+            @"^(?<indent>[ \t]*)(?:(?:[-+*]|\d+[.)])\s+(?:\[(?<state>[ xX])\]\s+)?)?(?<text>.*)$",
+            RegexOptions.CultureInvariant);
+        var indent = match.Groups["indent"].Value;
+        var text = match.Groups["text"].Value;
+        var completed = block.Kind == MarkdownBlockKind.TaskListItem && block.IsTaskCompleted;
+        var prefix = style switch
+        {
+            MarkdownBlockListStyle.Bulleted => "- ",
+            MarkdownBlockListStyle.Numbered => $"{ordinal}. ",
+            MarkdownBlockListStyle.Checklist => completed ? "- [x] " : "- [ ] ",
+            _ => throw new ArgumentOutOfRangeException(nameof(style), style, null)
+        };
+        return indent + prefix + text + suffix;
+    }
+
+    private async Task<bool> ExecuteMoveAsync(
+        int? insertBeforeBlockIndex,
+        AreaReference? destinationArea,
+        CancellationToken cancellationToken)
+    {
+        var currentSnapshot = Snapshot;
+        var callback = MoveBlocksAsync;
+        if (!CanMoveSelection || currentSnapshot is null || callback is null)
+        {
+            return false;
+        }
+
+        IsMoveInProgress = true;
+        MoveErrorMessage = null;
+        try
+        {
+            var selected = Blocks
+                .Where(block => moveSelectionIndices.Contains(block.Index))
+                .OrderBy(static block => block.Index)
+                .Select(static block => block.Index)
+                .ToArray();
+            var result = await callback(
+                new MarkdownBlocksMoveRequest(currentSnapshot, selected, insertBeforeBlockIndex, destinationArea),
+                cancellationToken).ConfigureAwait(true);
+            if (!result.IsAccepted || result.Snapshot is null || result.OutputBlockIndices is null)
+            {
+                MoveErrorMessage = string.IsNullOrWhiteSpace(result.ErrorMessage)
+                    ? L10n.Get("FeedBlockMoveFailed")
+                    : result.ErrorMessage;
+                return false;
+            }
+
+            Load(result.Snapshot);
+            foreach (var blockIndex in result.OutputBlockIndices)
+            {
+                moveSelectionIndices.Add(blockIndex);
+            }
+
+            moveSelectionAnchorBlockIndex = result.OutputBlockIndices.FirstOrDefault();
+            ApplyMoveSelection();
+            RaiseMoveStateChanged();
+            CommitAccepted?.Invoke(result.Snapshot);
+            return true;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return false;
+        }
+        catch (Exception exception)
+        {
+            MoveErrorMessage = exception.Message;
+            return false;
+        }
+        finally
+        {
+            IsMoveInProgress = false;
+            SetMoveDropTarget(null, after: false);
+        }
+    }
+
+    private MarkdownLiveBlockViewModel? FindAdjacentMoveTarget(int delta)
+    {
+        if (moveSelectionIndices.Count == 0 || delta == 0)
+        {
+            return null;
+        }
+
+        var movable = Blocks.Where(static block => block.IsMovable).ToArray();
+        return delta < 0
+            ? movable.LastOrDefault(block => block.Index < moveSelectionIndices.Min()
+                && !moveSelectionIndices.Contains(block.Index))
+            : movable.FirstOrDefault(block => block.Index > moveSelectionIndices.Max()
+                && !moveSelectionIndices.Contains(block.Index));
+    }
+
+    private void ApplyMoveSelection()
+    {
+        foreach (var block in Blocks)
+        {
+            block.SetMoveSelected(moveSelectionIndices.Contains(block.Index));
+        }
+    }
+
+    private void NormalizeAreaSectionSelection()
+    {
+        foreach (var headingIndex in moveSelectionIndices
+                     .Where(index => Blocks.FirstOrDefault(block => block.Index == index)?.Kind == MarkdownBlockKind.AreaHeading)
+                     .ToArray())
+        {
+            foreach (var candidate in Blocks.Where(candidate => candidate.Index > headingIndex))
+            {
+                if (candidate.Kind == MarkdownBlockKind.AreaHeading)
+                {
+                    break;
+                }
+
+                if (candidate.IsMovable)
+                {
+                    moveSelectionIndices.Add(candidate.Index);
+                }
+            }
+        }
+    }
+
+    private void RaiseMoveStateChanged()
+    {
+        this.RaisePropertyChanged(nameof(SelectedMoveBlockCount));
+        this.RaisePropertyChanged(nameof(HasMoveSelection));
+        this.RaisePropertyChanged(nameof(CanMoveSelection));
+        this.RaisePropertyChanged(nameof(CanMoveSelectionUp));
+        this.RaisePropertyChanged(nameof(CanMoveSelectionDown));
+        this.RaisePropertyChanged(nameof(CanTransformSelection));
+        this.RaisePropertyChanged(nameof(CanOpenSelectionActions));
+        this.RaisePropertyChanged(nameof(CanConvertSelectionToArea));
+        foreach (var block in Blocks)
+        {
+            block.RaiseToolbarStateChanged();
+        }
     }
 
     public void SetReviewSelection(
@@ -499,7 +1112,204 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
         ActiveBlock = block;
         block.BeginEdit();
         DirtyStateChanged?.Invoke(this, EventArgs.Empty);
+        RaiseMoveStateChanged();
         return true;
+    }
+
+    public MarkdownLiveBlockViewModel? BeginSessionBlockAfter(int sourceBlockIndex)
+    {
+        ObjectDisposedException.ThrowIf(isDisposed, this);
+        var sourcePosition = Blocks
+            .Select((block, position) => (block, position))
+            .FirstOrDefault(candidate => candidate.block.Index == sourceBlockIndex)
+            .position;
+        if (sourcePosition < 0
+            || sourcePosition >= Blocks.Count
+            || Blocks[sourcePosition].Index != sourceBlockIndex)
+        {
+            return null;
+        }
+
+        var source = Blocks[sourcePosition];
+        MarkdownLiveBlockViewModel sessionBlock;
+        if (sourcePosition + 1 < Blocks.Count
+            && Blocks[sourcePosition + 1].Kind == MarkdownBlockKind.Blank)
+        {
+            var blank = Blocks[sourcePosition + 1];
+            sessionBlock = new MarkdownLiveBlockViewModel(
+                this,
+                blank.Block,
+                blank.DocumentNewLine,
+                isSessionBlock: true,
+                sessionInsertionPrefix: blank.Block.Raw,
+                sessionInsertionSuffix: blank.DocumentNewLine);
+            Blocks[sourcePosition + 1] = sessionBlock;
+        }
+        else
+        {
+            var synthetic = new MarkdownBlock(
+                Blocks.Max(static block => block.Index) + 1,
+                MarkdownBlockKind.Paragraph,
+                string.Empty,
+                source.Block.Start + source.Block.Length,
+                0,
+                source.Block.LineNumber + 1);
+            sessionBlock = new MarkdownLiveBlockViewModel(
+                this,
+                synthetic,
+                source.DocumentNewLine,
+                isSessionBlock: true,
+                sessionInsertionPrefix: source.DocumentNewLine,
+                sessionInsertionSuffix: source.DocumentNewLine);
+            Blocks.Insert(sourcePosition + 1, sessionBlock);
+        }
+
+        return BeginEdit(sessionBlock) ? sessionBlock : null;
+    }
+
+    public async Task<bool> ToggleTaskCompletionAsync(
+        MarkdownLiveBlockViewModel requestedBlock,
+        CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(isDisposed, this);
+        ArgumentNullException.ThrowIfNull(requestedBlock);
+        if (!ReferenceEquals(requestedBlock.Owner, this)
+            || requestedBlock.Kind != MarkdownBlockKind.TaskListItem
+            || !CanEdit)
+        {
+            return false;
+        }
+
+        var requestedIndex = requestedBlock.Index;
+        if (ActiveBlock is not null && !ReferenceEquals(ActiveBlock, requestedBlock))
+        {
+            if (!await CommitActiveAsync(cancellationToken).ConfigureAwait(true))
+            {
+                return false;
+            }
+
+            requestedBlock = Blocks.FirstOrDefault(candidate => candidate.Index == requestedIndex)
+                ?? requestedBlock;
+        }
+
+        if (!BeginEdit(requestedBlock))
+        {
+            return false;
+        }
+
+        var replacementState = requestedBlock.IsTaskCompleted ? " " : "x";
+        requestedBlock.EditorText = Regex.Replace(
+            requestedBlock.EditorText,
+            @"^(?<prefix>[ \t]*[-+*]\s+\[)[ xX](?<suffix>\])",
+            match => match.Groups["prefix"].Value + replacementState + match.Groups["suffix"].Value,
+            RegexOptions.CultureInvariant);
+        return await CommitActiveAsync(cancellationToken).ConfigureAwait(true);
+    }
+
+    public async Task<MarkdownBlockMergeResult> MergeActiveWithPreviousAsync(
+        CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(isDisposed, this);
+        CancelPendingAutosave();
+        var block = ActiveBlock;
+        var currentSnapshot = Snapshot;
+        if (block is null || currentSnapshot is null || block.IsSessionBlock)
+        {
+            return new MarkdownBlockMergeResult(false, false);
+        }
+
+        var plan = mergeService.CreatePlan(currentSnapshot.Raw, block.Index, block.EditorText);
+        if (plan is null)
+        {
+            return new MarkdownBlockMergeResult(false, false);
+        }
+
+        var callback = CommitBlockAsync;
+        if (callback is null)
+        {
+            block.ErrorMessage = L10n.Get("MarkdownEditingUnavailable");
+            return new MarkdownBlockMergeResult(true, false);
+        }
+
+        using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken,
+            sessionCancellation.Token);
+        await commitGate.WaitAsync(linkedCancellation.Token);
+        try
+        {
+            if (!ReferenceEquals(block, ActiveBlock) || !ReferenceEquals(currentSnapshot, Snapshot))
+            {
+                return new MarkdownBlockMergeResult(true, false);
+            }
+
+            block.IsCommitInProgress = true;
+            block.ErrorMessage = null;
+            var patch = new MarkdownBlockPatch(
+                currentSnapshot.RelativePath,
+                currentSnapshot.ExpectedRevisionHash,
+                currentSnapshot.HasUtf8Bom,
+                plan.TargetBlockIndex,
+                new MarkdownBlockTextRange(plan.SelectionStart, plan.SelectionLength),
+                plan.OriginalRaw,
+                plan.ReplacementRaw,
+                plan.UpdatedDocumentRaw);
+            var result = await callback(patch, linkedCancellation.Token);
+            linkedCancellation.Token.ThrowIfCancellationRequested();
+            if (!result.IsAccepted || result.Snapshot is not { } acceptedSnapshot)
+            {
+                block.ErrorMessage = string.IsNullOrWhiteSpace(result.ErrorMessage)
+                    ? L10n.Get("MarkdownBlockSaveFailed")
+                    : result.ErrorMessage;
+                return new MarkdownBlockMergeResult(true, false);
+            }
+
+            if (!IsValidAcknowledgement(currentSnapshot, patch, acceptedSnapshot))
+            {
+                block.ErrorMessage = L10n.Get("MarkdownPatchAcknowledgementInvalid");
+                return new MarkdownBlockMergeResult(true, false);
+            }
+
+            var removedBlockIndex = block.Index;
+            hasDeferredCommitNotification = false;
+            Load(acceptedSnapshot);
+            await QueueDeleteDraftAsync(currentSnapshot.RelativePath, removedBlockIndex).ConfigureAwait(true);
+            var target = Blocks.FirstOrDefault(candidate =>
+                candidate.Index == plan.TargetBlockIndex && candidate.IsEditable);
+            if (target is null || !BeginEdit(target))
+            {
+                CommitAccepted?.Invoke(acceptedSnapshot);
+                return new MarkdownBlockMergeResult(true, true);
+            }
+
+            CommitAccepted?.Invoke(acceptedSnapshot);
+            return new MarkdownBlockMergeResult(true, true, target, plan.CaretIndex);
+        }
+        catch (OperationCanceledException) when (linkedCancellation.IsCancellationRequested)
+        {
+            return new MarkdownBlockMergeResult(true, false);
+        }
+        catch (Exception exception)
+        {
+            block.ErrorMessage = exception.Message;
+            return new MarkdownBlockMergeResult(true, false);
+        }
+        finally
+        {
+            block.IsCommitInProgress = false;
+            commitGate.Release();
+            RaiseMoveStateChanged();
+        }
+    }
+
+    public bool CanMergeActiveWithPrevious()
+    {
+        ObjectDisposedException.ThrowIf(isDisposed, this);
+        var block = ActiveBlock;
+        var currentSnapshot = Snapshot;
+        return block is not null
+            && currentSnapshot is not null
+            && !block.IsSessionBlock
+            && mergeService.CreatePlan(currentSnapshot.Raw, block.Index, block.EditorText) is not null;
     }
 
     public async Task<bool> CommitActiveAsync(CancellationToken cancellationToken = default)
@@ -537,7 +1347,7 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
                 block.AcceptCommit();
                 ActiveBlock = null;
                 Load(currentSnapshot);
-                await QueueDeleteDraftAsync(currentSnapshot.RelativePath, closedBlockIndex).ConfigureAwait(false);
+                await QueueDeleteDraftAsync(currentSnapshot.RelativePath, closedBlockIndex).ConfigureAwait(true);
                 if (notifyCommitAccepted)
                 {
                     CommitAccepted?.Invoke(currentSnapshot);
@@ -578,7 +1388,7 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
             var committedBlockIndex = block.Index;
             hasDeferredCommitNotification = false;
             Load(acceptedSnapshot);
-            await QueueDeleteDraftAsync(currentSnapshot.RelativePath, committedBlockIndex).ConfigureAwait(false);
+            await QueueDeleteDraftAsync(currentSnapshot.RelativePath, committedBlockIndex).ConfigureAwait(true);
             CommitAccepted?.Invoke(acceptedSnapshot);
             return true;
         }
@@ -595,6 +1405,7 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
         {
             block.IsCommitInProgress = false;
             commitGate.Release();
+            RaiseMoveStateChanged();
         }
     }
 
@@ -611,14 +1422,18 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
         if (currentSnapshot is not null && cancelledBlock is not null)
         {
             _ = QueueDeleteDraftAsync(currentSnapshot.RelativePath, cancelledBlock.Index);
-            if (notifyCommitAccepted)
+            if (notifyCommitAccepted || cancelledBlock.IsSessionBlock)
             {
                 Load(currentSnapshot);
-                CommitAccepted?.Invoke(currentSnapshot);
+                if (notifyCommitAccepted)
+                {
+                    CommitAccepted?.Invoke(currentSnapshot);
+                }
             }
         }
 
         DirtyStateChanged?.Invoke(this, EventArgs.Empty);
+        RaiseMoveStateChanged();
     }
 
     internal void NotifyBlockStateChanged(MarkdownLiveBlockViewModel block)
@@ -930,13 +1745,45 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
         try
         {
             await operation().ConfigureAwait(false);
-            DraftPersistenceError = null;
-            onSuccess?.Invoke();
+            await RunOnSynchronizationContextAsync(() =>
+            {
+                DraftPersistenceError = null;
+                onSuccess?.Invoke();
+            }).ConfigureAwait(false);
         }
         catch (Exception exception)
         {
-            DraftPersistenceError = exception.Message;
+            await RunOnSynchronizationContextAsync(
+                    () => DraftPersistenceError = exception.Message)
+                .ConfigureAwait(false);
         }
+    }
+
+    private Task RunOnSynchronizationContextAsync(Action action)
+    {
+        var context = synchronizationContext;
+        if (context is null || ReferenceEquals(SynchronizationContext.Current, context))
+        {
+            action();
+            return Task.CompletedTask;
+        }
+
+        var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        context.Post(
+            _ =>
+            {
+                try
+                {
+                    action();
+                    completion.TrySetResult(true);
+                }
+                catch (Exception exception)
+                {
+                    completion.TrySetException(exception);
+                }
+            },
+            null);
+        return completion.Task;
     }
 
     private void ReplaceSession()
@@ -1007,24 +1854,37 @@ public sealed class MarkdownLiveBlockViewModel : ReactiveObject
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     private readonly string newLine;
+    private readonly string sessionInsertionPrefix;
+    private readonly string sessionInsertionSuffix;
     private string editorText;
     private bool isEditing;
     private bool isCommitInProgress;
     private bool isReviewHighlighted;
     private bool isReviewAnchor;
+    private bool isFeedFilterVisible = true;
+    private bool isMoveSelected;
+    private bool isPointerOverBlock;
+    private bool isToolbarFlyoutOpen;
+    private MarkdownMoveDropTarget moveDropTarget;
     private string? errorMessage;
     private string? reviewSelectionAutomationName;
 
     internal MarkdownLiveBlockViewModel(
         MarkdownLivePreviewEditorViewModel owner,
         MarkdownBlock block,
-        string newLine)
+        string newLine,
+        bool isSessionBlock = false,
+        string sessionInsertionPrefix = "",
+        string sessionInsertionSuffix = "")
     {
         Owner = owner;
         Block = block;
         this.newLine = newLine;
+        this.sessionInsertionPrefix = sessionInsertionPrefix;
+        this.sessionInsertionSuffix = sessionInsertionSuffix;
+        IsSessionBlock = isSessionBlock;
         editorText = StripStructuralLineEnding(block.Raw);
-        RenderKind = Classify(block);
+        RenderKind = isSessionBlock ? MarkdownLiveBlockRenderKind.Paragraph : Classify(block);
         PreviewText = CreatePreviewText(block, RenderKind);
         InlineTokens = TokenizeInline(PreviewText);
     }
@@ -1033,7 +1893,11 @@ public sealed class MarkdownLiveBlockViewModel : ReactiveObject
 
     public MarkdownBlock Block { get; private set; }
 
+    public bool IsSessionBlock { get; }
+
     public int Index => Block.Index;
+
+    public string DocumentNewLine => newLine;
 
     public string BlockAutomationId => $"{Owner.AutomationIdPrefix}Block-{Index}";
 
@@ -1047,6 +1911,12 @@ public sealed class MarkdownLiveBlockViewModel : ReactiveObject
 
     public string SavingAutomationId => $"{Owner.AutomationIdPrefix}BlockSaving-{Index}";
 
+    public string MoveHandleAutomationId => $"{Owner.AutomationIdPrefix}BlockMoveHandle-{Index}";
+
+    public string ContextToolbarAutomationId => $"{Owner.AutomationIdPrefix}BlockToolbar-{Index}";
+
+    public string TaskCheckboxAutomationId => $"{Owner.AutomationIdPrefix}TaskCheckbox-{Index}";
+
     public string LinkAutomationId(int linkIndex) => $"{Owner.AutomationIdPrefix}Link-{Index}-{linkIndex}";
 
     public string BlockedLinkAutomationId(int linkIndex) => $"{Owner.AutomationIdPrefix}BlockedLink-{Index}-{linkIndex}";
@@ -1056,6 +1926,82 @@ public sealed class MarkdownLiveBlockViewModel : ReactiveObject
     public bool IsReviewHighlighted => isReviewHighlighted;
 
     public bool IsReviewAnchor => isReviewAnchor;
+
+    public bool IsFeedFilterVisible => isFeedFilterVisible;
+
+    internal void SetFeedFilterVisible(bool value)
+    {
+        this.RaiseAndSetIfChanged(ref isFeedFilterVisible, value, nameof(IsFeedFilterVisible));
+    }
+
+    public bool IsMoveSelected => isMoveSelected;
+
+    public bool IsPointerOverBlock => isPointerOverBlock;
+
+    public bool IsToolbarFlyoutOpen => isToolbarFlyoutOpen;
+
+    public bool IsContextToolbarVisible => !IsEditing
+        && (IsPointerOverBlock || IsMoveSelected || IsToolbarFlyoutOpen);
+
+    public bool CanMoveUpFromToolbar => Owner.CanMoveBlockFromToolbar(this, -1);
+
+    public bool CanMoveDownFromToolbar => Owner.CanMoveBlockFromToolbar(this, 1);
+
+    public bool CanTransformFromToolbar => Owner.CanTransformBlockFromToolbar(this);
+
+    public bool CanOpenActionsFromToolbar => Owner.CanOpenBlockActionsFromToolbar(this);
+
+    public bool CanConvertToAreaFromToolbar => Owner.CanConvertBlockToAreaFromToolbar(this);
+
+    public bool IsMoveDropBefore => moveDropTarget == MarkdownMoveDropTarget.Before;
+
+    public bool IsMoveDropAfter => moveDropTarget == MarkdownMoveDropTarget.After;
+
+    public string MoveDropAutomationStatus => moveDropTarget.ToString();
+
+    internal void SetMoveSelected(bool value)
+    {
+        this.RaiseAndSetIfChanged(ref isMoveSelected, value, nameof(IsMoveSelected));
+        this.RaisePropertyChanged(nameof(MoveHandleIdleOpacity));
+        this.RaisePropertyChanged(nameof(IsContextToolbarVisible));
+        RaiseToolbarStateChanged();
+    }
+
+    internal void SetPointerOver(bool value)
+    {
+        this.RaiseAndSetIfChanged(ref isPointerOverBlock, value, nameof(IsPointerOverBlock));
+        this.RaisePropertyChanged(nameof(MoveHandleIdleOpacity));
+        this.RaisePropertyChanged(nameof(IsContextToolbarVisible));
+    }
+
+    internal void SetToolbarFlyoutOpen(bool value)
+    {
+        this.RaiseAndSetIfChanged(ref isToolbarFlyoutOpen, value, nameof(IsToolbarFlyoutOpen));
+        this.RaisePropertyChanged(nameof(MoveHandleIdleOpacity));
+        this.RaisePropertyChanged(nameof(IsContextToolbarVisible));
+    }
+
+    internal void RaiseToolbarStateChanged()
+    {
+        this.RaisePropertyChanged(nameof(CanMoveUpFromToolbar));
+        this.RaisePropertyChanged(nameof(CanMoveDownFromToolbar));
+        this.RaisePropertyChanged(nameof(CanTransformFromToolbar));
+        this.RaisePropertyChanged(nameof(CanOpenActionsFromToolbar));
+        this.RaisePropertyChanged(nameof(CanConvertToAreaFromToolbar));
+    }
+
+    internal void SetMoveDropTarget(MarkdownMoveDropTarget value)
+    {
+        if (moveDropTarget == value)
+        {
+            return;
+        }
+
+        moveDropTarget = value;
+        this.RaisePropertyChanged(nameof(IsMoveDropBefore));
+        this.RaisePropertyChanged(nameof(IsMoveDropAfter));
+        this.RaisePropertyChanged(nameof(MoveDropAutomationStatus));
+    }
 
     public string? ReviewSelectionAutomationId => IsReviewAnchor
         ? "FeedReviewInlineAnchorText"
@@ -1077,6 +2023,20 @@ public sealed class MarkdownLiveBlockViewModel : ReactiveObject
 
     public bool IsEditable => RenderKind != MarkdownLiveBlockRenderKind.Blank;
 
+    public bool IsMovable => (Block.Kind is MarkdownBlockKind.Heading
+            or MarkdownBlockKind.AreaHeading
+            or MarkdownBlockKind.Paragraph
+            or MarkdownBlockKind.ListItem
+            or MarkdownBlockKind.TaskListItem
+            or MarkdownBlockKind.BlockQuote
+            or MarkdownBlockKind.FencedCode
+            or MarkdownBlockKind.HorizontalRule)
+        && Block.Kind is not MarkdownBlockKind.Raw
+        && !Block.Raw.Contains("unlimotion://task/", StringComparison.Ordinal)
+        && !Block.Raw.Contains("<!-- unlimotion-note:", StringComparison.Ordinal)
+        && !Block.Raw.Contains("<!-- unlimotion-recovery:", StringComparison.Ordinal)
+        && !Block.Raw.Contains("#^", StringComparison.Ordinal);
+
     public bool CanStartEdit => IsEditable && Owner.CanEdit;
 
     public bool IsPreviewVisible => !IsEditing;
@@ -1084,6 +2044,13 @@ public sealed class MarkdownLiveBlockViewModel : ReactiveObject
     public bool IsRawFallback => RenderKind == MarkdownLiveBlockRenderKind.RawFallback;
 
     public bool IsTaskCompleted => Block.IsTaskCompleted == true;
+
+    public bool IsAreaHeading => Block.Kind == MarkdownBlockKind.AreaHeading;
+
+    public string MoveHandleContent => IsAreaHeading ? "◈" : "⋮⋮";
+
+    public double MoveHandleIdleOpacity =>
+        IsAreaHeading || IsMoveSelected || IsPointerOverBlock || IsToolbarFlyoutOpen ? 1 : 0;
 
     public int HeadingLevel => Block.HeadingLevel;
 
@@ -1142,6 +2109,7 @@ public sealed class MarkdownLiveBlockViewModel : ReactiveObject
         {
             this.RaiseAndSetIfChanged(ref isEditing, value);
             this.RaisePropertyChanged(nameof(IsPreviewVisible));
+            this.RaisePropertyChanged(nameof(IsContextToolbarVisible));
         }
     }
 
@@ -1202,7 +2170,9 @@ public sealed class MarkdownLiveBlockViewModel : ReactiveObject
 
     internal MarkdownBlockPatch CreatePatch(MarkdownLiveDocumentSnapshot snapshot)
     {
-        var replacement = NormalizeNewLines(EditorText, newLine) + GetStructuralLineEnding(Block.Raw);
+        var replacement = IsSessionBlock
+            ? sessionInsertionPrefix + NormalizeNewLines(EditorText, newLine) + sessionInsertionSuffix
+            : NormalizeNewLines(EditorText, newLine) + GetStructuralLineEnding(Block.Raw);
         var selection = new MarkdownBlockTextRange(Block.Start, Block.Length);
         var patch = new MarkdownBlockPatch(
             snapshot.RelativePath,

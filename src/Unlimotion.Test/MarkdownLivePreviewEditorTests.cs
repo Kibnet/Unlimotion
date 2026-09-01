@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Unlimotion.Notes.Markdown;
 using Unlimotion.Notes.Recovery;
 using Unlimotion.ViewModel.Feed;
 
@@ -275,6 +276,39 @@ public class MarkdownLivePreviewEditorTests
         await Assert.That(block.IsDirty).IsTrue();
         await Assert.That(block.ErrorMessage).IsEqualTo("Файл изменён снаружи.");
         await Assert.That(editor.Snapshot!.Raw).IsEqualTo(raw);
+    }
+
+    [Test]
+    public async Task RejectedMerge_KeepsCurrentBlockAndDurableDraftForConflictRecovery()
+    {
+        const string raw = "Альфа\n\nБета\n";
+        var drafts = new MemoryFeedDraftStore();
+        using var editor = new MarkdownLivePreviewEditorViewModel();
+        editor.ConfigureDraftPersistence("vault1", drafts);
+        editor.CommitBlockAsync = (_, _) =>
+            Task.FromResult(MarkdownBlockCommitResult.Rejected("Файл изменён снаружи."));
+        editor.Load(new MarkdownLiveDocumentSnapshot(raw, "revision-1", false, "note.md"));
+        var current = editor.Blocks.Last(static block => block.Kind == MarkdownBlockKind.Paragraph);
+
+        editor.BeginEdit(current);
+        current.EditorText = "Версия редактора";
+        await editor.FlushDraftPersistenceAsync();
+        var result = await editor.MergeActiveWithPreviousAsync();
+        await editor.FlushDraftPersistenceAsync();
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(result.IsApplicable).IsTrue();
+            await Assert.That(result.IsMerged).IsFalse();
+            await Assert.That(editor.ActiveBlock).IsSameReferenceAs(current);
+            await Assert.That(current.IsDirty).IsTrue();
+            await Assert.That(current.ErrorMessage).IsEqualTo("Файл изменён снаружи.");
+            await Assert.That(editor.Snapshot!.Raw).IsEqualTo(raw);
+        }
+
+        var draft = (await drafts.ListAsync("vault1")).Single();
+        await Assert.That(draft.BaseRevision).IsEqualTo("revision-1");
+        await Assert.That(draft.RawMarkdown).IsEqualTo("Версия редактора");
     }
 
     [Test]

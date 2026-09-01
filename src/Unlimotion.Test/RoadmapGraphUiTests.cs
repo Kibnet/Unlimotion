@@ -2661,11 +2661,12 @@ public class RoadmapGraphUiTests
                 vm.AllTasksMode = false;
                 vm.GraphMode = true;
 
-                var view = new MainControl { DataContext = vm };
-                window = CreateWindow(view);
+                var shell = new MainScreen { DataContext = vm };
+                window = CreateWindow(shell);
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
 
+                var view = shell.GetVisualDescendants().OfType<MainControl>().Single();
                 graphControl = OpenRoadmapTabAndWaitForGraphControl(view);
                 await Assert.That(graphControl).IsNotNull();
                 var selectedTask = TestHelpers.GetTask(vm, MainWindowViewModelFixture.RootTask2Id);
@@ -2676,7 +2677,7 @@ public class RoadmapGraphUiTests
                 await Assert.That(vm.CurrentTaskItem?.Id).IsEqualTo(selectedTask.Id);
 
                 var countBefore = vm.taskRepository!.Tasks.Count;
-                ExecuteCreateCommandThroughMenu(view, "GlobalTaskCreateTaskMenuItem");
+                ExecuteCreateCommandThroughMenu(shell, "GlobalTaskCreateTaskMenuItem");
                 await Assert.That(WaitFor(() => vm.taskRepository.Tasks.Count == countBefore + 1)).IsTrue();
                 var rootCreated = vm.CurrentTaskItem;
                 await Assert.That(rootCreated).IsNotNull();
@@ -2685,20 +2686,20 @@ public class RoadmapGraphUiTests
                 await ClickControlAsync(window, selectedNode);
                 await Assert.That(vm.CurrentTaskItem?.Id).IsEqualTo(selectedTask.Id);
                 countBefore = vm.taskRepository.Tasks.Count;
-                ExecuteCreateCommandThroughMenu(view, "GlobalTaskCreateSiblingMenuItem");
+                ExecuteCreateCommandThroughMenu(shell, "GlobalTaskCreateSiblingMenuItem");
                 await Assert.That(WaitFor(() => vm.taskRepository.Tasks.Count == countBefore + 1)).IsTrue();
 
                 await ClickControlAsync(window, selectedNode);
                 await Assert.That(vm.CurrentTaskItem?.Id).IsEqualTo(selectedTask.Id);
                 countBefore = vm.taskRepository.Tasks.Count;
-                ExecuteCreateCommandThroughMenu(view, "GlobalTaskCreateBlockedSiblingMenuItem");
+                ExecuteCreateCommandThroughMenu(shell, "GlobalTaskCreateBlockedSiblingMenuItem");
                 await Assert.That(WaitFor(() => vm.taskRepository.Tasks.Count == countBefore + 1)).IsTrue();
                 await Assert.That(selectedTask.Blocks).Contains(vm.CurrentTaskItem!.Id);
 
                 await ClickControlAsync(window, selectedNode);
                 await Assert.That(vm.CurrentTaskItem?.Id).IsEqualTo(selectedTask.Id);
                 countBefore = vm.taskRepository.Tasks.Count;
-                ExecuteCreateCommandThroughMenu(view, "GlobalTaskCreateInnerMenuItem");
+                ExecuteCreateCommandThroughMenu(shell, "GlobalTaskCreateInnerMenuItem");
                 await Assert.That(WaitFor(() => vm.taskRepository.Tasks.Count == countBefore + 1)).IsTrue();
                 await Assert.That(selectedTask.Contains).Contains(vm.CurrentTaskItem!.Id);
 
@@ -3263,14 +3264,19 @@ public class RoadmapGraphUiTests
     private static void ExecuteCreateCommandThroughMenu(Control root, string menuItemAutomationId)
     {
         var createMenuButton = root.GetVisualDescendants()
-            .OfType<DropDownButton>()
-            .First(button =>
+            .OfType<Button>()
+            .FirstOrDefault(button =>
                 string.Equals(
                     AutomationProperties.GetAutomationId(button),
-                    "GlobalTaskCreateMenuButton",
+                    "GlobalCreateMenuButton",
                     StringComparison.Ordinal) &&
                 button.IsVisible &&
                 button.IsEnabled);
+
+        if (createMenuButton is null)
+        {
+            throw new InvalidOperationException("Visible global create menu button was not found.");
+        }
 
         if (createMenuButton.Flyout is not MenuFlyout menuFlyout)
         {

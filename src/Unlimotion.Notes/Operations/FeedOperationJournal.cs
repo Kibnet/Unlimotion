@@ -9,7 +9,8 @@ namespace Unlimotion.Notes.Operations;
 public enum FeedOperationKind
 {
     NoteExtraction,
-    MoveToToday
+    MoveToToday,
+    HeadingAreaConversion
 }
 
 public enum FeedOperationState
@@ -59,7 +60,12 @@ public sealed record FeedOperationRecoveryDescriptor(
     string? ReviewSessionId = null,
     IReadOnlyList<BlockLocator>? InputLocators = null,
     IReadOnlyList<BlockLocator>? SourceOutputLocators = null,
-    IReadOnlyList<BlockLocator>? DestinationOutputLocators = null);
+    IReadOnlyList<BlockLocator>? DestinationOutputLocators = null,
+    string? AreaId = null,
+    string? AreaName = null,
+    string? ParentAreaId = null,
+    bool? CreateArea = null,
+    string? CanonicalReplacement = null);
 
 public sealed class FeedOperationRecoveryConflictException(
     string vaultId,
