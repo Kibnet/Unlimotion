@@ -12,6 +12,7 @@ public sealed record TaskOperationResult
     public TaskAvailabilityAnalysis? Before { get; init; }
     public TaskAvailabilityAnalysis? After { get; init; }
     public TaskGraphValidationReport? Validation { get; init; }
+    public long StorageRevision { get; init; }
 
     public static TaskOperationResult Succeeded(
         IReadOnlyList<TaskItem> changedTasks,

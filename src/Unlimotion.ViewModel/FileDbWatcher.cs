@@ -8,18 +8,19 @@ using Unlimotion.TaskTree;
 
 namespace Unlimotion.ViewModel
 {
-    public class FileDbWatcher : IDatabaseWatcher
+    public class FileDbWatcher : IDatabaseWatcher, IRawDatabaseWatcher, IDisposable
     {
         private const string GitFolderName = ".git";
         private const string GitLockPostfix = ".lock";
         private const string GitOrigPostfix = ".orig";
-        private readonly MemoryCache ignoredTasks = MemoryCache.Default;
         private readonly FileSystemWatcher? watcher;
-        private readonly object itLock = new();
         public event EventHandler<DbUpdatedEventArgs>? OnUpdated;
+        public event EventHandler<DbUpdatedEventArgs>? OnRawUpdated;
+        public event EventHandler? OnInvalidated;
         private readonly MemoryCache cache = new("EventThrottlerCache");
         private readonly TimeSpan throttlePeriod = TimeSpan.FromSeconds(1);
         private bool isEnable;
+        private bool isDisposed;
     private readonly INotificationManagerWrapper? _notificationManager;
     private readonly object itLockEnable = new();
 
@@ -27,21 +28,23 @@ namespace Unlimotion.ViewModel
         {
             lock (itLockEnable)
             {
+                if (isDisposed)
+                    return;
                 isEnable = enable;
-                if (watcher != null)
-                {
-                    watcher.EnableRaisingEvents = enable;
-                }
             }
         }
 
         public void ForceUpdateFile(string filename, UpdateType type)
         {
-            OnUpdated?.Invoke(this, new DbUpdatedEventArgs
+            if (isDisposed)
+                return;
+            var args = new DbUpdatedEventArgs
             {
                 Id = filename,
                 Type = type
-            });
+            };
+            OnRawUpdated?.Invoke(this, args);
+            OnUpdated?.Invoke(this, args);
         }
 
         public FileDbWatcher(string path, INotificationManagerWrapper? notificationManager = null)
@@ -63,6 +66,19 @@ namespace Unlimotion.ViewModel
             watcher.Changed += throttle;
             watcher.Created += throttle;
             watcher.Deleted += throttle;
+            watcher.Renamed += (sender, args) =>
+            {
+                RegisterRawUpdate(args.OldName, UpdateType.Removed);
+                RegisterRawUpdate(args.Name, UpdateType.Saved);
+                throttle(sender, new FileSystemEventArgs(
+                    WatcherChangeTypes.Deleted,
+                    Path.GetDirectoryName(args.OldFullPath) ?? string.Empty,
+                    args.OldName ?? string.Empty));
+                throttle(sender, new FileSystemEventArgs(
+                    WatcherChangeTypes.Created,
+                    Path.GetDirectoryName(args.FullPath) ?? string.Empty,
+                    args.Name ?? string.Empty));
+            };
 
             //todo Добавить логер и логировать ошибки
             watcher.Error += OnError;
@@ -73,16 +89,17 @@ namespace Unlimotion.ViewModel
 
         public void AddIgnoredTask(string taskId)
         {
-            lock (itLock)
-            {
-                ignoredTasks.Add(taskId, itLock,  new CacheItemPolicy { SlidingExpiration = TimeSpan.FromSeconds(60) });
-                Debug.WriteLine($"{DateTimeOffset.Now}: ${taskId} is added to ignored");
-            }
+            // Own writes are deduplicated by the storage's confirmed content snapshot.
+            // Do not suppress by file name: an external edit can follow immediately.
+            Debug.WriteLine($"{DateTimeOffset.Now}: ${taskId} was written by this storage");
         }
 
         private void OnError(object sender, ErrorEventArgs e)
         {
+            if (isDisposed)
+                return;
             Debug.WriteLine("Error in FileWatcher");
+            OnInvalidated?.Invoke(this, EventArgs.Empty);
             _notificationManager?.ErrorToast(L10n.Format("FileWatcherError", e.GetException().Message));
 
         }
@@ -92,14 +109,18 @@ namespace Unlimotion.ViewModel
         {
             return (s, e) =>
             {
-                if (!isEnable)
-                    return;
-
                 var fullPath = e.FullPath;
                 
                 if (fullPath.Contains(GitFolderName) ||
                     fullPath.EndsWith(GitOrigPostfix) ||
                     IsStorageServiceArtifact(e.Name))
+                    return;
+
+                RegisterRawUpdate(
+                    e.Name,
+                    e.ChangeType == WatcherChangeTypes.Deleted ? UpdateType.Removed : UpdateType.Saved);
+
+                if (!isEnable)
                     return;
                 
                 if (fullPath.EndsWith(GitLockPostfix)) 
@@ -116,15 +137,6 @@ namespace Unlimotion.ViewModel
         {
             if (!isEnable)
                 return;
-
-            lock (itLock)
-            {
-                var fileInfo = new FileInfo(e.FullPath);
-                if (ignoredTasks.Contains(fileInfo.Name))
-                {
-                    return;
-                }
-            }
 
             switch (e.ChangeType)
             {
@@ -147,6 +159,20 @@ namespace Unlimotion.ViewModel
             Debug.WriteLine($"{DateTimeOffset.Now}: {e.FullPath} {e.ChangeType}.");
         }
 
+        private void RegisterRawUpdate(string? fileName, UpdateType type)
+        {
+            if (isDisposed || string.IsNullOrWhiteSpace(fileName) || IsStorageServiceArtifact(fileName))
+            {
+                return;
+            }
+
+            OnRawUpdated?.Invoke(this, new DbUpdatedEventArgs
+            {
+                Id = fileName,
+                Type = type
+            });
+        }
+
         private static bool IsStorageServiceArtifact(string? fileName) =>
             string.IsNullOrWhiteSpace(fileName) ||
             fileName.Equals(".unlimotion.lock", StringComparison.OrdinalIgnoreCase) ||
@@ -165,6 +191,26 @@ namespace Unlimotion.ViewModel
                     Task.Run(handler);
                 }
             };
+        }
+
+        public void Dispose()
+        {
+            lock (itLockEnable)
+            {
+                if (isDisposed)
+                    return;
+
+                isDisposed = true;
+                isEnable = false;
+            }
+
+            if (watcher != null)
+            {
+                watcher.EnableRaisingEvents = false;
+                watcher.Dispose();
+            }
+
+            cache.Dispose();
         }
     }
 }

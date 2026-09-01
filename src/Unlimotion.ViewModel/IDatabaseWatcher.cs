@@ -9,3 +9,9 @@ public interface IDatabaseWatcher
     public void SetEnable(bool enable);
     public void ForceUpdateFile(string filename, UpdateType type);
 }
+
+public interface IRawDatabaseWatcher
+{
+    public event EventHandler<DbUpdatedEventArgs> OnRawUpdated;
+    public event EventHandler OnInvalidated;
+}

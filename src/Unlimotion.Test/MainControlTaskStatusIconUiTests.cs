@@ -924,57 +924,171 @@ public class MainControlTaskStatusIconUiTests
     }
 
     [Test]
+    public async Task TaskStatusPicker_ImmediateRepeatingCompletion_PreservesEditorFieldsAndCreatesNextTask()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var storage = new InMemoryStorage();
+            var repository = new UnifiedTaskStorage(new TaskTreeManager(storage));
+            var storedTask = new TaskItem
+            {
+                Id = "status-picker-immediate-repeat",
+                Status = DomainTaskStatus.Prepared,
+                IsCanBeCompleted = true
+            };
+            storedTask.EnsureStatusHistory("owner");
+            await storage.Save(storedTask);
+            await repository.Init();
+            Window? window = null;
+
+            try
+            {
+                var task = repository.Tasks.Lookup(storedTask.Id).Value;
+                task.IsInitializedProvider = () => true;
+                var plannedBegin = DateTime.Now.AddDays(-1);
+                task.Title = "Daily review";
+                task.PlannedBeginDateTime = plannedBegin;
+                task.Repeater = new RepeaterPatternViewModel
+                {
+                    Type = RepeaterType.Daily,
+                    Period = 1
+                };
+                var statusPicker = new TaskStatusPicker
+                {
+                    Task = task,
+                    Width = 28,
+                    Height = 24
+                };
+
+                window = CreateWindow(statusPicker);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+                var flyout = await OpenStatusFlyoutAsync(window, statusPicker);
+                var completedItem = flyout.Items
+                    .OfType<MenuItem>()
+                    .Single(item => string.Equals(
+                        AutomationProperties.GetAutomationId(item),
+                        "TaskStatusOptionCompleted",
+                        StringComparison.Ordinal));
+
+                InvokeMenuItemClick(completedItem);
+
+                var completed = await TestHelpers.WaitUntilAsync(() =>
+                {
+                    Dispatcher.UIThread.RunJobs();
+                    return task.Status == DomainTaskStatus.Completed && repository.Tasks.Count == 2;
+                }, TimeSpan.FromSeconds(2));
+                var next = repository.Tasks.Items.Single(item => item.Id != task.Id);
+
+                using (Assert.Multiple())
+                {
+                    await Assert.That(completed).IsTrue();
+                    await Assert.That(task.Title).IsEqualTo("Daily review");
+                    await Assert.That(task.PlannedBeginDateTime).IsEqualTo(plannedBegin);
+                    await Assert.That(task.Repeater?.Type).IsEqualTo(RepeaterType.Daily);
+                    await Assert.That(next.Title).IsEqualTo("Daily review");
+                    await Assert.That(next.Status).IsEqualTo(DomainTaskStatus.Prepared);
+                    await Assert.That(next.PlannedBeginDateTime).IsEqualTo(plannedBegin.AddDays(1));
+                    await Assert.That(next.Repeater?.Type).IsEqualTo(RepeaterType.Daily);
+                }
+            }
+            finally
+            {
+                window?.Close();
+                repository.Dispose();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
     public async Task TaskStatusPickerFlyout_EnablesCompletedOptionAfterCriterionIsSatisfied()
     {
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
-            var task = new TaskItemViewModel(
-                new TaskItem
+            var storage = new InMemoryStorage();
+            var repository = new UnifiedTaskStorage(new TaskTreeManager(storage));
+            var storedTask = new TaskItem
+            {
+                Id = "status-picker-criteria-task",
+                Title = "Status picker criteria task",
+                Status = DomainTaskStatus.Prepared,
+                IsCanBeCompleted = true,
+                CompletionCriteria =
+                [
+                    new TaskCompletionCriterion
+                    {
+                        Text = "Проверить результат",
+                        IsSatisfied = false
+                    }
+                ]
+            };
+            storedTask.EnsureStatusHistory("owner");
+            await storage.Save(storedTask);
+            await repository.Init();
+            var task = repository.Tasks.Lookup(storedTask.Id).Value;
+            task.IsInitializedProvider = () => true;
+            var statusPicker = new TaskStatusPicker
+            {
+                Task = task,
+                Width = 28,
+                Height = 24
+            };
+            Window? window = null;
+
+            try
+            {
+                window = CreateWindow(statusPicker);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+                var flyout = await OpenStatusFlyoutAsync(window, statusPicker);
+                var completedItem = flyout.Items
+                    .OfType<MenuItem>()
+                    .SingleOrDefault(item =>
+                        string.Equals(
+                            AutomationProperties.GetAutomationId(item),
+                            "TaskStatusOptionCompleted",
+                            StringComparison.Ordinal));
+
+                await Assert.That(completedItem).IsNotNull();
+                await Assert.That(completedItem!.IsEnabled).IsFalse();
+                await Assert.That(AutomationProperties.GetHelpText(completedItem)).IsNotEmpty();
+                flyout.Hide();
+
+                task.CompletionCriteria.Single().IsSatisfied = true;
+                Dispatcher.UIThread.RunJobs();
+
+                await Assert.That(task.StatusOptions.Single(option => option.Status == DomainTaskStatus.Completed).IsEnabled)
+                    .IsTrue();
+                flyout = await OpenStatusFlyoutAsync(window, statusPicker);
+                completedItem = flyout.Items
+                    .OfType<MenuItem>()
+                    .Single(item =>
+                        string.Equals(
+                            AutomationProperties.GetAutomationId(item),
+                            "TaskStatusOptionCompleted",
+                            StringComparison.Ordinal));
+                await Assert.That(completedItem.IsEnabled).IsTrue();
+                await Assert.That(AutomationProperties.GetHelpText(completedItem)).IsEmpty();
+
+                InvokeMenuItemClick(completedItem);
+                var completed = await TestHelpers.WaitUntilAsync(() =>
                 {
-                    Id = "status-picker-criteria-task",
-                    Title = "Status picker criteria task",
-                    Status = DomainTaskStatus.Prepared,
-                    IsCanBeCompleted = true,
-                    CompletionCriteria =
-                    [
-                        new TaskCompletionCriterion
-                        {
-                            Text = "Проверить результат",
-                            IsSatisfied = false
-                        }
-                    ]
-                },
-                new UnifiedTaskStorage(new TaskTreeManager(new InMemoryStorage())),
-                () => false);
-            var flyout = BuildStatusFlyout(task);
-            var completedItem = flyout.Items
-                .OfType<MenuItem>()
-                .SingleOrDefault(item =>
-                    string.Equals(
-                        AutomationProperties.GetAutomationId(item),
-                        "TaskStatusOptionCompleted",
-                        StringComparison.Ordinal));
+                    Dispatcher.UIThread.RunJobs();
+                    return task.Status == DomainTaskStatus.Completed;
+                }, TimeSpan.FromSeconds(2));
+                var persisted = await storage.Load(task.Id);
 
-            await Assert.That(completedItem).IsNotNull();
-            await Assert.That(completedItem!.IsEnabled).IsFalse();
-            await Assert.That(AutomationProperties.GetHelpText(completedItem)).IsNotEmpty();
-
-            task.CompletionCriteria.Single().IsSatisfied = true;
-            Dispatcher.UIThread.RunJobs();
-
-            await Assert.That(task.StatusOptions.Single(option => option.Status == DomainTaskStatus.Completed).IsEnabled)
-                .IsTrue();
-            flyout = BuildStatusFlyout(task);
-            completedItem = flyout.Items
-                .OfType<MenuItem>()
-                .Single(item =>
-                    string.Equals(
-                        AutomationProperties.GetAutomationId(item),
-                        "TaskStatusOptionCompleted",
-                        StringComparison.Ordinal));
-            await Assert.That(completedItem.IsEnabled).IsTrue();
-            await Assert.That(AutomationProperties.GetHelpText(completedItem)).IsEmpty();
+                await Assert.That(completed).IsTrue();
+                await Assert.That(persisted?.Status).IsEqualTo(DomainTaskStatus.Completed);
+                await Assert.That(persisted?.CompletionCriteria.Single().IsSatisfied).IsTrue();
+            }
+            finally
+            {
+                window?.Close();
+                repository.Dispose();
+            }
         }, CancellationToken.None);
     }
 
@@ -1360,8 +1474,11 @@ public class MainControlTaskStatusIconUiTests
             return Task.FromResult(change);
         }
 
-        public Task<TaskItemViewModel> Update(TaskItem change) =>
-            throw new NotSupportedException();
+        public Task<TaskItemViewModel> Update(TaskItem change)
+        {
+            UpdateAccessChecks.Add(Dispatcher.UIThread.CheckAccess());
+            return Task.FromResult<TaskItemViewModel>(null!);
+        }
 
         public Task<TaskOperationResult> TrySetStatusAsync(
             string taskId,

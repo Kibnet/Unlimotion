@@ -99,6 +99,278 @@ public sealed class TaskItemViewModelStatusCommandTests
     }
 
     [Test]
+    public async Task DelayedStatusResult_DoesNotOverwriteNewerStorageGeneration()
+    {
+        using var storage = new ScriptedTaskStorage();
+        var task = CreateTask("generation-order", DomainTaskStatus.Prepared);
+        storage.Seed(task);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        storage.StatusHandler = async (taskId, requestedStatus, author) =>
+        {
+            started.TrySetResult();
+            await release.Task;
+            return storage.CreateSuccess(taskId, requestedStatus, author) with { StorageRevision = 10 };
+        };
+        using var viewModel = new TaskItemViewModel(task, storage, () => false);
+
+        var transition = viewModel.TryTransitionToStatusAsync(DomainTaskStatus.InProgress, "tester");
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var newer = TaskItemSnapshot.Clone(task);
+        newer.Status = DomainTaskStatus.Completed;
+        viewModel.Update(newer, storageRevision: 11);
+
+        release.TrySetResult();
+        var result = await transition.WaitAsync(TimeSpan.FromSeconds(5));
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(result.Success).IsTrue();
+            await Assert.That(result.AuthoritativeTask?.Status).IsEqualTo(DomainTaskStatus.InProgress);
+            await Assert.That(viewModel.Status).IsEqualTo(DomainTaskStatus.Completed);
+        }
+    }
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task EditDuringStatusCommand_IsMergedAndDrainedBeforeCompletion(bool sealDuringCommand)
+    {
+        using var storage = new ScriptedTaskStorage();
+        var task = CreateTask("editor-race", DomainTaskStatus.Prepared);
+        storage.Seed(task);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        storage.StatusHandler = async (taskId, requestedStatus, author) =>
+        {
+            started.TrySetResult();
+            await release.Task;
+            return storage.CreateSuccess(taskId, requestedStatus, author);
+        };
+        using var viewModel = new TaskItemViewModel(task, storage, () => true);
+        viewModel.Title = "Before command";
+
+        var transition = viewModel.TryTransitionToStatusAsync(DomainTaskStatus.Completed, "tester");
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        viewModel.Title = "Edited while command is pending";
+        viewModel.Repeater = new RepeaterPatternViewModel
+        {
+            Type = RepeaterType.Daily,
+            Period = 1
+        };
+        var sealedSaves = sealDuringCommand ? viewModel.SealPendingSaves() : Task.CompletedTask;
+
+        release.TrySetResult();
+        var result = await transition.WaitAsync(TimeSpan.FromSeconds(5));
+        await sealedSaves.WaitAsync(TimeSpan.FromSeconds(5));
+        var persisted = storage.Snapshot(task.Id);
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(result.Success).IsTrue();
+            await Assert.That(viewModel.Status).IsEqualTo(DomainTaskStatus.Completed);
+            await Assert.That(viewModel.Title).IsEqualTo("Edited while command is pending");
+            await Assert.That(viewModel.Repeater?.Type).IsEqualTo(RepeaterType.Daily);
+            await Assert.That(persisted.Status).IsEqualTo(DomainTaskStatus.Completed);
+            await Assert.That(persisted.Title).IsEqualTo("Edited while command is pending");
+            await Assert.That(persisted.Repeater?.Type).IsEqualTo(RepeaterType.Daily);
+        }
+    }
+
+    [Test]
+    public async Task EditorFlushFailureBeforeStatusCommand_ReturnsControlledFailureAndRemainsRetryable()
+    {
+        using var storage = new ScriptedTaskStorage();
+        var task = CreateTask("editor-preflush-failure", DomainTaskStatus.Prepared);
+        storage.Seed(task);
+        storage.UpdateHandler = _ => Task.FromException(new InvalidOperationException("controlled editor save failure"));
+        using var viewModel = new TaskItemViewModel(task, storage, () => true);
+        viewModel.Title = "Unsaved title";
+
+        var result = await viewModel.TryTransitionToStatusAsync(
+            DomainTaskStatus.Completed,
+            "tester").WaitAsync(TimeSpan.FromSeconds(5));
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(result.Success).IsFalse();
+            await Assert.That(result.DeniedReason?.Kind).IsEqualTo(TaskOperationDeniedKind.StorageFailed);
+            await Assert.That(storage.StatusCalls).IsEmpty();
+            await Assert.That(storage.Snapshot(task.Id).Title).IsEqualTo(task.Title);
+        }
+
+        storage.UpdateHandler = null;
+        await viewModel.SaveItemCommand.Execute().ToTask().WaitAsync(TimeSpan.FromSeconds(5));
+        await Assert.That(storage.Snapshot(task.Id).Title).IsEqualTo("Unsaved title");
+
+        viewModel.Description = "New edit after successful retry";
+        await viewModel.SealPendingSaves().WaitAsync(TimeSpan.FromSeconds(5));
+        await Assert.That(storage.Snapshot(task.Id).Description)
+            .IsEqualTo("New edit after successful retry");
+    }
+
+    [Test]
+    public async Task SealPendingSaves_FlushesThrottledEditorRevisionBeforeTeardown()
+    {
+        using var storage = new ScriptedTaskStorage();
+        var task = CreateTask("sealed-throttled-editor", DomainTaskStatus.Prepared);
+        storage.Seed(task);
+        using var viewModel = new TaskItemViewModel(task, storage, () => true);
+        viewModel.Title = "Saved by lifecycle seal";
+
+        await viewModel.SealPendingSaves().WaitAsync(TimeSpan.FromSeconds(5));
+
+        await Assert.That(storage.Snapshot(task.Id).Title)
+            .IsEqualTo("Saved by lifecycle seal");
+    }
+
+    [Test]
+    public async Task SealPendingSaves_WhenFinalEditorFlushFails_FaultsTeardown()
+    {
+        using var storage = new ScriptedTaskStorage();
+        var task = CreateTask("sealed-throttled-editor-failure", DomainTaskStatus.Prepared);
+        storage.Seed(task);
+        storage.UpdateHandler = _ => Task.FromException(new InvalidOperationException("controlled seal save failure"));
+        using var viewModel = new TaskItemViewModel(task, storage, () => true);
+        viewModel.Title = "Cannot be discarded";
+
+        var sealedSaves = viewModel.SealPendingSaves();
+
+        await Assert.That(async () =>
+                await sealedSaves.WaitAsync(TimeSpan.FromSeconds(5)))
+            .Throws<InvalidOperationException>();
+    }
+
+    [Test]
+    public async Task EditorFlushFailureAfterSuccessfulStatusCommand_PreservesConfirmedResultAndRemainsRetryable()
+    {
+        using var storage = new ScriptedTaskStorage();
+        var task = CreateTask("editor-postflush-failure", DomainTaskStatus.Prepared);
+        storage.Seed(task);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        storage.StatusHandler = async (taskId, requestedStatus, author) =>
+        {
+            started.TrySetResult();
+            await release.Task;
+            return storage.CreateSuccess(taskId, requestedStatus, author);
+        };
+        using var viewModel = new TaskItemViewModel(task, storage, () => true);
+        viewModel.Title = "Before command";
+
+        var transition = viewModel.TryTransitionToStatusAsync(DomainTaskStatus.Completed, "tester");
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        viewModel.Title = "Edited while command is pending";
+        storage.UpdateHandler = _ => Task.FromException(new InvalidOperationException("controlled final editor save failure"));
+
+        release.TrySetResult();
+        var result = await transition.WaitAsync(TimeSpan.FromSeconds(5));
+        var persistedBeforeRetry = storage.Snapshot(task.Id);
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(result.Success).IsTrue();
+            await Assert.That(result.AuthoritativeTask?.Status).IsEqualTo(DomainTaskStatus.Completed);
+            await Assert.That(viewModel.Status).IsEqualTo(DomainTaskStatus.Completed);
+            await Assert.That(viewModel.Title).IsEqualTo("Edited while command is pending");
+            await Assert.That(persistedBeforeRetry.Status).IsEqualTo(DomainTaskStatus.Completed);
+            await Assert.That(persistedBeforeRetry.Title).IsEqualTo("Before command");
+        }
+
+        storage.UpdateHandler = null;
+        await viewModel.SaveItemCommand.Execute().ToTask().WaitAsync(TimeSpan.FromSeconds(5));
+        await viewModel.SealPendingSaves().WaitAsync(TimeSpan.FromSeconds(5));
+        var persistedAfterRetry = storage.Snapshot(task.Id);
+        using (Assert.Multiple())
+        {
+            await Assert.That(persistedAfterRetry.Status).IsEqualTo(DomainTaskStatus.Completed);
+            await Assert.That(persistedAfterRetry.Title).IsEqualTo("Edited while command is pending");
+        }
+    }
+
+    [Test]
+    public async Task EditorFlushFailureAfterSuccessfulStatusCommand_FaultsConcurrentLifecycleSeal()
+    {
+        using var storage = new ScriptedTaskStorage();
+        var task = CreateTask("editor-postflush-seal-failure", DomainTaskStatus.Prepared);
+        storage.Seed(task);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        storage.StatusHandler = async (taskId, requestedStatus, author) =>
+        {
+            started.TrySetResult();
+            await release.Task;
+            return storage.CreateSuccess(taskId, requestedStatus, author);
+        };
+        using var viewModel = new TaskItemViewModel(task, storage, () => true);
+        viewModel.Title = "Before command";
+
+        var transition = viewModel.TryTransitionToStatusAsync(DomainTaskStatus.Completed, "tester");
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        viewModel.Title = "Unsaved edit during sealed command";
+        storage.UpdateHandler = _ => Task.FromException(new InvalidOperationException("controlled sealed editor save failure"));
+        var sealedSaves = viewModel.SealPendingSaves();
+
+        release.TrySetResult();
+        var result = await transition.WaitAsync(TimeSpan.FromSeconds(5));
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(result.Success).IsTrue();
+            await Assert.That(viewModel.Status).IsEqualTo(DomainTaskStatus.Completed);
+            await Assert.That(viewModel.Title).IsEqualTo("Unsaved edit during sealed command");
+            await Assert.That(storage.Snapshot(task.Id).Status).IsEqualTo(DomainTaskStatus.Completed);
+            await Assert.That(storage.Snapshot(task.Id).Title).IsEqualTo("Before command");
+        }
+
+        await Assert.That(async () =>
+                await sealedSaves.WaitAsync(TimeSpan.FromSeconds(5)))
+            .Throws<InvalidOperationException>();
+    }
+
+    [Test]
+    public async Task RetryThatPersistsFailedRevisionBeforeProducerCompletion_AllowsLifecycleSeal()
+    {
+        using var storage = new ScriptedTaskStorage();
+        var task = CreateTask("editor-retry-before-producer-completion", DomainTaskStatus.Prepared);
+        storage.Seed(task);
+        var statusStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseStatus = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        storage.StatusHandler = async (taskId, requestedStatus, author) =>
+        {
+            statusStarted.TrySetResult();
+            await releaseStatus.Task;
+            return storage.CreateSuccess(taskId, requestedStatus, author);
+        };
+        var notifications = new BlockingErrorNotificationManager();
+        using var viewModel = new TaskItemViewModel(task, storage, () => true)
+        {
+            NotificationManager = notifications
+        };
+        viewModel.Title = "Before command";
+
+        var transition = viewModel.TryTransitionToStatusAsync(DomainTaskStatus.Completed, "tester");
+        await statusStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        viewModel.Title = "Retry saves this edit";
+        storage.UpdateHandler = _ => Task.FromException(new InvalidOperationException("controlled final editor save failure"));
+        releaseStatus.TrySetResult();
+        await notifications.ErrorToastEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        storage.UpdateHandler = null;
+        await viewModel.SaveItemCommand.Execute().ToTask().WaitAsync(TimeSpan.FromSeconds(5));
+        notifications.ReleaseErrorToast.TrySetResult();
+        var result = await transition.WaitAsync(TimeSpan.FromSeconds(5));
+        await viewModel.SealPendingSaves().WaitAsync(TimeSpan.FromSeconds(5));
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(result.Success).IsTrue();
+            await Assert.That(storage.Snapshot(task.Id).Status).IsEqualTo(DomainTaskStatus.Completed);
+            await Assert.That(storage.Snapshot(task.Id).Title).IsEqualTo("Retry saves this edit");
+        }
+    }
+
+    [Test]
     public async Task PendingArchiveConfirmation_IsCancelledAndDrainedByLifecycleSeal()
     {
         using var storage = new ScriptedTaskStorage();
@@ -814,6 +1086,8 @@ public sealed class TaskItemViewModelStatusCommandTests
 
         public Func<string, DomainTaskStatus, string?, Task<TaskOperationResult>>? StatusHandler { get; set; }
 
+        public Func<TaskItem, Task>? UpdateHandler { get; set; }
+
         public event EventHandler<EventArgs>? Initiated;
 
         public void Seed(params TaskItem[] tasks)
@@ -903,11 +1177,18 @@ public sealed class TaskItemViewModelStatusCommandTests
         public Task<bool> Delete(TaskItemViewModel change, TaskItemViewModel parent) =>
             throw new NotSupportedException();
 
-        public Task<TaskItemViewModel> Update(TaskItemViewModel change) =>
-            throw new NotSupportedException();
+        public Task<TaskItemViewModel> Update(TaskItemViewModel change) => Update(change.Model);
 
-        public Task<TaskItemViewModel> Update(TaskItem change) =>
-            throw new NotSupportedException();
+        public async Task<TaskItemViewModel> Update(TaskItem change)
+        {
+            if (UpdateHandler is not null)
+            {
+                await UpdateHandler(Clone(change));
+            }
+
+            _tasks[change.Id] = Clone(change);
+            return null!;
+        }
 
         public Task<TaskItemViewModel> Clone(
             TaskItemViewModel change,
@@ -964,6 +1245,31 @@ public sealed class TaskItemViewModelStatusCommandTests
             BlocksTasks = task.BlocksTasks?.ToList() ?? [],
             BlockedByTasks = task.BlockedByTasks?.ToList() ?? []
         };
+    }
+
+    private sealed class BlockingErrorNotificationManager : INotificationManagerWrapper
+    {
+        public TaskCompletionSource ErrorToastEntered { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource ReleaseErrorToast { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public void Ask(string header, string message, Action yesAction, Action? noAction = null) =>
+            noAction?.Invoke();
+
+        public Task<bool> ConfirmTaskOutlinePasteAsync(TaskOutlinePastePreview preview) =>
+            Task.FromResult(false);
+
+        public void ErrorToast(string message)
+        {
+            ErrorToastEntered.TrySetResult();
+            ReleaseErrorToast.Task.GetAwaiter().GetResult();
+        }
+
+        public void SuccessToast(string message)
+        {
+        }
     }
 
     private sealed class FakeSystemCultureProvider(string cultureName) : ILocalizationSystemCultureProvider

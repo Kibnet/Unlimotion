@@ -11,11 +11,10 @@ namespace Unlimotion.UiTests.Headless.Tests;
 public sealed class HeadlessSessionStorageLifecycleTests
 {
     private const int DelayedWatcherCycleCount = 8;
-    private static readonly TimeSpan EventDeliveryTimeout = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan ThrottleBoundary = TimeSpan.FromMilliseconds(1_500);
 
     [Test]
-    public async Task DelayedWatcherEvent_AfterDispose_DoesNotCrashHost()
+    public async Task DelayedWatcherEvent_AfterDispose_IsIgnoredAndDoesNotCrashHost()
     {
         var currentTaskId = UnlimotionAppLaunchHost.GetCurrentTaskId(
             UnlimotionAutomationScenario.ReadmeDemo,
@@ -57,7 +56,8 @@ public sealed class HeadlessSessionStorageLifecycleTests
 
                 await Task.Delay(TimeSpan.FromMilliseconds(25));
                 state.Watcher.ForceUpdateFile(currentTaskId, UpdateType.Removed);
-                await updateObserved.Task.WaitAsync(EventDeliveryTimeout);
+                await Task.Delay(TimeSpan.FromMilliseconds(100));
+                await Assert.That(updateObserved.Task.IsCompleted).IsFalse();
             }
             finally
             {

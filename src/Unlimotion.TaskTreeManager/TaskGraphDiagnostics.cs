@@ -12,12 +12,25 @@ public interface ITaskGraphWriteLock
     Task<T> WithWriteLockAsync<T>(Func<Task<T>> operation);
 }
 
+public interface ITaskGraphWriteScopeStorage
+{
+    ITaskGraphWriteScope BeginWriteScope();
+    Task<TaskGraphReadResult> RefreshAttemptedWritesAsync(ITaskGraphWriteScope scope);
+}
+
+public interface ITaskGraphWriteScope : IDisposable
+{
+    IReadOnlyList<string> AttemptedTaskIds { get; }
+}
+
 public sealed record TaskGraphReadResult(
     IReadOnlyList<TaskItem> Tasks,
     IReadOnlyDictionary<string, string> FilesByTaskId,
     IReadOnlyList<TaskGraphLoadError> LoadErrors,
     IReadOnlyList<TaskGraphDuplicateIdIssue> DuplicateIdIssues)
 {
+    public long Revision { get; init; }
+
     public IReadOnlyDictionary<string, TaskItem> TasksById { get; } = Tasks
         .Where(static task => !string.IsNullOrWhiteSpace(task.Id))
         .GroupBy(static task => task.Id, StringComparer.Ordinal)
