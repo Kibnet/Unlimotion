@@ -14,9 +14,10 @@ public abstract class FeedScenariosBase<TSession> : StatusContractScenariosBase<
     public const string ShellScenarioTestName = nameof(Feed_shell_switch_preserves_task_context);
     public const string CaptureScenarioTestName = nameof(Feed_chronology_and_quick_capture_are_persisted);
     public const string SearchScenarioTestName = nameof(Feed_search_clear_restores_chronology);
-    public const string ReviewScenarioTestName = nameof(Feed_review_stays_inline);
+    public const string ReviewScenarioTestName = nameof(Feed_review_uses_global_dialog);
     public const string TaskReferenceScenarioTestName = nameof(Feed_task_status_precedes_title_and_title_navigates);
     public const string NarrowScenarioTestName = nameof(Feed_narrow_layout_keeps_primary_actions_available);
+    public const string EditorDragScenarioTestName = "Feed_editor_pointer_drag_reorders_blocks";
     public const string DailyNoteFilenameFormatScenarioTestName = nameof(Daily_note_filename_format_settings);
     public const string UnifiedScenarioTestName = "Feed_unified_capture_review_task_parent_status_navigation_search_and_conflicts";
     public const string ScreenshotPathEnvironmentVariable = "UNLIMOTION_FEED_SCREENSHOT_PATH";
@@ -31,12 +32,18 @@ public abstract class FeedScenariosBase<TSession> : StatusContractScenariosBase<
         ReviewScenarioTestName or
         TaskReferenceScenarioTestName or
         NarrowScenarioTestName or
+        EditorDragScenarioTestName or
         DailyNoteFilenameFormatScenarioTestName or
         UnifiedScenarioTestName;
 
     protected static bool IsDailyNoteFilenameFormatScenarioTest => string.Equals(
         TestContext.Current?.Metadata.TestName,
         DailyNoteFilenameFormatScenarioTestName,
+        StringComparison.Ordinal);
+
+    protected static bool IsEditorDragScenarioTest => string.Equals(
+        TestContext.Current?.Metadata.TestName,
+        EditorDragScenarioTestName,
         StringComparison.Ordinal);
 
     protected static bool IsUnifiedFeedScenarioTest =>
@@ -67,14 +74,22 @@ public abstract class FeedScenariosBase<TSession> : StatusContractScenariosBase<
     {
     }
 
-    /// <summary>
-    /// Opens Settings from the task workspace. Desktop implementations may use
-    /// the responsive main-tabs overflow when the direct tab is hidden.
-    /// </summary>
-    protected virtual void SelectSettingsTab()
+    protected virtual void OpenSettings()
     {
-        Page.SelectTabItem(static page => page.SettingsTabItem, timeoutMs: 10_000);
+        Page.ClickButton(static page => page.GlobalSettingsButton);
     }
+
+    protected virtual void OpenQuickCapture()
+    {
+        Page.ClickButton(static page => page.GlobalCreateMenuButton);
+        var noteItem = WaitForControl(
+            () => Page.GlobalCreateNoteMenuItem,
+            "Global create menu did not expose the quick-note action.");
+        noteItem.Invoke();
+    }
+
+    protected virtual bool IsQuickCaptureClosedAfterSave() =>
+        TryResolve(() => Page.FeedQuickCaptureTextBox) is null;
 
     protected virtual void WriteExternalDailyNoteFilenameFormat(string format)
     {
@@ -234,16 +249,17 @@ public abstract class FeedScenariosBase<TSession> : StatusContractScenariosBase<
     public async Task Feed_chronology_and_quick_capture_are_persisted()
     {
         OpenFeed();
-        var items = WaitForListItems(
-            () => Page.FeedChronologyList.Items,
+        OpenQuickCapture();
+        WaitForChronologyDayCount(
             minimumCount: 1,
             "Feed chronology did not expose its newest daily note.");
         var todayPath = UnlimotionAutomationScenarioData.GetFeedDailyRelativePath(
             DateOnly.FromDateTime(DateTime.Now));
         using (Assert.Multiple())
         {
-            await Assert.That(items[0].Name).IsNotEmpty();
-            await Assert.That(items[0].Name).DoesNotContain(UnlimotionAutomationScenarioData.FeedNewestMarker);
+            await Assert.That(Page.FeedChronologyList.Name).IsNotEmpty();
+            await Assert.That(Page.FeedChronologyList.Name)
+                .DoesNotContain(UnlimotionAutomationScenarioData.FeedNewestMarker);
             await Assert.That(ReadFeedVaultText(todayPath))
                 .Contains(UnlimotionAutomationScenarioData.FeedNewestMarker);
         }
@@ -261,16 +277,15 @@ public abstract class FeedScenariosBase<TSession> : StatusContractScenariosBase<
             timeout: TimeSpan.FromSeconds(10),
             timeoutMessage: "Quick capture was not persisted in today's Markdown file.");
         WaitUntil(
-            () => Page.FeedQuickCaptureTextBox.Text,
-            string.IsNullOrEmpty,
+            IsQuickCaptureClosedAfterSave,
             timeout: TimeSpan.FromSeconds(10),
-            timeoutMessage: "Quick capture input was not cleared after the Markdown write completed.");
+            timeoutMessage: "Quick capture overlay did not close after the Markdown write completed.");
 
         using (Assert.Multiple())
         {
             await Assert.That(ReadFeedVaultText(todayPath))
                 .Contains(UnlimotionAutomationScenarioData.FeedQuickCaptureMarker);
-            await Assert.That(Page.FeedQuickCaptureTextBox.Text).IsEmpty();
+            await Assert.That(IsQuickCaptureClosedAfterSave()).IsTrue();
         }
     }
 
@@ -291,8 +306,7 @@ public abstract class FeedScenariosBase<TSession> : StatusContractScenariosBase<
             .IsTrue();
 
         Page.FeedSearchBox.Enter(string.Empty);
-        _ = WaitForListItems(
-            () => Page.FeedChronologyList.Items,
+        WaitForChronologyDayCount(
             minimumCount: 2,
             "Clearing Feed search did not restore chronology.");
 
@@ -307,30 +321,24 @@ public abstract class FeedScenariosBase<TSession> : StatusContractScenariosBase<
 
     [Test]
     [NotInParallel(DesktopUiConstraint)]
-    public async Task Feed_review_stays_inline()
+    public async Task Feed_review_uses_global_dialog()
     {
         OpenFeed();
         var startReview = WaitForControl(
             () => Page.FeedStartReviewButton,
             "Feed review banner did not expose its start action.");
 
-        using (Assert.Multiple())
-        {
-            await Assert.That(Page.FeedReviewBanner.AutomationId).IsEqualTo("FeedReviewBanner");
-            await Assert.That(Page.FeedBootstrapSummary.AutomationId).IsEqualTo("FeedBootstrapSummary");
-            await Assert.That(Page.FeedBootstrapIndexedFilesText.Text).IsNotEmpty();
-            await Assert.That(Page.FeedBootstrapPendingCheckboxesText.Text).IsNotEmpty();
-        }
+        await Assert.That(Page.FeedReviewBanner.AutomationId).IsEqualTo("FeedReviewBanner");
 
         startReview.Invoke();
         var selection = WaitForControl(
             () => Page.FeedReviewSelectionText,
-            "Starting Feed review did not expose an inline selection.");
+            "Starting Feed review did not expose the selected source block.");
         WaitUntil(
             () => selection.Text,
             text => text.Contains(UnlimotionAutomationScenarioData.FeedPendingReviewMarker, StringComparison.Ordinal),
             timeout: TimeSpan.FromSeconds(10),
-            timeoutMessage: "Inline review did not select the seeded unfinished checkbox.");
+            timeoutMessage: "Global review did not select the seeded unfinished checkbox.");
 
         using (Assert.Multiple())
         {
@@ -360,6 +368,7 @@ public abstract class FeedScenariosBase<TSession> : StatusContractScenariosBase<
         // Feed session, so this avoids asserting an intentionally disabled Apply
         // action while startup is still in progress.
         OpenFeed();
+        OpenQuickCapture();
         _ = WaitForControl(
             () => Page.FeedQuickCaptureTextBox,
             "Feed vault did not finish initialization before opening daily format settings.");
@@ -371,15 +380,12 @@ public abstract class FeedScenariosBase<TSession> : StatusContractScenariosBase<
             timeoutMessage: "Feed vault did not become ready before opening daily format settings.");
         Page.FeedQuickCaptureTextBox.Enter(string.Empty);
 
-        // Settings belongs to the task workspace. Switch the top-level mode before
-        // resolving its controls, otherwise Headless can find a non-attached template
-        // whose command bindings have not been activated.
+        // Settings is a global overlay and must remain available from the Tasks mode too.
         OpenTasks();
-        SelectSettingsTab();
-        var settingsTab = WaitForControl(
-            () => Page.SettingsTabItem,
-            "Settings tab did not become available after navigation.");
-        await Assert.That(settingsTab.IsSelected).IsTrue();
+        OpenSettings();
+        _ = WaitForControl(
+            () => Page.SettingsRoot,
+            "Global Settings overlay did not become available after navigation.");
 
         var formatInput = WaitForControl(
             () => Page.NoteDailyFileNameFormatTextBox,
@@ -587,6 +593,7 @@ public abstract class FeedScenariosBase<TSession> : StatusContractScenariosBase<
         CaptureDailyNoteFilenameFormatScreenshotIfRequested();
 
         OpenFeed();
+        OpenQuickCapture();
         Page.FeedQuickCaptureTextBox.Enter(captureMarker);
         WaitUntil(
             () => Page.FeedCaptureButton.IsEnabled,
@@ -659,6 +666,9 @@ public abstract class FeedScenariosBase<TSession> : StatusContractScenariosBase<
             await Assert.That(snapshot.TasksMode.IsInside(snapshot.Viewport)).IsTrue();
             await Assert.That(snapshot.QuickCapture.IsInside(snapshot.Viewport)).IsTrue();
             await Assert.That(snapshot.ReviewAction.IsInside(snapshot.Viewport)).IsTrue();
+            await Assert.That(snapshot.AreaFilter.IsInside(snapshot.Viewport)).IsTrue();
+            await Assert.That(snapshot.AreaActions.All(action => action.IsInside(snapshot.Viewport))).IsTrue();
+            await Assert.That(snapshot.AreaActions.All(action => !action.Overlaps(snapshot.AreaFilter))).IsTrue();
             await Assert.That(snapshot.HasHorizontalOverflow).IsFalse();
         }
     }
@@ -693,6 +703,28 @@ public abstract class FeedScenariosBase<TSession> : StatusContractScenariosBase<
             items => items.Count >= minimumCount,
             timeout: TimeSpan.FromSeconds(10),
             timeoutMessage: timeoutMessage);
+    }
+
+    private void WaitForChronologyDayCount(int minimumCount, string timeoutMessage)
+    {
+        WaitUntil(
+            () => ParseChronologyDayCount(TryResolve(() => Page.FeedChronologyList)?.Name),
+            count => count >= minimumCount,
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: timeoutMessage);
+    }
+
+    private static int ParseChronologyDayCount(string? automationName)
+    {
+        if (string.IsNullOrWhiteSpace(automationName))
+        {
+            return 0;
+        }
+
+        return automationName
+            .Split([' ', ':'], StringSplitOptions.RemoveEmptyEntries)
+            .Select(token => int.TryParse(token, out var count) ? count : 0)
+            .FirstOrDefault(count => count > 0);
     }
 
     private static TControl WaitForControl<TControl>(Func<TControl> resolve, string timeoutMessage)
@@ -735,6 +767,10 @@ public readonly record struct FeedElementBounds(double Left, double Top, double 
 
     public bool VerticallyOverlaps(FeedElementBounds other) =>
         Math.Min(Bottom, other.Bottom) > Math.Max(Top, other.Top);
+
+    public bool Overlaps(FeedElementBounds other) =>
+        Math.Min(Right, other.Right) > Math.Max(Left, other.Left) &&
+        Math.Min(Bottom, other.Bottom) > Math.Max(Top, other.Top);
 }
 
 public readonly record struct FeedTaskGeometrySnapshot(
@@ -747,4 +783,6 @@ public readonly record struct FeedNarrowLayoutSnapshot(
     FeedElementBounds TasksMode,
     FeedElementBounds QuickCapture,
     FeedElementBounds ReviewAction,
+    FeedElementBounds AreaFilter,
+    IReadOnlyList<FeedElementBounds> AreaActions,
     bool HasHorizontalOverflow);
