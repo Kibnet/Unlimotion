@@ -81,126 +81,159 @@ public class TaskStatusTransitionTests
     }
 
     [Test]
-    public async Task HandleTaskStatusChange_CompletedTaskWithRepeater_CreatesPreparedClone()
+    public async Task HandleTaskStatusChange_CompletedRepeater_ClonesContainedDagAndInternalRelations()
     {
         var storage = new InMemoryStorage();
         var manager = new TaskTreeManager(storage);
-
-        var task = new TaskItem
+        var plannedBegin = new DateTimeOffset(2026, 1, 5, 9, 0, 0, TimeSpan.Zero);
+        var futureRightBegin = DateTimeOffset.UtcNow.AddDays(30);
+        var externalBlocker = new TaskItem
         {
-            Id = "test-task",
+            Id = "external-blocker",
+            Title = "external blocker",
             Status = DomainTaskStatus.Completed,
-            Repeater = new RepeaterPattern
-            {
-                Type = RepeaterType.Daily,
-                Period = 1
-            },
-            PlannedBeginDateTime = DateTimeOffset.UtcNow.AddDays(-1),
-            PlannedEndDateTime = DateTimeOffset.UtcNow,
-            ContainsTasks = new List<string> { "child1" },
-            BlocksTasks = new List<string> { "blocked1" },
-            BlockedByTasks = new List<string> { "blocker1" },
-            Description = "Test task",
-            Title = "Test Task"
+            BlocksTasks = ["source"]
         };
-
-        var result = await manager.HandleTaskStatusChange(task);
-        var clonedTask = result.First(taskItem => taskItem.Id != task.Id && taskItem.Title == task.Title);
-
-        await Assert.That(task.CompletedDateTime).IsNotNull();
-        await Assert.That(task.ArchiveDateTime).IsNull();
-        await Assert.That(result).Contains(task);
-        await Assert.That(clonedTask.Id).IsNotNull();
-        await Assert.That(clonedTask.Status).IsEqualTo(DomainTaskStatus.Prepared);
-        await Assert.That(clonedTask.StatusHistory.Last().Status).IsEqualTo(DomainTaskStatus.Prepared);
-        await Assert.That(clonedTask.Title).IsEqualTo(task.Title);
-        await Assert.That(clonedTask.Description).IsEqualTo(task.Description);
-        await Assert.That(clonedTask.ContainsTasks).IsEquivalentTo(task.ContainsTasks);
-        await Assert.That(clonedTask.BlocksTasks).IsEquivalentTo(task.BlocksTasks);
-        await Assert.That(clonedTask.BlockedByTasks).IsEquivalentTo(task.BlockedByTasks);
-        await Assert.That(result).Contains(clonedTask);
-    }
-
-    [Test]
-    public async Task HandleTaskStatusChange_CompletedTaskWithRepeater_ShouldSyncCloneRelationsAndAvailability()
-    {
-        var storage = new InMemoryStorage();
-        var manager = new TaskTreeManager(storage);
-
-        var child = new TaskItem
+        var externalBlocked = new TaskItem
         {
-            Id = "child",
-            Status = DomainTaskStatus.Completed,
-            ParentTasks = new List<string> { "source" }
-        };
-
-        var blocker = new TaskItem
-        {
-            Id = "blocker",
-            Status = DomainTaskStatus.Completed,
-            BlocksTasks = new List<string> { "source" }
-        };
-
-        var blocked = new TaskItem
-        {
-            Id = "blocked",
+            Id = "external-blocked",
+            Title = "external blocked",
             Status = DomainTaskStatus.NotReady,
-            IsCanBeCompleted = true,
-            UnlockedDateTime = DateTimeOffset.UtcNow,
-            BlockedByTasks = new List<string> { "source" }
+            BlockedByTasks = ["source"]
         };
-
+        var sharedLeaf = new TaskItem
+        {
+            Id = "shared-leaf",
+            Title = "shared leaf",
+            Status = DomainTaskStatus.Completed,
+            ParentTasks = ["left", "right"],
+            PlannedBeginDateTime = plannedBegin.AddHours(3),
+            PlannedEndDateTime = plannedBegin.AddHours(4),
+            CompletionCriteria =
+            [
+                new TaskCompletionCriterion
+                {
+                    Id = "old-criterion",
+                    Text = "Verify leaf",
+                    IsSatisfied = true
+                }
+            ]
+        };
+        var left = new TaskItem
+        {
+            Id = "left",
+            Title = "left",
+            Status = DomainTaskStatus.Completed,
+            ParentTasks = ["source"],
+            ContainsTasks = [sharedLeaf.Id],
+            BlocksTasks = ["right"],
+            PlannedBeginDateTime = plannedBegin.AddHours(1)
+        };
+        var right = new TaskItem
+        {
+            Id = "right",
+            Title = "right",
+            Status = DomainTaskStatus.Completed,
+            ParentTasks = ["source"],
+            ContainsTasks = [sharedLeaf.Id],
+            BlockedByTasks = ["left"],
+            PlannedBeginDateTime = futureRightBegin
+        };
         var source = new TaskItem
         {
             Id = "source",
+            Title = "source",
+            Description = "Source description",
             Status = DomainTaskStatus.Prepared,
+            IsCanBeCompleted = true,
             Repeater = new RepeaterPattern
             {
                 Type = RepeaterType.Daily,
-                Period = 1
+                Period = 1,
+                AfterComplete = false,
+                Pattern = [1, 3]
             },
-            PlannedBeginDateTime = DateTimeOffset.UtcNow.AddDays(-1),
-            PlannedEndDateTime = DateTimeOffset.UtcNow,
-            ContainsTasks = new List<string> { "child" },
-            BlocksTasks = new List<string> { "blocked" },
-            BlockedByTasks = new List<string> { "blocker" },
-            Description = "Source description",
-            Title = "Source title"
+            PlannedBeginDateTime = plannedBegin,
+            PlannedEndDateTime = plannedBegin.AddHours(8),
+            ContainsTasks = [left.Id, right.Id],
+            BlocksTasks = [externalBlocked.Id],
+            BlockedByTasks = [externalBlocker.Id]
         };
 
-        await storage.Save(child);
-        await storage.Save(blocker);
-        await storage.Save(blocked);
+        await storage.Save(externalBlocker);
+        await storage.Save(externalBlocked);
+        await storage.Save(sharedLeaf);
+        await storage.Save(left);
+        await storage.Save(right);
         await storage.Save(source);
         source.Status = DomainTaskStatus.Completed;
 
         var result = await manager.HandleTaskStatusChange(source);
+        var cloneRoot = result.Single(item => item.Id != source.Id && item.Title == source.Title);
+        var cloneLeft = result.Single(item => item.Title == left.Title && item.Id != left.Id);
+        var cloneRight = result.Single(item => item.Title == right.Title && item.Id != right.Id);
+        var cloneLeaf = result.Single(item => item.Title == sharedLeaf.Title && item.Id != sharedLeaf.Id);
 
-        var clone = result.FirstOrDefault(t => t.Id != source.Id && t.Title == source.Title);
-        await Assert.That(clone).IsNotNull();
+        using (Assert.Multiple())
+        {
+            await Assert.That(cloneRoot.Status).IsEqualTo(DomainTaskStatus.Prepared);
+            await Assert.That(cloneRoot.StatusHistory).Count().IsEqualTo(1);
+            await Assert.That(cloneRoot.StatusHistory[0].Status).IsEqualTo(DomainTaskStatus.Prepared);
+            await Assert.That(cloneRoot.Repeater).IsNotNull();
+            await Assert.That(cloneRoot.Repeater!.Type).IsEqualTo(RepeaterType.Daily);
+            await Assert.That(cloneRoot.Repeater).IsNotSameReferenceAs(source.Repeater);
+            await Assert.That(cloneRoot.ContainsTasks).IsEquivalentTo([cloneLeft.Id, cloneRight.Id]);
+            await Assert.That(cloneRoot.BlocksTasks).IsEmpty();
+            await Assert.That(cloneRoot.BlockedByTasks).IsEmpty();
+            await Assert.That(cloneRoot.IsCanBeCompleted).IsFalse();
+            await Assert.That(cloneRoot.UnlockedDateTime).IsNull();
+            await Assert.That(cloneRoot.CompletedDateTime).IsNull();
+            await Assert.That(cloneRoot.ArchiveDateTime).IsNull();
 
-        var cloneFromStorage = await storage.Load(clone!.Id);
-        var childFromStorage = await storage.Load(child.Id);
-        var blockerFromStorage = await storage.Load(blocker.Id);
-        var blockedFromStorage = await storage.Load(blocked.Id);
+            await Assert.That(cloneLeft.Status).IsEqualTo(DomainTaskStatus.NotReady);
+            await Assert.That(cloneRight.Status).IsEqualTo(DomainTaskStatus.NotReady);
+            await Assert.That(cloneLeaf.Status).IsEqualTo(DomainTaskStatus.NotReady);
+            await Assert.That(cloneLeft.StatusHistory).Count().IsEqualTo(1);
+            await Assert.That(cloneRight.StatusHistory).Count().IsEqualTo(1);
+            await Assert.That(cloneLeaf.StatusHistory).Count().IsEqualTo(1);
+            await Assert.That(cloneLeft.StatusHistory[0].Status).IsEqualTo(DomainTaskStatus.NotReady);
+            await Assert.That(cloneRight.StatusHistory[0].Status).IsEqualTo(DomainTaskStatus.NotReady);
+            await Assert.That(cloneLeaf.StatusHistory[0].Status).IsEqualTo(DomainTaskStatus.NotReady);
+            await Assert.That(cloneLeft.IsCanBeCompleted).IsFalse();
+            await Assert.That(cloneRight.IsCanBeCompleted).IsFalse();
+            await Assert.That(cloneLeaf.IsCanBeCompleted).IsFalse();
+            await Assert.That(cloneLeft.UnlockedDateTime).IsNull();
+            await Assert.That(cloneRight.UnlockedDateTime).IsNull();
+            await Assert.That(cloneLeaf.UnlockedDateTime).IsNull();
+            await Assert.That(cloneLeaf.CompletedDateTime).IsNull();
+            await Assert.That(cloneLeaf.ArchiveDateTime).IsNull();
+            await Assert.That(cloneLeaf.ParentTasks).IsEquivalentTo([cloneLeft.Id, cloneRight.Id]);
+            await Assert.That(cloneLeft.ContainsTasks).IsEquivalentTo([cloneLeaf.Id]);
+            await Assert.That(cloneRight.ContainsTasks).IsEquivalentTo([cloneLeaf.Id]);
+            await Assert.That(cloneLeft.BlocksTasks).IsEquivalentTo([cloneRight.Id]);
+            await Assert.That(cloneRight.BlockedByTasks).IsEquivalentTo([cloneLeft.Id]);
 
-        await Assert.That(cloneFromStorage).IsNotNull();
-        await Assert.That(cloneFromStorage!.Status).IsEqualTo(DomainTaskStatus.Prepared);
-        await Assert.That(cloneFromStorage.ContainsTasks).Contains(child.Id);
-        await Assert.That(cloneFromStorage.BlockedByTasks).Contains(blocker.Id);
-        await Assert.That(cloneFromStorage.BlocksTasks).Contains(blocked.Id);
+            await Assert.That(cloneRoot.PlannedBeginDateTime).IsEqualTo(plannedBegin.AddDays(1));
+            await Assert.That(cloneRoot.PlannedEndDateTime).IsEqualTo(plannedBegin.AddDays(1).AddHours(8));
+            await Assert.That(cloneLeft.PlannedEndDateTime).IsNull();
+            await Assert.That(cloneRight.PlannedBeginDateTime).IsEqualTo(futureRightBegin.AddDays(1));
+            await Assert.That(cloneLeaf.PlannedBeginDateTime).IsEqualTo(sharedLeaf.PlannedBeginDateTime!.Value.AddDays(1));
+            await Assert.That(cloneLeaf.PlannedEndDateTime).IsEqualTo(sharedLeaf.PlannedEndDateTime!.Value.AddDays(1));
+            await Assert.That(cloneLeaf.CompletionCriteria).Count().IsEqualTo(1);
+            await Assert.That(cloneLeaf.CompletionCriteria[0].Id).IsNotEqualTo("old-criterion");
+            await Assert.That(cloneLeaf.CompletionCriteria[0].Text).IsEqualTo("Verify leaf");
+            await Assert.That(cloneLeaf.CompletionCriteria[0].IsSatisfied).IsFalse();
+        }
 
-        await Assert.That(childFromStorage).IsNotNull();
-        await Assert.That(childFromStorage!.ParentTasks).Contains(clone.Id);
+        cloneRoot.Repeater!.Period = 7;
+        cloneRoot.Repeater.Pattern.Add(6);
+        await Assert.That(source.Repeater!.Period).IsEqualTo(1);
+        await Assert.That(source.Repeater.Pattern).IsEquivalentTo([1, 3]);
 
-        await Assert.That(blockerFromStorage).IsNotNull();
-        await Assert.That(blockerFromStorage!.BlocksTasks).Contains(clone.Id);
-
-        await Assert.That(blockedFromStorage).IsNotNull();
-        await Assert.That(blockedFromStorage!.BlockedByTasks).Contains(clone.Id);
-        await Assert.That(blockedFromStorage.IsCanBeCompleted).IsFalse();
-
-        await Assert.That(cloneFromStorage.Status).IsEqualTo(DomainTaskStatus.Prepared);
+        var externalBlockerAfter = await storage.Load(externalBlocker.Id);
+        var externalBlockedAfter = await storage.Load(externalBlocked.Id);
+        await Assert.That(externalBlockerAfter!.BlocksTasks).IsEquivalentTo([source.Id]);
+        await Assert.That(externalBlockedAfter!.BlockedByTasks).IsEquivalentTo([source.Id]);
     }
 
     [Test]

@@ -2053,7 +2053,7 @@
                                                 <ComboBox Grid.Column="0"
                                                           Classes="RepeaterSelector"
                                                           ItemsSource="{Binding Repeaters}"
-                                                          SelectedItem="{Binding Repeater}"
+                                                          SelectedItem="{Binding SelectedRepeaterTemplate}"
                                                           PlaceholderText="{DynamicResource RepeaterTemplates}"
                                                           AutomationProperties.AutomationId="CurrentTaskRepeaterSelector">
                                                     <ComboBox.ItemTemplate>

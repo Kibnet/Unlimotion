@@ -516,7 +516,38 @@ public sealed class TaskGraphCommandServiceTests
     }
 
     [Test]
-    public async Task TrySetStatus_RepeatingCompletionReturnsOriginalCloneAndReverseLinkTasks()
+    public async Task TrySetStatus_ContainmentCycleFailsValidationWithoutWrites()
+    {
+        var source = CreateTask("cycle-source", DomainTaskStatus.Prepared);
+        var child = CreateTask("cycle-child", DomainTaskStatus.Completed);
+        source.ContainsTasks = [child.Id];
+        source.ParentTasks = [child.Id];
+        child.ContainsTasks = [source.Id];
+        child.ParentTasks = [source.Id];
+        var storage = new DiagnosticStorage([source, child]);
+
+        var result = await new TaskGraphCommandService(storage)
+            .TrySetStatusAsync(source.Id, DomainTaskStatus.Completed, "tester");
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(result.Success).IsFalse();
+            await Assert.That(result.DeniedReason?.Kind)
+                .IsEqualTo(TaskOperationDeniedKind.ValidationFailed);
+            await Assert.That(result.Validation?.ReferenceIssues.Any(issue =>
+                    issue.Kind == TaskGraphReferenceIssueKind.ContainmentCycle))
+                .IsTrue();
+            await Assert.That(result.ChangedTasks).IsEmpty();
+            await Assert.That(storage.SaveCount).IsEqualTo(0);
+            await Assert.That(result.AuthoritativeTask).IsNull();
+        }
+
+        var persisted = await storage.Load(source.Id);
+        await Assert.That(persisted!.Status).IsEqualTo(DomainTaskStatus.Prepared);
+    }
+
+    [Test]
+    public async Task TrySetStatus_RepeatingCompletionReturnsOriginalAndClonedSubtree()
     {
         using var temp = TempTaskDirectory.Create();
         var plannedBegin = DateTimeOffset.UtcNow.AddDays(-1);
@@ -550,18 +581,24 @@ public sealed class TaskGraphCommandServiceTests
         var changedIds = result.ChangedTasks.Select(static task => task.Id).ToHashSet(StringComparer.Ordinal);
         var allTasks = await LoadAllTasks(storage);
         var clone = allTasks.Single(task => task.Id != source.Id && task.Title == source.Title);
+        var childClone = allTasks.Single(task => task.Id != child.Id && task.Title == child.Title);
         await Assert.That(changedIds).Contains(source.Id);
         await Assert.That(changedIds).Contains(clone.Id);
-        await Assert.That(changedIds).Contains(child.Id);
-        await Assert.That(changedIds).Contains(blocker.Id);
+        await Assert.That(changedIds).Contains(childClone.Id);
         await Assert.That(changedIds).Contains(blocked.Id);
+        await Assert.That(clone.ContainsTasks).IsEquivalentTo([childClone.Id]);
+        await Assert.That(childClone.ParentTasks).IsEquivalentTo([clone.Id]);
+        await Assert.That(clone.BlockedByTasks).IsEmpty();
+        await Assert.That(clone.BlocksTasks).IsEmpty();
 
         var childAfter = await storage.Load(child.Id, forced: true);
         var blockerAfter = await storage.Load(blocker.Id, forced: true);
         var blockedAfter = await storage.Load(blocked.Id, forced: true);
-        await Assert.That(childAfter!.ParentTasks).Contains(clone.Id);
-        await Assert.That(blockerAfter!.BlocksTasks).Contains(clone.Id);
-        await Assert.That(blockedAfter!.BlockedByTasks).Contains(clone.Id);
+        await Assert.That(childAfter!.ParentTasks).IsEquivalentTo([source.Id]);
+        await Assert.That(blockerAfter!.BlocksTasks).IsEquivalentTo([source.Id]);
+        await Assert.That(blockedAfter!.BlockedByTasks).IsEquivalentTo([source.Id]);
+        await Assert.That(blockedAfter.IsCanBeCompleted).IsTrue();
+        await Assert.That(blockedAfter.UnlockedDateTime).IsNotNull();
     }
 
     [Test]

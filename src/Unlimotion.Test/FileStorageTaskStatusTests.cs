@@ -69,18 +69,38 @@ public class FileStorageTaskStatusTests
         try
         {
             var storage = new CountingFileStorage(tempDir, new RecordingDatabaseWatcher());
+            var plannedBegin = DateTime.Now.AddDays(-1);
+            var grandchild = new TaskItem
+            {
+                Id = "immediate-repeating-grandchild",
+                Title = "Daily review nested subtask",
+                Status = DomainTaskStatus.Completed,
+                ParentTasks = ["immediate-repeating-child"],
+                PlannedBeginDateTime = plannedBegin.AddHours(3)
+            };
+            var child = new TaskItem
+            {
+                Id = "immediate-repeating-child",
+                Title = "Daily review subtask",
+                Status = DomainTaskStatus.Completed,
+                ParentTasks = ["immediate-repeating-completion"],
+                ContainsTasks = [grandchild.Id],
+                PlannedBeginDateTime = plannedBegin.AddHours(2)
+            };
             var source = new TaskItem
             {
                 Id = "immediate-repeating-completion",
                 Status = DomainTaskStatus.Prepared,
-                IsCanBeCompleted = true
+                IsCanBeCompleted = true,
+                ContainsTasks = [child.Id]
             };
+            await storage.Save(grandchild);
+            await storage.Save(child);
             await storage.Save(source);
             using var unified = new UnifiedTaskStorage(new TaskTreeManager(storage));
             await unified.Init();
             var viewModel = unified.Tasks.Lookup(source.Id).Value;
             viewModel.IsInitializedProvider = () => true;
-            var plannedBegin = DateTime.Now.AddDays(-1);
 
             viewModel.Title = "Daily review";
             viewModel.PlannedBeginDateTime = plannedBegin;
@@ -95,7 +115,12 @@ public class FileStorageTaskStatusTests
                 "tester");
             var graph = await storage.ReadGraphAsync();
             var persistedSource = graph.TasksById[source.Id];
-            var next = graph.Tasks.Single(task => task.Id != source.Id);
+            var persistedChild = graph.TasksById[child.Id];
+            var persistedGrandchild = graph.TasksById[grandchild.Id];
+            var next = graph.Tasks.Single(task => task.Id != source.Id && task.Title == "Daily review");
+            var nextChild = graph.Tasks.Single(task => task.Id != child.Id && task.Title == child.Title);
+            var nextGrandchild = graph.Tasks.Single(task =>
+                task.Id != grandchild.Id && task.Title == grandchild.Title);
 
             using (Assert.Multiple())
             {
@@ -107,7 +132,19 @@ public class FileStorageTaskStatusTests
                 await Assert.That(next.Status).IsEqualTo(DomainTaskStatus.Prepared);
                 await Assert.That(next.PlannedBeginDateTime?.LocalDateTime).IsEqualTo(plannedBegin.AddDays(1));
                 await Assert.That(next.Repeater?.Type).IsEqualTo(RepeaterType.Daily);
+                await Assert.That(next.ContainsTasks).IsEquivalentTo([nextChild.Id]);
+                await Assert.That(nextChild.ParentTasks).IsEquivalentTo([next.Id]);
+                await Assert.That(nextChild.ContainsTasks).IsEquivalentTo([nextGrandchild.Id]);
+                await Assert.That(nextGrandchild.ParentTasks).IsEquivalentTo([nextChild.Id]);
+                await Assert.That(nextChild.Status).IsEqualTo(DomainTaskStatus.NotReady);
+                await Assert.That(nextGrandchild.Status).IsEqualTo(DomainTaskStatus.NotReady);
+                await Assert.That(nextChild.PlannedBeginDateTime?.LocalDateTime)
+                    .IsEqualTo(persistedChild.PlannedBeginDateTime?.LocalDateTime.AddDays(1));
+                await Assert.That(nextGrandchild.PlannedBeginDateTime?.LocalDateTime)
+                    .IsEqualTo(persistedGrandchild.PlannedBeginDateTime?.LocalDateTime.AddDays(1));
                 await Assert.That(unified.Tasks.Lookup(next.Id).HasValue).IsTrue();
+                await Assert.That(unified.Tasks.Lookup(nextChild.Id).HasValue).IsTrue();
+                await Assert.That(unified.Tasks.Lookup(nextGrandchild.Id).HasValue).IsTrue();
             }
         }
         finally

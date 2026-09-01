@@ -1114,6 +1114,214 @@ public class TaskTreeManager
         }
     }
 
+    private async Task<List<TaskItem>> CreateNextOccurrenceSubtree(TaskItem root, DateTimeOffset now)
+    {
+        if (root.Repeater == null || !root.PlannedBeginDateTime.HasValue)
+        {
+            return [];
+        }
+
+        var sources = new Dictionary<string, TaskItem>(StringComparer.Ordinal)
+        {
+            [root.Id] = TaskItemSnapshot.Clone(root)
+        };
+        var sourceOrder = new List<string> { root.Id };
+        var queue = new Queue<string>();
+        queue.Enqueue(root.Id);
+        while (queue.Count > 0)
+        {
+            var sourceId = queue.Dequeue();
+            var source = sources[sourceId];
+            EnsureNoDuplicateRelationIds(source, source.ContainsTasks, nameof(TaskItem.ContainsTasks));
+            foreach (var childId in source.ContainsTasks ?? [])
+            {
+                if (sources.ContainsKey(childId))
+                {
+                    continue;
+                }
+
+                var child = await Storage.Load(childId) ??
+                            throw new InvalidOperationException(
+                                $"Cannot clone repeating task '{root.Id}' because contained task '{childId}' is missing.");
+                sources.Add(childId, TaskItemSnapshot.Clone(child));
+                sourceOrder.Add(childId);
+                queue.Enqueue(childId);
+            }
+        }
+
+        EnsureAcyclicContainment(root.Id, sources);
+        var nextRootBegin = root.Repeater.GetNextOccurrence(root.PlannedBeginDateTime.Value);
+        var dateOffset = nextRootBegin - root.PlannedBeginDateTime.Value;
+        var clonesBySourceId = new Dictionary<string, TaskItem>(StringComparer.Ordinal);
+        foreach (var sourceId in sourceOrder)
+        {
+            clonesBySourceId[sourceId] = CreateOccurrenceClone(
+                sources[sourceId],
+                isRoot: string.Equals(sourceId, root.Id, StringComparison.Ordinal),
+                dateOffset,
+                now);
+        }
+
+        foreach (var sourceId in sourceOrder)
+        {
+            var source = sources[sourceId];
+            var clone = clonesBySourceId[sourceId];
+            foreach (var childId in source.ContainsTasks ?? [])
+            {
+                var childClone = clonesBySourceId[childId];
+                clone.ContainsTasks.Add(childClone.Id);
+                childClone.ParentTasks.Add(clone.Id);
+            }
+
+            foreach (var blockedId in source.BlocksTasks ?? [])
+            {
+                if (!clonesBySourceId.TryGetValue(blockedId, out var blockedClone))
+                {
+                    continue;
+                }
+
+                AddRelationId(clone.BlocksTasks, blockedClone.Id);
+                AddRelationId(blockedClone.BlockedByTasks, clone.Id);
+            }
+
+            foreach (var blockerId in source.BlockedByTasks ?? [])
+            {
+                if (!clonesBySourceId.TryGetValue(blockerId, out var blockerClone))
+                {
+                    continue;
+                }
+
+                AddRelationId(clone.BlockedByTasks, blockerClone.Id);
+                AddRelationId(blockerClone.BlocksTasks, clone.Id);
+            }
+        }
+
+        foreach (var sourceId in sourceOrder.AsEnumerable().Reverse())
+        {
+            await Storage.Save(clonesBySourceId[sourceId]);
+        }
+
+        var result = new Dictionary<string, TaskItem>(StringComparer.Ordinal);
+        result.AddOrUpdateRange(clonesBySourceId.Values);
+        result.AddOrUpdateRange(await CalculateAndUpdateAvailability(clonesBySourceId[root.Id]));
+        return result.Values.ToList();
+    }
+
+    private static TaskItem CreateOccurrenceClone(
+        TaskItem source,
+        bool isRoot,
+        TimeSpan dateOffset,
+        DateTimeOffset now)
+    {
+        var snapshot = TaskItemSnapshot.Clone(source);
+        var clone = new TaskItem
+        {
+            Id = Guid.NewGuid().ToString(),
+            UserId = snapshot.UserId,
+            Title = snapshot.Title,
+            Description = snapshot.Description,
+            Status = isRoot ? DomainTaskStatus.Prepared : DomainTaskStatus.NotReady,
+            StatusHistory = [],
+            CompletionCriteria = snapshot.CompletionCriteria
+                .Where(static criterion => criterion != null)
+                .Select(static criterion => new TaskCompletionCriterion
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    Text = criterion.Text,
+                    IsSatisfied = false,
+                    ExtensionData = criterion.ExtensionData?.ToDictionary(
+                        static pair => pair.Key,
+                        static pair => pair.Value == null ? null! : pair.Value.DeepClone())
+                })
+                .ToList(),
+            IsCanBeCompleted = true,
+            CreatedDateTime = now,
+            UpdatedDateTime = null,
+            UnlockedDateTime = null,
+            PlannedBeginDateTime = snapshot.PlannedBeginDateTime?.Add(dateOffset),
+            PlannedEndDateTime = snapshot.PlannedEndDateTime?.Add(dateOffset),
+            PlannedDuration = snapshot.PlannedDuration,
+            ContainsTasks = [],
+            ParentTasks = [],
+            BlocksTasks = [],
+            BlockedByTasks = [],
+            Repeater = snapshot.Repeater,
+            Importance = snapshot.Importance,
+            Wanted = snapshot.Wanted,
+            Version = 1,
+            ExtensionData = snapshot.ExtensionData
+        };
+        clone.EnsureStatusHistory("System");
+        return clone;
+    }
+
+    private static void EnsureNoDuplicateRelationIds(
+        TaskItem source,
+        IEnumerable<string>? relationIds,
+        string relationName)
+    {
+        var duplicate = relationIds?
+            .Where(static id => !string.IsNullOrWhiteSpace(id))
+            .GroupBy(static id => id, StringComparer.Ordinal)
+            .FirstOrDefault(static group => group.Count() > 1);
+        if (duplicate != null)
+        {
+            throw new InvalidOperationException(
+                $"Cannot clone task '{source.Id}': {relationName} contains duplicate task '{duplicate.Key}'.");
+        }
+    }
+
+    private static void EnsureAcyclicContainment(
+        string rootId,
+        IReadOnlyDictionary<string, TaskItem> sources)
+    {
+        var states = new Dictionary<string, int>(StringComparer.Ordinal) { [rootId] = 1 };
+        var stack = new Stack<OccurrenceTraversalFrame>();
+        stack.Push(CreateOccurrenceFrame(sources[rootId]));
+        while (stack.Count > 0)
+        {
+            var frame = stack.Pop();
+            if (frame.NextChildIndex >= frame.ChildIds.Length)
+            {
+                states[frame.TaskId] = 2;
+                continue;
+            }
+
+            var childId = frame.ChildIds[frame.NextChildIndex];
+            stack.Push(frame with { NextChildIndex = frame.NextChildIndex + 1 });
+            if (!states.TryGetValue(childId, out var childState))
+            {
+                states[childId] = 1;
+                stack.Push(CreateOccurrenceFrame(sources[childId]));
+                continue;
+            }
+
+            if (childState == 1)
+            {
+                throw new InvalidOperationException(
+                    $"Cannot clone repeating task '{rootId}' because containment has a cycle through '{childId}'.");
+            }
+        }
+    }
+
+    private static OccurrenceTraversalFrame CreateOccurrenceFrame(TaskItem task) => new(
+        task.Id,
+        task.ContainsTasks?.ToArray() ?? Array.Empty<string>(),
+        0);
+
+    private static void AddRelationId(ICollection<string> relation, string id)
+    {
+        if (!relation.Contains(id, StringComparer.Ordinal))
+        {
+            relation.Add(id);
+        }
+    }
+
+    private readonly record struct OccurrenceTraversalFrame(
+        string TaskId,
+        string[] ChildIds,
+        int NextChildIndex);
+
     /// <summary>
     /// Handles logic when a task's Status property changes
     /// </summary>
@@ -1164,78 +1372,7 @@ public class TaskTreeManager
                     if (task.Repeater != null && task.Repeater.Type != RepeaterType.None &&
                         task.PlannedBeginDateTime.HasValue)
                     {
-                        var clone = new TaskItem
-                        {
-                            BlocksTasks = task.BlocksTasks.ToList(),
-                            BlockedByTasks =
-                                task.BlockedByTasks.ToList(), //TODO добавить тест на срабатывание блокировки
-                            ContainsTasks = task.ContainsTasks.ToList(),
-                            Description = task.Description,
-                            Title = task.Title,
-                            PlannedDuration = task.PlannedDuration,
-                            Repeater = task.Repeater,
-                            Status = DomainTaskStatus.Prepared,
-                            Wanted = task.Wanted,
-                        };
-                        clone.SetStatus(DomainTaskStatus.Prepared, now, "System");
-                        clone.PlannedBeginDateTime = task.Repeater.GetNextOccurrence(task.PlannedBeginDateTime.Value);
-                        if (task.PlannedEndDateTime.HasValue)
-                        {
-                            clone.PlannedEndDateTime =
-                                clone.PlannedBeginDateTime.Value.Add(task.PlannedEndDateTime.Value -
-                                                                     task.PlannedBeginDateTime.Value);
-                        }
-
-                        // Save the cloned task
-                        clone.Version = 1;
-                        clone.UpdatedDateTime ??= clone.CreatedDateTime;
-                        await Storage.Save(clone);
-                        result.AddOrUpdate(clone);
-
-                        // Restore reverse links for cloned relations, so model stays symmetric:
-                        // child.ParentTasks, blocker.BlocksTasks, blocked.BlockedByTasks.
-                        if (clone.ContainsTasks?.Count > 0)
-                        {
-                            foreach (var containsId in clone.ContainsTasks)
-                            {
-                                var child = await Storage.Load(containsId);
-                                if (child != null)
-                                {
-                                    result.AddOrUpdateRange(
-                                        await CreateParentChildRelation(clone, child));
-                                }
-                            }
-                        }
-
-                        if (clone.BlockedByTasks?.Count > 0)
-                        {
-                            foreach (var blockerId in clone.BlockedByTasks)
-                            {
-                                var blocker = await Storage.Load(blockerId);
-                                if (blocker != null)
-                                {
-                                    result.AddOrUpdateRange(
-                                        await CreateBlockingBlockedByRelation(clone, blocker));
-                                }
-                            }
-                        }
-
-                        if (clone.BlocksTasks?.Count > 0)
-                        {
-                            foreach (var blockedId in clone.BlocksTasks)
-                            {
-                                var blocked = await Storage.Load(blockedId);
-                                if (blocked != null)
-                                {
-                                    result.AddOrUpdateRange(
-                                        await CreateBlockingBlockedByRelation(blocked, clone));
-                                }
-                            }
-                        }
-
-                        // Always normalize clone availability even if it has no relations.
-                        result.AddOrUpdateRange(
-                            await CalculateAndUpdateAvailability(clone));
+                        result.AddOrUpdateRange(await CreateNextOccurrenceSubtree(task, now));
                     }
                 }
 

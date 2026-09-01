@@ -109,6 +109,22 @@ public sealed class TaskAvailabilityParityTests
             .Contains(TaskGraphReferenceIssueKind.DuplicateCriterionId);
     }
 
+    [Test]
+    public async Task Validate_ReportsContainmentCycle()
+    {
+        var first = CreateTask("first", DomainTaskStatus.Prepared);
+        var second = CreateTask("second", DomainTaskStatus.Prepared);
+        first.ContainsTasks = [second.Id];
+        first.ParentTasks = [second.Id];
+        second.ContainsTasks = [first.Id];
+        second.ParentTasks = [first.Id];
+
+        var validation = new TaskAvailabilityService([first, second]).Validate();
+
+        await Assert.That(validation.ReferenceIssues.Select(static issue => issue.Kind))
+            .Contains(TaskGraphReferenceIssueKind.ContainmentCycle);
+    }
+
     private static IReadOnlyList<ParityScenario> CreateScenarios()
     {
         var available = CreateTask("available", DomainTaskStatus.Prepared);

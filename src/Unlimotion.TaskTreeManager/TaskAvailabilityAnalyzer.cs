@@ -93,7 +93,8 @@ public enum TaskGraphReferenceIssueKind
     MissingReverseLink,
     SelfRelation,
     DuplicateRelation,
-    DuplicateCriterionId
+    DuplicateCriterionId,
+    ContainmentCycle
 }
 
 public sealed record TaskAvailabilityMismatch

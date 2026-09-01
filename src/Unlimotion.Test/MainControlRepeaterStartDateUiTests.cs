@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
@@ -12,9 +13,13 @@ using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Newtonsoft.Json;
+using Unlimotion;
 using Unlimotion.Domain;
+using Unlimotion.Storage;
+using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
 using Unlimotion.Views;
+using DomainTaskStatus = Unlimotion.Domain.TaskStatus;
 
 namespace Unlimotion.Test;
 
@@ -22,6 +27,189 @@ namespace Unlimotion.Test;
 [ParallelLimiter<SharedUiStateParallelLimit>]
 public class MainControlRepeaterStartDateUiTests
 {
+    [Test]
+    public async Task CompletingRepeatingTask_SelectsTemplateAfterReload()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            await using var fixture = new MainWindowViewModelFixture();
+            var vm = fixture.MainWindowViewModelTest;
+            await vm.Connect();
+            vm.AllTasksMode = true;
+            vm.DetailsAreOpen = true;
+            var source = TestHelpers.SetCurrentTask(vm, MainWindowViewModelFixture.RepeateTask9Id);
+            source.Title = "UI repeating source";
+            source.Status = DomainTaskStatus.Prepared;
+            source.IsCanBeCompleted = true;
+            source.PlannedBeginDateTime = DateTime.Today.AddDays(-1);
+            source.Repeater = new RepeaterPatternViewModel
+            {
+                Type = RepeaterType.Daily,
+                Period = 3,
+                AfterComplete = true
+            };
+            var readySource = source.Model;
+            readySource.Status = DomainTaskStatus.Prepared;
+            readySource.IsCanBeCompleted = true;
+            await vm.taskRepository!.TaskTreeManager.Storage.Save(readySource);
+            source.Update(readySource);
+            vm.CurrentTaskItem = source;
+            vm.SelectCurrentTask();
+
+            var countBeforeCompletion = vm.taskRepository.Tasks.Count;
+            var view = new MainControl { DataContext = vm };
+            var window = new Window { Width = 1400, Height = 1000, Content = view };
+            try
+            {
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+                var statusPicker = Find<TaskStatusPicker>(view, "CurrentTaskStatusButton");
+                var buildFlyout = typeof(TaskStatusPicker).GetMethod(
+                    "BuildStatusFlyout",
+                    BindingFlags.NonPublic | BindingFlags.Static)
+                    ?? throw new InvalidOperationException("TaskStatusPicker.BuildStatusFlyout was not found.");
+                var flyout = (MenuFlyout)buildFlyout.Invoke(null, [source])!;
+                statusPicker.Flyout = flyout;
+                flyout.ShowAt(statusPicker);
+                Dispatcher.UIThread.RunJobs();
+                var completed = flyout.Items.OfType<MenuItem>().Single(item =>
+                    AutomationProperties.GetAutomationId(item) == "TaskStatusOptionCompleted");
+                await Assert.That(completed.IsEnabled).IsTrue();
+                completed.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent, completed));
+                Dispatcher.UIThread.RunJobs();
+
+                await WaitAsync(() =>
+                    source.Status == DomainTaskStatus.Completed &&
+                    vm.taskRepository.Tasks.Count == countBeforeCompletion + 1);
+                var next = vm.taskRepository.Tasks.Items.Single(task =>
+                    task.Id != source.Id && task.Title == source.Title);
+                TestHelpers.SetCurrentTask(vm, next.Id);
+                vm.SelectCurrentTask();
+                Dispatcher.UIThread.RunJobs();
+
+                var selector = Find<ComboBox>(view, "CurrentTaskRepeaterSelector");
+                var selected = selector.SelectedItem as RepeaterPatternViewModel;
+                using (Assert.Multiple())
+                {
+                    await Assert.That(selected).IsNotNull();
+                    await Assert.That(selected!.Type).IsEqualTo(RepeaterType.Daily);
+                    await Assert.That(next.Repeater!.Period).IsEqualTo(3);
+                    await Assert.That(next.Repeater.AfterComplete).IsTrue();
+                }
+
+                var path = Path.Combine(fixture.DefaultTasksFolderPath, next.Id);
+                await WaitAsync(() => File.Exists(path));
+                using var reloadedRepository = new UnifiedTaskStorage(new TaskTreeManager(
+                    new FileTaskStorage(new FileTaskStorageOptions
+                    {
+                        Path = fixture.DefaultTasksFolderPath,
+                        UseWatcher = false
+                    })));
+                await reloadedRepository.Init();
+                var reloadedNext = reloadedRepository.Tasks.Lookup(next.Id).Value;
+                vm.CurrentTaskItem = reloadedNext;
+                Dispatcher.UIThread.RunJobs();
+                selected = selector.SelectedItem as RepeaterPatternViewModel;
+                await Assert.That(selected).IsNotNull();
+                await Assert.That(selected!.Type).IsEqualTo(RepeaterType.Daily);
+            }
+            finally
+            {
+                window.Content = null;
+                window.Close();
+                Dispatcher.UIThread.RunJobs();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task HydratedWeeklyRepeaters_SelectExactTemplatesInComboBox()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            await using var fixture = new MainWindowViewModelFixture();
+            var vm = fixture.MainWindowViewModelTest;
+            await vm.Connect();
+            vm.DetailsAreOpen = true;
+            TestHelpers.SetCurrentTask(vm, MainWindowViewModelFixture.RepeateTask9Id);
+            vm.SelectCurrentTask();
+            var task = vm.CurrentTaskItem!;
+            var view = new MainControl { DataContext = vm };
+            var window = new Window { Width = 1400, Height = 1000, Content = view };
+            try
+            {
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+                var selector = Find<ComboBox>(view, "CurrentTaskRepeaterSelector");
+
+                task.Repeater = new RepeaterPatternViewModel
+                {
+                    Type = RepeaterType.Weekly,
+                    WorkDays = true
+                };
+                Dispatcher.UIThread.RunJobs();
+                await Assert.That(selector.SelectedItem).IsSameReferenceAs(task.Repeaters[2]);
+
+                task.Repeater = new RepeaterPatternViewModel
+                {
+                    Type = RepeaterType.Weekly,
+                    Monday = true,
+                    Saturday = true
+                };
+                Dispatcher.UIThread.RunJobs();
+                await Assert.That(selector.SelectedItem).IsSameReferenceAs(task.Repeaters[3]);
+            }
+            finally
+            {
+                window.Content = null;
+                window.Close();
+                Dispatcher.UIThread.RunJobs();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task HydratedDailyRepeater_IsSelectedInTemplateComboBox()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            await using var fixture = new MainWindowViewModelFixture();
+            var vm = fixture.MainWindowViewModelTest;
+            await vm.Connect();
+            vm.DetailsAreOpen = true;
+            TestHelpers.SetCurrentTask(vm, MainWindowViewModelFixture.RepeateTask9Id);
+            vm.SelectCurrentTask();
+            var task = vm.CurrentTaskItem!;
+            task.Repeater = new RepeaterPatternViewModel
+            {
+                Type = RepeaterType.Daily,
+                Period = 3,
+                AfterComplete = true
+            };
+            var view = new MainControl { DataContext = vm };
+            var window = new Window { Width = 1400, Height = 1000, Content = view };
+            try
+            {
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+                var selector = Find<ComboBox>(view, "CurrentTaskRepeaterSelector");
+                await Assert.That(selector.SelectedItem)
+                    .IsSameReferenceAs(task.SelectedRepeaterTemplate);
+                await Assert.That(task.Repeater.Period).IsEqualTo(3);
+                await Assert.That(task.Repeater.AfterComplete).IsTrue();
+            }
+            finally
+            {
+                window.Content = null;
+                window.Close();
+                Dispatcher.UIThread.RunJobs();
+            }
+        }, CancellationToken.None);
+    }
+
     [Test]
     [Arguments(1400)]
     [Arguments(390)]
