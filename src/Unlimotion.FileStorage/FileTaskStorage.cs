@@ -9,7 +9,7 @@ using Unlimotion.TaskTree;
 
 namespace Unlimotion.Storage;
 
-public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraphWriteLock
+public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraphWriteLock, ITaskGraphWriteScopeStorage
 {
     private static readonly AsyncLocal<HashSet<string>?> HeldDirectoryLocks = new();
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> DirectorySemaphores =
@@ -17,6 +17,11 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
     private readonly ConcurrentDictionary<string, TaskItem> _tasks = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, string> _taskFilePaths = new(StringComparer.Ordinal);
     private readonly FileTaskStorageOptions _options;
+    private readonly object _liveGraphSync = new();
+    private TaskGraphReadResult? _liveGraph;
+    private long _liveGraphRevision;
+    private volatile bool _liveGraphNeedsReload;
+    private readonly AsyncLocal<FileTaskGraphWriteScope?> _activeWriteScope = new();
 
     public FileTaskStorage(FileTaskStorageOptions options)
     {
@@ -67,9 +72,20 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
 
     public async Task<TaskItem?> Load(string itemId, bool forced)
     {
+        var liveGraphEnabled = false;
+        if (!forced && TryGetLiveTask(itemId, out var liveTask, out liveGraphEnabled))
+        {
+            return liveTask;
+        }
+
+        if (!forced && liveGraphEnabled)
+        {
+            return null;
+        }
+
         if (!forced && _tasks.TryGetValue(itemId, out var cached))
         {
-            return cached;
+            return TaskItemSnapshot.Clone(cached);
         }
 
         if (!TryResolveTaskFilePath(itemId, out var filePath))
@@ -77,8 +93,12 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
             return null;
         }
 
-        if (!File.Exists(filePath))
+        if (!File.Exists(filePath) || new FileInfo(filePath).Length == 0)
         {
+            RemoveCachedTaskMappedToFile(filePath, exceptTaskId: null);
+            _tasks.TryRemove(itemId, out _);
+            _taskFilePaths.TryRemove(itemId, out _);
+            PublishLiveFileChange(filePath, task: null, error: null);
             return null;
         }
 
@@ -87,23 +107,44 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
         {
             task = await Task.Run(() => DeserializeTask(filePath));
         }
-        catch
+        catch (Exception ex)
         {
+            RemoveCachedTaskMappedToFile(filePath, exceptTaskId: null);
+            _tasks.TryRemove(itemId, out _);
+            _taskFilePaths.TryRemove(itemId, out _);
+            PublishLiveFileChange(filePath, task: null, error: ex.Message);
             return null;
         }
 
         if (task == null || !TryValidateTaskId(task.Id, out _))
         {
+            RemoveCachedTaskMappedToFile(filePath, exceptTaskId: null);
+            _tasks.TryRemove(itemId, out _);
+            _taskFilePaths.TryRemove(itemId, out _);
+            PublishLiveFileChange(filePath, task: null, error: "File does not contain a task with a valid non-empty Id.");
             return null;
         }
 
-        _tasks.AddOrUpdate(task.Id, task, (_, _) => task);
+        var stored = TaskItemSnapshot.Clone(task);
+        RemoveCachedTaskMappedToFile(filePath, exceptTaskId: stored.Id);
+        _tasks.AddOrUpdate(stored.Id, stored, (_, _) => stored);
         _taskFilePaths.AddOrUpdate(task.Id, filePath, (_, _) => filePath);
-        return task;
+        PublishLiveFileChange(filePath, stored, error: null);
+        return TaskItemSnapshot.Clone(stored);
     }
 
     public async IAsyncEnumerable<TaskItem> GetAll()
     {
+        if (TryGetLiveGraph(out var liveGraph))
+        {
+            foreach (var task in liveGraph.Tasks)
+            {
+                yield return TaskItemSnapshot.Clone(task);
+            }
+
+            yield break;
+        }
+
         foreach (var file in EnumerateTaskFiles())
         {
             TaskItem? task = null;
@@ -121,9 +162,10 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
                 continue;
             }
 
-            _tasks.AddOrUpdate(task.Id, task, (_, _) => task);
+            var stored = TaskItemSnapshot.Clone(task);
+            _tasks.AddOrUpdate(stored.Id, stored, (_, _) => stored);
             _taskFilePaths.AddOrUpdate(task.Id, file, (_, _) => file);
-            yield return task;
+            yield return TaskItemSnapshot.Clone(stored);
         }
     }
 
@@ -170,7 +212,8 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
                 }
 
                 files.Add(file);
-                _tasks.AddOrUpdate(task.Id, task, (_, _) => task);
+                var stored = TaskItemSnapshot.Clone(task);
+                _tasks.AddOrUpdate(task.Id, stored, (_, _) => stored);
                 _taskFilePaths.AddOrUpdate(task.Id, file, (_, _) => file);
             }
             catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
@@ -191,10 +234,49 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
         return new FileTaskStorageDirectoryReadResult(tasks, filesByTaskId, loadErrors, duplicates);
     }
 
-    public async Task<TaskGraphReadResult> ReadGraphAsync()
+    public virtual async Task<TaskGraphReadResult> ReadGraphAsync()
     {
+        if (TryGetLiveGraph(out var liveGraph))
+        {
+            return CloneGraph(liveGraph);
+        }
+
         var result = await ReadDirectoryAsync();
-        return new TaskGraphReadResult(
+        return ToGraphResult(result);
+    }
+
+    public async Task EnableLiveGraphAsync()
+    {
+        await WithDirectoryLockAsync(async () =>
+        {
+            _tasks.Clear();
+            _taskFilePaths.Clear();
+            var result = await ReadDirectoryAsync();
+            PublishLiveGraph(ToGraphResult(result));
+            _liveGraphNeedsReload = false;
+        });
+    }
+
+    public long LiveGraphRevision => Interlocked.Read(ref _liveGraphRevision);
+
+    public void InvalidateLiveGraph() => _liveGraphNeedsReload = true;
+
+    protected async Task EnsureLiveGraphReadyWithinWriteLockAsync()
+    {
+        if (!_liveGraphNeedsReload)
+        {
+            return;
+        }
+
+        _tasks.Clear();
+        _taskFilePaths.Clear();
+        var result = await ReadDirectoryAsync();
+        PublishLiveGraph(ToGraphResult(result));
+        _liveGraphNeedsReload = false;
+    }
+
+    private static TaskGraphReadResult ToGraphResult(FileTaskStorageDirectoryReadResult result) =>
+        new(
             result.Tasks,
             result.FilesByTaskId,
             result.LoadErrors
@@ -203,10 +285,27 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
             result.DuplicateIdIssues
                 .Select(static issue => new TaskGraphDuplicateIdIssue(issue.TaskId, issue.Files))
                 .ToArray());
+
+    public virtual Task<T> WithWriteLockAsync<T>(Func<Task<T>> operation) =>
+        WithDirectoryLockAsync(operation);
+
+    public ITaskGraphWriteScope BeginWriteScope()
+    {
+        var scope = new FileTaskGraphWriteScope(this, _activeWriteScope.Value);
+        _activeWriteScope.Value = scope;
+        return scope;
     }
 
-    public Task<T> WithWriteLockAsync<T>(Func<Task<T>> operation) =>
-        WithDirectoryLockAsync(operation);
+    public async Task<TaskGraphReadResult> RefreshAttemptedWritesAsync(ITaskGraphWriteScope scope)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        foreach (var taskId in scope.AttemptedTaskIds.Distinct(StringComparer.Ordinal))
+        {
+            await Load(taskId, forced: true);
+        }
+
+        return await ReadGraphAsync();
+    }
 
     public Task<T> WithDirectoryLockAsync<T>(Func<Task<T>> operation) =>
         WithDirectoryLockAsync(operation, CancellationToken.None);
@@ -281,26 +380,31 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
 
     private async Task<TaskItem> SaveCore(TaskItem taskItem)
     {
-        var item = taskItem with { };
+        var item = TaskItemSnapshot.Clone(taskItem);
         var id = string.IsNullOrWhiteSpace(item.Id) ? Guid.NewGuid().ToString() : item.Id;
         ValidateTaskId(id);
         item.Id = id;
         item.EnsureStatusHistory(item.UserId ?? "local-user");
+        _activeWriteScope.Value?.Record(item.Id);
 
         var filePath = ResolveTaskFilePath(item.Id);
         OnBeforeWrite(item.Id, filePath);
         var json = JsonConvert.SerializeObject(item, Formatting.Indented, CreateSerializerSettings());
         await AtomicWriteAllTextAsync(filePath, json + Environment.NewLine);
+        OnAfterWritePersisted(item.Id, filePath);
 
         taskItem.Id = item.Id;
-        _tasks.AddOrUpdate(taskItem.Id, item, (_, _) => item);
+        var stored = TaskItemSnapshot.Clone(item);
+        _tasks.AddOrUpdate(taskItem.Id, stored, (_, _) => stored);
         _taskFilePaths.AddOrUpdate(taskItem.Id, filePath, (_, _) => filePath);
-        return item;
+        PublishLiveFileChange(filePath, stored, error: null);
+        return TaskItemSnapshot.Clone(stored);
     }
 
     private Task<bool> RemoveCore(string itemId)
     {
         ValidateTaskId(itemId);
+        _activeWriteScope.Value?.Record(itemId);
         var filePath = ResolveTaskFilePath(itemId);
         OnBeforeRemove(itemId, filePath);
         _tasks.TryRemove(itemId, out _);
@@ -310,6 +414,8 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
         {
             File.Delete(filePath);
         }
+
+        PublishLiveFileChange(filePath, task: null, error: null);
 
         return Task.FromResult(true);
     }
@@ -321,7 +427,7 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
         return JsonRepairingReader.DeserializeWithRepair<TaskItem>(fullPath, serializer, saveRepairedSidecar: false);
     }
 
-    private IEnumerable<string> EnumerateTaskFiles()
+    protected virtual IEnumerable<string> EnumerateTaskFiles()
     {
         var directoryInfo = new DirectoryInfo(Path);
         return directoryInfo
@@ -332,7 +438,7 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
             .ToArray();
     }
 
-    private static bool IsTaskFile(string fileName)
+    protected static bool IsTaskFile(string fileName)
     {
         if (fileName.StartsWith(".", StringComparison.Ordinal))
         {
@@ -400,6 +506,10 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
     {
     }
 
+    protected virtual void OnAfterWritePersisted(string taskId, string filePath)
+    {
+    }
+
     protected bool TryGetTaskIdBySourceFileName(string fileName, out string taskId)
     {
         foreach (var pair in _taskFilePaths)
@@ -416,6 +526,185 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
 
         taskId = string.Empty;
         return false;
+    }
+
+    private bool TryGetLiveTask(string taskId, out TaskItem? task, out bool liveGraphEnabled)
+    {
+        lock (_liveGraphSync)
+        {
+            liveGraphEnabled = _liveGraph != null;
+            if (_liveGraph?.TasksById.TryGetValue(taskId, out var cached) == true)
+            {
+                task = TaskItemSnapshot.Clone(cached);
+                return true;
+            }
+        }
+
+        task = null;
+        return false;
+    }
+
+    private bool TryGetLiveGraph(out TaskGraphReadResult graph)
+    {
+        lock (_liveGraphSync)
+        {
+            if (_liveGraph == null)
+            {
+                graph = null!;
+                return false;
+            }
+
+            graph = _liveGraph;
+            return true;
+        }
+    }
+
+    private void PublishLiveGraph(TaskGraphReadResult graph)
+    {
+        lock (_liveGraphSync)
+        {
+            var revision = Interlocked.Increment(ref _liveGraphRevision);
+            _liveGraph = CloneGraph(graph) with { Revision = revision };
+        }
+    }
+
+    private void PublishLiveFileChange(string filePath, TaskItem? task, string? error)
+    {
+        lock (_liveGraphSync)
+        {
+            if (_liveGraph == null)
+            {
+                return;
+            }
+
+            // A graph with duplicate IDs needs its complete per-file ordering to select the canonical source.
+            // It is already write-unsafe, so keep its diagnostics intact until an explicit reload.
+            if (_liveGraph.DuplicateIdIssues.Count > 0)
+            {
+                _liveGraphNeedsReload = true;
+                return;
+            }
+
+            var previousTask = _liveGraph.FilesByTaskId
+                .Where(pair => string.Equals(pair.Value, filePath, StringComparison.OrdinalIgnoreCase))
+                .Select(pair => _liveGraph.TasksById.GetValueOrDefault(pair.Key))
+                .FirstOrDefault(existing => existing != null);
+            var previousError = _liveGraph.LoadErrors.FirstOrDefault(existing =>
+                string.Equals(existing.File, filePath, StringComparison.OrdinalIgnoreCase));
+            if (task != null && previousTask != null && previousError == null &&
+                JsonConvert.SerializeObject(previousTask, CreateSerializerSettings()) ==
+                JsonConvert.SerializeObject(task, CreateSerializerSettings()))
+            {
+                return;
+            }
+
+            var previousIds = _liveGraph.FilesByTaskId
+                .Where(pair => string.Equals(pair.Value, filePath, StringComparison.OrdinalIgnoreCase))
+                .Select(static pair => pair.Key)
+                .ToHashSet(StringComparer.Ordinal);
+            var tasks = _liveGraph.Tasks
+                .Where(existing => !previousIds.Contains(existing.Id))
+                .Select(TaskItemSnapshot.Clone)
+                .ToList();
+            var files = _liveGraph.FilesByTaskId
+                .Where(pair => !previousIds.Contains(pair.Key))
+                .ToDictionary(static pair => pair.Key, static pair => pair.Value, StringComparer.Ordinal);
+            var errors = _liveGraph.LoadErrors
+                .Where(existing => !string.Equals(existing.File, filePath, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            var duplicates = new List<TaskGraphDuplicateIdIssue>();
+
+            if (task != null)
+            {
+                var stored = TaskItemSnapshot.Clone(task);
+                if (files.TryGetValue(stored.Id, out var otherFile) &&
+                    !string.Equals(otherFile, filePath, StringComparison.OrdinalIgnoreCase))
+                {
+                    duplicates.Add(new TaskGraphDuplicateIdIssue(stored.Id, [otherFile, filePath]));
+                }
+
+                tasks.Add(stored);
+                files[stored.Id] = filePath;
+            }
+            else if (!string.IsNullOrWhiteSpace(error))
+            {
+                errors.Add(new TaskGraphLoadError(filePath, error));
+            }
+
+            var revision = Interlocked.Increment(ref _liveGraphRevision);
+            _liveGraph = new TaskGraphReadResult(tasks, files, errors, duplicates) { Revision = revision };
+        }
+    }
+
+    private void RemoveCachedTaskMappedToFile(string filePath, string? exceptTaskId)
+    {
+        foreach (var pair in _taskFilePaths)
+        {
+            if (string.Equals(pair.Value, filePath, StringComparison.OrdinalIgnoreCase) &&
+                (exceptTaskId == null || !string.Equals(pair.Key, exceptTaskId, StringComparison.Ordinal)))
+            {
+                _taskFilePaths.TryRemove(pair.Key, out _);
+                _tasks.TryRemove(pair.Key, out _);
+            }
+        }
+    }
+
+    private static TaskGraphReadResult CloneGraph(TaskGraphReadResult graph) => new(
+        graph.Tasks.Select(TaskItemSnapshot.Clone).ToArray(),
+        new Dictionary<string, string>(graph.FilesByTaskId, StringComparer.Ordinal),
+        graph.LoadErrors.Select(static error => new TaskGraphLoadError(error.File, error.Message)).ToArray(),
+        graph.DuplicateIdIssues
+            .Select(static issue => new TaskGraphDuplicateIdIssue(issue.TaskId, issue.Files.ToArray()))
+            .ToArray())
+    {
+        Revision = graph.Revision
+    };
+
+    private sealed class FileTaskGraphWriteScope : ITaskGraphWriteScope
+    {
+        private readonly FileTaskStorage _owner;
+        private readonly FileTaskGraphWriteScope? _previous;
+        private readonly HashSet<string> _attemptedTaskIds = new(StringComparer.Ordinal);
+        private bool _disposed;
+
+        public FileTaskGraphWriteScope(FileTaskStorage owner, FileTaskGraphWriteScope? previous)
+        {
+            _owner = owner;
+            _previous = previous;
+        }
+
+        public IReadOnlyList<string> AttemptedTaskIds
+        {
+            get
+            {
+                lock (_attemptedTaskIds)
+                {
+                    return _attemptedTaskIds.ToArray();
+                }
+            }
+        }
+
+        public void Record(string taskId)
+        {
+            lock (_attemptedTaskIds)
+            {
+                _attemptedTaskIds.Add(taskId);
+            }
+        }
+
+        public void Dispose()
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
+            if (ReferenceEquals(_owner._activeWriteScope.Value, this))
+            {
+                _owner._activeWriteScope.Value = _previous;
+            }
+        }
     }
 
     private async Task<FileStream> AcquireDirectoryLockAsync(

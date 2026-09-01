@@ -11,6 +11,8 @@ using DomainTaskStatus = Unlimotion.Domain.TaskStatus;
 
 namespace Unlimotion.Test;
 
+[NotInParallel("AvaloniaHeadless")]
+[ParallelLimiter<SharedUiStateParallelLimit>]
 public sealed class UnifiedTaskStorageStatusCommandTests
 {
     [Test]
@@ -260,6 +262,63 @@ public sealed class UnifiedTaskStorageStatusCommandTests
             await Assert.That(results.All(static result => result.Success)).IsTrue();
             await Assert.That(unified.Tasks.Lookup("task").Value.Status).IsEqualTo(DomainTaskStatus.InProgress);
         }
+    }
+
+    [Test]
+    public async Task NewerWatcherDeleteTombstone_PreventsDelayedCommandFromRecreatingTask()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var storage = new GenerationOrderingStorage(CreateTask("generation-delete", DomainTaskStatus.Prepared));
+            using var unified = new UnifiedTaskStorage(new TaskTreeManager(storage));
+            await unified.Init();
+            storage.BlockPostWriteRead = true;
+
+            var command = unified.TrySetStatusAsync(
+                "generation-delete",
+                DomainTaskStatus.InProgress,
+                "tester");
+            await storage.PostWriteReadEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            storage.PublishRemoved(storageRevision: 11);
+            await WaitUntilAsync(
+                () => !unified.Tasks.Lookup("generation-delete").HasValue,
+                TimeSpan.FromSeconds(5));
+
+            storage.ReleasePostWriteRead.TrySetResult();
+            var result = await command.WaitAsync(TimeSpan.FromSeconds(5));
+
+            using (Assert.Multiple())
+            {
+                await Assert.That(result.Success).IsTrue();
+                await Assert.That(result.StorageRevision).IsEqualTo(10);
+                await Assert.That(unified.Tasks.Lookup("generation-delete").HasValue).IsFalse();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task OlderRemovalAfterNewerWatcherCreate_DoesNotDeleteTask()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var storage = new GenerationOrderingStorage(CreateTask("generation-create", DomainTaskStatus.Prepared));
+            using var unified = new UnifiedTaskStorage(new TaskTreeManager(storage));
+            await unified.Init();
+            var newer = CreateTask("generation-create", DomainTaskStatus.Completed);
+
+            storage.PublishSaved(newer, storageRevision: 11);
+            await WaitUntilAsync(
+                () => unified.Tasks.Lookup(newer.Id).HasValue &&
+                      unified.Tasks.Lookup(newer.Id).Value.Status == DomainTaskStatus.Completed,
+                TimeSpan.FromSeconds(5));
+            storage.PublishRemoved(storageRevision: 10);
+            await Task.Delay(50);
+
+            await Assert.That(unified.Tasks.Lookup(newer.Id).HasValue).IsTrue();
+            await Assert.That(unified.Tasks.Lookup(newer.Id).Value.Status).IsEqualTo(DomainTaskStatus.Completed);
+        }, CancellationToken.None);
     }
 
     [Test]
@@ -554,6 +613,93 @@ public sealed class UnifiedTaskStorageStatusCommandTests
             }
 
             return CreateGraph(persisted);
+        }
+    }
+
+    private sealed class GenerationOrderingStorage : IStorage, ITaskGraphDiagnosticStorage
+    {
+        private TaskItem? persisted;
+        private int graphReadCount;
+
+        public GenerationOrderingStorage(TaskItem task) => persisted = CloneTask(task);
+
+        public bool BlockPostWriteRead { get; set; }
+        public TaskCompletionSource PostWriteReadEntered { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource ReleasePostWriteRead { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public event EventHandler<TaskStorageUpdateEventArgs>? Updating;
+        public event Action<Exception?>? OnConnectionError
+        {
+            add { }
+            remove { }
+        }
+
+        public Task<TaskItem> Save(TaskItem item)
+        {
+            persisted = CloneTask(item);
+            return Task.FromResult(CloneTask(item));
+        }
+
+        public Task<bool> Remove(string itemId)
+        {
+            persisted = null;
+            return Task.FromResult(true);
+        }
+
+        public Task<TaskItem?> Load(string itemId) =>
+            Task.FromResult(persisted == null ? null : CloneTask(persisted));
+
+        public async IAsyncEnumerable<TaskItem> GetAll()
+        {
+            if (persisted != null)
+            {
+                yield return CloneTask(persisted);
+            }
+
+            await Task.CompletedTask;
+        }
+
+        public Task BulkInsert(IEnumerable<TaskItem> taskItems) => Task.CompletedTask;
+        public Task<bool> Connect() => Task.FromResult(true);
+        public Task Disconnect() => Task.CompletedTask;
+
+        public async Task<TaskGraphReadResult> ReadGraphAsync()
+        {
+            var snapshot = persisted == null ? null : CloneTask(persisted);
+            if (BlockPostWriteRead && Interlocked.Increment(ref graphReadCount) == 2)
+            {
+                PostWriteReadEntered.TrySetResult();
+                await ReleasePostWriteRead.Task;
+            }
+
+            return snapshot == null
+                ? new TaskGraphReadResult([], new Dictionary<string, string>(), [], []) { Revision = 10 }
+                : CreateGraph(snapshot) with { Revision = 10 };
+        }
+
+        public void PublishRemoved(long storageRevision)
+        {
+            var taskId = persisted?.Id ?? "generation-delete";
+            persisted = null;
+            Updating?.Invoke(this, new TaskStorageUpdateEventArgs
+            {
+                Id = taskId,
+                Type = UpdateType.Removed,
+                StorageRevision = storageRevision
+            });
+        }
+
+        public void PublishSaved(TaskItem task, long storageRevision)
+        {
+            persisted = CloneTask(task);
+            Updating?.Invoke(this, new TaskStorageUpdateEventArgs
+            {
+                Id = task.Id,
+                Type = UpdateType.Saved,
+                StorageRevision = storageRevision
+            });
         }
     }
 

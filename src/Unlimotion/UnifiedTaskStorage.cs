@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -26,6 +27,8 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
     private readonly TaskItemViewModelContext? taskContext;
     private readonly SemaphoreSlim statusCommandGate = new(1, 1);
     private readonly CancellationTokenSource cacheLifetime = new();
+    private readonly ConcurrentDictionary<string, long> appliedStorageRevisions =
+        new(StringComparer.Ordinal);
     private SynchronizationContext? cacheSynchronizationContext;
     private volatile bool disposed;
 
@@ -53,17 +56,23 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
         StatusModelMigrationWasApplied = false;
         Tasks.Edit(operations => operations.Clear());
         TaskTreeManager.Storage.Updating -= TaskStorageOnUpdating;
+        if (TaskTreeManager.Storage is FileStorage initializingFileStorage &&
+            initializingFileStorage.Watcher is IRawDatabaseWatcher)
+        {
+            initializingFileStorage.Watcher?.SetEnable(false);
+        }
 
         var initialTaskViews = await BuildInitialTaskViewsAsync();
         var shouldYieldBetweenBatches = SynchronizationContext.Current != null;
         await AddInitialTasksToCacheAsync(initialTaskViews, shouldYieldBetweenBatches);
 
-        if (TaskTreeManager.Storage is FileStorage initFileStorage)
+        TaskTreeManager.Storage.Updating += TaskStorageOnUpdating;
+        if (TaskTreeManager.Storage is FileStorage initFileStorage &&
+            initFileStorage.Watcher is IRawDatabaseWatcher)
         {
             initFileStorage.Watcher?.SetEnable(true);
+            await ReconcileFileStorageSnapshotAsync(initFileStorage);
         }
-
-        TaskTreeManager.Storage.Updating += TaskStorageOnUpdating;
 
         OnInited();
     }
@@ -79,7 +88,7 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
         cacheLifetime.Cancel();
         if (TaskTreeManager.Storage is FileStorage fileStorage)
         {
-            fileStorage.Watcher?.SetEnable(false);
+            fileStorage.Dispose();
         }
 
         TaskTreeManager.Storage.Updating -= TaskStorageOnUpdating;
@@ -101,6 +110,11 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
                 var forceReverseLinksRecheck = ShouldForceReverseLinkRecheck(fileStorage);
                 var reverseLinksResult = await MigrateReverseLinks(TaskTreeManager, forceReverseLinksRecheck);
                 await MigrateIsCanBeCompleted(TaskTreeManager, forceRecheck: reverseLinksResult.AnyChanges);
+                if (fileStorage.Watcher is IRawDatabaseWatcher)
+                {
+                    await fileStorage.EnableLiveGraphAsync();
+                    await fileStorage.SynchronizePendingFileChangesAsync();
+                }
             }
 
             var initialTasks = new List<TaskItem>();
@@ -117,6 +131,47 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
             new TaskRelationsIndex().Rebuild(initialTaskViews);
             return initialTaskViews;
         });
+    }
+
+    private async Task ReconcileFileStorageSnapshotAsync(FileStorage fileStorage)
+    {
+        var previousGraph = await fileStorage.ReadGraphAsync();
+        var graph = await fileStorage.SynchronizePendingFileChangesAsync();
+        await RunOnCacheSynchronizationContextAsync(() =>
+        {
+            var taskIds = graph.TasksById.Keys.ToHashSet(StringComparer.Ordinal);
+            var changed = false;
+            foreach (var task in graph.TasksById.Values)
+            {
+                changed |= HydrateCache(task, create: true, graph.Revision);
+            }
+
+            // A load error means the physical file still exists but cannot be projected safely.
+            // Preserve its last visible VM; write commands remain blocked by the graph diagnostic.
+            var errorFiles = graph.LoadErrors
+                .Select(static error => error.File)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var idsWithUnreadableSources = previousGraph.FilesByTaskId
+                .Where(pair => errorFiles.Contains(pair.Value))
+                .Select(static pair => pair.Key)
+                .ToHashSet(StringComparer.Ordinal);
+            var removedIds = Tasks.Keys
+                .Where(id => !taskIds.Contains(id) && !idsWithUnreadableSources.Contains(id))
+                .ToArray();
+            var acceptedRemovedIds = removedIds
+                .Where(id => TryAcceptStorageRevision(id, graph.Revision))
+                .ToArray();
+            if (acceptedRemovedIds.Length > 0)
+            {
+                RemoveTasksFromCache(acceptedRemovedIds);
+                changed = true;
+            }
+
+            if (changed)
+            {
+                RefreshRelations();
+            }
+        }).ConfigureAwait(false);
     }
 
     private async Task AddInitialTasksToCacheAsync(
@@ -337,6 +392,24 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
 
         if (result.DeniedReason?.Kind == TaskOperationDeniedKind.OutcomeUnknown)
         {
+            if (result.ChangedTasks.Count > 0)
+            {
+                await RunOnCacheSynchronizationContextAsync(() =>
+                {
+                    var hydrated = false;
+                    foreach (var task in result.ChangedTasks)
+                    {
+                        hydrated |= HydrateCache(task, create: true, result.StorageRevision);
+                    }
+
+                    if (hydrated)
+                    {
+                        RefreshRelations();
+                    }
+                }).ConfigureAwait(false);
+                return;
+            }
+
             TaskItem? reloadedTask = null;
             try
             {
@@ -352,7 +425,7 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
             {
                 await RunOnCacheSynchronizationContextAsync(() =>
                 {
-                    if (HydrateCache(reloadedTask, create: false))
+                    if (HydrateCache(reloadedTask, create: false, result.StorageRevision))
                     {
                         RefreshRelations();
                     }
@@ -387,7 +460,7 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
             var hydrated = false;
             foreach (var (task, create) in tasksToHydrate.Values)
             {
-                hydrated |= HydrateCache(task, create);
+                hydrated |= HydrateCache(task, create, result.StorageRevision);
             }
 
             if (hydrated)
@@ -1088,7 +1161,7 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
                 var taskItem = await TaskTreeManager.Storage.Load(e.Id);
                 if (taskItem?.Id != null)
                 {
-                    UpdateCache(taskItem, true);
+                    HydrateCache(taskItem, create: true, e.StorageRevision);
                     RefreshRelations();
                 }
                 break;
@@ -1096,8 +1169,14 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
                 // Handle file storage ID mapping
                 var taskId = isFileStorage ? new FileInfo(e.Id).Name : e.Id;
                 var deletedItem = Tasks.Lookup(taskId);
-                if (deletedItem.HasValue)
-                    await Delete(deletedItem.Value, false);
+                if (TryAcceptStorageRevision(taskId, e.StorageRevision))
+                {
+                    if (deletedItem.HasValue)
+                    {
+                        RemoveTasksFromCache([taskId]);
+                        RefreshRelations();
+                    }
+                }
                 break;
             default:
                 throw new ArgumentOutOfRangeException();
@@ -1124,23 +1203,59 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
         HydrateCache(task, create);
     }
 
-    private bool HydrateCache(TaskItem task, bool create)
+    private bool HydrateCache(TaskItem task, bool create, long storageRevision = 0)
     {
+        if (!TryAcceptStorageRevision(task.Id, storageRevision))
+        {
+            return false;
+        }
+
         var vm = Tasks.Lookup(task.Id);
 
         if (vm.HasValue)
         {
-            vm.Value.Update(task);
-            return true;
+            return vm.Value.Update(task, storageRevision);
         }
         else if (create)
         {
             vm = CreateTaskViewModel(task);
+            vm.Value.TryAcceptStorageRevision(storageRevision);
             Tasks.AddOrUpdate(vm.Value);
             return true;
         }
 
         return false;
+    }
+
+    private bool TryAcceptStorageRevision(string taskId, long storageRevision)
+    {
+        if (storageRevision <= 0)
+        {
+            return true;
+        }
+
+        while (true)
+        {
+            if (!appliedStorageRevisions.TryGetValue(taskId, out var current))
+            {
+                if (appliedStorageRevisions.TryAdd(taskId, storageRevision))
+                {
+                    return true;
+                }
+
+                continue;
+            }
+
+            if (storageRevision < current)
+            {
+                return false;
+            }
+
+            if (appliedStorageRevisions.TryUpdate(taskId, storageRevision, current))
+            {
+                return true;
+            }
+        }
     }
 
     private TaskItemViewModel CreateTaskViewModel(

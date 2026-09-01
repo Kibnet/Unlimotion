@@ -6,6 +6,8 @@ namespace Unlimotion.TaskTree;
 public sealed class TaskGraphCommandService
 {
     private readonly IStorage _storage;
+    private long _lastReadRevision;
+    private ITaskGraphWriteScope? _activeWriteScope;
 
     public TaskGraphCommandService(IStorage storage)
     {
@@ -145,7 +147,7 @@ public sealed class TaskGraphCommandService
         }
         catch (Exception ex)
         {
-            return CreateOutcomeUnknownResult(
+            return await CreateOutcomeUnknownResultAsync(
                 ex,
                 task.Id,
                 requestedStatus,
@@ -156,7 +158,7 @@ public sealed class TaskGraphCommandService
 
         if (afterRead.Result != null)
         {
-            return CreateOutcomeUnknownResult(
+            return await CreateOutcomeUnknownResultAsync(
                 new InvalidOperationException(afterRead.Result.DeniedReason?.Message ?? "Post-write graph read failed."),
                 task.Id,
                 requestedStatus,
@@ -180,7 +182,7 @@ public sealed class TaskGraphCommandService
 
         var after = new TaskAvailabilityService(afterGraph.Tasks).Analyze(afterTask);
         return TaskOperationResult.Succeeded(
-            changedTasks,
+            BuildConfirmedChanges(changedTasks, afterGraph),
             before,
             after,
             validation,
@@ -269,7 +271,7 @@ public sealed class TaskGraphCommandService
         }
         catch (Exception ex)
         {
-            return CreateOutcomeUnknownResult(
+            return await CreateOutcomeUnknownResultAsync(
                 ex,
                 task.Id,
                 requestedStatus: null,
@@ -280,7 +282,7 @@ public sealed class TaskGraphCommandService
 
         if (afterRead.Result != null)
         {
-            return CreateOutcomeUnknownResult(
+            return await CreateOutcomeUnknownResultAsync(
                 new InvalidOperationException(afterRead.Result.DeniedReason?.Message ?? "Post-write graph read failed."),
                 task.Id,
                 requestedStatus: null,
@@ -317,7 +319,7 @@ public sealed class TaskGraphCommandService
         }
 
         var after = new TaskAvailabilityService(afterGraph.Tasks).Analyze(afterTask);
-        return TaskOperationResult.Succeeded(changedTasks, before, after, validation);
+        return TaskOperationResult.Succeeded(BuildConfirmedChanges(changedTasks, afterGraph), before, after, validation);
     }
 
     private async Task<TaskOperationReadResult> ReadGraphForWriteAsync()
@@ -332,7 +334,9 @@ public sealed class TaskGraphCommandService
 
         try
         {
-            return new TaskOperationReadResult(await diagnosticStorage.ReadGraphAsync(), null);
+            var graph = await diagnosticStorage.ReadGraphAsync();
+            _lastReadRevision = graph.Revision;
+            return new TaskOperationReadResult(graph, null);
         }
         catch (Exception ex)
         {
@@ -345,14 +349,18 @@ public sealed class TaskGraphCommandService
 
     private async Task<TaskOperationResult> ExecuteWriteAsync(Func<Task<TaskOperationResult>> operation)
     {
+        using var writeScope = (_storage as ITaskGraphWriteScopeStorage)?.BeginWriteScope();
+        _activeWriteScope = writeScope;
         try
         {
             if (_storage is ITaskGraphWriteLock writeLock)
             {
-                return await writeLock.WithWriteLockAsync(operation);
+                var result = await writeLock.WithWriteLockAsync(operation);
+                return result with { StorageRevision = _lastReadRevision };
             }
 
-            return await operation();
+            var unlockedResult = await operation();
+            return unlockedResult with { StorageRevision = _lastReadRevision };
         }
         catch (Exception ex)
         {
@@ -363,6 +371,10 @@ public sealed class TaskGraphCommandService
                 criterionId: null,
                 before: null,
                 validation: null);
+        }
+        finally
+        {
+            _activeWriteScope = null;
         }
     }
 
@@ -383,14 +395,15 @@ public sealed class TaskGraphCommandService
             before,
             validation: validation);
 
-    private static TaskOperationResult CreateOutcomeUnknownResult(
+    private async Task<TaskOperationResult> CreateOutcomeUnknownResultAsync(
         Exception ex,
         string? taskId,
         DomainTaskStatus? requestedStatus,
         string? criterionId,
         TaskAvailabilityAnalysis? before,
-        TaskGraphValidationReport? validation) =>
-        TaskOperationResult.Denied(
+        TaskGraphValidationReport? validation)
+    {
+        var result = TaskOperationResult.Denied(
             TaskOperationDeniedReason.Create(
                 TaskOperationDeniedKind.OutcomeUnknown,
                 $"Task graph write may have been persisted, but the final outcome could not be verified: {ex.Message}",
@@ -399,6 +412,41 @@ public sealed class TaskGraphCommandService
                 criterionId),
             before,
             validation: validation);
+
+        var attemptedTaskIds = _activeWriteScope?.AttemptedTaskIds ?? Array.Empty<string>();
+        if (attemptedTaskIds.Count == 0 || _storage is not ITaskGraphDiagnosticStorage diagnosticStorage)
+        {
+            return result;
+        }
+
+        try
+        {
+            var confirmedGraph = _storage is ITaskGraphWriteScopeStorage scopedStorage && _activeWriteScope != null
+                ? await scopedStorage.RefreshAttemptedWritesAsync(_activeWriteScope)
+                : await diagnosticStorage.ReadGraphAsync();
+            _lastReadRevision = confirmedGraph.Revision;
+            var confirmedTasks = attemptedTaskIds
+                .Select(id => confirmedGraph.TasksById.GetValueOrDefault(id))
+                .Where(static task => task != null)
+                .Select(static task => TaskItemSnapshot.Clone(task!))
+                .ToArray();
+            var authoritativeTask = taskId != null
+                ? confirmedGraph.TasksById.GetValueOrDefault(taskId)
+                : null;
+            return result with
+            {
+                ChangedTasks = confirmedTasks,
+                AuthoritativeTask = authoritativeTask == null
+                    ? null
+                    : TaskItemSnapshot.Clone(authoritativeTask),
+                StorageRevision = confirmedGraph.Revision
+            };
+        }
+        catch
+        {
+            return result;
+        }
+    }
 
     private TaskTreeManager CreateManager(string? author) => new(_storage)
     {
@@ -413,56 +461,16 @@ public sealed class TaskGraphCommandService
             ? manager.UpdateTaskWithinExistingMutationLockAsync(change)
             : manager.UpdateTask(change);
 
-    private static TaskItem CloneForUpdate(TaskItem task) => task with
-    {
-        StatusHistory = task.StatusHistory?.Select(CloneStatusHistoryEntry).ToList() ?? new List<TaskStatusHistoryEntry>(),
-        CompletionCriteria = task.CompletionCriteria?.Select(CloneCriterion).ToList() ?? new List<TaskCompletionCriterion>(),
-        ContainsTasks = task.ContainsTasks?.ToList() ?? new List<string>(),
-        ParentTasks = task.ParentTasks?.ToList() ?? new List<string>(),
-        BlocksTasks = task.BlocksTasks?.ToList() ?? new List<string>(),
-        BlockedByTasks = task.BlockedByTasks?.ToList() ?? new List<string>(),
-        Repeater = CloneRepeater(task.Repeater),
-        ExtensionData = task.ExtensionData?.ToDictionary(
-            static pair => pair.Key,
-            static pair => pair.Value == null ? null! : pair.Value.DeepClone())
-    };
+    private static TaskItem CloneForUpdate(TaskItem task) => TaskItemSnapshot.Clone(task);
 
-    private static TaskCompletionCriterion CloneCriterion(TaskCompletionCriterion criterion) => new()
-    {
-        Id = criterion.Id,
-        Text = criterion.Text,
-        IsSatisfied = criterion.IsSatisfied,
-        ExtensionData = criterion.ExtensionData?.ToDictionary(
-            static pair => pair.Key,
-            static pair => pair.Value == null ? null! : pair.Value.DeepClone())
-    };
-
-    private static TaskStatusHistoryEntry CloneStatusHistoryEntry(TaskStatusHistoryEntry entry) =>
-        entry == null
-            ? null!
-            : new TaskStatusHistoryEntry
-            {
-                Status = entry.Status,
-                ChangedAt = entry.ChangedAt,
-                Author = entry.Author,
-                ExtensionData = entry.ExtensionData?.ToDictionary(
-                    static pair => pair.Key,
-                    static pair => pair.Value == null ? null! : pair.Value.DeepClone())
-            };
-
-    private static RepeaterPattern? CloneRepeater(RepeaterPattern? repeater) =>
-        repeater == null
-            ? null
-            : new RepeaterPattern
-            {
-                Type = repeater.Type,
-                Period = repeater.Period,
-                AfterComplete = repeater.AfterComplete,
-                Pattern = repeater.Pattern?.ToList()!,
-                ExtensionData = repeater.ExtensionData?.ToDictionary(
-                    static pair => pair.Key,
-                    static pair => pair.Value == null ? null! : pair.Value.DeepClone())
-            };
+    private static IReadOnlyList<TaskItem> BuildConfirmedChanges(
+        IReadOnlyList<TaskItem> changedTasks,
+        TaskGraphReadResult confirmedGraph) => changedTasks
+        .Where(static task => !string.IsNullOrWhiteSpace(task.Id))
+        .Select(task => confirmedGraph.TasksById.GetValueOrDefault(task.Id))
+        .Where(static task => task != null)
+        .Select(static task => TaskItemSnapshot.Clone(task!))
+        .ToArray();
 
     private sealed record TaskOperationReadResult(TaskGraphReadResult? Graph, TaskOperationResult? Result);
 }
