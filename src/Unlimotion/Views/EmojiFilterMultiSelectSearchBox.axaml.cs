@@ -566,11 +566,18 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
                 .ToList();
         var hasNoMatches = query.Length > 0 && matches.Count == 0;
         var itemsToShow = hasNoMatches ? selectableFilters : matches;
+        var selectedFilter = PART_List.SelectedItem as EmojiFilter;
 
         displayedFilters.Clear();
         foreach (var filter in itemsToShow)
         {
             displayedFilters.Add(filter);
+        }
+        // Rebuilding the displayed collection clears ListBox selection. Retain the
+        // selected object when it survives a source refresh, including the All row.
+        if (selectedFilter != null && displayedFilters.Contains(selectedFilter))
+        {
+            PART_List.SelectedItem = selectedFilter;
         }
 
         PART_NoMatchesPanel.IsVisible = hasNoMatches;

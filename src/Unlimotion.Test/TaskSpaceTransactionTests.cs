@@ -988,8 +988,11 @@ public sealed class TaskSpaceTransactionTests : IDisposable
         var writePaths = baselineFaultProvider.RecordedWrites.ToArray();
         await Assert.That(writePaths.Length).IsGreaterThan(0);
 
+        using var matrixTrace = new FaultMatrixTrace(nameof(CatalogMutation_EveryPersistedWriteFault_ReopensAsCompleteBeforeState), writePaths);
+
         for (var writeNumber = 1; writeNumber <= writePaths.Length; writeNumber++)
         {
+            using var caseTrace = matrixTrace.StartCase(writeNumber);
             var faultProvider = new FaultInjectingConfigurationProvider();
             var configuration = CreateFaultInjectingConfiguration(
                 CreateConfiguration(out _),
@@ -997,6 +1000,7 @@ public sealed class TaskSpaceTransactionTests : IDisposable
             var before = CreateRemovalBeforeState(configuration);
             var after = CreateRemovalAfterState(before);
             faultProvider.FailWriteNumber(writeNumber);
+            caseTrace.Next("write");
             var failed = false;
             try
             {
@@ -1021,6 +1025,7 @@ public sealed class TaskSpaceTransactionTests : IDisposable
                     $"Catalog mutation did not surface injected write #{writeNumber} ({writePaths[writeNumber - 1]}).");
             }
 
+            caseTrace.Next("recovery");
             var recovered = TaskSourceSettingsAdapter.LoadOrCreate(
                 configuration,
                 Path.Combine(_rootPath, $"matrix-default-{writeNumber}"));
@@ -1041,6 +1046,7 @@ public sealed class TaskSpaceTransactionTests : IDisposable
                 throw new InvalidOperationException(
                     $"Catalog mutation write #{writeNumber} ({writePaths[writeNumber - 1]}) left a prepared journal.");
             }
+            caseTrace.Pass();
         }
 
         await Assert.That(writePaths.Distinct(StringComparer.Ordinal).Count()).IsGreaterThan(10);
@@ -1062,8 +1068,11 @@ public sealed class TaskSpaceTransactionTests : IDisposable
         var writePaths = baselineFaultProvider.RecordedWrites.ToArray();
         await Assert.That(writePaths.Length).IsGreaterThan(0);
 
+        using var matrixTrace = new FaultMatrixTrace(nameof(ActivationProjection_EveryPersistedWriteFault_RestoresPreviousRuntimeAndProjection), writePaths);
+
         for (var writeNumber = 1; writeNumber <= writePaths.Length; writeNumber++)
         {
+            using var caseTrace = matrixTrace.StartCase(writeNumber);
             var faultProvider = new FaultInjectingConfigurationProvider();
             var configuration = CreateFaultInjectingConfiguration(
                 CreateConfiguration(out _),
@@ -1074,6 +1083,7 @@ public sealed class TaskSpaceTransactionTests : IDisposable
                 "Matrix target",
                 Path.Combine(_rootPath, $"projection-matrix-{writeNumber}"));
             faultProvider.FailWriteNumber(writeNumber);
+            caseTrace.Next("write");
             var failed = false;
             try
             {
@@ -1097,6 +1107,7 @@ public sealed class TaskSpaceTransactionTests : IDisposable
                     $"Activation write #{writeNumber} ({writePaths[writeNumber - 1]}) did not restore the previous runtime.");
             }
 
+            caseTrace.Next("recovery");
             var recovered = TaskSourceSettingsAdapter.LoadOrCreate(
                 configuration,
                 Path.Combine(_rootPath, $"projection-default-{writeNumber}"));
@@ -1107,6 +1118,7 @@ public sealed class TaskSpaceTransactionTests : IDisposable
                 throw new InvalidOperationException(
                     $"Activation write #{writeNumber} ({writePaths[writeNumber - 1]}) did not restore the committed default projection.");
             }
+            caseTrace.Pass();
         }
 
         await Assert.That(writePaths.Distinct(StringComparer.Ordinal).Count()).IsGreaterThan(10);
@@ -1123,10 +1135,14 @@ public sealed class TaskSpaceTransactionTests : IDisposable
         var writePaths = baseline.FaultProvider.RecordedWrites.ToArray();
         await Assert.That(writePaths.Length).IsGreaterThan(0);
 
+        using var matrixTrace = new FaultMatrixTrace(nameof(FirstMigration_EveryPersistedWriteFault_RestartsWithCompleteLegacyProfile), writePaths);
+
         for (var writeNumber = 1; writeNumber <= writePaths.Length; writeNumber++)
         {
+            using var caseTrace = matrixTrace.StartCase(writeNumber);
             var setup = CreateLegacyMigrationConfiguration(writeNumber.ToString());
             setup.FaultProvider.FailWriteNumber(writeNumber);
+            caseTrace.Next("write");
             var failed = false;
             try
             {
@@ -1145,6 +1161,7 @@ public sealed class TaskSpaceTransactionTests : IDisposable
                     $"First migration did not surface injected write #{writeNumber} ({writePaths[writeNumber - 1]}).");
             }
 
+            caseTrace.Next("recovery");
             TaskSourcesSettings recovered;
             try
             {
@@ -1175,6 +1192,7 @@ public sealed class TaskSpaceTransactionTests : IDisposable
                 throw new InvalidOperationException(
                     $"First migration write #{writeNumber} ({writePaths[writeNumber - 1]}) did not recover the complete legacy profile.");
             }
+            caseTrace.Pass();
         }
 
         await Assert.That(writePaths.Distinct(StringComparer.Ordinal).Count()).IsGreaterThan(10);

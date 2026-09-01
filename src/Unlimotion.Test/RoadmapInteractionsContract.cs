@@ -12,7 +12,7 @@ internal static class RoadmapInteractionsContract
         result.FiltersAvailable = true;
 
         var roadmapTests = new RoadmapGraphUiTests();
-        await roadmapTests.RoadmapGraph_SearchText_HighlightsAndClearsMatchingNode();
+        await RoadmapGraphUiTests.SearchScenario.RoadmapGraph_SearchText_HighlightsAndClearsMatchingNode();
         result.SearchAvailable = true;
         await roadmapTests.RoadmapGraph_InlineTitleEdit_CreatesEditorForF2OrRepeatedTitleClick();
         result.InlineRenameAvailable = true;

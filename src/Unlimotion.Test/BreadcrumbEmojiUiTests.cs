@@ -19,31 +19,25 @@ public class BreadcrumbEmojiUiTests
     [Test]
     public async Task Breadcrumbs_ShouldRenderEmojiRunsWithEmojiFont()
     {
+        using var phases = new TestScenarioPhases(nameof(Breadcrumbs_ShouldRenderEmojiRunsWithEmojiFont));
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
-            var fixture = new MainWindowViewModelFixture();
             Window? window = null;
 
             try
             {
-                var vm = fixture.MainWindowViewModelTest;
-                await vm.Connect();
-
-                var parentTask = TestHelpers.GetTask(vm, MainWindowViewModelFixture.RootTask2Id)!;
-                var childTask = TestHelpers.GetTask(vm, MainWindowViewModelFixture.SubTask22Id)!;
-
-                parentTask.Title = "📚 Root Task 2";
-                childTask.Title = "🧪 Sub Task 22";
-                vm.AllTasksMode = false;
-                vm.CurrentTaskItem = childTask;
-
-                var view = new MainControl { DataContext = vm };
-                window = CreateWindow(view);
+                // The executable breadcrumbs BDD covers real task selection/path binding.
+                // This case isolates the production text renderer and its font runs.
+                var breadcrumbs = new EmojiTextBlock
+                {
+                    EmojiText = "📚 Root Task 2 / 🧪 Sub Task 22",
+                    FontWeight = Avalonia.Media.FontWeight.Bold
+                };
+                window = CreateWindow(breadcrumbs);
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
-
-                var breadcrumbs = view.FindControl<EmojiTextBlock>("BreadcrumbsTextBlock");
+                phases.Next("body");
 
                 await Assert.That(breadcrumbs).IsNotNull();
                 await Assert.That(WaitFor(() => breadcrumbs!.Inlines.Count > 0)).IsTrue();
@@ -60,8 +54,8 @@ public class BreadcrumbEmojiUiTests
             }
             finally
             {
+                phases.Next("cleanup");
                 window?.Close();
-                await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
     }

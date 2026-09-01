@@ -5,6 +5,7 @@ using Unlimotion.Test.StormBdd;
 namespace Unlimotion.Test;
 
 [NotInParallel("ServerStorageLiveIntegration")]
+[Property("CiMeasurementPackage", "server")]
 public class StormServerStorageCrudRealtimeExecutableSpecTests
 {
     [Test]

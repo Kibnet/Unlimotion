@@ -6,6 +6,7 @@ using Unlimotion.Test.StormBdd;
 namespace Unlimotion.Test;
 
 [NotInParallel("AvaloniaHeadless")]
+[Property("CiMeasurementPackage", "emoji")]
 [ParallelLimiter<SharedUiStateParallelLimit>]
 public class StormEmojiFilterExecutableSpecTests
 {

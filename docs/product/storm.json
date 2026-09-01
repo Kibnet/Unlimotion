@@ -3133,13 +3133,17 @@
         {
           "path": "src/Unlimotion.Test/MainControlTreeCommandsUiTests.cs",
           "description": "Источник подтверждает связанное продуктовое поведение или ограничение."
+        },
+        {
+          "path": "docs/testing/ci-test-coverage-map.md",
+          "description": "2026-08-31: active execution mapping after approved BDD dedup; prior dated evidence is historical. Validation status is recorded in the implementation report."
         }
       ],
       "assumptions": [],
       "open_questions": [],
       "trace_method_examples": [
         "TreeCommandUi_CopyTaskOutline_HotkeyAndContextMenu_Work",
-        "TreeSearch_AllTasksSearchEditor_FiltersVisibleTree",
+        "StormSearchBehaviorExecutableSpecTests.SearchBehaviorScenario_ExecutesFeatureSteps",
         "TreeCommandUi_PasteTaskOutline_Hotkey_CreatesTreeUnderSelectedTask"
       ],
       "trace_confidence": 0.78,
@@ -3242,14 +3246,17 @@
         {
           "path": "src/Unlimotion.Test/MainControlResetFiltersUiTests.cs",
           "description": "Источник подтверждает связанное продуктовое поведение или ограничение."
+        },
+        {
+          "path": "docs/testing/ci-test-coverage-map.md",
+          "description": "2026-08-31: active execution mapping after approved BDD dedup; prior dated evidence is historical. Validation status is recorded in the implementation report."
         }
       ],
       "assumptions": [],
       "open_questions": [],
       "trace_method_examples": [
-        "FilterFlyout_EmojiFilters_OpenFullListThenSearchAndToggleWithoutClosing",
         "MainControlFilterToolbar_NarrowViewport_UsesCompactPrimaryActions",
-        "RoadmapFilterFlyout_EmojiFilters_UsesSearchableMultiSelectDropdown"
+        "StormEmojiFilterExecutableSpecTests.EmojiFilterScenario_ExecutesFeatureSteps"
       ],
       "trace_confidence": 0.78,
       "linked_scenarios": [
@@ -3887,7 +3894,7 @@
     {
       "id": "TS-0019",
       "name": "ServerStorage_LiveSignalR_SaveTask_DeliversUpdateToSecondClientForSameUser",
-      "path": "src/Unlimotion.Test/ServerStorageLiveIntegrationTests.cs",
+      "path": "src/Unlimotion.Test/StormServerStorageCrudRealtimeExecutableSpecTests.cs",
       "framework": "TUnit",
       "type": "integration/live-signalr-ravendb",
       "status": "active",
@@ -3935,6 +3942,10 @@
         {
           "command": "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/ServerStorageLiveIntegrationTests/*\" --output Detailed",
           "result": "passed 2/2 on 2026-06-26 after test-only live host reload-on-change/EventLog cleanup stabilization"
+        },
+        {
+          "path": "docs/testing/ci-test-coverage-map.md",
+          "description": "2026-08-31: active execution mapping after approved BDD dedup; prior dated evidence is historical. Validation status is recorded in the implementation report."
         }
       ],
       "assumptions": [
@@ -3942,14 +3953,14 @@
       ],
       "open_questions": [],
       "trace_method_examples": [
-        "ServerStorage_LiveSignalR_SaveTask_DeliversUpdateToSecondClientForSameUser"
+        "StormServerStorageCrudRealtimeExecutableSpecTests.ServerStorageCrudRealtimeScenario_ExecutesFeatureSteps"
       ],
       "trace_confidence": 0.84
     },
     {
       "id": "TS-0020",
       "name": "ServerStorage_LiveServiceStackTaskApi_BulkInsertGetAllAndGetTask_RoundTripsAuthenticatedUserTasks",
-      "path": "src/Unlimotion.Test/ServerStorageLiveIntegrationTests.cs",
+      "path": "src/Unlimotion.Test/StormServerStorageCrudRealtimeExecutableSpecTests.cs",
       "framework": "TUnit",
       "type": "integration/live-servicestack-ravendb",
       "status": "active",
@@ -3998,6 +4009,10 @@
         {
           "command": "dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --no-restore -- --treenode-filter \"/*/*/ServerStorageLiveIntegrationTests/*\" --output Detailed",
           "result": "passed 2/2 on 2026-06-26 after ServiceStack live host cleanup stabilization"
+        },
+        {
+          "path": "docs/testing/ci-test-coverage-map.md",
+          "description": "2026-08-31: active execution mapping after approved BDD dedup; prior dated evidence is historical. Validation status is recorded in the implementation report."
         }
       ],
       "assumptions": [
@@ -4005,7 +4020,7 @@
       ],
       "open_questions": [],
       "trace_method_examples": [
-        "ServerStorage_LiveServiceStackTaskApi_BulkInsertGetAllAndGetTask_RoundTripsAuthenticatedUserTasks"
+        "StormServerStorageCrudRealtimeExecutableSpecTests.ServerStorageCrudRealtimeScenario_ExecutesFeatureSteps"
       ],
       "trace_confidence": 0.84
     },
@@ -7888,7 +7903,7 @@
         ],
         "method_examples": [
           "TreeCommandUi_CopyTaskOutline_HotkeyAndContextMenu_Work",
-          "TreeSearch_AllTasksSearchEditor_FiltersVisibleTree",
+          "StormSearchBehaviorExecutableSpecTests.SearchBehaviorScenario_ExecutesFeatureSteps",
           "TreeCommandUi_PasteTaskOutline_Hotkey_CreatesTreeUnderSelectedTask"
         ]
       },
@@ -7934,9 +7949,8 @@
           "CN-0004"
         ],
         "method_examples": [
-          "FilterFlyout_EmojiFilters_OpenFullListThenSearchAndToggleWithoutClosing",
           "MainControlFilterToolbar_NarrowViewport_UsesCompactPrimaryActions",
-          "RoadmapFilterFlyout_EmojiFilters_UsesSearchableMultiSelectDropdown"
+          "StormEmojiFilterExecutableSpecTests.EmojiFilterScenario_ExecutesFeatureSteps"
         ]
       },
       "TS-0007": {
@@ -8176,7 +8190,7 @@
         ],
         "constraints": [],
         "method_examples": [
-          "ServerStorage_LiveSignalR_SaveTask_DeliversUpdateToSecondClientForSameUser"
+          "StormServerStorageCrudRealtimeExecutableSpecTests.ServerStorageCrudRealtimeScenario_ExecutesFeatureSteps"
         ]
       },
       "TS-0020": {
@@ -8188,7 +8202,7 @@
         ],
         "constraints": [],
         "method_examples": [
-          "ServerStorage_LiveServiceStackTaskApi_BulkInsertGetAllAndGetTask_RoundTripsAuthenticatedUserTasks"
+          "StormServerStorageCrudRealtimeExecutableSpecTests.ServerStorageCrudRealtimeScenario_ExecutesFeatureSteps"
         ]
       },
       "TS-0021": {
