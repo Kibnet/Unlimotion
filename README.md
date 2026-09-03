@@ -11,27 +11,51 @@
 
 ## Download and install
 
-Ready-to-run self-contained published builds are available on the [latest GitHub release](https://github.com/Kibnet/Unlimotion/releases/latest) page. They do not require the .NET SDK. An artifact being published does not guarantee compatibility with every OS version; a complete platform smoke-test matrix is still being established.
+Ready-to-run self-contained published builds are available on the [latest GitHub release](https://github.com/Kibnet/Unlimotion/releases/latest) page and do not require the .NET SDK. The table below is the durable published-support snapshot for release `1.27.0`, source `5aebebcb34eabe35fcdb7a47ff76ffdc2a7e16dd`. Exact asset digests and caveats are versioned in [distribution/support-matrix.json](distribution/support-matrix.json). A published file alone does not prove compatibility with every OS version.
 
-| Available build | File to choose | Current validation status |
-| --- | --- | --- |
-| Windows x64 | `Unlimotion-win-Setup.exe` or `Unlimotion-win-Portable.zip` | Published. The project does not currently publish verified Authenticode evidence. Microsoft Defender SmartScreen may show a warning. |
-| Linux x64 (AppImage) | `Unlimotion.AppImage` | Published generic Linux option; distribution compatibility has not yet been smoke-tested as a complete matrix. |
-| Linux x64 (.deb) | `Unlimotion-<version>.deb` | Preview. Compatibility with current Debian releases has not yet been verified. |
-| macOS x64 | `Unlimotion-osx-Setup.pkg` or `Unlimotion-osx-Portable.zip` | Intel build. The project does not currently publish verified Developer ID signing and notarization evidence. |
-| macOS arm64 | `Unlimotion-osx-arm64-Setup.pkg` or `Unlimotion-osx-arm64-Portable.zip` | Apple Silicon build. The project does not currently publish verified Developer ID signing and notarization evidence. |
-| Android arm64 | `Unlimotion-<version>-android-arm64.apk` | Sideloaded APK. The project declares Android 6.0 / API 23 as its minimum; this is not a universal device-compatibility guarantee. |
-| Android x64 | `Unlimotion-<version>-android-x64.apk` | Sideloaded APK, primarily for x86_64 devices and emulators; the same Android minimum-version caveat applies. |
+Candidate CI results are kept separately and cannot promote this published snapshot (`candidateEvidenceAccepted: false`). Evidence levels mean:
 
-- For a Windows or macOS portable ZIP, extract the archive before starting the included application.
-- For the AppImage, download it and run:
+- `present`: the exact release asset and digest are recorded; native compatibility is not implied.
+- `metadataVerified`: package and binary metadata were checked on the named platform.
+- `launchVerified`: the exact artifact also passed a native launch cell on the named OS and architecture.
+- `productionReady`: all required release, signing and native gates passed for those exact bytes.
+
+| Available build | Exact release `1.27.0` file(s) | Evidence / public status | Scope and caveats |
+| --- | --- | --- | --- |
+| <!-- distribution-claim:windows-x64;platform=windows;architecture=x64;distribution=desktop --> Windows x64 | `Unlimotion-win-Setup.exe` or `Unlimotion-win-Portable.zip` | `present` / `publishedWithCaveats` | <!-- distribution-caveat:windows-exact-consumer-matrix-not-verified --><!-- distribution-caveat:authenticode-not-verified --> No exact-artifact Windows consumer matrix or verified Authenticode evidence is published. Microsoft Defender SmartScreen may warn. |
+| <!-- distribution-claim:linux-appimage-x64;platform=linux;architecture=x64;distribution=appimage --> Linux x64 (AppImage) | `Unlimotion.AppImage` | `present` / `publishedWithCaveats` | <!-- distribution-caveat:direct-fuse-not-verified --><!-- distribution-caveat:distribution-compatibility-not-verified --> Direct FUSE launch and distribution compatibility are not yet verified for these exact bytes. |
+| <!-- distribution-claim:linux-deb-x64;platform=linux;architecture=x64;distribution=deb --> Linux x64 (.deb) | `Unlimotion-1.27.0.deb` | `present` / `preview` | <!-- distribution-caveat:debian-12-13-launch-not-verified --><!-- distribution-caveat:candidate-cannot-promote-release --> Preview only; clean install and launch on Debian 12 and Debian 13 are not confirmed for this release. |
+| <!-- distribution-claim:macos-x64;platform=macos;architecture=x64;distribution=desktop --> macOS x64 | `Unlimotion-osx-Setup.pkg` or `Unlimotion-osx-Portable.zip` | `present` / `publishedWithCaveats` | <!-- distribution-caveat:macos15-x64-launch-not-verified --><!-- distribution-caveat:developer-id-notarization-not-verified --> Intel build; no exact-artifact macOS 15 launch cell or verified Developer ID/notarization evidence is published. |
+| <!-- distribution-claim:macos-arm64;platform=macos;architecture=arm64;distribution=desktop --> macOS arm64 | `Unlimotion-osx-arm64-Setup.pkg` or `Unlimotion-osx-arm64-Portable.zip` | `present` / `publishedWithCaveats` | <!-- distribution-caveat:macos15-arm64-launch-not-verified --><!-- distribution-caveat:developer-id-notarization-not-verified --> Apple Silicon build; no exact-artifact macOS 15 launch cell or verified Developer ID/notarization evidence is published. |
+| <!-- distribution-claim:android-arm64;platform=android;architecture=arm64;distribution=apk --> Android arm64 | `Unlimotion-1.27.0-android-arm64.apk` | `present` / `publishedWithCaveats` | <!-- distribution-caveat:api23-arm64-runtime-not-verified --><!-- distribution-caveat:sideload-not-universal --> Sideloaded APK. Android 6.0 / API 23 is the declared minimum, not a verified all-device runtime guarantee. |
+| <!-- distribution-claim:android-x64;platform=android;architecture=x64;distribution=apk --> Android x64 | `Unlimotion-1.27.0-android-x64.apk` | `present` / `publishedWithCaveats` | <!-- distribution-caveat:api23-api36-x64-launch-not-verified --><!-- distribution-caveat:x64-not-universal --> Sideloaded x86_64 APK. API 23 and API 36 emulator launch evidence is not published for these exact bytes. |
+
+- Extract a Windows or macOS portable ZIP before starting the included application.
+- On a minimal Debian installation, AppImage extract-and-run needs the documented native runtime set. Install it before launch (the exact release `1.27.0` still retains the compatibility caveat above):
+
+```bash
+# Debian 12
+sudo apt install ca-certificates libc6 libgcc-s1 libgssapi-krb5-2 libstdc++6 tzdata zlib1g libx11-6 libice6 libsm6 libfontconfig1 libicu72 libssl3
+
+# Debian 13
+sudo apt install ca-certificates libc6 libgcc-s1 libgssapi-krb5-2 libstdc++6 tzdata zlib1g libx11-6 libice6 libsm6 libfontconfig1 libicu76 libssl3t64
+```
+
+- AppImage direct launch additionally needs the FUSE 2 compatibility library. On Debian 12 install `libfuse2`; on Debian 13 install `libfuse2t64`, then run:
 
 ```bash
 chmod +x Unlimotion.AppImage
 ./Unlimotion.AppImage
 ```
 
-- On macOS, the project does not currently publish verified signing and notarization evidence for these packages. Gatekeeper may block them. If you trust the downloaded artifact, follow Apple's official [Open Anyway guidance](https://support.apple.com/en-us/102445). Changing file permissions does not establish trust or notarization.
+  If FUSE is unavailable, the [official AppImage fallback](https://docs.appimage.org/user-guide/troubleshooting/fuse.html) runs the embedded payload without mounting the image:
+
+```bash
+APPIMAGE_EXTRACT_AND_RUN=1 ./Unlimotion.AppImage
+```
+
+  This fallback does not prove direct FUSE compatibility; the snapshot remains `directFUSE: notVerified`.
+- On macOS, the project does not publish verified signing and notarization evidence for these packages. Gatekeeper may block them. If you trust the downloaded artifact, follow Apple's official [Open Anyway guidance](https://support.apple.com/en-us/102445). Changing file permissions does not establish trust or notarization.
 - Android installation is performed outside an app store. The OS may ask you to allow installation from the selected source; the exact permission flow depends on the Android version and device. When updating in the app, Android downloads the matching APK and asks for system installation confirmation.
 - The desktop in-app updater is available only when Velopack recognizes the current installation as managed. Portable and source runs must not rely on that updater; use the Releases page instead.
 
@@ -45,27 +69,25 @@ Prerequisites:
 - [.NET 10 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/10.0), compatible with `global.json`
 - Network access to NuGet for the first restore
 
-Run the commands from the repository root.
+The root entry-point scripts locate the repository themselves, so you can invoke them from any working directory. They forward additional arguments to the application and preserve its exit code.
 
 Windows PowerShell:
 
 ```powershell
 git clone https://github.com/Kibnet/Unlimotion.git
-Set-Location Unlimotion
-.\run.windows.cmd
+.\Unlimotion\run.windows.cmd
 ```
 
 Linux or macOS:
 
 ```bash
 git clone https://github.com/Kibnet/Unlimotion.git
-cd Unlimotion
 
 # Linux
-bash ./run.linux.sh
+./Unlimotion/run.linux.sh
 
 # macOS
-bash ./run.macos.sh
+./Unlimotion/run.macos.sh
 ```
 
 ## Conceptual description
@@ -198,7 +220,26 @@ Red arrows - the ratio of the blocking task to the blocked one
 ### Settings
 Settings window - allows you to change the parameters that affect the operation of the program.
 - **TaskStorage Path** - Path to the directory(folder) with tasks. It is along this path that the task files in JSON format will be saved. The path can be specified absolute or relative.
-If the path is not specified, the tasks are saved in the "Tasks" directory, which is created in the working directory from which the program was launched.
+When this value is blank, desktop Release builds on Windows, Linux, and macOS have a known first-run defect: the default resolves to a filesystem root (`/Tasks` on Linux/macOS or the root of the current drive, for example `C:\Tasks`, on Windows), not to the launch working directory. Android uses app-private task storage and is not affected.
+
+Until the data-path fix is released, create a settings file before the first desktop launch and set the exact `TaskStorage.Path` key to an explicit writable absolute directory. For example, on Linux/macOS:
+
+```json
+{
+  "TaskStorage": {
+    "Path": "/home/me/UnlimotionTasks",
+    "IsServerMode": "False"
+  }
+}
+```
+
+On Windows, escape backslashes in JSON, for example `"Path": "C:\\Users\\me\\UnlimotionTasks"`. Pass the settings file with one complete argument, replacing the example path with its absolute location:
+
+```text
+--config=/home/me/unlimotion-settings.json
+```
+
+If the settings-file path contains spaces, quote the whole `--config=...` argument for your shell; spaces in `TaskStorage.Path` need only valid JSON quoting. Distribution smoke tests use this workaround and do not verify blank/default desktop first-run behavior. <!-- task-storage-default-caveat;workaround=explicit-writable-path;unconfigured-first-run=not-verified -->
 - **SSH Key Storage Path** - Folder where Git backup keeps SSH keys and the dedicated `known_hosts` file when an SSH remote is used.
 
 ![Settings](media/readme/en/settings.png)
