@@ -168,6 +168,8 @@ namespace Unlimotion.Views
             GlobalSettingsButton.IsVisible = true;
 
             var availableWidth = Math.Max(0, Bounds.Width - 24);
+            GlobalSearchPopupBody.Width = Math.Min(620, availableWidth);
+            GlobalSearchPopupBody.MaxHeight = Math.Max(160, Math.Min(520, Bounds.Height - 160));
             var fixedControls = new Control[]
             {
                 GlobalCreateMenuButton,

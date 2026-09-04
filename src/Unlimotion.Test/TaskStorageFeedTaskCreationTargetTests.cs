@@ -1,14 +1,66 @@
 using System;
+using System.IO;
+using System.Collections.Generic;
+using Newtonsoft.Json.Linq;
+using Unlimotion.Domain;
 using System.Linq;
+using System.Reactive.Linq;
+using System.Threading;
 using System.Threading.Tasks;
+using Avalonia.Threading;
 using Unlimotion.Notes.Operations;
 using Unlimotion.TaskTree;
 using Unlimotion.ViewModel.Feed;
 
 namespace Unlimotion.Test;
 
+[NotInParallel("AvaloniaHeadless")]
+[ParallelLimiter<SharedUiStateParallelLimit>]
 public sealed class TaskStorageFeedTaskCreationTargetTests
 {
+    [Test]
+    [Arguments(false, false)]
+    [Arguments(false, true)]
+    [Arguments(true, false)]
+    [Arguments(true, true)]
+    public async Task ExistingTaskWithoutMatchingOwnership_IsNeverReused(bool cached, bool foreignMarker)
+    {
+        var storage = new InMemoryStorage();
+        using var repository = new UnifiedTaskStorage(new TaskTreeManager(storage));
+        await repository.Init();
+        var existing = new TaskItem { Id = "feed-collision", Title = "Чужая задача",
+            ExtensionData = foreignMarker ? new Dictionary<string, JToken>
+            { ["unlimotionFeedOperationId"] = JValue.CreateString("foreign") } : null };
+        await storage.Save(existing);
+        if (cached) await repository.Update(existing);
+        var target = new TaskStorageFeedTaskCreationTarget(() => repository);
+        var draft = new FeedTaskDraft(existing.Id, "ours", "Новая задача", "Контекст", false, []);
+        await Assert.That(() => target.CreateOrGetAsync(draft)).Throws<InvalidDataException>();
+        await Assert.That(() => target.FindOwnedAsync(draft)).Throws<InvalidDataException>();
+        await Assert.That((await storage.Load(existing.Id))!.Title).IsEqualTo("Чужая задача");
+    }
+
+    [Test]
+    public async Task BackgroundConversion_PublishesRepositoryChangesOnOwningUiContext()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            using var repository = new UnifiedTaskStorage(new TaskTreeManager(new InMemoryStorage()));
+            await repository.Init();
+            var wrongThread = false;
+            using var subscription = repository.Tasks.Connect().Subscribe(_ =>
+            {
+                if (!Dispatcher.UIThread.CheckAccess()) wrongThread = true;
+            });
+            var target = new TaskStorageFeedTaskCreationTarget(() => repository);
+            await Task.Run(() => target.CreateOrGetAsync(new FeedTaskDraft(
+                "feed-background", "background", "Фоновая задача", "", false, [])));
+            await Assert.That(wrongThread).IsFalse();
+            await Assert.That(repository.Tasks.Count).IsEqualTo(1);
+        }, CancellationToken.None);
+    }
+
     [Test]
     public async Task LocalRepositoryAdapterPersistsClassificationAndIsIdempotentByStableTaskId()
     {

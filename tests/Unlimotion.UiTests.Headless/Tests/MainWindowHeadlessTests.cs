@@ -49,8 +49,6 @@ public sealed class MainWindowHeadlessTests
         var isStatusContract = IsStatusContractScenarioTest;
         var isFeed = IsFeedScenarioTest;
         var isDailyNoteFilenameFormatScenario = IsDailyNoteFilenameFormatScenarioTest;
-        var headlessSession = HeadlessRuntime.Session;
-        var sessionThreadId = HeadlessRuntime.Dispatch(static () => Environment.CurrentManagedThreadId);
         var inner = DesktopAppSession.Launch(
                 UnlimotionAppLaunchHost.CreateHeadlessLaunchOptions(
                     isStatusContract
@@ -86,18 +84,18 @@ public sealed class MainWindowHeadlessTests
                                 () => viewModel.taskRepository);
                         viewModel.Feed.SetNotificationDispatcher(action =>
                         {
-                            if (Environment.CurrentManagedThreadId == sessionThreadId)
+                            if (Dispatcher.UIThread.CheckAccess())
                             {
                                 action();
                                 return;
                             }
 
-                            _ = headlessSession.Dispatch(action, CancellationToken.None);
+                            Dispatcher.UIThread.Post(action);
                         });
 
                         if (isDailyNoteFilenameFormatScenario)
                         {
-                            if (Environment.CurrentManagedThreadId == sessionThreadId)
+                            if (Dispatcher.UIThread.CheckAccess())
                             {
                                 WireDailyNoteFilenameFormatSettings(viewModel);
                             }
@@ -108,6 +106,7 @@ public sealed class MainWindowHeadlessTests
                         }
                     },
                     viewModelFactoryDispatcher: factory => HeadlessRuntime.Dispatch(factory),
+                    prepareViewModelDispatcher: HeadlessSessionHooks.PrepareAsync,
                     headlessWindowCleanup: HeadlessSessionHooks.CloseWindow));
         return new HeadlessRuntimeSession(inner);
     }
@@ -171,7 +170,12 @@ public sealed class MainWindowHeadlessTests
         settings.ConfigureNoteDailyFileNameFormatBridge(
             feed.ValidateDailyNoteFileNameFormat,
             feed.ApplyDailyNoteFileNameFormatAsync,
-            feed.ReloadDailyNoteFileNameFormatAsync);
+            feed.ReloadDailyNoteFileNameFormatAsync,
+            feed.PreviewDailyNoteFileNameFormatAsync);
+        settings.ConfirmNoteDailyFileNameFormatCommand = ReactiveCommand.CreateFromTask(
+            settings.ConfirmNoteDailyFileNameFormatAsync);
+        settings.CancelNoteDailyFileNameFormatCommand = ReactiveCommand.Create(
+            settings.CancelNoteDailyFileNameFormatPreview);
         settings.ApplyNoteDailyFileNameFormatCommand = ReactiveCommand.CreateFromTask(
             settings.ApplyNoteDailyFileNameFormatAsync);
         settings.ReloadExternalNoteDailyFileNameFormatCommand = ReactiveCommand.CreateFromTask(
@@ -247,6 +251,26 @@ public sealed class MainWindowHeadlessTests
     {
         HeadlessRuntime.Dispatch(static () => Dispatcher.UIThread.RunJobs());
     }
+
+    protected override void WaitForDailyNoteFilenameFormatImpact()
+    {
+        // The Headless adapter can resolve a hidden control before async preview finishes.
+        // Wait for the real surface to become actionable; still invoke the button itself.
+        var confirmation = GetNativeControl<Control>(Page.ConfirmNoteDailyFileNameFormatButton);
+        WaitUntil(() => HeadlessRuntime.Dispatch(() =>
+        {
+            Dispatcher.UIThread.RunJobs();
+            var settings = GetHeadlessMainWindowViewModel().Settings;
+            return settings.HasNoteDailyFileNameFormatImpact && settings.CanApplyNoteDailyFileNameFormat
+                && confirmation.IsEffectivelyVisible && confirmation.IsEnabled;
+        }), timeout: TimeSpan.FromSeconds(10), timeoutMessage: "Format impact confirmation is not visible and ready.");
+    }
+
+    protected override bool IsDailyNoteFilenameFormatImpactReady() => HeadlessRuntime.Dispatch(() =>
+    {
+        var settings = GetHeadlessMainWindowViewModel().Settings;
+        return settings.HasNoteDailyFileNameFormatImpact && settings.CanApplyNoteDailyFileNameFormat;
+    });
 
     protected override void OpenQuickCapture()
     {

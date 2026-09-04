@@ -18,7 +18,7 @@ internal static class TaskPlanningDatesUiContract
     public static async Task<TaskPlanningDatesScenarioResult> ExecuteTaskPlanningDatesScenarioAsync()
     {
         var result = new TaskPlanningDatesScenarioResult();
-        var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        var session = HeadlessUnitTestSession.StartNew(typeof(SkiaHeadlessAppBuilder));
 
         try
         {

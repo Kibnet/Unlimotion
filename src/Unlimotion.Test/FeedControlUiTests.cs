@@ -12,6 +12,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.Input.Raw;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -36,6 +37,461 @@ namespace Unlimotion.Test;
 [ParallelLimiter<SharedUiStateParallelLimit>]
 public class FeedControlUiTests
 {
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task SearchAndWikiNavigation_ShareLatestRequestIdentity(bool latestIsDailySearch)
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            using var directory = new FeedTempDirectory();
+            var today = new DateOnly(2026, 9, 4);
+            directory.WriteNote("A.md", "Первый источник\n");
+            directory.WriteNote("B.md", "Вторая заметка\n");
+            directory.WriteDaily(today, "Дневной источник\n");
+            var vault = new DelayedLinkVault(new FileNoteVault(directory.Path));
+            using var feed = new FeedViewModel(() => today, vaultFactory: _ => vault);
+            await feed.InitializeVaultAsync(directory.Path);
+            feed.SearchQuery = latestIsDailySearch ? "Дневной источник" : "Первый источник";
+            await Assert.That(await WaitForAsync(() => feed.SearchResults.Count == 1)).IsTrue();
+            var result = feed.SearchResults.Single();
+            vault.DelayNextA = true;
+            var pending = latestIsDailySearch ? feed.OpenVaultLinkAsync("A", null) : feed.OpenSearchResultAsync(result);
+            await vault.Started.Task;
+            if (latestIsDailySearch) await feed.OpenSearchResultAsync(result);
+            else await feed.OpenVaultLinkAsync("B", null);
+            vault.Release.TrySetResult();
+            await pending;
+            if (latestIsDailySearch)
+            {
+                await Assert.That(feed.OpenedThematicFile).IsNull();
+                await Assert.That(feed.SelectedDay!.Date).IsEqualTo(today);
+            }
+            else await Assert.That(feed.OpenedThematicFile!.RelativePath).IsEqualTo("B.md");
+            await Assert.That(feed.HasError).IsFalse();
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task NoteLink_LateReadDoesNotOverrideNewerOpenOrClose(bool close)
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            using var directory = new FeedTempDirectory();
+            directory.WriteNote("A.md", "Заметка A\n");
+            directory.WriteNote("B.md", "Заметка B\n");
+            var vault = new DelayedLinkVault(new FileNoteVault(directory.Path));
+            using var feed = new FeedViewModel(vaultFactory: _ => vault);
+            await feed.InitializeVaultAsync(directory.Path);
+            vault.DelayNextA = true;
+            var pending = feed.OpenVaultLinkAsync("A", null);
+            await vault.Started.Task;
+            if (close) feed.CloseThematicFileCommand.Execute(null);
+            else await feed.OpenVaultLinkAsync("B", null);
+            vault.Release.TrySetResult();
+            await pending;
+            if (close) await Assert.That(feed.OpenedThematicFile).IsNull();
+            else await Assert.That(feed.OpenedThematicFile!.RelativePath).IsEqualTo("B.md");
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task Review_MultilineSelectionRendersAfterExpansion(bool dialogOnly)
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(SkiaHeadlessAppBuilder));
+        await session.DispatchAsync(async () =>
+        {
+            using var directory = new FeedTempDirectory();
+            directory.WriteDaily(new DateOnly(2026, 8, 23), "## Работа <!-- unlimotion-area:work -->\n- [ ] Разобрать кандидата\n\nКонтекст\n\n## Дом <!-- unlimotion-area:home -->\nДомашняя запись\n");
+            await SeedAreaCatalogAsync(directory.Path, new AreaDefinition { Id = "work", Name = "Работа" }, new AreaDefinition { Id = "home", Name = "Дом" });
+            using var feed = new FeedViewModel(() => new DateOnly(2026, 8, 24));
+            await feed.InitializeVaultAsync(directory.Path);
+            Control surface = dialogOnly ? new FeedReviewDialog { DataContext = feed } : new FeedControl { DataContext = feed };
+            var window = new Window { Width = 900, Height = 1100, Content = surface };
+            try
+            {
+                window.Show();
+                RunLayoutJobs();
+                await ((ReactiveCommand<Unit, Unit>)feed.StartReviewCommand).Execute().ToTask();
+                RunLayoutJobs();
+                feed.ExpandSelectionDownCommand.Execute(null);
+                RunLayoutJobs();
+                await Assert.That(feed.CurrentReview!.SelectedMarkdown).Contains("\n\nКонтекст");
+                if (dialogOnly)
+                {
+                    var text = FindControlByAutomationId<TextBlock>(surface, "FeedReviewSelectionText");
+                    await Assert.That(text.Text).IsEqualTo(feed.CurrentReview.SelectedMarkdown);
+                    await Assert.That(text.Bounds.Height).IsGreaterThan(text.FontSize * 2);
+                }
+            }
+            finally { window.Close(); }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task NoteLink_ClickOpensThematicNoteOrMovedDailyBlock(bool movedDaily)
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            using var directory = new FeedTempDirectory();
+            var today = new DateOnly(2026, 9, 4);
+            directory.WriteDaily(today, movedDaily
+                ? "[[Ежедневные/2026-09-03#^unlimotion-move-test|Перенесено]]\n"
+                : "[[Работа/Итог|Итог]] <!-- unlimotion-note:note-test -->\n");
+            directory.WriteDaily(today.AddDays(-1), "- [ ] Целевой блок\n^unlimotion-move-test\n");
+            directory.WriteNote("Работа/Итог.md", "# Итог\n\nПолезные сведения\n");
+            using var feed = new FeedViewModel(() => today);
+            await feed.InitializeVaultAsync(directory.Path);
+            FeedSearchNavigationRequestedEventArgs? navigation = null;
+            feed.SearchNavigationRequested += (_, args) => navigation = args;
+            var view = new FeedControl { DataContext = feed };
+            var window = new Window { Width = 720, Height = 640, Content = view };
+            try
+            {
+                window.Show();
+                RunLayoutJobs();
+                var button = view.GetVisualDescendants().OfType<Button>().First(control =>
+                    AutomationProperties.GetAutomationId(control)?.StartsWith("FeedDay-20260904-Markdown-Link-", StringComparison.Ordinal) == true);
+                button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, button));
+                await Assert.That(await WaitForAsync(() => movedDaily ? navigation is not null : feed.OpenedThematicFile is not null)).IsTrue();
+                await Assert.That(feed.HasError).IsFalse();
+                if (movedDaily)
+                {
+                    await Assert.That(navigation!.RelativePath).IsEqualTo("Ежедневные/2026-09-03.md");
+                    await Assert.That(feed.SelectedDay!.Date).IsEqualTo(today.AddDays(-1));
+                }
+                else await Assert.That(feed.OpenedThematicFile!.MarkdownEditor.Snapshot!.Raw).Contains("Полезные сведения");
+            }
+            finally { window.Close(); }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    [Arguments("../outside.md")]
+    [Arguments("file:///C:/outside.md")]
+    [Arguments("Missing")]
+    public async Task NoteLink_UnsafeOrMissingTargetShowsErrorWithoutOpeningDocument(string target)
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            using var directory = new FeedTempDirectory();
+            using var feed = new FeedViewModel();
+            await feed.InitializeVaultAsync(directory.Path);
+            await feed.OpenVaultLinkAsync(target, "Ежедневные/2026-09-04.md");
+            await Assert.That(feed.HasError).IsTrue();
+            await Assert.That(feed.OpenedThematicFile).IsNull();
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task MergeThenRefresh_PreservesEditorFocus_AndKeyboardUndoRestoresBothBlocks()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            using var directory = new FeedTempDirectory();
+            var today = new DateOnly(2026, 9, 4);
+            const string original = "Альфа\n\nБета\n";
+            directory.WriteDaily(today, original);
+            using var feed = new FeedViewModel(() => today);
+            await feed.InitializeVaultAsync(directory.Path);
+            var view = new FeedControl { DataContext = feed };
+            var window = new Window { Width = 720, Height = 640, Content = view };
+            try
+            {
+                window.Show();
+                RunLayoutJobs();
+                var model = feed.Days.Single().MarkdownEditor;
+                var second = model.Blocks.Single(block => block.PreviewText == "Бета");
+                var preview = FindControlByAutomationId<MarkdownBlockPreviewControl>(view, second.PreviewAutomationId);
+                preview.Focus();
+                window.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, null);
+                window.KeyRelease(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, null);
+                RunLayoutJobs();
+                var input = FindControlByAutomationId<TextBox>(view, second.EditorAutomationId);
+                input.SelectionStart = input.SelectionEnd = 0;
+                window.KeyPress(Key.Back, RawInputModifiers.None, PhysicalKey.Backspace, null);
+                window.KeyRelease(Key.Back, RawInputModifiers.None, PhysicalKey.Backspace, null);
+                await Assert.That(await WaitForAsync(() => model.Snapshot!.Raw == "АльфаБета\n")).IsTrue();
+                await feed.RefreshAsync();
+                RunLayoutJobs();
+                await Assert.That(feed.Days.Single().MarkdownEditor).IsSameReferenceAs(model);
+                var mergedInput = FindControlByAutomationId<TextBox>(view, model.ActiveBlock!.EditorAutomationId);
+                await Assert.That(mergedInput.IsFocused).IsTrue();
+                await Assert.That(model.CanUndoStructuralChange).IsTrue();
+                window.KeyPress(Key.Z, RawInputModifiers.Control, PhysicalKey.Z, null);
+                window.KeyRelease(Key.Z, RawInputModifiers.Control, PhysicalKey.Z, null);
+                await Assert.That(await WaitForAsync(() => model.Snapshot!.Raw == original)).IsTrue();
+                await Assert.That(File.ReadAllText(directory.GetDailyPath(today))).IsEqualTo(original);
+            }
+            finally { window.Close(); }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task DismissedReminder_StaysHiddenAfterCapture_WhileReviewRemainsAvailable()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            using var directory = new FeedTempDirectory();
+            var today = new DateOnly(2026, 9, 4);
+            directory.WriteDaily(today, "- [ ] Первая задача\n");
+            using var feed = new FeedViewModel(() => today);
+            await feed.InitializeVaultAsync(directory.Path);
+            await feed.RefreshAsync();
+            await Assert.That(feed.IsReviewBannerVisible).IsTrue();
+            feed.DismissReviewReminderCommand.Execute(null);
+            feed.QuickCaptureText = "Ещё одна мысль";
+            await feed.CaptureAsync();
+            await Assert.That(feed.IsReviewBannerVisible).IsFalse();
+            await Assert.That(feed.HasPendingReview).IsTrue();
+            await Assert.That(feed.CanStartReview).IsTrue();
+            await ((ReactiveCommand<Unit, Unit>)feed.StartReviewCommand).Execute().ToTask();
+            await Assert.That(feed.IsReviewSelectionVisible).IsTrue();
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task Review_TaskPersistedBeforeSourceConflict_ImmediatelyOffersRecoveryAndBlocksAnotherConversion()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            using var directory = new FeedTempDirectory();
+            var today = new DateOnly(2026, 9, 4);
+            const string source = "- [ ] Сохранить задачу\n";
+            directory.WriteDaily(today, source);
+            var target = new RecordingFeedTaskTarget
+            {
+                OnCreate = () => directory.WriteDaily(today, source + "\nВнешняя правка во время сохранения\n")
+            };
+            using var feed = new FeedViewModel(() => today) { TaskCreationTarget = target };
+            await feed.InitializeVaultAsync(directory.Path);
+            await ((ReactiveCommand<Unit, Unit>)feed.StartReviewCommand).Execute().ToTask();
+            await ((ReactiveCommand<Unit, Unit>)feed.CreateTaskCommand).Execute().ToTask();
+            await Assert.That(target.Tasks.Count).IsEqualTo(1);
+            await Assert.That(feed.HasPendingRecoveries).IsTrue();
+            await Assert.That(feed.PendingRecoveries.Single().CanKeepBoth).IsTrue();
+            await Assert.That(feed.HasError).IsTrue();
+            await Assert.That(feed.ErrorMessage).DoesNotContain("revision");
+            await ((ReactiveCommand<Unit, Unit>)feed.CreateTaskCommand).Execute().ToTask();
+            await Assert.That(target.Tasks.Count).IsEqualTo(1);
+            await Assert.That(File.ReadAllText(directory.GetDailyPath(today))).Contains("Внешняя правка во время сохранения");
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task Review_TaskThenMove_WithNeighbours_DoesNotRequeueConvertedLinksAfterRestart(bool keepNeighbour)
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            using var directory = new FeedTempDirectory();
+            var today = new DateOnly(2026, 9, 4);
+            directory.WriteDaily(today.AddDays(-1), "- [ ] Подготовить план\n\n"
+                + (keepNeighbour ? "Контекст между решениями\n\n" : string.Empty) + "- [ ] Купить книгу\n");
+            var target = new RecordingFeedTaskTarget();
+            using (var feed = new FeedViewModel(() => today) { TaskCreationTarget = target })
+            {
+                await feed.InitializeVaultAsync(directory.Path);
+                await ((ReactiveCommand<Unit, Unit>)feed.StartReviewCommand).Execute().ToTask();
+                await Assert.That(feed.CurrentReview!.SelectedMarkdown).Contains("Подготовить план");
+                await ((ReactiveCommand<Unit, Unit>)feed.CreateTaskCommand).Execute().ToTask();
+                await Assert.That(feed.HasCreatedTask).IsTrue();
+                await ((ReactiveCommand<Unit, Unit>)feed.ContinueReviewCommand).Execute().ToTask();
+                await Assert.That(feed.CurrentReview!.SelectedMarkdown).Contains("Купить книгу");
+                await ((ReactiveCommand<Unit, Unit>)feed.MoveToTodayCommand).Execute().ToTask();
+                await Assert.That(feed.HasError).IsFalse();
+                if (keepNeighbour)
+                    await Assert.That(feed.CurrentReview!.SelectedMarkdown.Trim()).IsEqualTo("Контекст между решениями");
+                else
+                    await Assert.That(feed.IsReviewSelectionVisible).IsFalse();
+            }
+            using var restored = new FeedViewModel(() => today) { TaskCreationTarget = target };
+            await restored.InitializeVaultAsync(directory.Path);
+            await ((ReactiveCommand<Unit, Unit>)restored.StartReviewCommand).Execute().ToTask();
+            for (var index = 0; index < restored.CurrentReviewCount; index++)
+            {
+                await Assert.That(restored.CurrentReview!.SelectedMarkdown).DoesNotContain("unlimotion://task/");
+                await Assert.That(restored.CurrentReview.SelectedMarkdown).DoesNotContain("[[Ежедневные/");
+                if (restored.CanNavigateReviewNext)
+                    await ((ReactiveCommand<Unit, Unit>)restored.NextReviewCommand).Execute().ToTask();
+            }
+            await Assert.That(target.Tasks.Count).IsEqualTo(1);
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task Review_ExpandAcrossBlank_AssignArea_ExtractWholeNote_AndRestart()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            using var directory = new FeedTempDirectory();
+            var today = new DateOnly(2026, 9, 4);
+            await SeedAreaCatalogAsync(directory.Path, new AreaDefinition { Id = "work", Name = "Работа" });
+            using (var feed = new FeedViewModel(() => today))
+            {
+                await feed.InitializeVaultAsync(directory.Path);
+                directory.WriteDaily(today, "Первый полезный абзац\n\nВторой полезный абзац\n");
+                await feed.RefreshAsync();
+                await ((ReactiveCommand<Unit, Unit>)feed.StartReviewCommand).Execute().ToTask();
+                await Assert.That(feed.CurrentReview!.SelectedMarkdown).IsEqualTo("Первый полезный абзац");
+                feed.ExpandSelectionDownCommand.Execute(null);
+                await Assert.That(feed.CurrentReview.SelectedMarkdown).Contains("Второй полезный абзац");
+                feed.ShrinkSelectionDownCommand.Execute(null);
+                await Assert.That(feed.CurrentReview.SelectedMarkdown).IsEqualTo("Первый полезный абзац");
+                feed.ExpandSelectionDownCommand.Execute(null);
+                feed.ReviewDestinationArea = feed.Areas.Single(area => area.Identity == "work");
+                await ((ReactiveCommand<Unit, Unit>)feed.AssignReviewAreaCommand).Execute().ToTask();
+                await Assert.That(feed.HasError).IsFalse();
+                var paragraphs = new MarkdownDocumentParser().Parse(File.ReadAllText(directory.GetDailyPath(today)))
+                    .Blocks.Where(block => block.Kind == MarkdownBlockKind.Paragraph).ToArray();
+                await Assert.That(paragraphs.Length).IsEqualTo(2);
+                await Assert.That(paragraphs.All(block => block.AreaId == "work")).IsTrue();
+                feed.ReviewNoteTitle = "Полезная информация";
+                feed.ReviewNoteFolder = "Работа";
+                await ((ReactiveCommand<Unit, Unit>)feed.CreateNoteCommand).Execute().ToTask();
+                await Assert.That(feed.HasError).IsFalse();
+                await Assert.That(feed.IsReviewSelectionVisible).IsFalse();
+                var note = File.ReadAllText(System.IO.Path.Combine(directory.Path, "Работа", "Полезная информация.md"));
+                await Assert.That(note.Replace("\r\n", "\n")).Contains("Первый полезный абзац\n\nВторой полезный абзац");
+                var source = File.ReadAllText(directory.GetDailyPath(today));
+                await Assert.That(source).Contains("[[Работа/Полезная информация");
+                await Assert.That(source).DoesNotContain("Первый полезный абзац");
+            }
+            using var restored = new FeedViewModel(() => today);
+            await restored.InitializeVaultAsync(directory.Path);
+            await ((ReactiveCommand<Unit, Unit>)restored.StartReviewCommand).Execute().ToTask();
+            await Assert.That(restored.IsReviewSelectionVisible).IsFalse();
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    [Arguments("unrelated", true)]
+    [Arguments("changed", false)]
+    [Arguments("duplicate", false)]
+    [Arguments("area", false)]
+    public async Task Review_ExternalRevisionReconcilesOnlyUniqueUnchangedSelection(string change, bool succeeds)
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            using var directory = new FeedTempDirectory();
+            var today = new DateOnly(2026, 9, 4);
+            const string raw = "## Работа <!-- unlimotion-area:work -->\n- [ ] Подготовить отчёт\n";
+            directory.WriteDaily(today, raw);
+            var target = new RecordingFeedTaskTarget();
+            var controlledVault = new ReadBoundaryVault(new FileNoteVault(directory.Path));
+            using var feed = new FeedViewModel(() => today, vaultFactory: _ => controlledVault) { TaskCreationTarget = target };
+            await feed.InitializeVaultAsync(directory.Path);
+            await ((ReactiveCommand<Unit, Unit>)feed.StartReviewCommand).Execute().ToTask();
+            await Assert.That(feed.IsReviewSelectionVisible).IsTrue();
+            var external = change switch
+            {
+                "changed" => raw.Replace("Подготовить отчёт", "Не создавать эту задачу"),
+                "duplicate" => raw + "\n- [ ] Подготовить отчёт\n",
+                "area" => raw.Replace("work", "personal"),
+                _ => "Посторонний новый абзац\n\n" + raw
+            };
+            // Change the file after command entry, at its first read. Otherwise the OS
+            // watcher can disable the command before it runs, testing a different flow.
+            controlledVault.BeforeNextDailyRead = () => directory.WriteDaily(today, external);
+            await ((ReactiveCommand<Unit, Unit>)feed.CreateTaskCommand).Execute().ToTask();
+            await Assert.That(target.Tasks.Count).IsEqualTo(succeeds ? 1 : 0);
+            if (succeeds) await Assert.That(feed.ErrorMessage).IsNull();
+            else await Assert.That(feed.HasError).IsTrue();
+            var persisted = File.ReadAllText(directory.GetDailyPath(today));
+            if (succeeds)
+                await Assert.That(persisted).Contains("Посторонний новый абзац");
+            else
+            {
+                await Assert.That(persisted).IsEqualTo(external);
+                await Assert.That(feed.ErrorMessage).DoesNotContain("revision");
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task AreaChoices_UseTheSameHierarchyInCaptureAndReview()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            using var directory = new FeedTempDirectory();
+            await SeedAreaCatalogAsync(directory.Path,
+                new AreaDefinition { Id = "parent", Name = "Работа" },
+                new AreaDefinition { Id = "child", Name = "Аналитика", ParentId = "parent" });
+            using var feed = new FeedViewModel();
+            await feed.InitializeVaultAsync(directory.Path);
+            await Assert.That(string.Join(",", feed.Areas.Where(area => area.HasStableAreaId).Select(area => area.Identity)))
+                .IsEqualTo("parent,child");
+            var child = feed.Areas.Single(area => area.Identity == "child");
+            await Assert.That(child.DestinationDisplayName).Contains("Работа");
+            await Assert.That(child.ToString()).DoesNotContain("ViewModel");
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task MovingBlocksOutsideFilter_ShowsUndoEvenWhenTheDayDisappears()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            using var directory = new FeedTempDirectory();
+            var today = new DateOnly(2026, 9, 4);
+            const string raw = "## Работа <!-- unlimotion-area:work -->\nПервый\n\nВторой\n";
+            directory.WriteDaily(today, raw);
+            using var feed = new FeedViewModel(() => today);
+            await feed.InitializeVaultAsync(directory.Path);
+            feed.FeedAreaFilterOptions.Single(option => option.IsAll).IsSelected = false;
+            feed.FeedAreaFilterOptions.Single(option => option.Identity == "work").IsSelected = true;
+            var editor = feed.Days.Single().MarkdownEditor;
+            var paragraphs = editor.Blocks.Where(block => block.Kind == MarkdownBlockKind.Paragraph).ToArray();
+            editor.SelectMoveBlock(paragraphs[0], false, false);
+            editor.SelectMoveBlock(paragraphs[1], true, false);
+            await Assert.That(await editor.MoveSelectionToTargetAsync(editor.Blocks[0], after: false)).IsTrue();
+            await feed.RefreshAsync();
+            await Assert.That(feed.VisibleDays).IsEmpty();
+            await Assert.That(feed.HasMoveUndoNotice).IsTrue();
+            var view = new FeedControl { DataContext = feed };
+            var window = new Window { Width = 720, Height = 640, Content = view };
+            try
+            {
+                window.Show();
+                RunLayoutJobs();
+                var button = FindControlByAutomationId<Button>(view, "FeedUndoMoveButton");
+                await Assert.That(button.IsEffectivelyVisible).IsTrue();
+                await Assert.That(button.IsEnabled).IsTrue();
+                var point = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), window)!.Value;
+                window.MouseDown(point, MouseButton.Left);
+                window.MouseUp(point, MouseButton.Left);
+                await Assert.That(WaitFor(() =>
+                {
+                    try { return File.ReadAllText(directory.GetDailyPath(today)) == raw; }
+                    catch (IOException) { return false; } // The atomic writer can briefly own the file during Undo.
+                })).IsTrue();
+                await feed.RefreshAsync();
+                await Assert.That(feed.VisibleDays.Count).IsEqualTo(1);
+                await Assert.That(feed.HasMoveUndoNotice).IsFalse();
+            }
+            finally { window.Close(); }
+        }, CancellationToken.None);
+    }
+
     [Test]
     public async Task Feed_ChronologyUsesCompactReadableDensity()
     {
@@ -888,7 +1344,7 @@ public class FeedControlUiTests
     [Test]
     public async Task Feed_FirstConnectSummaryStartsInlineReviewAndKeepsAreaRemapSelected()
     {
-        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(SkiaHeadlessAppBuilder));
         await session.DispatchAsync(async () =>
         {
             var day = new DateOnly(2026, 8, 23);
@@ -944,7 +1400,7 @@ public class FeedControlUiTests
                     .IsReviewHighlighted).IsTrue();
 
                 InvokeButton(expandDown);
-                await Assert.That(viewModel.CurrentReview!.SelectedBlockCount).IsEqualTo(2);
+                await Assert.That(viewModel.CurrentReview!.SelectedBlockCount).IsEqualTo(3);
                 var shrinkDown = FindControlByAutomationId<Button>(reviewDialog, "FeedReviewShrinkDownButton");
                 InvokeButton(shrinkDown);
                 await Assert.That(viewModel.CurrentReview.SelectedBlockCount).IsEqualTo(1);
@@ -1347,7 +1803,12 @@ public class FeedControlUiTests
                         .IsEffectivelyVisible).IsTrue();
                 }
 
-                viewModel.ResetFeedAreaFilterCommand.Execute(null);
+                var resetButton = FindControlByAutomationId<Button>(view, "FeedAreaFilterResetButton");
+                var resetPoint = resetButton.TranslatePoint(new Point(resetButton.Bounds.Width / 2,
+                    resetButton.Bounds.Height / 2), window)!.Value;
+                window.MouseMove(resetPoint);
+                window.MouseDown(resetPoint, MouseButton.Left);
+                window.MouseUp(resetPoint, MouseButton.Left);
                 RunLayoutJobs();
                 using (Assert.Multiple())
                 {
@@ -1429,16 +1890,24 @@ public class FeedControlUiTests
         {
             var today = new DateOnly(2026, 8, 24);
             using var directory = new FeedTempDirectory();
-            for (var offset = 0; offset < 32; offset++)
+            const int dayCount = 800;
+            for (var offset = 0; offset < dayCount; offset++)
             {
+                var areaHeading = offset % 2 == 0
+                    ? "Работа <!-- unlimotion-area:work -->"
+                    : "Дом <!-- unlimotion-area:home -->";
+                var body = offset == dayCount / 2
+                    ? string.Join('\n', Enumerable.Range(1, 200).Select(line => $"Строка {line}"))
+                    : $"Запись {offset}\n\nДополнительный текст для прокрутки {offset}";
                 directory.WriteDaily(
                     today.AddDays(-offset),
-                    $"## Работа <!-- unlimotion-area:work -->\nЗапись {offset}\n\nДополнительный текст для прокрутки {offset}\n");
+                    $"## {areaHeading}\n{body}\n");
             }
 
+            await SeedAreaCatalogAsync(directory.Path, new AreaDefinition { Id = "work", Name = "Работа" },
+                new AreaDefinition { Id = "home", Name = "Дом" });
             using var viewModel = new FeedViewModel(() => today);
             await viewModel.InitializeVaultAsync(directory.Path);
-            var initialCount = viewModel.Days.Count;
             var newestDay = viewModel.Days[0];
             var view = new FeedControl { DataContext = viewModel };
             var window = new Window { Width = 760, Height = 420, Content = view };
@@ -1447,19 +1916,98 @@ public class FeedControlUiTests
                 window.Show();
                 RunLayoutJobs();
                 var scrollViewer = FindControlByAutomationId<ScrollViewer>(view, "FeedChronologyList");
-                scrollViewer.Offset = new Avalonia.Vector(0, scrollViewer.ScrollBarMaximum.Y);
+                var editor = newestDay.MarkdownEditor;
+                var editedBlock = editor.Blocks.Single(block => block.PreviewText == "Запись 0");
+                var preview = FindControlByAutomationId<MarkdownBlockPreviewControl>(view, editedBlock.PreviewAutomationId);
+                preview.Focus();
+                window.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, null);
+                window.KeyRelease(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, null);
                 RunLayoutJobs();
+                var input = FindControlByAutomationId<TextBox>(view, editedBlock.EditorAutomationId);
+                input.Text = "Запись во время подгрузки";
+                await viewModel.LoadOlderDaysAsync();
+                RunLayoutJobs();
+                await Assert.That(input.IsFocused).IsTrue();
+                await Assert.That(editor.ActiveBlock).IsSameReferenceAs(editedBlock);
+                await editor.FlushAutosaveAsync();
+                await Assert.That(File.ReadAllText(directory.GetDailyPath(today))).Contains("Запись во время подгрузки");
+                for (var scrollPage = 0; scrollPage < 3; scrollPage++)
+                {
+                    var countBeforeScrollLoad = viewModel.Days.Count;
+                    var appendAnchorDay = viewModel.Days[^1];
+                    scrollViewer.Offset = new Avalonia.Vector(
+                        0,
+                        Math.Max(0, scrollViewer.ScrollBarMaximum.Y - (scrollViewer.Viewport.Height * 2)));
+                    RunLayoutJobs();
+                    var appendAnchorOffset = scrollViewer.ScrollBarMaximum.Y;
+                    scrollViewer.Offset = new Avalonia.Vector(0, appendAnchorOffset);
+                    var appliedAnchorOffset = scrollViewer.Offset.Y;
+                    RunLayoutJobs();
 
-                await Assert.That(await WaitForAsync(
-                    () => !viewModel.IsLoadingOlderDays && viewModel.Days.Count > initialCount,
-                    timeoutMilliseconds: 30000)).IsTrue();
+                    var scrollPageAppended = await WaitForAsync(
+                        () => !viewModel.IsLoadingOlderDays && viewModel.Days.Count > countBeforeScrollLoad,
+                        timeoutMilliseconds: 30000);
+                    await Assert.That(scrollPageAppended).IsTrue();
+                    RunLayoutJobs();
+                    await Assert.That(Math.Abs(scrollViewer.Offset.Y - appliedAnchorOffset)).IsLessThan(0.5);
+                    await Assert.That(FindOptionalControlByAutomationId<Control>(view, appendAnchorDay.AutomationId))
+                        .IsNotNull();
+                }
+                while (viewModel.HasMoreDays)
+                {
+                    var beforePage = viewModel.Days.Count;
+                    await viewModel.LoadOlderDaysAsync();
+                    RunLayoutJobs();
+                    var appended = await WaitForAsync(() => !viewModel.IsLoadingOlderDays && viewModel.Days.Count > beforePage,
+                        timeoutMilliseconds: 30000);
+                    await Assert.That(appended).IsTrue();
+                }
+                var chronologyItems = FindControlByAutomationId<ItemsControl>(view, "FeedChronologyItems");
+                var realizedEditorsAtOldestDay = view.GetVisualDescendants()
+                    .OfType<MarkdownBlockLivePreviewEditor>()
+                    .Count();
+                Console.WriteLine(
+                    $"Feed virtualization: loadedDays={viewModel.Days.Count}, visibleDays={viewModel.VisibleDays.Count}, realizedEditors={realizedEditorsAtOldestDay}");
                 using (Assert.Multiple())
                 {
+                    await Assert.That(viewModel.Days.Count).IsEqualTo(dayCount);
                     await Assert.That(viewModel.Days[0]).IsSameReferenceAs(newestDay);
                     await Assert.That(viewModel.Days.Select(static day => day.Date).Distinct().Count())
                         .IsEqualTo(viewModel.Days.Count);
                     await Assert.That(viewModel.LoadedDayCount).IsEqualTo(viewModel.Days.Count);
+                    await Assert.That(realizedEditorsAtOldestDay).IsGreaterThan(0);
+                    await Assert.That(realizedEditorsAtOldestDay).IsLessThan(50);
                 }
+                var tallDay = viewModel.Days.Single(day => day.Date == today.AddDays(-(dayCount / 2)));
+                var tallBlock = tallDay.MarkdownEditor.Blocks.Single(block => block.PreviewText.Contains("Строка 200"));
+                chronologyItems.ScrollIntoView(tallDay);
+                RunLayoutJobs();
+                await Assert.That(await WaitForAsync(() =>
+                    FindOptionalControlByAutomationId<MarkdownBlockPreviewControl>(view, tallBlock.PreviewAutomationId) is not null))
+                    .IsTrue();
+                var tallPreview = FindControlByAutomationId<MarkdownBlockPreviewControl>(view, tallBlock.PreviewAutomationId);
+                await Assert.That(tallPreview.Bounds.Height).IsGreaterThan(scrollViewer.Viewport.Height);
+                await Assert.That(view.GetVisualDescendants().OfType<MarkdownBlockLivePreviewEditor>().Count()).IsLessThan(50);
+                var oldestDay = viewModel.Days[^1];
+                chronologyItems.ScrollIntoView(oldestDay);
+                RunLayoutJobs();
+                await Assert.That(await WaitForAsync(() =>
+                    FindOptionalControlByAutomationId<Control>(view, oldestDay.AutomationId) is not null)).IsTrue();
+                viewModel.FeedAreaFilterOptions.Single(area => area.IsAll).IsSelected = false;
+                viewModel.FeedAreaFilterOptions.Single(area => area.Identity == "work").IsSelected = true;
+                RunLayoutJobs();
+                await Assert.That(viewModel.VisibleDays.Count).IsEqualTo(dayCount / 2);
+                viewModel.ResetFeedAreaFilterCommand.Execute(null);
+                RunLayoutJobs();
+                await Assert.That(viewModel.VisibleDays.Count).IsEqualTo(dayCount);
+                chronologyItems.ScrollIntoView(newestDay);
+                RunLayoutJobs();
+                await Assert.That(await WaitForAsync(() =>
+                    FindOptionalControlByAutomationId<MarkdownBlockPreviewControl>(view, editedBlock.PreviewAutomationId) is not null))
+                    .IsTrue();
+                await Assert.That(newestDay.MarkdownEditor).IsSameReferenceAs(editor);
+                await Assert.That(newestDay.MarkdownEditor.Blocks.Single(block => block.Index == editedBlock.Index).PreviewText)
+                    .IsEqualTo("Запись во время подгрузки");
             }
             finally
             {
@@ -1584,6 +2132,7 @@ public class FeedControlUiTests
 
     private sealed class RecordingFeedTaskTarget : IFeedTaskCreationTarget
     {
+        public Action? OnCreate { get; init; }
         public List<FeedTaskDraft> Tasks { get; } = [];
 
         public Task<FeedCreatedTask> CreateOrGetAsync(
@@ -1592,8 +2141,50 @@ public class FeedControlUiTests
         {
             cancellationToken.ThrowIfCancellationRequested();
             Tasks.Add(draft);
+            OnCreate?.Invoke();
             return Task.FromResult(new FeedCreatedTask(draft.TaskId, draft.Title));
         }
+    }
+
+    private sealed class DelayedLinkVault(INoteVault inner) : INoteVault
+    {
+        public bool DelayNextA { get; set; }
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public string RootPath => inner.RootPath;
+        public string ResolveSafePath(string path) => inner.ResolveSafePath(path);
+        public async Task<VaultDocument?> ReadAsync(string path, CancellationToken cancellationToken = default)
+        {
+            if (path == "A.md" && DelayNextA)
+            {
+                DelayNextA = false;
+                Started.TrySetResult();
+                await Release.Task.WaitAsync(cancellationToken);
+            }
+            return await inner.ReadAsync(path, cancellationToken);
+        }
+        public Task<IReadOnlyList<string>> ListMarkdownFilesAsync(CancellationToken cancellationToken = default) => inner.ListMarkdownFilesAsync(cancellationToken);
+        public Task<VaultWriteResult> CreateAsync(string path, string text, bool hasUtf8Bom = false, CancellationToken cancellationToken = default) => inner.CreateAsync(path, text, hasUtf8Bom, cancellationToken);
+        public Task<VaultWriteResult> WriteAsync(string path, string text, string? expectedRevision, bool hasUtf8Bom = false, CancellationToken cancellationToken = default) => inner.WriteAsync(path, text, expectedRevision, hasUtf8Bom, cancellationToken);
+    }
+
+    private sealed class ReadBoundaryVault(INoteVault inner) : INoteVault
+    {
+        public Action? BeforeNextDailyRead { get; set; }
+        public string RootPath => inner.RootPath;
+        public string ResolveSafePath(string path) => inner.ResolveSafePath(path);
+        public Task<VaultDocument?> ReadAsync(string path, CancellationToken cancellationToken = default)
+        {
+            if (path.StartsWith("Ежедневные/", StringComparison.Ordinal) && BeforeNextDailyRead is { } action)
+            {
+                BeforeNextDailyRead = null;
+                action();
+            }
+            return inner.ReadAsync(path, cancellationToken);
+        }
+        public Task<IReadOnlyList<string>> ListMarkdownFilesAsync(CancellationToken cancellationToken = default) => inner.ListMarkdownFilesAsync(cancellationToken);
+        public Task<VaultWriteResult> CreateAsync(string path, string text, bool hasUtf8Bom = false, CancellationToken cancellationToken = default) => inner.CreateAsync(path, text, hasUtf8Bom, cancellationToken);
+        public Task<VaultWriteResult> WriteAsync(string path, string text, string? expectedRevision, bool hasUtf8Bom = false, CancellationToken cancellationToken = default) => inner.WriteAsync(path, text, expectedRevision, hasUtf8Bom, cancellationToken);
     }
 
     private sealed class FeedTempDirectory : IDisposable

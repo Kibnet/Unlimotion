@@ -252,7 +252,7 @@ public class MainControlTaskCardLayoutUiTests
     [Test]
     public async Task CurrentTaskCard_DesktopRepeaterLayout_UsesCompactControls()
     {
-        var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        var session = HeadlessUnitTestSession.StartNew(typeof(SkiaHeadlessAppBuilder));
         try
         {
             await session.DispatchAsync(async () =>

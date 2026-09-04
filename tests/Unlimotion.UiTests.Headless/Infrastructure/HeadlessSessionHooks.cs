@@ -42,6 +42,16 @@ public static class HeadlessSessionHooks
         }
     }
 
+    public static async Task PrepareAsync(Func<Task> action)
+    {
+        // Keep the headless dispatcher pumping while storage publishes to its captured UI context.
+        await HeadlessRuntime.Session.Dispatch<bool>(async () =>
+        {
+            await action();
+            return true;
+        }, CancellationToken.None).ConfigureAwait(false);
+    }
+
     [After(TestSession)]
     public static async Task CleanupSession()
     {

@@ -83,6 +83,15 @@
                         Command="{Binding RefreshCommand}"
                         Content="{DynamicResource FeedRefresh}"
                         AutomationProperties.AutomationId="FeedRefreshButton" />
+                <Grid Grid.Row="1" Grid.ColumnSpan="4" ColumnDefinitions="*,Auto" ColumnSpacing="8"
+                      IsVisible="{Binding HasMoveUndoNotice}"
+                      AutomationProperties.AutomationId="FeedHiddenMoveNotice">
+                    <TextBlock Text="{DynamicResource FeedMoveHidden}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                    <Button Grid.Column="1" Content="{DynamicResource FeedUndoChange}"
+                            Command="{Binding MoveUndoEditor.UndoStructuralChangeCommand}"
+                            IsEnabled="{Binding MoveUndoEditor.CanUndoStructuralChange}"
+                            AutomationProperties.AutomationId="FeedUndoMoveButton" />
+                </Grid>
             </Grid>
         </Border>
 
@@ -184,16 +193,18 @@
                                     AutomationProperties.AutomationId="FeedAreaFilterResetButton" />
                         </StackPanel>
                         <ScrollViewer x:Name="ChronologyScroller"
+                                      IsVisible="{Binding HasVisibleDays}"
                                       HorizontalScrollBarVisibility="Disabled"
                                       VerticalScrollBarVisibility="Auto"
                                       AutomationProperties.ControlTypeOverride="List"
                                       AutomationProperties.Name="{Binding ChronologyAutomationName}"
                                       AutomationProperties.AutomationId="FeedChronologyList">
                             <ItemsControl x:Name="ChronologyList"
-                                          ItemsSource="{Binding VisibleDays}">
+                                          ItemsSource="{Binding VisibleDays}"
+                                          AutomationProperties.AutomationId="FeedChronologyItems">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
-                                        <StackPanel />
+                                        <VirtualizingStackPanel />
                                     </ItemsPanelTemplate>
                                 </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
@@ -238,13 +249,14 @@
                                 AutomationProperties.AutomationId="FeedLoadOlderDaysButton" />
                     </Grid>
 
-                    <Grid IsVisible="{Binding IsSearchActive}">
-                        <TextBlock IsVisible="{Binding IsSearchEmpty}"
+                    <Grid IsVisible="{Binding IsSearchActive}" RowDefinitions="Auto,*" RowSpacing="8">
+                        <views:FeedSearchFiltersControl />
+                        <TextBlock Grid.Row="1" IsVisible="{Binding IsSearchEmpty}"
                                    HorizontalAlignment="Center"
                                    VerticalAlignment="Top"
                                    Margin="12"
                                    Text="{DynamicResource FeedSearchNoResults}" />
-                        <ListBox x:Name="SearchResultsList"
+                        <ListBox x:Name="SearchResultsList" Grid.Row="1"
                                  ItemsSource="{Binding SearchResults}"
                                  Background="Transparent"
                                  BorderThickness="0"

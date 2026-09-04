@@ -114,7 +114,13 @@ public partial class MarkdownBlockLivePreviewEditor : UserControl
 
     private void OnEditorPointerMoved(object? sender, PointerEventArgs e)
     {
-        UpdatePointerOverBlock(e.GetPosition(this));
+        // The host also receives pointer events over modal overlays. Geometry alone would
+        // reveal toolbars behind quick capture/settings even though the editor is not hit.
+        var fromEditor = e.Source is Visual source
+            && (ReferenceEquals(source, this) || source.GetVisualAncestors().Contains(this)
+                // Transparent gaps may hit a containing panel, but never a sibling overlay.
+                || this.GetVisualAncestors().Contains(source));
+        UpdatePointerOverBlock(fromEditor ? e.GetPosition(this) : new Point(-1, -1));
 
         if (dragSourceBlock is null
             || DataContext is not MarkdownLivePreviewEditorViewModel editor)
@@ -308,6 +314,11 @@ public partial class MarkdownBlockLivePreviewEditor : UserControl
 
     private void OnBlockPointerEntered(object? sender, PointerEventArgs e)
     {
+        if (FindToolbarBlockAt(e.GetPosition(this)) is not null)
+        {
+            UpdatePointerOverBlock(e.GetPosition(this));
+            return;
+        }
         if (sender is Control { DataContext: MarkdownLiveBlockViewModel block }
             && DataContext is MarkdownLivePreviewEditorViewModel editor)
         {
@@ -318,6 +329,7 @@ public partial class MarkdownBlockLivePreviewEditor : UserControl
 
     private void OnBlockPointerExited(object? sender, PointerEventArgs e)
     {
+        if (FindToolbarBlockAt(e.GetPosition(this)) is not null) return;
         if (sender is Control { DataContext: MarkdownLiveBlockViewModel block }
             && DataContext is MarkdownLivePreviewEditorViewModel editor)
         {
@@ -337,7 +349,8 @@ public partial class MarkdownBlockLivePreviewEditor : UserControl
             return;
         }
 
-        var block = FindMoveTargetAt(position)?.DataContext as MarkdownLiveBlockViewModel;
+        var block = FindToolbarBlockAt(position)
+            ?? FindMoveTargetAt(position)?.DataContext as MarkdownLiveBlockViewModel;
         if (ReferenceEquals(block, pointerOverBlock))
         {
             return;
@@ -353,6 +366,42 @@ public partial class MarkdownBlockLivePreviewEditor : UserControl
         {
             editor.SetPointerOverBlock(pointerOverBlock, true);
         }
+    }
+
+    private void OnToolbarAttached(object? sender, VisualTreeAttachmentEventArgs args)
+    {
+        if (sender is Border border)
+        {
+            border.LayoutUpdated -= OnToolbarLayoutUpdated;
+            border.LayoutUpdated += OnToolbarLayoutUpdated;
+        }
+    }
+
+    private void OnToolbarLayoutUpdated(object? sender, EventArgs args)
+    {
+        if (sender is not Border border) return;
+        // Rows are wrapped by ItemsControl containers. Raising only the inner Grid
+        // cannot put an overhanging toolbar above the next row's container.
+        if (border.FindAncestorOfType<ContentPresenter>() is { } container)
+            container.SetValue(Panel.ZIndexProperty, border.IsEffectivelyVisible ? 30 : 0);
+        if (!border.IsEffectivelyVisible || border.FindAncestorOfType<Grid>() is not { } row) return;
+        if (row.TranslatePoint(default, this) is not { } origin) return;
+        var maxWidth = Math.Max(0, row.Bounds.Width);
+        if (Math.Abs(border.MaxWidth - maxWidth) > 0.5) border.MaxWidth = maxWidth;
+        var top = origin.Y >= border.Bounds.Height ? -border.Bounds.Height : row.Bounds.Height;
+        if (Math.Abs(Canvas.GetTop(border) - top) > 0.5) Canvas.SetTop(border, top);
+    }
+
+    private MarkdownLiveBlockViewModel? FindToolbarBlockAt(Point position)
+    {
+        foreach (var toolbar in this.GetVisualDescendants().OfType<Border>())
+        {
+            if (!toolbar.IsEffectivelyVisible || toolbar.DataContext is not MarkdownLiveBlockViewModel block
+                || AutomationProperties.GetAutomationId(toolbar) != block.ContextToolbarAutomationId) continue;
+            if (toolbar.TranslatePoint(default, this) is { } origin
+                && new Rect(origin, toolbar.Bounds.Size).Contains(position)) return block;
+        }
+        return null;
     }
 
     private Control? FindMoveTargetAt(Point position)
@@ -454,9 +503,29 @@ public partial class MarkdownBlockLivePreviewEditor : UserControl
 
     private async void OnEditorKeyDown(object? sender, KeyEventArgs e)
     {
+        if (e.Key == Key.Z && e.KeyModifiers == KeyModifiers.Control
+            && DataContext is MarkdownLivePreviewEditorViewModel { CanUndoStructuralChange: true } undoEditor)
+        {
+            e.Handled = true;
+            isExplicitCommit = true;
+            try
+            {
+                var undo = await undoEditor.UndoStructuralChangeAsync();
+                if (undo.TargetBlock is { } target) FocusEditor(target.EditorAutomationId, undo.CaretIndex);
+            }
+            finally { isExplicitCommit = false; }
+            return;
+        }
         if (e.Source is not TextBox { DataContext: MarkdownLiveBlockViewModel block }
             || DataContext is not MarkdownLivePreviewEditorViewModel editor)
         {
+            return;
+        }
+
+        if (isSwitchingBlock || isExplicitCommit || block.IsCommitInProgress)
+        {
+            // A boundary mutation owns focus until its acknowledgement is processed.
+            e.Handled = true;
             return;
         }
 
@@ -486,16 +555,24 @@ public partial class MarkdownBlockLivePreviewEditor : UserControl
             && ((TextBox)e.Source).SelectionStart == 0
             && ((TextBox)e.Source).SelectionEnd == 0)
         {
+            e.Handled = true;
             if (!editor.CanMergeActiveWithPrevious())
             {
                 return;
             }
 
-            e.Handled = true;
-            var merge = await editor.MergeActiveWithPreviousAsync();
-            if (merge.IsMerged && merge.TargetBlock is not null)
+            isSwitchingBlock = true;
+            try
             {
-                FocusEditor(merge.TargetBlock.EditorAutomationId, merge.CaretIndex);
+                var merge = await editor.MergeActiveWithPreviousAsync();
+                if (merge.IsMerged && merge.TargetBlock is not null)
+                {
+                    FocusEditor(merge.TargetBlock.EditorAutomationId, merge.CaretIndex);
+                }
+            }
+            finally
+            {
+                isSwitchingBlock = false;
             }
 
             return;
@@ -503,7 +580,7 @@ public partial class MarkdownBlockLivePreviewEditor : UserControl
 
         if (!extendsSelection
             && e.Key is Key.Left or Key.Right or Key.Up or Key.Down
-            && await TryMoveCaretAcrossBlockAsync(editor, block, (TextBox)e.Source, e.Key))
+            && await TryMoveCaretAcrossBlockAsync(editor, block, (TextBox)e.Source, e))
         {
             e.Handled = true;
             return;
@@ -522,7 +599,8 @@ public partial class MarkdownBlockLivePreviewEditor : UserControl
             return;
         }
 
-        if (block.Kind == Unlimotion.Notes.Markdown.MarkdownBlockKind.FencedCode)
+        if (block.Kind is Unlimotion.Notes.Markdown.MarkdownBlockKind.FencedCode
+            or Unlimotion.Notes.Markdown.MarkdownBlockKind.Raw)
         {
             InsertInternalLineBreak(block, textBox);
             return;
@@ -568,6 +646,7 @@ public partial class MarkdownBlockLivePreviewEditor : UserControl
         var start = Math.Min(textBox.SelectionStart, textBox.SelectionEnd);
         var end = Math.Max(textBox.SelectionStart, textBox.SelectionEnd);
         var source = block.EditorText;
+        var beforeSplit = editor.GetSnapshotWithActiveDraft();
         var (left, right) = CreateSplitFragments(block, source, start, end);
         var sourceIndex = block.Index;
         block.EditorText = string.IsNullOrEmpty(right)
@@ -588,6 +667,8 @@ public partial class MarkdownBlockLivePreviewEditor : UserControl
             {
                 FocusEditor(target.EditorAutomationId, 0);
             }
+            if (beforeSplit is not null && editor.Snapshot is { } afterSplit)
+                editor.RememberStructuralChange(beforeSplit, afterSplit, sourceIndex, start);
         }
         finally
         {
@@ -691,8 +772,9 @@ public partial class MarkdownBlockLivePreviewEditor : UserControl
         MarkdownLivePreviewEditorViewModel editor,
         MarkdownLiveBlockViewModel block,
         TextBox textBox,
-        Key key)
+        KeyEventArgs keyEvent)
     {
+        var key = keyEvent.Key;
         if (textBox.SelectionStart != textBox.SelectionEnd)
         {
             return false;
@@ -721,12 +803,16 @@ public partial class MarkdownBlockLivePreviewEditor : UserControl
             return false;
         }
 
+        // Consume during tunnelling, BEFORE the first await. Otherwise the native TextBox
+        // and window navigation process the same key while the block is still saving.
+        keyEvent.Handled = true;
+
         var targetBeforeCommit = movingPrevious
-            ? editor.Blocks.LastOrDefault(candidate => candidate.Index < block.Index && candidate.IsEditable)
-            : editor.Blocks.FirstOrDefault(candidate => candidate.Index > block.Index && candidate.IsEditable);
+            ? editor.Blocks.LastOrDefault(candidate => candidate.Index < block.Index && candidate.IsEditable && candidate.IsFeedFilterVisible)
+            : editor.Blocks.FirstOrDefault(candidate => candidate.Index > block.Index && candidate.IsEditable && candidate.IsFeedFilterVisible);
         if (targetBeforeCommit is null)
         {
-            return false;
+            return true;
         }
 
         var targetLocator = new BlockLocator(

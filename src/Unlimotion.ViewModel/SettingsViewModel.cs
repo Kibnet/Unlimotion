@@ -76,6 +76,10 @@ public class SettingsViewModel
     private Func<string, NoteDailyFileNameFormatValidation>? _noteDailyFileNameFormatValidator;
     private Func<string, Task<NoteDailyFileNameFormatApplyResult>>? _applyNoteDailyFileNameFormatAsync;
     private Func<Task<NoteDailyFileNameFormatState>>? _reloadNoteDailyFileNameFormatAsync;
+    private Func<string, Task<NoteDailyFileNameFormatImpact>>? _previewNoteDailyFileNameFormatAsync;
+    private string? _pendingFormat;
+    private string? _pendingFormatRoot;
+    private long _pendingFormatContext;
     private string? _taskStorageUrl;
     private string? _login;
     private string? _password;
@@ -198,6 +202,8 @@ public class SettingsViewModel
     public ICommand? BrowseTaskStoragePathCommand { get; set; }
     public ICommand? BrowseNoteVaultRootPathCommand { get; set; }
     public ICommand? ApplyNoteDailyFileNameFormatCommand { get; set; }
+    public ICommand? ConfirmNoteDailyFileNameFormatCommand { get; set; }
+    public ICommand? CancelNoteDailyFileNameFormatCommand { get; set; }
     public ICommand? ReloadExternalNoteDailyFileNameFormatCommand { get; set; }
     public ICommand? CloneCommand { get; set; }
     public ICommand? PullCommand { get; set; }
@@ -554,6 +560,7 @@ public class SettingsViewModel
             }
 
             _noteDailyFileNameFormatDraft = normalized;
+            CancelNoteDailyFileNameFormatPreview();
             RefreshNoteDailyFileNameFormatDraftPresentation();
         }
     }
@@ -707,11 +714,13 @@ public class SettingsViewModel
     public void ConfigureNoteDailyFileNameFormatBridge(
         Func<string, NoteDailyFileNameFormatValidation> validator,
         Func<string, Task<NoteDailyFileNameFormatApplyResult>> applyAsync,
-        Func<Task<NoteDailyFileNameFormatState>> reloadAsync)
+        Func<Task<NoteDailyFileNameFormatState>> reloadAsync,
+        Func<string, Task<NoteDailyFileNameFormatImpact>>? previewAsync = null)
     {
         _noteDailyFileNameFormatValidator = validator ?? throw new ArgumentNullException(nameof(validator));
         _applyNoteDailyFileNameFormatAsync = applyAsync ?? throw new ArgumentNullException(nameof(applyAsync));
         _reloadNoteDailyFileNameFormatAsync = reloadAsync ?? throw new ArgumentNullException(nameof(reloadAsync));
+        _previewNoteDailyFileNameFormatAsync = previewAsync;
         AdvanceNoteDailyFileNameFormatApplyContextGeneration();
         ResetNoteDailyFileNameFormatFeedSession();
         RefreshNoteDailyFileNameFormatDraftPresentation();
@@ -763,6 +772,9 @@ public class SettingsViewModel
             return;
         }
 
+        if (state.IsExternalChange || state.RequiresReload ||
+            AppliedNoteDailyFileNameFormat != state.FileNameFormat)
+            CancelNoteDailyFileNameFormatPreview();
         var hadDirtyDraft = HasUnappliedNoteDailyFileNameFormatDraft;
         if (state.RequiresReload)
         {
@@ -826,7 +838,24 @@ public class SettingsViewModel
                     : null);
     }
 
-    public async Task ApplyNoteDailyFileNameFormatAsync()
+    public string? NoteDailyFileNameFormatImpactText { get; private set; }
+    public bool HasNoteDailyFileNameFormatImpact => NoteDailyFileNameFormatImpactText is not null
+        && _pendingFormat == NoteDailyFileNameFormatDraft && _pendingFormatRoot == NoteVaultRootPath
+        && _pendingFormatContext == _noteDailyFileNameFormatApplyContextGeneration;
+
+    public void CancelNoteDailyFileNameFormatPreview()
+    {
+        NoteDailyFileNameFormatImpactText = null;
+        _pendingFormat = null;
+    }
+
+    public Task ConfirmNoteDailyFileNameFormatAsync() => HasNoteDailyFileNameFormatImpact
+        ? ApplyNoteDailyFileNameFormatCoreAsync(confirmed: true)
+        : ApplyNoteDailyFileNameFormatCoreAsync(confirmed: false);
+
+    public Task ApplyNoteDailyFileNameFormatAsync() => ApplyNoteDailyFileNameFormatCoreAsync(confirmed: false);
+
+    private async Task ApplyNoteDailyFileNameFormatCoreAsync(bool confirmed)
     {
         if (!CanApplyNoteDailyFileNameFormat || _applyNoteDailyFileNameFormatAsync == null)
         {
@@ -843,6 +872,24 @@ public class SettingsViewModel
         NoteDailyFileNameFormatStatusText = applyingStatusText;
         try
         {
+            if (!confirmed && _previewNoteDailyFileNameFormatAsync is not null)
+            {
+                CancelNoteDailyFileNameFormatPreview();
+                var impact = await _previewNoteDailyFileNameFormatAsync(requestedFormat).ConfigureAwait(true);
+                if (!IsCurrentNoteDailyFileNameFormatOperation(operationGeneration, operationFeedSessionGeneration, operationRootPath)
+                    || requestedFormat != NoteDailyFileNameFormatDraft) return;
+                if (impact.LeavingFeed > 0)
+                {
+                    _pendingFormat = requestedFormat;
+                    _pendingFormatRoot = operationRootPath;
+                    _pendingFormatContext = operationApplyContextGeneration;
+                    NoteDailyFileNameFormatImpactText = _localization.Format("NoteDailyFileNameFormatImpact",
+                        impact.RetainedDays, impact.PreviouslyRecognized, impact.RecognizedDays, impact.UnrecognizedFiles);
+                    NoteDailyFileNameFormatStatusText = null;
+                    return;
+                }
+            }
+            CancelNoteDailyFileNameFormatPreview();
             var result = await _applyNoteDailyFileNameFormatAsync(requestedFormat)
                 .ConfigureAwait(true);
             if (result.Succeeded && result.AppliedState is { } state)
@@ -2422,6 +2469,7 @@ public class SettingsViewModel
 
         if (_noteDailyFileNameFormatFeedSessionGeneration != sessionGeneration)
         {
+            CancelNoteDailyFileNameFormatPreview();
             _noteDailyFileNameFormatFeedSessionGeneration = sessionGeneration;
             AdvanceNoteDailyFileNameFormatOperationGeneration();
         }
@@ -2431,6 +2479,7 @@ public class SettingsViewModel
 
     private void ResetNoteDailyFileNameFormatFeedSession()
     {
+        CancelNoteDailyFileNameFormatPreview();
         _noteDailyFileNameFormatFeedSessionGeneration = null;
         AdvanceNoteDailyFileNameFormatOperationGeneration();
     }

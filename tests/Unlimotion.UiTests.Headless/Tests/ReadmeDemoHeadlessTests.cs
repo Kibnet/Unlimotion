@@ -32,6 +32,7 @@ public abstract class ReadmeDemoHeadlessTestsBase
                     Language,
                     vm => _vm = vm,
                     viewModelFactoryDispatcher: factory => HeadlessRuntime.Dispatch(factory),
+                    prepareViewModelDispatcher: HeadlessSessionHooks.PrepareAsync,
                     headlessWindowCleanup: HeadlessSessionHooks.CloseWindow)));
     }
 

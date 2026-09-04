@@ -56,8 +56,8 @@ public abstract partial class MainWindowScenariosBase<TSession> : UiTestBase<TSe
                 .IsEqualTo("CurrentTaskDescriptionSection");
             await Assert.That(Page.CurrentTaskPlanningSection.AutomationId)
                 .IsEqualTo("CurrentTaskPlanningSection");
-            await Assert.That(Page.CurrentTaskRepeaterSection.AutomationId)
-                .IsEqualTo("CurrentTaskRepeaterSection");
+            // The launch fixture has no planned start. Repeater controls are intentionally
+            // hidden until one is set; their show/hide contract has its own UI scenario.
             await Assert.That(Page.CurrentTaskRelationsSection.AutomationId)
                 .IsEqualTo("CurrentTaskRelationsSection");
         }

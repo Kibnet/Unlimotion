@@ -12,6 +12,25 @@ namespace Unlimotion.Test;
 public sealed class DailyMarkdownBlockMoveTests
 {
     [Test]
+    public async Task Move_CheckboxCarriesItsHiddenAnchor_WithoutChangingTheLinkedTarget()
+    {
+        using var directory = new TempNotesDirectory();
+        var vault = new FileNoteVault(directory.Path);
+        var parser = new MarkdownDocumentParser();
+        const string path = "Ежедневные/2026-09-04.md";
+        const string raw = "Первый\n\n- [ ] Купить книгу\n^unlimotion-move-stable\n\nПоследний\n";
+        await vault.CreateAsync(path, raw);
+        var source = (await vault.ReadAsync(path))!;
+        var document = parser.Parse(raw);
+        var result = await new FeedMarkdownBlockMoveService(vault, parser).MoveAsync(
+            new FeedMarkdownBlockMoveRequest(path, source.Revision,
+                [Locate(path, document, "Купить книгу")], Locate(path, document, "Первый")));
+        await Assert.That(result.UpdatedText).StartsWith("- [ ] Купить книгу\n^unlimotion-move-stable\n");
+        await Assert.That(result.UpdatedText.Split("^unlimotion-move-stable").Length - 1).IsEqualTo(1);
+        await Assert.That(result.OutputLocators.Count).IsEqualTo(2);
+    }
+
+    [Test]
     public async Task Move_NonContiguousBlocksAcrossAreas_PreservesSourceOrderAndRawText()
     {
         using var directory = new TempNotesDirectory();

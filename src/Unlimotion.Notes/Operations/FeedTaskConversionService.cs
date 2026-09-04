@@ -23,6 +23,9 @@ public sealed record FeedCreatedTask(string TaskId, string Title);
 public interface IFeedTaskCreationTarget
 {
     bool SupportsClassification => true;
+    bool SupportsReadOnlyLookup => false;
+    Task<FeedCreatedTask?> FindOwnedAsync(FeedTaskDraft draft, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("This task storage cannot verify an existing feed task without creating it.");
 
     Task<FeedCreatedTask> CreateOrGetAsync(FeedTaskDraft draft, CancellationToken cancellationToken = default);
 }
@@ -47,7 +50,22 @@ public sealed record FeedTaskConversionRecord(
     FeedTaskConversionRecoveryDescriptor? RecoveryDescriptor = null,
     string? RecoveryIssue = null,
     bool ReviewApplied = false,
-    FeedOperationRecoveryResolution RecoveryResolution = FeedOperationRecoveryResolution.None);
+    FeedOperationRecoveryResolution RecoveryResolution = FeedOperationRecoveryResolution.None,
+    FeedTaskCaptureIntent? CaptureIntent = null,
+    FeedRecoveredCaptureWrite? RecoveredCaptureWrite = null);
+
+public sealed record FeedRecoveredCaptureWrite(string RelativePath, string Text,
+    string? ExpectedRevision, bool HasUtf8Bom, string CaptureText, AreaReference? Area);
+
+// Persisted before touching Markdown: recovery can distinguish a committed append from an
+// untouched source even when the process dies before the next journal checkpoint.
+public sealed record FeedTaskCaptureIntent(
+    string CaptureText,
+    AreaReference? Area,
+    string? InitialSourceRevision,
+    string AppendedTextHash,
+    bool HasUtf8Bom,
+    string? AppendedText = null);
 
 public sealed record FeedTaskConversionRecoveryDescriptor(
     string OriginalOperationId,
@@ -83,7 +101,8 @@ public interface IFeedTaskConversionJournal
             throw new InvalidOperationException("Legacy task conversions require manual recovery.");
         }
 
-        if (record.State is not FeedTaskConversionState.TaskCreated and not FeedTaskConversionState.Completed)
+        if (record.State is not FeedTaskConversionState.TaskCreated and not FeedTaskConversionState.Completed
+            && !(record.State == FeedTaskConversionState.Pending && record.CaptureIntent is not null))
         {
             throw new InvalidOperationException("The task must exist before keeping both copies.");
         }
@@ -311,11 +330,15 @@ public sealed partial class FeedTaskConversionService(
         var operation = await journal.LoadAsync(request.VaultId, request.OperationId, cancellationToken)
             .ConfigureAwait(false);
         ValidateExistingOperation(operation, request, taskId);
+        if (operation is { State: FeedTaskConversionState.Pending, CaptureIntent: not null })
+        {
+            await EnsureCapturedAsync(operation, cancellationToken).ConfigureAwait(false);
+        }
         if (operation?.State == FeedTaskConversionState.Completed)
         {
             var completedSource = await vault.ReadAsync(request.SourcePath, cancellationToken).ConfigureAwait(false)
                 ?? throw new InvalidDataException("The converted task source is missing.");
-            if (operation.RecoveryDescriptor?.SourceOutputHash is { Length: > 0 } completedSourceHash
+            if (!operation.ReviewApplied && operation.RecoveryDescriptor?.SourceOutputHash is { Length: > 0 } completedSourceHash
                 && !string.Equals(
                     FeedOperationHash.Compute(completedSource.Text),
                     completedSourceHash,
@@ -578,6 +601,39 @@ public sealed partial class FeedTaskConversionService(
         string operationId,
         CancellationToken cancellationToken = default) =>
         journal.MarkReviewAppliedAsync(vaultId, operationId, cancellationToken);
+
+    private async Task EnsureCapturedAsync(FeedTaskConversionRecord operation, CancellationToken cancellationToken)
+    {
+        var intent = operation.CaptureIntent!;
+        var source = await vault.ReadAsync(operation.SourcePath, cancellationToken).ConfigureAwait(false);
+        if (source is not null
+            && string.Equals(source.Revision, operation.ExpectedSourceRevision, StringComparison.Ordinal)
+            && string.Equals(FeedOperationHash.Compute(source.Text), intent.AppendedTextHash, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        if (!string.Equals(source?.Revision, intent.InitialSourceRevision, StringComparison.Ordinal))
+        {
+            throw new VaultRevisionConflictException(operation.SourcePath, intent.InitialSourceRevision, source?.Revision);
+        }
+
+        var updated = mutations.AppendQuickCapture(source?.Text ?? string.Empty, intent.CaptureText, intent.Area);
+        if (!string.Equals(FeedOperationHash.Compute(updated), intent.AppendedTextHash, StringComparison.Ordinal))
+        {
+            throw new InvalidDataException("The capture intent no longer matches its expected Markdown output.");
+        }
+
+        if (source is null)
+        {
+            await vault.CreateAsync(operation.SourcePath, updated, intent.HasUtf8Bom, cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            await vault.WriteAsync(operation.SourcePath, updated, source.Revision, intent.HasUtf8Bom, cancellationToken)
+                .ConfigureAwait(false);
+        }
+    }
 
     internal static (string Title, string Description) ParseTaskContent(IReadOnlyList<MarkdownBlock> selection)
     {

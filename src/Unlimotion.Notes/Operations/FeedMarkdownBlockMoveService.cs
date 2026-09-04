@@ -137,7 +137,7 @@ public sealed class FeedMarkdownBlockMoveService(
 
     private static void EnsureMovable(MarkdownBlock block)
     {
-        if (block.Kind is MarkdownBlockKind.FrontMatter or MarkdownBlockKind.Blank or MarkdownBlockKind.Raw
+        if (block.IsTechnicalMoveAnchor || block.Kind is MarkdownBlockKind.FrontMatter or MarkdownBlockKind.Blank or MarkdownBlockKind.Raw
             || block.Raw.Contains("unlimotion://task/", StringComparison.Ordinal)
             || block.Raw.Contains("<!-- unlimotion-note:", StringComparison.Ordinal)
             || block.Raw.Contains("<!-- unlimotion-recovery:", StringComparison.Ordinal)
@@ -155,6 +155,10 @@ public sealed class FeedMarkdownBlockMoveService(
         {
             if (item.Block.Kind != MarkdownBlockKind.AreaHeading)
             {
+                var anchor = document.Blocks.Skip(item.Block.Index + 1)
+                    .FirstOrDefault(static block => block.Kind != MarkdownBlockKind.Blank);
+                if (anchor?.IsTechnicalMoveAnchor == true)
+                    return new MoveRange(item.Block.Start, anchor.Start + anchor.Length - item.Block.Start);
                 return new MoveRange(item.Block.Start, item.Block.Length);
             }
 

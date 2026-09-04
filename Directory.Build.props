@@ -1,0 +1,4 @@
+<Project>
+  <!-- AppAutomation imports the repository-root props for isolated desktop builds. -->
+  <Import Project="src/Directory.Build.props" />
+</Project>

@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel;
 using System.Linq;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
@@ -20,15 +21,12 @@ public partial class FeedControl : UserControl
     private bool hasSavedChronologyOffset;
     private bool wasSearchActive;
     private bool suppressNextChronologyRestore;
+    private bool loadOlderDaysWhenIdle;
 
     public FeedControl()
     {
         InitializeComponent();
-        ChronologyScroller.AddHandler(
-            ScrollViewer.ScrollChangedEvent,
-            OnChronologyScrollChanged,
-            RoutingStrategies.Bubble,
-            handledEventsToo: true);
+        ChronologyScroller.ScrollChanged += OnChronologyScrollChanged;
         DataContextChanged += (_, _) => ObserveDataContext();
         AttachedToVisualTree += (_, _) =>
         {
@@ -66,12 +64,14 @@ public partial class FeedControl : UserControl
         Grid.SetColumn(button, column);
     }
 
-    private void OnChronologyScrollChanged(object? sender, ScrollChangedEventArgs e)
+    private async void OnChronologyScrollChanged(object? sender, ScrollChangedEventArgs e)
+        => await TryLoadOlderDaysFromCurrentPositionAsync();
+
+    private async Task TryLoadOlderDaysFromCurrentPositionAsync()
     {
         if (DataContext is not FeedViewModel viewModel
             || !viewModel.HasMoreDays
-            || viewModel.IsLoadingOlderDays
-            || e.ExtentDelta == default && e.OffsetDelta == default)
+            || viewModel.IsLoadingOlderDays)
         {
             return;
         }
@@ -84,22 +84,28 @@ public partial class FeedControl : UserControl
             return;
         }
 
-        if (viewModel.LoadOlderDaysCommand.CanExecute(null))
+        if (viewModel.IsBusy)
         {
-            viewModel.LoadOlderDaysCommand.Execute(null);
+            loadOlderDaysWhenIdle = true;
+            return;
         }
+
+        loadOlderDaysWhenIdle = false;
+        await viewModel.LoadOlderDaysAsync();
     }
 
-    private void OnMarkdownLinkInvoked(object? sender, MarkdownLinkInvokedEventArgs e)
+    private async void OnMarkdownLinkInvoked(object? sender, MarkdownLinkInvokedEventArgs e)
     {
         const string taskPrefix = "unlimotion://task/";
-        if (DataContext is not FeedViewModel viewModel
-            || !e.Target.StartsWith(taskPrefix, StringComparison.Ordinal))
+        if (DataContext is not FeedViewModel viewModel)
         {
             return;
         }
 
-        viewModel.OpenTaskReference(e.Target[taskPrefix.Length..]);
+        if (e.Target.StartsWith(taskPrefix, StringComparison.Ordinal))
+            viewModel.OpenTaskReference(e.Target[taskPrefix.Length..]);
+        else if (sender is MarkdownBlockLivePreviewEditor { DataContext: MarkdownLivePreviewEditorViewModel editor })
+            await viewModel.OpenVaultLinkAsync(e.Target, editor.Snapshot?.RelativePath, e.Kind == MarkdownInlineTokenKind.WikiLink);
     }
 
     private async void OnBrokenTaskReferenceActionInvoked(
@@ -184,6 +190,7 @@ public partial class FeedControl : UserControl
         observedViewModel.SearchNavigationRequested -= OnSearchNavigationRequested;
         observedViewModel.ReviewNavigationRequested -= OnReviewNavigationRequested;
         observedViewModel = null;
+        loadOlderDaysWhenIdle = false;
     }
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -191,6 +198,13 @@ public partial class FeedControl : UserControl
         if (e.PropertyName is nameof(FeedViewModel.SearchQuery) or nameof(FeedViewModel.IsSearchActive))
         {
             UpdateSearchModeState();
+        }
+
+        if (e.PropertyName == nameof(FeedViewModel.IsBusy)
+            && observedViewModel is { IsBusy: false }
+            && loadOlderDaysWhenIdle)
+        {
+            _ = TryLoadOlderDaysFromCurrentPositionAsync();
         }
     }
 
