@@ -187,6 +187,7 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
     private CancellationTokenSource? autosaveDebounceCancellation;
     private Task autosaveTask = Task.CompletedTask;
     private Task draftPersistenceTail = Task.CompletedTask;
+    private Task draftPublicationTail = Task.CompletedTask;
     private MarkdownLiveDocumentSnapshot? snapshot;
     private MarkdownLiveBlockViewModel? activeBlock;
     private FeedDraft? recoveryDraft;
@@ -205,6 +206,10 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
     private bool isMoveInProgress;
     private string? moveErrorMessage;
     private bool isDisposed;
+    private long areaFilterGeneration;
+    private StructuralUndo? structuralUndo;
+    private sealed record StructuralUndo(MarkdownLiveDocumentSnapshot Before, MarkdownLiveDocumentSnapshot After,
+        int BlockIndex, int CaretIndex, bool IsMove);
 
     public MarkdownLivePreviewEditorViewModel(
         IMarkdownDocumentParser? parser = null,
@@ -225,9 +230,99 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
         AutomationIdPrefix = NormalizeAutomationIdPrefix(automationIdPrefix);
         RestoreRecoveryDraftCommand = ReactiveCommand.Create(RestoreRecoveryDraft);
         DiscardRecoveryDraftCommand = ReactiveCommand.CreateFromTask(DiscardRecoveryDraftAsync);
+        UndoStructuralChangeCommand = ReactiveCommand.CreateFromTask(async () => { await UndoStructuralChangeAsync(); });
     }
 
     public ObservableCollection<MarkdownLiveBlockViewModel> Blocks { get; } = new();
+
+    public System.Windows.Input.ICommand UndoStructuralChangeCommand { get; }
+    public MarkdownLiveDocumentSnapshot? GetSnapshotWithActiveDraft() => Snapshot is not { } current ? null
+        : ActiveBlock is { } block ? current with { Raw = block.CreatePatch(current).PatchedDocumentRaw } : current;
+    public bool CanUndoStructuralChange => structuralUndo is not null && !IsMoveInProgress
+        && ActiveBlock?.IsDirty != true && CommitBlockAsync is not null;
+    public bool HasHiddenMovedBlocks => structuralUndo?.IsMove == true
+        && SelectedMoveBlocks().Any(block => !block.IsFeedFilterVisible);
+
+    public void RememberStructuralChange(MarkdownLiveDocumentSnapshot before, MarkdownLiveDocumentSnapshot after,
+        int blockIndex, int caretIndex, bool isMove = false)
+    {
+        if (before.Raw == after.Raw) return;
+        structuralUndo = new StructuralUndo(before, after, blockIndex, caretIndex, isMove);
+        RaiseStructuralUndoChanged();
+    }
+
+    private void InvalidateStructuralUndo()
+    {
+        structuralUndo = null;
+        RaiseStructuralUndoChanged();
+    }
+
+    private void RaiseStructuralUndoChanged()
+    {
+        this.RaisePropertyChanged(nameof(CanUndoStructuralChange));
+        this.RaisePropertyChanged(nameof(HasHiddenMovedBlocks));
+    }
+
+    public async Task<MarkdownBlockMergeResult> UndoStructuralChangeAsync(CancellationToken cancellationToken = default)
+    {
+        var undo = structuralUndo;
+        var current = Snapshot;
+        if (!CanUndoStructuralChange || undo is null || current is null)
+            return new MarkdownBlockMergeResult(false, false);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, sessionCancellation.Token);
+        await commitGate.WaitAsync(linked.Token);
+        var editingBlock = ActiveBlock;
+        try
+        {
+            if (!ReferenceEquals(undo, structuralUndo) || Snapshot != current || ActiveBlock?.IsDirty == true
+                || current.ExpectedRevisionHash != undo.After.ExpectedRevisionHash || current.Raw != undo.After.Raw)
+                return new MarkdownBlockMergeResult(true, false);
+            IsMoveInProgress = true;
+            if (editingBlock is not null) editingBlock.IsCommitInProgress = true;
+            var patch = new MarkdownBlockPatch(current.RelativePath, current.ExpectedRevisionHash, current.HasUtf8Bom,
+                0, new MarkdownBlockTextRange(0, current.Raw.Length), current.Raw, undo.Before.Raw, undo.Before.Raw);
+            var result = await CommitBlockAsync!(patch, linked.Token);
+            linked.Token.ThrowIfCancellationRequested();
+            if (!result.IsAccepted || result.Snapshot is not { } accepted || !IsValidAcknowledgement(current, patch, accepted))
+            {
+                InvalidateStructuralUndo();
+                MoveErrorMessage = L10n.Get("FeedUndoUnsafe");
+                return new MarkdownBlockMergeResult(true, false);
+            }
+            if (ActiveBlock?.IsDirty == true || Snapshot != current || !ReferenceEquals(undo, structuralUndo))
+            {
+                InvalidateStructuralUndo();
+                MoveErrorMessage = L10n.Get("FeedUndoUnsafe");
+                CommitAccepted?.Invoke(accepted);
+                return new MarkdownBlockMergeResult(true, false);
+            }
+            InvalidateStructuralUndo();
+            Load(accepted);
+            IsMoveInProgress = false;
+            var target = Blocks.FirstOrDefault(block => block.Index == undo.BlockIndex && block.IsEditable);
+            if (!undo.IsMove && target is not null) BeginEdit(target);
+            CommitAccepted?.Invoke(accepted);
+            return new MarkdownBlockMergeResult(true, true, undo.IsMove ? null : target, undo.CaretIndex);
+        }
+        catch (OperationCanceledException) when (linked.IsCancellationRequested)
+        {
+            return new MarkdownBlockMergeResult(true, false);
+        }
+        catch (Exception exception)
+        {
+            System.Diagnostics.Trace.TraceError("Feed structural undo: {0}", exception);
+            InvalidateStructuralUndo();
+            MoveErrorMessage = L10n.Get("FeedUndoUnsafe");
+            return new MarkdownBlockMergeResult(true, false);
+        }
+        finally
+        {
+            if (editingBlock is not null) editingBlock.IsCommitInProgress = false;
+            IsMoveInProgress = false;
+            commitGate.Release();
+            RaiseStructuralUndoChanged();
+        }
+    }
 
     public bool ApplyAreaFilter(string? areaIdentity, string? areaName)
     {
@@ -241,8 +336,10 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
         bool showAll)
     {
         ArgumentNullException.ThrowIfNull(selectedAreas);
+        var generation = ++areaFilterGeneration;
         var hasVisibleContent = false;
-        foreach (var block in Blocks)
+        var filteringBlocks = Blocks.ToArray();
+        foreach (var block in filteringBlocks)
         {
             var belongsToArea = showAll || selectedAreas.Any(selection => MatchesArea(
                 block.Block,
@@ -252,9 +349,17 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
                 || block.Block.IsContent && belongsToArea
                 || block.Block.Kind == MarkdownBlockKind.AreaHeading && belongsToArea;
             block.SetFeedFilterVisible(isVisible);
+            // Hiding the focused editor can synchronously close it and reload Blocks.
+            // Do not enumerate a live collection or leave its replacement unfiltered.
+            if (generation != areaFilterGeneration)
+                return Blocks.Any(item => item.Block.IsContent && item.IsFeedFilterVisible);
+            if (Blocks.Count != filteringBlocks.Length
+                || !ReferenceEquals(Blocks.FirstOrDefault(), filteringBlocks.FirstOrDefault()))
+                return ApplyAreaFilter(selectedAreas, showAll);
             hasVisibleContent |= block.Block.IsContent && isVisible;
         }
 
+        RaiseStructuralUndoChanged();
         return showAll ? Blocks.Any(static block => block.Block.IsContent) : hasVisibleContent;
     }
 
@@ -325,6 +430,7 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
         {
             this.RaiseAndSetIfChanged(ref isMoveInProgress, value);
             RaiseMoveStateChanged();
+            RaiseStructuralUndoChanged();
         }
     }
 
@@ -573,7 +679,7 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
     {
         lock (draftPersistenceSync)
         {
-            return draftPersistenceTail;
+            return draftPublicationTail;
         }
     }
 
@@ -623,6 +729,10 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
         ArgumentNullException.ThrowIfNull(documentSnapshot.Raw);
         ArgumentException.ThrowIfNullOrWhiteSpace(documentSnapshot.ExpectedRevisionHash);
         ArgumentNullException.ThrowIfNull(documentSnapshot.RelativePath);
+
+        if (structuralUndo is { } undo && (undo.After.ExpectedRevisionHash != documentSnapshot.ExpectedRevisionHash
+            || undo.After.Raw != documentSnapshot.Raw || undo.After.RelativePath != documentSnapshot.RelativePath))
+            InvalidateStructuralUndo();
 
         ReplaceSession();
         hasDeferredCommitNotification = false;
@@ -963,6 +1073,7 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
             moveSelectionAnchorBlockIndex = result.OutputBlockIndices.FirstOrDefault();
             ApplyMoveSelection();
             RaiseMoveStateChanged();
+            RememberStructuralChange(currentSnapshot, result.Snapshot, selected[0], 0, isMove: true);
             CommitAccepted?.Invoke(result.Snapshot);
             return true;
         }
@@ -1086,7 +1197,7 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
     {
         ObjectDisposedException.ThrowIf(isDisposed, this);
         ArgumentNullException.ThrowIfNull(block);
-        if (!CanEdit || !ReferenceEquals(block.Owner, this) || !block.IsEditable)
+        if (!CanEdit || IsMoveInProgress || !ReferenceEquals(block.Owner, this) || !block.IsEditable)
         {
             return false;
         }
@@ -1270,6 +1381,7 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
             }
 
             var removedBlockIndex = block.Index;
+            var beforeMerge = currentSnapshot with { Raw = block.CreatePatch(currentSnapshot).PatchedDocumentRaw };
             hasDeferredCommitNotification = false;
             Load(acceptedSnapshot);
             await QueueDeleteDraftAsync(currentSnapshot.RelativePath, removedBlockIndex).ConfigureAwait(true);
@@ -1277,10 +1389,12 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
                 candidate.Index == plan.TargetBlockIndex && candidate.IsEditable);
             if (target is null || !BeginEdit(target))
             {
+                RememberStructuralChange(beforeMerge, acceptedSnapshot, removedBlockIndex, 0);
                 CommitAccepted?.Invoke(acceptedSnapshot);
                 return new MarkdownBlockMergeResult(true, true);
             }
 
+            RememberStructuralChange(beforeMerge, acceptedSnapshot, removedBlockIndex, 0);
             CommitAccepted?.Invoke(acceptedSnapshot);
             return new MarkdownBlockMergeResult(true, true, target, plan.CaretIndex);
         }
@@ -1442,6 +1556,8 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
         {
             if (block.IsDirty)
             {
+                // Invalidate before debounce or disk commit: Undo must never overwrite a new draft.
+                InvalidateStructuralUndo();
                 QueueSaveDraft(block);
                 ScheduleAutosave(block);
             }
@@ -1731,32 +1847,40 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
     {
         lock (draftPersistenceSync)
         {
-            draftPersistenceTail = RunDraftOperationAsync(draftPersistenceTail, operation, onSuccess);
-            return draftPersistenceTail;
+            var persisted = RunDraftStorageOperationAsync(draftPersistenceTail, operation);
+            draftPersistenceTail = persisted;
+            draftPublicationTail = PublishDraftOperationAsync(draftPublicationTail, persisted, onSuccess);
+            return draftPublicationTail;
         }
     }
 
-    private async Task RunDraftOperationAsync(
+    private static async Task<Exception?> RunDraftStorageOperationAsync(
         Task previous,
-        Func<Task> operation,
-        Action? onSuccess)
+        Func<Task> operation)
     {
         await previous.ConfigureAwait(false);
         try
         {
             await operation().ConfigureAwait(false);
-            await RunOnSynchronizationContextAsync(() =>
-            {
-                DraftPersistenceError = null;
-                onSuccess?.Invoke();
-            }).ConfigureAwait(false);
+            return null;
         }
         catch (Exception exception)
         {
-            await RunOnSynchronizationContextAsync(
-                    () => DraftPersistenceError = exception.Message)
-                .ConfigureAwait(false);
+            return exception;
         }
+    }
+
+    private async Task PublishDraftOperationAsync(Task previous, Task<Exception?> persisted, Action? onSuccess)
+    {
+        await previous.ConfigureAwait(false);
+        var error = await persisted.ConfigureAwait(false);
+        if (isDisposed) return;
+        await RunOnSynchronizationContextAsync(() =>
+        {
+            if (isDisposed) return;
+            DraftPersistenceError = error?.Message;
+            if (error is null) onSuccess?.Invoke();
+        }).ConfigureAwait(false);
     }
 
     private Task RunOnSynchronizationContextAsync(Action action)
@@ -1819,7 +1943,11 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
         CancelPendingAutosave();
         sessionCancellation.Cancel();
         sessionCancellation.Dispose();
-        FlushDraftPersistenceAsync().GetAwaiter().GetResult();
+        // Closing may run on the UI thread. Wait only for durable I/O, never for a
+        // notification posted back to that thread. Late publications ignore disposed editors.
+        Task pendingPersistence;
+        lock (draftPersistenceSync) pendingPersistence = draftPersistenceTail;
+        pendingPersistence.GetAwaiter().GetResult();
         ActiveBlock?.CancelEdit();
         ActiveBlock = null;
         RecoveryDraft = null;
@@ -1827,6 +1955,8 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
         Snapshot = null;
         RestoreRecoveryDraftCommand.Dispose();
         DiscardRecoveryDraftCommand.Dispose();
+        (UndoStructuralChangeCommand as IDisposable)?.Dispose();
+        InvalidateStructuralUndo();
         this.RaisePropertyChanged(nameof(HasDocument));
         this.RaisePropertyChanged(nameof(CanEdit));
         this.RaisePropertyChanged(nameof(CanRestoreRecoveryDraft));
@@ -1927,7 +2057,7 @@ public sealed class MarkdownLiveBlockViewModel : ReactiveObject
 
     public bool IsReviewAnchor => isReviewAnchor;
 
-    public bool IsFeedFilterVisible => isFeedFilterVisible;
+    public bool IsFeedFilterVisible => isFeedFilterVisible && !IsTechnicalMoveAnchor;
 
     internal void SetFeedFilterVisible(bool value)
     {
@@ -1941,7 +2071,9 @@ public sealed class MarkdownLiveBlockViewModel : ReactiveObject
     public bool IsToolbarFlyoutOpen => isToolbarFlyoutOpen;
 
     public bool IsContextToolbarVisible => !IsEditing
-        && (IsPointerOverBlock || IsMoveSelected || IsToolbarFlyoutOpen);
+        && (IsToolbarFlyoutOpen || (Owner.HasMoveSelection
+            ? IsMoveSelected && Owner.Blocks.FirstOrDefault(block => block.IsMoveSelected) == this
+            : IsPointerOverBlock));
 
     public bool CanMoveUpFromToolbar => Owner.CanMoveBlockFromToolbar(this, -1);
 
@@ -1983,6 +2115,7 @@ public sealed class MarkdownLiveBlockViewModel : ReactiveObject
 
     internal void RaiseToolbarStateChanged()
     {
+        this.RaisePropertyChanged(nameof(IsContextToolbarVisible));
         this.RaisePropertyChanged(nameof(CanMoveUpFromToolbar));
         this.RaisePropertyChanged(nameof(CanMoveDownFromToolbar));
         this.RaisePropertyChanged(nameof(CanTransformFromToolbar));
@@ -2021,9 +2154,11 @@ public sealed class MarkdownLiveBlockViewModel : ReactiveObject
 
     public long TaskReferencesVersion { get; private set; }
 
-    public bool IsEditable => RenderKind != MarkdownLiveBlockRenderKind.Blank;
+    public bool IsTechnicalMoveAnchor => Block.IsTechnicalMoveAnchor;
 
-    public bool IsMovable => (Block.Kind is MarkdownBlockKind.Heading
+    public bool IsEditable => RenderKind != MarkdownLiveBlockRenderKind.Blank && !IsTechnicalMoveAnchor;
+
+    public bool IsMovable => !IsTechnicalMoveAnchor && (Block.Kind is MarkdownBlockKind.Heading
             or MarkdownBlockKind.AreaHeading
             or MarkdownBlockKind.Paragraph
             or MarkdownBlockKind.ListItem
@@ -2216,6 +2351,11 @@ public sealed class MarkdownLiveBlockViewModel : ReactiveObject
     private static string CreatePreviewText(MarkdownBlock block, MarkdownLiveBlockRenderKind renderKind)
     {
         var text = StripStructuralLineEnding(block.Raw);
+        if (renderKind is not MarkdownLiveBlockRenderKind.FencedCode and not MarkdownLiveBlockRenderKind.RawFallback)
+        {
+            text = Regex.Replace(text, @"(?m)^\^unlimotion-move-[A-Za-z0-9_-]+\r?$", string.Empty).TrimEnd('\r', '\n');
+            text = Regex.Replace(text, @"(?<=\]\])\s+<!-- unlimotion-note:[A-Za-z0-9_-]+ -->", string.Empty);
+        }
         return renderKind switch
         {
             MarkdownLiveBlockRenderKind.Heading => AreaMarkerRegex.Replace(
@@ -2249,6 +2389,16 @@ public sealed class MarkdownLiveBlockViewModel : ReactiveObject
         return !match.Success
             ? "•"
             : match.Value.Trim() is "-" or "+" or "*" ? "•" : match.Value.Trim();
+    }
+
+    public static string ToReadableText(string raw)
+    {
+        // Share the live preview's Markdown interpretation; keep raw source in the search entry
+        // for navigation, hashes and revision checks, never overwrite it with this presentation.
+        var blocks = new MarkdownDocumentParser().Parse(raw).Blocks;
+        return string.Join(" ", blocks.Where(block => block.Kind is not (MarkdownBlockKind.Blank or MarkdownBlockKind.FrontMatter))
+            .Select(block => string.Concat(TokenizeInline(CreatePreviewText(block, Classify(block)))
+                .Select(token => token.Text)).Trim()).Where(text => text.Length > 0));
     }
 
     private static IReadOnlyList<MarkdownInlineToken> TokenizeInline(string value)

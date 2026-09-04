@@ -1746,7 +1746,7 @@ public class RoadmapGraphUiTests
     [Test]
     public async Task RoadmapGraph_ModifierDoubleClick_PreservesCurrentTaskSemantics()
     {
-        var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        var session = HeadlessUnitTestSession.StartNew(typeof(SkiaHeadlessAppBuilder));
         try
         {
             await session.DispatchAsync(async () =>
@@ -1918,7 +1918,7 @@ public class RoadmapGraphUiTests
     [Test]
     public async Task RoadmapGraph_RectangleSelection_AppliesModifierSemanticsAndDoesNotChangeCurrentTask()
     {
-        var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        var session = HeadlessUnitTestSession.StartNew(typeof(SkiaHeadlessAppBuilder));
         try
         {
             await session.DispatchAsync(async () =>
@@ -2478,7 +2478,7 @@ public class RoadmapGraphUiTests
     [Test]
     public async Task RoadmapGraph_RightDragOnEmptyCanvas_PansViewportWithSelection()
     {
-        var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        var session = HeadlessUnitTestSession.StartNew(typeof(SkiaHeadlessAppBuilder));
         try
         {
             await session.DispatchAsync(async () =>
@@ -2570,7 +2570,7 @@ public class RoadmapGraphUiTests
         string hotkey,
         string selectedTaskId)
     {
-        var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        var session = HeadlessUnitTestSession.StartNew(typeof(SkiaHeadlessAppBuilder));
         try
         {
             await session.DispatchAsync(async () =>

@@ -29,6 +29,7 @@ public sealed class HeadlessSessionStorageLifecycleTests
                 language: "en",
                 afterViewModelPrepared: vm => captured = CaptureStorage(vm),
                 viewModelFactoryDispatcher: factory => HeadlessRuntime.Dispatch(factory),
+                prepareViewModelDispatcher: HeadlessSessionHooks.PrepareAsync,
                 headlessWindowCleanup: HeadlessSessionHooks.CloseWindow);
             var session = DesktopAppSession.Launch(options);
             var state = RequireCapture(captured);
@@ -99,6 +100,7 @@ public sealed class HeadlessSessionStorageLifecycleTests
                             throw sentinel;
                         },
                         viewModelFactoryDispatcher: factory => HeadlessRuntime.Dispatch(factory),
+                        prepareViewModelDispatcher: HeadlessSessionHooks.PrepareAsync,
                         headlessWindowCleanup: HeadlessSessionHooks.CloseWindow));
             }
             catch (Exception exception)
@@ -137,6 +139,7 @@ public sealed class HeadlessSessionStorageLifecycleTests
         var options = UnlimotionAppLaunchHost.CreateHeadlessLaunchOptions(
             afterViewModelPrepared: vm => captured = CaptureStorage(vm),
             viewModelFactoryDispatcher: factory => HeadlessRuntime.Dispatch(factory),
+            prepareViewModelDispatcher: HeadlessSessionHooks.PrepareAsync,
             headlessWindowCleanup: HeadlessSessionHooks.CloseWindow);
         var session = DesktopAppSession.Launch(options);
         var state = RequireCapture(captured);
@@ -179,10 +182,8 @@ public sealed class HeadlessSessionStorageLifecycleTests
                 UnlimotionAppLaunchHost.CreateHeadlessLaunchOptions(
                     UnlimotionAutomationScenario.Feed,
                     feedVaultPrepared: path => vaultPath = path,
-                    beforeViewModelInitialized: viewModel =>
-                        viewModel.Feed.SetNotificationDispatcher(action =>
-                            HeadlessRuntime.Dispatch(action)),
                     viewModelFactoryDispatcher: factory => HeadlessRuntime.Dispatch(factory),
+                    prepareViewModelDispatcher: HeadlessSessionHooks.PrepareAsync,
                     headlessWindowCleanup: HeadlessSessionHooks.CloseWindow));
             var capturedVault = vaultPath
                 ?? throw new InvalidOperationException("Feed scenario did not expose its isolated vault path.");
@@ -243,6 +244,7 @@ public sealed class HeadlessSessionStorageLifecycleTests
             UnlimotionAppLaunchHost.CreateHeadlessLaunchOptions(
                 afterViewModelPrepared: _ => prepared = true,
                 viewModelFactoryDispatcher: factory => HeadlessRuntime.Dispatch(factory),
+                prepareViewModelDispatcher: HeadlessSessionHooks.PrepareAsync,
                 headlessWindowCleanup: HeadlessSessionHooks.CloseWindow));
         viewModelPrepared = prepared;
         return session;

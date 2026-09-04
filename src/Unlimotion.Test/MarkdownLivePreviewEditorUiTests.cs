@@ -25,6 +25,38 @@ namespace Unlimotion.Test;
 public class MarkdownLivePreviewEditorUiTests
 {
     [Test]
+    public async Task GeneratedMoveAnchor_IsHiddenButPreserved_AndCodeExampleRemainsVisible()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            const string raw = "- [ ] Купить книгу\n\n^unlimotion-move-test123\n\n[[Темы/Заметка|Заметка]] <!-- unlimotion-note:note-example -->\n\n```text\n^unlimotion-move-example\n```\n";
+            using var model = new MarkdownLivePreviewEditorViewModel();
+            model.Load(new MarkdownLiveDocumentSnapshot(raw, "rev", false, "day.md"));
+            var view = new MarkdownBlockLivePreviewEditor { DataContext = model };
+            var window = new Window { Width = 720, Height = 420, Content = view };
+            try
+            {
+                window.Show();
+                RunLayoutJobs();
+                var anchor = model.Blocks.Single(block => block.IsTechnicalMoveAnchor);
+                await Assert.That(anchor.IsFeedFilterVisible).IsFalse();
+                await Assert.That(anchor.IsEditable).IsFalse();
+                await Assert.That(anchor.IsMovable).IsFalse();
+                var preview = FindControlByAutomationId<MarkdownBlockPreviewControl>(view, $"MarkdownLivePreview-BlockPreview-{anchor.Index}");
+                await Assert.That(preview.IsEffectivelyVisible).IsFalse();
+                await Assert.That(model.Blocks.Single(block => block.Block.Kind == MarkdownBlockKind.FencedCode).PreviewText)
+                    .Contains("^unlimotion-move-example");
+                await Assert.That(model.Snapshot!.Raw).IsEqualTo(raw);
+                var note = model.Blocks.Single(block => block.Block.Raw.Contains("[[Темы/Заметка"));
+                await Assert.That(note.PreviewText).DoesNotContain("unlimotion-note:");
+                await Assert.That(note.PreviewText).Contains("Заметка");
+            }
+            finally { window.Close(); }
+        }, CancellationToken.None);
+    }
+
+    [Test]
     public async Task FocusedEditor_RemainsActiveAndFocusedAfterDebouncedAutosave()
     {
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
@@ -499,17 +531,21 @@ public class MarkdownLivePreviewEditorUiTests
                 window.Show();
                 RunLayoutJobs();
                 var toolbar = FindControlByAutomationId<Border>(view, selected[0].ContextToolbarAutomationId);
-                var checklist = toolbar.GetVisualDescendants()
-                    .OfType<Button>()
-                    .Single(button => string.Equals(button.Content as string, "☑", StringComparison.Ordinal));
+                var more = toolbar.GetVisualDescendants().OfType<Button>().Single(button => button.Flyout is MenuFlyout);
+                more.Flyout!.ShowAt(more);
+                RunLayoutJobs();
+                var checklist = ((MenuFlyout)more.Flyout!).Items.OfType<MenuItem>().Single(item =>
+                    Equals(item.Header, Unlimotion.ViewModel.Localization.Localization.Get("FeedBlockChecklist")));
                 using (Assert.Multiple())
                 {
                     await Assert.That(toolbar.IsEffectivelyVisible).IsTrue();
                     await Assert.That(checklist.IsEnabled).IsTrue();
                     await Assert.That(selected.All(static block => block.IsMoveSelected)).IsTrue();
+                    await Assert.That(viewModel.Blocks.Count(block => block.IsContextToolbarVisible)).IsEqualTo(1);
                 }
 
-                checklist.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                checklist.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+                more.Flyout.Hide();
                 await Assert.That(WaitFor(() => commitCount == 1)).IsTrue();
                 await Assert.That(viewModel.Snapshot!.Raw).IsEqualTo("- [ ] Альфа\n\n- [ ] Бета\n");
                 await Assert.That(viewModel.SelectedMoveBlockCount).IsEqualTo(2);
@@ -543,11 +579,18 @@ public class MarkdownLivePreviewEditorUiTests
                 window.Show();
                 RunLayoutJobs();
                 var checkbox = FindControlByAutomationId<CheckBox>(view, task.TaskCheckboxAutomationId);
-                checkbox.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                var point = checkbox.TranslatePoint(new Point(checkbox.Bounds.Width / 2, checkbox.Bounds.Height / 2), window)!.Value;
+                window.MouseDown(point, MouseButton.Left);
+                window.MouseUp(point, MouseButton.Left);
 
                 await Assert.That(WaitFor(() => viewModel.Snapshot?.ExpectedRevisionHash == "revision-2")).IsTrue();
                 await Assert.That(viewModel.Snapshot!.Raw).IsEqualTo("- [x] Сделать\n");
                 await Assert.That(viewModel.ActiveBlock).IsNull();
+                RunLayoutJobs();
+                var completed = FindControlByAutomationId<CheckBox>(view, task.TaskCheckboxAutomationId);
+                await Assert.That(completed.IsChecked).IsTrue();
+                await Assert.That(AutomationProperties.GetName(completed)).IsEqualTo(
+                    Unlimotion.ViewModel.Localization.Localization.Get("MarkdownTaskCompleted"));
             }
             finally
             {
@@ -793,6 +836,57 @@ public class MarkdownLivePreviewEditorUiTests
             }
             finally
             {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    [Arguments(Key.Down)]
+    [Arguments(Key.Up)]
+    public async Task BoundaryArrow_IsConsumedBeforeAsynchronousSave(Key key)
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var source = new MarkdownLiveDocumentSnapshot("Первая строка\n\nВторая строка\n", "r1", false, "note.md");
+            var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            using var vm = new MarkdownLivePreviewEditorViewModel();
+            vm.CommitBlockAsync = async (patch, _) =>
+            {
+                await release.Task;
+                return MarkdownBlockCommitResult.Accepted(source with { Raw = patch.PatchedDocumentRaw, ExpectedRevisionHash = "r2" });
+            };
+            vm.Load(source);
+            var paragraphs = vm.Blocks.Where(block => block.Kind == MarkdownBlockKind.Paragraph).ToArray();
+            var view = new MarkdownBlockLivePreviewEditor { DataContext = vm };
+            var window = new Window { Width = 720, Height = 420, Content = view };
+            try
+            {
+                window.Show();
+                RunLayoutJobs();
+                var block = paragraphs[key == Key.Down ? 0 : 1];
+                vm.BeginEdit(block);
+                RunLayoutJobs();
+                var textBox = FindVisibleControlByAutomationId<TextBox>(view, block.EditorAutomationId);
+                textBox.Focus();
+                textBox.Text += "!";
+                textBox.SelectionStart = textBox.SelectionEnd = 5;
+                var keyEvent = new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = key };
+                var consumedBeforeNativeEditor = false;
+                textBox.AddHandler(InputElement.KeyDownEvent, (_, args) => consumedBeforeNativeEditor = args.Handled,
+                    RoutingStrategies.Tunnel, handledEventsToo: true);
+                textBox.RaiseEvent(keyEvent);
+                release.TrySetResult();
+                await Assert.That(consumedBeforeNativeEditor).IsTrue();
+                await Assert.That(WaitFor(() => vm.ActiveBlock != block && vm.ActiveBlock is not null)).IsTrue();
+                RunLayoutJobs();
+                var next = FindVisibleControlByAutomationId<TextBox>(view, vm.ActiveBlock!.EditorAutomationId);
+                await Assert.That(next.IsFocused).IsTrue();
+            }
+            finally
+            {
+                release.TrySetResult();
                 window.Close();
             }
         }, CancellationToken.None);
@@ -1128,7 +1222,8 @@ public class MarkdownLivePreviewEditorUiTests
                     await Assert.That(toolbarOrigin.X).IsGreaterThanOrEqualTo(0);
                     await Assert.That(toolbarOrigin.X + toolbar.Bounds.Width).IsLessThanOrEqualTo(view.Bounds.Width + 0.5);
                     await Assert.That(handle.Bounds.Width).IsGreaterThanOrEqualTo(24);
-                    await Assert.That(toolbar.GetVisualDescendants().OfType<Button>().Count()).IsEqualTo(6);
+                    await Assert.That(toolbar.GetVisualDescendants().OfType<Button>().Count()).IsEqualTo(4);
+                    await Assert.That(toolbarOrigin.X).IsLessThanOrEqualTo(32);
                     await Assert.That(blockModel.CanMoveUpFromToolbar).IsFalse();
                     await Assert.That(blockModel.CanMoveDownFromToolbar).IsTrue();
                 }
@@ -1190,7 +1285,7 @@ public class MarkdownLivePreviewEditorUiTests
                         await Assert.That(block.CanTransformFromToolbar).IsFalse();
                         await Assert.That(block.CanOpenActionsFromToolbar).IsFalse();
                         await Assert.That(more.IsEnabled).IsFalse();
-                        await Assert.That(toolbarButtons.Length).IsEqualTo(6);
+                        await Assert.That(toolbarButtons.Length).IsEqualTo(4);
                         await Assert.That(toolbarButtons.All(static button => !button.IsEnabled)).IsTrue();
                     }
 
@@ -1219,8 +1314,8 @@ public class MarkdownLivePreviewEditorUiTests
                 invokedAction = action;
                 return Task.CompletedTask;
             };
-            viewModel.Load(new MarkdownLiveDocumentSnapshot("Полезный блок\n", "revision-1", false, "note.md"));
-            var block = viewModel.Blocks.Single(static candidate => candidate.Kind == MarkdownBlockKind.Paragraph);
+            viewModel.Load(new MarkdownLiveDocumentSnapshot("### Полезный блок\n", "revision-1", false, "note.md"));
+            var block = viewModel.Blocks.Single(static candidate => candidate.Kind == MarkdownBlockKind.Heading);
             var view = new MarkdownBlockLivePreviewEditor { DataContext = viewModel };
             var window = new Window { Width = 720, Height = 320, Content = view };
             MenuFlyout? flyout = null;
@@ -1250,9 +1345,10 @@ public class MarkdownLivePreviewEditorUiTests
                     await Assert.That(block.MoveHandleIdleOpacity).IsEqualTo(1);
                 }
 
-                var createNote = flyout.Items.OfType<MenuItem>().ElementAt(1);
-                createNote.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent, createNote));
-                await Assert.That(WaitFor(() => invokedAction == MarkdownSelectionSemanticAction.Note)).IsTrue();
+                var convertArea = flyout.Items.OfType<MenuItem>().Single(item =>
+                    Equals(item.Header, Unlimotion.ViewModel.Localization.Localization.Get("FeedBlockConvertToArea")));
+                convertArea.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent, convertArea));
+                await Assert.That(WaitFor(() => invokedAction == MarkdownSelectionSemanticAction.ConvertHeadingToArea)).IsTrue();
                 await Assert.That(invokedIndices).IsNotNull();
                 await Assert.That(invokedIndices!).IsEquivalentTo([block.Index]);
 
@@ -1320,6 +1416,8 @@ public class MarkdownLivePreviewEditorUiTests
                     await Assert.That(editor.SelectionStart).IsEqualTo("Альфа".Length);
                     await Assert.That(editor.SelectionEnd).IsEqualTo("Альфа".Length);
                 }
+                PressKey(window, Key.Z, PhysicalKey.Z, RawInputModifiers.Control);
+                await Assert.That(WaitFor(() => viewModel.Snapshot?.Raw == "Альфа\n\n- [ ] Бета\n")).IsTrue();
             }
             finally
             {
@@ -1336,8 +1434,8 @@ public class MarkdownLivePreviewEditorUiTests
         {
             using var viewModel = new MarkdownLivePreviewEditorViewModel();
             viewModel.CommitBlockAsync = (_, _) => throw new InvalidOperationException("Commit is not expected.");
-            viewModel.Load(new MarkdownLiveDocumentSnapshot("Текст блока\n", "revision-1", false, "note.md"));
-            var blockModel = viewModel.Blocks.Single(static block => block.Kind == MarkdownBlockKind.Paragraph);
+            viewModel.Load(new MarkdownLiveDocumentSnapshot("Текст блока\n\nСледующий блок под меню\n", "revision-1", false, "note.md"));
+            var blockModel = viewModel.Blocks.First(static block => block.Kind == MarkdownBlockKind.Paragraph);
             var view = new MarkdownBlockLivePreviewEditor { DataContext = viewModel };
             var window = new Window { Width = 720, Height = 320, Content = view };
             try
@@ -1361,11 +1459,77 @@ public class MarkdownLivePreviewEditorUiTests
                     await Assert.That(Math.Abs(block.Bounds.Height - before)).IsLessThanOrEqualTo(0.5);
                     await Assert.That(viewModel.SelectedMoveBlockCount).IsEqualTo(0);
                 }
+                var container = block.FindAncestorOfType<Avalonia.Controls.Presenters.ContentPresenter>()!;
+                await Assert.That(container.GetValue(Panel.ZIndexProperty)).IsEqualTo(30);
+                viewModel.SetPointerOverBlock(blockModel, false);
+                RunLayoutJobs();
+                await Assert.That(container.GetValue(Panel.ZIndexProperty)).IsEqualTo(0);
             }
             finally
             {
                 window.Close();
             }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task EmptyMarkdownSeparators_DoNotReserveTheHeightOfAnInvisibleHandle()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            using var model = new MarkdownLivePreviewEditorViewModel();
+            model.Load(new MarkdownLiveDocumentSnapshot("Первый абзац\n\nВторой абзац\n", "r1", false, "note.md"));
+            var view = new MarkdownBlockLivePreviewEditor { DataContext = model };
+            var window = new Window { Width = 480, Height = 320, Content = view };
+            try
+            {
+                window.Show();
+                RunLayoutJobs();
+                var blanks = model.Blocks.Where(block => block.Kind == MarkdownBlockKind.Blank).ToArray();
+                await Assert.That(blanks.Length).IsGreaterThan(0);
+                foreach (var blank in blanks)
+                    await Assert.That(FindControlByAutomationId<Grid>(view, blank.BlockAutomationId).Bounds.Height)
+                        .IsLessThanOrEqualTo(8);
+            }
+            finally { window.Close(); }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task RoutedPointerOverModalOverlay_DoesNotRevealUnderlyingBlockToolbar()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            using var model = new MarkdownLivePreviewEditorViewModel();
+            model.Load(new MarkdownLiveDocumentSnapshot("Текст под диалогом\n", "r1", false, "note.md"));
+            model.CommitBlockAsync = (_, _) => throw new InvalidOperationException("Commit is not expected.");
+            var view = new MarkdownBlockLivePreviewEditor { DataContext = model };
+            var cover = new Border { Background = Avalonia.Media.Brushes.White, IsVisible = false };
+            var root = new Grid { Margin = new Thickness(0, 40, 0, 0), Children = { view, cover } };
+            var window = new Window { Width = 480, Height = 320, Content = root };
+            try
+            {
+                window.Show();
+                RunLayoutJobs();
+                var preview = FindControlByAutomationId<MarkdownBlockPreviewControl>(view, "MarkdownLivePreview-BlockPreview-0");
+                var point = preview.TranslatePoint(new Point(Math.Min(40, preview.Bounds.Width / 2), preview.Bounds.Height / 2), window)!.Value;
+                // Test routing independently of Headless's compositor hit-test fallback panel.
+                var pointer = new Pointer(1, PointerType.Mouse, true);
+                var properties = new PointerPointProperties(RawInputModifiers.None, PointerUpdateKind.Other);
+                preview.RaiseEvent(new PointerEventArgs(InputElement.PointerMovedEvent, preview, pointer,
+                    window, point, 0, properties, KeyModifiers.None));
+                RunLayoutJobs();
+                await Assert.That(model.Blocks[0].IsContextToolbarVisible).IsTrue();
+                cover.IsVisible = true;
+                RunLayoutJobs();
+                cover.RaiseEvent(new PointerEventArgs(InputElement.PointerMovedEvent, cover, pointer,
+                    window, point + new Vector(1, 0), 1, properties, KeyModifiers.None));
+                RunLayoutJobs();
+                await Assert.That(model.Blocks[0].IsContextToolbarVisible).IsFalse();
+            }
+            finally { window.Close(); }
         }, CancellationToken.None);
     }
 

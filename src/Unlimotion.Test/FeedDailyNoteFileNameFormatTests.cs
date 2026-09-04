@@ -22,6 +22,29 @@ namespace Unlimotion.Test;
 public sealed class FeedDailyNoteFileNameFormatTests
 {
     [Test]
+    public async Task FormatImpact_CountsAllFilesWithoutChangingNamesOrSettings()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            using var directory = new TempNotesDirectory();
+            var vault = new FileNoteVault(directory.Path);
+            await vault.CreateAsync("Ежедневные/2026-09-04.md", "старый день\n");
+            await vault.CreateAsync("Ежедневные/2026.09.03.md", "новый формат\n");
+            await vault.CreateAsync("Ежедневные/прочее.md", "не день\n");
+            await vault.CreateAsync("Тематика/справка.md", "не считать\n");
+            using var feed = new FeedViewModel(() => new DateOnly(2026, 9, 4));
+            await feed.InitializeVaultAsync(directory.Path);
+            var before = await vault.ReadAsync(DailyNoteSettingsStore.RelativePath);
+            var impact = await feed.PreviewDailyNoteFileNameFormatAsync("yyyy.MM.dd");
+            await Assert.That(impact).IsEqualTo(new NoteDailyFileNameFormatImpact(1, 2, 1, 1, 0));
+            await Assert.That(await vault.ReadAsync(DailyNoteSettingsStore.RelativePath)).IsEqualTo(before);
+            await Assert.That(feed.Days.Single().RelativePath).IsEqualTo("Ежедневные/2026-09-04.md");
+            await Assert.That((await vault.ListMarkdownFilesAsync()).Count).IsEqualTo(4);
+        }, CancellationToken.None);
+    }
+
+    [Test]
     public async Task ApplyingDottedFormatPersistsPortableSettingAndRebindsDailyTimeline()
     {
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
@@ -550,6 +573,17 @@ public sealed class FeedDailyNoteFileNameFormatTests
             try
             {
                 await feed.InitializeVaultAsync(originalRoot);
+                // Initialization publishes the first page before the background indexer has
+                // finished enumerating the directory. Relocate only after that I/O finishes.
+                var indexingDeadline = DateTimeOffset.UtcNow.AddSeconds(5);
+                while ((feed.IsBusy || feed.IsSearchIndexing) && DateTimeOffset.UtcNow < indexingDeadline)
+                {
+                    await Task.Delay(TimeSpan.FromMilliseconds(10));
+                }
+
+                await Assert.That(feed.IsBusy).IsFalse();
+                await Assert.That(feed.IsSearchIndexing).IsFalse();
+                await Assert.That(feed.ErrorMessage).IsNullOrEmpty();
                 Directory.Move(originalRoot, relocatedRoot);
                 var identity = await new VaultIdentityService(new FileNoteVault(relocatedRoot)).GetOrCreateAsync();
 

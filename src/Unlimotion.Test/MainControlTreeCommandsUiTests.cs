@@ -1267,7 +1267,7 @@ public class MainControlTreeCommandsUiTests
     [Test]
     public async Task CreateTaskUi_CtrlEnter_CreatesSiblingForSelectedTaskInLastUpdatedTab()
     {
-        var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        var session = HeadlessUnitTestSession.StartNew(typeof(SkiaHeadlessAppBuilder));
         try
         {
             await session.DispatchAsync(async () =>
@@ -1779,7 +1779,7 @@ public class MainControlTreeCommandsUiTests
     [Test]
     public async Task TreeCommandUi_HotkeyHelpPanel_DisplaysEmbeddedShortcutReferenceFromF1()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -1838,7 +1838,7 @@ public class MainControlTreeCommandsUiTests
     [Test]
     public async Task MainWindowUi_HotkeyHelpPanel_HandlesF1AtWindowLevel()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -1892,7 +1892,7 @@ public class MainControlTreeCommandsUiTests
     [Test]
     public async Task TreeCommandUi_SettingsShowHotkeysButton_OpensEmbeddedShortcutReference()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -2063,7 +2063,7 @@ public class MainControlTreeCommandsUiTests
     [Test]
     public async Task TreeCommandUi_CtrlA_UsesFocusedRelationTree()
     {
-        var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        var session = HeadlessUnitTestSession.StartNew(typeof(SkiaHeadlessAppBuilder));
         try
         {
             await session.DispatchAsync(async () =>

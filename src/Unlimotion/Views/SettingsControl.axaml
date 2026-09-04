@@ -461,6 +461,20 @@
                                     IsVisible="{Binding HasExternalNoteDailyFileNameFormatChange}"
                                     AutomationProperties.AutomationId="ReloadExternalNoteDailyFileNameFormatButton" />
                         </WrapPanel>
+                        <StackPanel Spacing="8" IsVisible="{Binding HasNoteDailyFileNameFormatImpact}"
+                                    AutomationProperties.AutomationId="NoteDailyFileNameFormatImpactPanel">
+                            <TextBlock Text="{Binding NoteDailyFileNameFormatImpactText}" TextWrapping="Wrap"
+                                       AutomationProperties.LiveSetting="Polite" />
+                            <WrapPanel Classes="ActionButtons">
+                                <Button Content="{DynamicResource NoteDailyFileNameFormatConfirm}"
+                                        Command="{Binding ConfirmNoteDailyFileNameFormatCommand}"
+                                        IsEnabled="{Binding CanApplyNoteDailyFileNameFormat}"
+                                        AutomationProperties.AutomationId="ConfirmNoteDailyFileNameFormatButton" />
+                                <Button Content="{DynamicResource Cancel}"
+                                        Command="{Binding CancelNoteDailyFileNameFormatCommand}"
+                                        AutomationProperties.AutomationId="CancelNoteDailyFileNameFormatButton" />
+                            </WrapPanel>
+                        </StackPanel>
                         <Label Classes="StatusText"
                                AutomationProperties.AutomationId="NoteDailyFileNameFormatStatusText"
                                AutomationProperties.Name="{Binding NoteDailyFileNameFormatStatusText}"
