@@ -209,6 +209,20 @@ public sealed class ReviewStateStore
             .ToArray());
     }
 
+    internal EffectiveReviewDecision ResolveConfirmedOutput(BlockLocator current, string entityId)
+    {
+        // Only operation Outputs prove provenance. A matching ordinary input or a mere
+        // link mention is not enough to relax the usual neighbour-based rematch.
+        var outputs = eventsById.Values
+            .Where(candidate => candidate.Decision is ReviewDecision.Converted or ReviewDecision.Moved
+                && !string.IsNullOrWhiteSpace(candidate.OperationId) && candidate.ResultEntityId == entityId)
+            .SelectMany(static candidate => candidate.Outputs ?? [])
+            .Where(output => string.Equals(NormalizePath(output.RelativePath), NormalizePath(current.RelativePath), StringComparison.OrdinalIgnoreCase)
+                && output.AreaIdentity == current.AreaIdentity && output.BlockKind == current.BlockKind && output.ContentHash == current.ContentHash)
+            .Select(static output => output.SemanticKey).ToHashSet(StringComparer.Ordinal);
+        return ResolveMatches(eventsById.Values.Where(candidate => outputs.Contains(candidate.Input.SemanticKey)).ToArray());
+    }
+
     public bool SessionIsTerminal(string sessionId)
     {
         var ownershipEvents = sessionEventsById.Values

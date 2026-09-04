@@ -25,6 +25,7 @@ public sealed class SettingsRemoteTypeHeadlessTests
                     UnlimotionAutomationScenario.GitRemoteSwitch,
                     afterViewModelPrepared: vm => _vm = vm,
                     viewModelFactoryDispatcher: factory => HeadlessRuntime.Dispatch(factory),
+                    prepareViewModelDispatcher: HeadlessSessionHooks.PrepareAsync,
                     headlessWindowCleanup: HeadlessSessionHooks.CloseWindow)));
     }
 

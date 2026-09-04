@@ -1,5 +1,6 @@
 using Unlimotion.Notes.Daily;
 using Unlimotion.Notes.Markdown;
+using System.Text.RegularExpressions;
 
 namespace Unlimotion.Notes.Review;
 
@@ -43,7 +44,7 @@ public sealed class FeedReviewQueue(
             for (var blockIndex = 0; blockIndex < contentBlocks.Length; blockIndex++)
             {
                 var block = contentBlocks[blockIndex];
-                if (block.Kind == MarkdownBlockKind.TaskListItem && block.IsTaskCompleted == true)
+                if (block.IsTechnicalMoveAnchor || block.Kind == MarkdownBlockKind.TaskListItem && block.IsTaskCompleted == true)
                 {
                     continue;
                 }
@@ -58,11 +59,19 @@ public sealed class FeedReviewQueue(
         }
 
         var currentLocators = unresolved.Select(static candidate => candidate.Locator).ToArray();
+        var stableOutputs = unresolved
+            .Select(candidate => (candidate.Locator, EntityId: StandaloneOutputIdentity(candidate.Block)))
+            .Where(static candidate => candidate.EntityId is not null).ToArray();
         var candidates = new List<FeedReviewCandidate>(unresolved.Count);
         foreach (var (locator, block, day) in unresolved)
         {
             var area = block.AreaId ?? block.AreaName;
             var effective = state.Resolve(locator, currentLocators);
+            if (effective.Event is null && !effective.HasConflict && StandaloneOutputIdentity(block) is { } entityId
+                && stableOutputs.Count(candidate => candidate.EntityId == entityId
+                    && string.Equals(candidate.Locator.RelativePath.Replace('\\', '/'), locator.RelativePath.Replace('\\', '/'), StringComparison.OrdinalIgnoreCase)
+                    && candidate.Locator.AreaIdentity == locator.AreaIdentity) == 1)
+                effective = state.ResolveConfirmedOutput(locator, entityId);
             if (effective.IsTerminal)
             {
                 continue;
@@ -95,6 +104,25 @@ public sealed class FeedReviewQueue(
             .ThenBy(static candidate => candidate.Block.Start)
             .ToArray();
     }
+
+    private static string? StandaloneOutputIdentity(MarkdownBlock block)
+    {
+        if (block.Kind != MarkdownBlockKind.Paragraph) return null;
+        var raw = block.Raw.Trim();
+        foreach (var pattern in StableOutputPatterns)
+        {
+            var match = pattern.Match(raw);
+            if (match.Success) return match.Groups["id"].Value;
+        }
+        return null;
+    }
+
+    private static readonly Regex[] StableOutputPatterns =
+    [
+        new(@"^\[(?:\\.|[^\]])*\]\(unlimotion://task/(?<id>[A-Za-z0-9_-]+)\)$", RegexOptions.CultureInvariant),
+        new(@"^\[\[[^\]\r\n]+\]\]\s+<!-- unlimotion-note:(?<id>[A-Za-z0-9_-]+) -->$", RegexOptions.CultureInvariant),
+        new(@"^\[\[[^\]\r\n]*#\^(?<id>unlimotion-move-[A-Za-z0-9_-]+)(?:\|[^\]\r\n]*)?\]\]$", RegexOptions.CultureInvariant)
+    ];
 
     public static IReadOnlyList<BlockLocator> CoveredLocators(
         string relativePath,

@@ -20,6 +20,77 @@ namespace Unlimotion.Test;
 public class FeedShellUiTests
 {
     [Test]
+    [Arguments(480)]
+    [Arguments(720)]
+    public async Task SearchPopup_FitsWindowAndKeepsDateControlsReadable(int width)
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            var searchVault = Path.Combine(fixture.FixtureDirectoryPath, "SearchVault");
+            Directory.CreateDirectory(searchVault);
+            await fixture.MainWindowViewModelTest.Feed.InitializeVaultAsync(searchVault);
+            var view = new MainScreen { DataContext = fixture.MainWindowViewModelTest };
+            var window = new Window { Width = width, Height = 720, Content = view };
+            try
+            {
+                window.Show();
+                fixture.MainWindowViewModelTest.Feed.SearchQuery = "искомое";
+                RunLayoutJobs();
+                var popup = FindControlByAutomationId<Avalonia.Controls.Primitives.Popup>(view, "GlobalSearchFlyout");
+                var body = (Border)popup.Child!;
+                await Assert.That(body.Bounds.Width).IsLessThanOrEqualTo(width - 24);
+                var period = FindControlByAutomationId<DropDownButton>(body, "GlobalSearchPeriodButton");
+                var flyout = (Flyout)period.Flyout!;
+                flyout.ShowAt(period);
+                RunLayoutJobs();
+                var dates = ((Control)flyout.Content!).GetVisualDescendants().OfType<CalendarDatePicker>().ToArray();
+                await Assert.That(dates.Length).IsEqualTo(2);
+                await Assert.That(dates.All(date => date.Bounds.Width >= 200)).IsTrue();
+                dates[0].SelectedDate = new DateTime(2026, 9, 1);
+                RunLayoutJobs();
+                await Assert.That(fixture.MainWindowViewModelTest.Feed.SearchFromDate?.Day).IsEqualTo(1);
+                flyout.Hide();
+                await Assert.That(popup.IsOpen).IsTrue();
+                fixture.MainWindowViewModelTest.IsFeedMode = true;
+                RunLayoutJobs();
+                await Assert.That(popup.IsOpen).IsFalse();
+                await Assert.That(fixture.MainWindowViewModelTest.Feed.SearchQuery).IsEqualTo("искомое");
+                var feedFilters = view.GetVisualDescendants().OfType<FeedSearchFiltersControl>()
+                    .Single(control => control.IsEffectivelyVisible);
+                await Assert.That(feedFilters.Bounds.Width).IsLessThanOrEqualTo(width);
+                var feedPeriod = FindControlByAutomationId<DropDownButton>(feedFilters, "GlobalSearchPeriodButton");
+                var feedPeriodFlyout = (Flyout)feedPeriod.Flyout!;
+                feedPeriodFlyout.ShowAt(feedPeriod);
+                RunLayoutJobs();
+                var feedDates = ((Control)feedPeriodFlyout.Content!).GetVisualDescendants()
+                    .OfType<CalendarDatePicker>().ToArray();
+                await Assert.That(feedDates.Length).IsEqualTo(2);
+                await Assert.That(feedDates[0].SelectedDate?.Day).IsEqualTo(1);
+                feedDates[1].SelectedDate = new DateTime(2026, 9, 4);
+                RunLayoutJobs();
+                await Assert.That(fixture.MainWindowViewModelTest.Feed.SearchToDate?.Day).IsEqualTo(4);
+                ((Control)feedPeriodFlyout.Content!).GetVisualDescendants().OfType<Button>()
+                    .Single(button => button.Content is string)
+                    .RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                RunLayoutJobs();
+                await Assert.That(fixture.MainWindowViewModelTest.Feed.SearchFromDate).IsNull();
+                await Assert.That(fixture.MainWindowViewModelTest.Feed.SearchToDate).IsNull();
+                feedPeriodFlyout.Hide();
+                fixture.MainWindowViewModelTest.IsTasksMode = true;
+                RunLayoutJobs();
+                await Assert.That(popup.IsOpen).IsTrue();
+            }
+            finally
+            {
+                window.Close();
+                await fixture.CleanTasksAsync();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
     public async Task Shell_GlobalActions_AreAvailableFromBothModesAndUseOverlays()
     {
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
@@ -39,6 +110,7 @@ public class FeedShellUiTests
                 var create = FindControlByAutomationId<Button>(view, "GlobalCreateMenuButton");
                 var taskSpaceSelector = FindControlByAutomationId<ComboBox>(view, "TaskSpaceSelector");
                 var search = FindControlByAutomationId<TextBox>(view, "GlobalSearchBox");
+                await Assert.That(search is SafeClipboardTextBox).IsTrue();
                 var settingsButton = FindControlByAutomationId<Button>(view, "GlobalSettingsButton");
                 var quickOverlay = FindControlByAutomationId<Grid>(view, "GlobalQuickCaptureOverlay");
                 var settingsOverlay = FindControlByAutomationId<Grid>(view, "GlobalSettingsOverlay");
@@ -64,6 +136,9 @@ public class FeedShellUiTests
                 viewModel.OpenQuickCapture(isTask: false);
                 RunLayoutJobs();
                 await Assert.That(quickOverlay.IsEffectivelyVisible).IsTrue();
+                var taskToggle = FindControlByAutomationId<ToggleSwitch>(view, "GlobalQuickCaptureTaskToggle");
+                await Assert.That(taskToggle.OnContent).IsEqualTo(Unlimotion.ViewModel.Localization.Localization.Get("DialogYes"));
+                await Assert.That(taskToggle.OffContent).IsEqualTo(Unlimotion.ViewModel.Localization.Localization.Get("DialogNo"));
 
                 viewModel.OpenSettings();
                 RunLayoutJobs();
@@ -142,7 +217,7 @@ public class FeedShellUiTests
             try
             {
                 var view = new MainScreen { DataContext = fixture.MainWindowViewModelTest };
-                window = new Window { Width = 500, Height = 700, Content = view };
+                window = new Window { Width = 400, Height = 700, Content = view };
                 window.Show();
                 RunLayoutJobs();
 
@@ -236,7 +311,7 @@ public class FeedShellUiTests
             try
             {
                 var view = new MainScreen { DataContext = fixture.MainWindowViewModelTest };
-                window = new Window { Width = 320, Height = 700, Content = view };
+                window = new Window { Width = 240, Height = 700, Content = view };
                 window.Show();
                 RunLayoutJobs();
 

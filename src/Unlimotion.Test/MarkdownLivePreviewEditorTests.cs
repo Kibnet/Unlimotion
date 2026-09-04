@@ -12,6 +12,29 @@ namespace Unlimotion.Test;
 public class MarkdownLivePreviewEditorTests
 {
     [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task AreaFilter_ReentrantReloadOrNewFilterLeavesCurrentBlocksConsistent(bool newFilter)
+    {
+        using var editor = new MarkdownLivePreviewEditorViewModel();
+        var snapshot = new MarkdownLiveDocumentSnapshot("Альфа\n\nБета\n", "revision", false, "note.md");
+        editor.Load(snapshot);
+        var reentered = false;
+        editor.Blocks[0].PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName != nameof(MarkdownLiveBlockViewModel.IsFeedFilterVisible) || reentered) return;
+            reentered = true;
+            if (newFilter) editor.ApplyAreaFilter([], showAll: true);
+            else editor.Load(snapshot);
+        };
+        var visible = editor.ApplyAreaFilter([], showAll: false);
+        await Assert.That(reentered).IsTrue();
+        await Assert.That(visible).IsEqualTo(newFilter);
+        await Assert.That(editor.Blocks.Where(block => block.Block.IsContent)
+            .All(block => block.IsFeedFilterVisible == newFilter)).IsTrue();
+    }
+
+    [Test]
     public async Task Autosave_DebouncesInput_KeepsEditing_AndAdvancesExpectedRevision()
     {
         var delay = new ManualAutosaveDelay();
@@ -309,6 +332,82 @@ public class MarkdownLivePreviewEditorTests
         var draft = (await drafts.ListAsync("vault1")).Single();
         await Assert.That(draft.BaseRevision).IsEqualTo("revision-1");
         await Assert.That(draft.RawMarkdown).IsEqualTo("Версия редактора");
+    }
+
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task StructuralUndo_FirstDraftEditOrExternalRevisionInvalidatesBeforeAnotherWrite(bool editDraft)
+    {
+        var before = new MarkdownLiveDocumentSnapshot("Альфа\n\nБета\n", "r1", false, "note.md");
+        var after = before with { Raw = "Бета\n\nАльфа\n", ExpectedRevisionHash = "r2" };
+        using var editor = new MarkdownLivePreviewEditorViewModel();
+        var writes = 0;
+        editor.CommitBlockAsync = (patch, _) =>
+        {
+            writes++;
+            return Task.FromResult(MarkdownBlockCommitResult.Accepted(after with { Raw = patch.PatchedDocumentRaw }));
+        };
+        editor.Load(after);
+        editor.RememberStructuralChange(before, after, 0, 0, isMove: true);
+        await Assert.That(editor.CanUndoStructuralChange).IsTrue();
+        if (editDraft)
+        {
+            editor.BeginEdit(editor.Blocks[0]);
+            editor.ActiveBlock!.EditorText = "Новый черновик";
+        }
+        else editor.Load(after with { Raw = "Изменено снаружи\n", ExpectedRevisionHash = "r3" });
+        await Assert.That(editor.CanUndoStructuralChange).IsFalse();
+        await Assert.That((await editor.UndoStructuralChangeAsync()).IsMerged).IsFalse();
+        await Assert.That(writes).IsEqualTo(0);
+        if (editDraft) await Assert.That(editor.ActiveBlock!.EditorText).IsEqualTo("Новый черновик");
+    }
+
+    [Test]
+    public async Task StructuralUndo_UsesExpectedRevisionAndKeepsCurrentTextWhenDiskRejectsIt()
+    {
+        var before = new MarkdownLiveDocumentSnapshot("А\r\n\r\nБ\r\n", "r1", true, "note.md");
+        var after = before with { Raw = "АБ\r\n", ExpectedRevisionHash = "r2" };
+        using var editor = new MarkdownLivePreviewEditorViewModel();
+        MarkdownBlockPatch? attempted = null;
+        editor.CommitBlockAsync = (patch, _) =>
+        {
+            attempted = patch;
+            return Task.FromResult(MarkdownBlockCommitResult.Rejected("external revision"));
+        };
+        editor.Load(after);
+        editor.RememberStructuralChange(before, after, 0, 0);
+        await Assert.That((await editor.UndoStructuralChangeAsync()).IsMerged).IsFalse();
+        await Assert.That(attempted!.ExpectedRevisionHash).IsEqualTo("r2");
+        await Assert.That(attempted.PatchedDocumentRaw).IsEqualTo(before.Raw);
+        await Assert.That(attempted.HasUtf8Bom).IsTrue();
+        await Assert.That(editor.Snapshot!.Raw).IsEqualTo(after.Raw);
+        await Assert.That(editor.CanUndoStructuralChange).IsFalse();
+        await Assert.That(editor.HasMoveError).IsTrue();
+    }
+
+    [Test]
+    public async Task StructuralUndo_DelayedAcknowledgementCannotEraseNewEditorInput()
+    {
+        var before = new MarkdownLiveDocumentSnapshot("А\n\nБ\n", "r1", false, "note.md");
+        var after = before with { Raw = "АБ\n", ExpectedRevisionHash = "r2" };
+        using var editor = new MarkdownLivePreviewEditorViewModel();
+        var completion = new TaskCompletionSource<MarkdownBlockCommitResult>();
+        editor.CommitBlockAsync = (_, _) => completion.Task;
+        editor.Load(after);
+        editor.BeginEdit(editor.Blocks[0]);
+        editor.RememberStructuralChange(before, after, 0, 0);
+        var active = editor.ActiveBlock!;
+        var undo = editor.UndoStructuralChangeAsync();
+        await Assert.That(active.IsCommitInProgress).IsTrue();
+        // A late IME/model update must remain safe even though normal TextBox input is disabled.
+        active.EditorText = "Новый ввод во время I/O";
+        completion.SetResult(MarkdownBlockCommitResult.Accepted(before with { ExpectedRevisionHash = "r3" }));
+        await undo;
+        await Assert.That(editor.ActiveBlock).IsSameReferenceAs(active);
+        await Assert.That(active.EditorText).IsEqualTo("Новый ввод во время I/O");
+        await Assert.That(active.IsCommitInProgress).IsFalse();
+        await Assert.That(editor.HasMoveError).IsTrue();
     }
 
     [Test]

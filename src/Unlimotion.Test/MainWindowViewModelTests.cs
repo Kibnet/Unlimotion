@@ -79,7 +79,7 @@ namespace Unlimotion.Test
         protected async Task RunWithTreeProjectionAsync(
             Func<MainWindowViewModelFixture, MainWindowViewModel, ITaskStorage, Task> action)
         {
-            var session = HeadlessUnitTestSession.StartNew(typeof(App));
+            var session = HeadlessUnitTestSession.StartNew(typeof(SkiaHeadlessAppBuilder));
             try
             {
                 await session.DispatchAsync(async () =>
@@ -1746,7 +1746,7 @@ namespace Unlimotion.Test
 
             ((NotificationManagerWrapperMock)mainWindowVM.ManagerWrapper).AskResult = true;
             
-            await TestHelpers.ActionNotCreateItems(() => mainWindowVM.Remove.Execute(null), taskRepository, -2);
+            await TestHelpers.ActionNotCreateItemsAsync(mainWindowVM.Remove, taskRepository, -2);
             
             await Assert.That(TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.RootTask4Id)).IsNull();
             await Assert.That(TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.SubTask41Id)).IsNull();
