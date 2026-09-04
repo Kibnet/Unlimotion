@@ -344,7 +344,9 @@ public sealed class MainWindowFlaUiTests
 
     [Test]
     [NotInParallel(DesktopUiConstraint)]
-    public async Task Feed_editor_pointer_drag_reorders_blocks()
+    [Arguments(1)]
+    [Arguments(3)]
+    public async Task Feed_editor_pointer_drag_reorders_blocks(int selectedCount)
     {
         const string dragSectionMarker = "Pointer drag section";
         Page.FeedModeButton.IsChecked = true;
@@ -370,7 +372,11 @@ public sealed class MainWindowFlaUiTests
             handles => handles.Length >= 4,
             timeout: TimeSpan.FromSeconds(10),
             timeoutMessage: "Feed move handles did not become available for pointer drag.");
-        var sourceHandle = movableHandles[^2];
+        var relativePath = UnlimotionAutomationScenarioData.GetFeedDailyRelativePath(today);
+        var document = new Unlimotion.Notes.Markdown.MarkdownDocumentParser().Parse(ReadFeedVaultText(relativePath));
+        var sourceIndices = document.Blocks.Where(block => block.Raw.StartsWith(dragSectionMarker, StringComparison.Ordinal))
+            .Select(block => block.Index).ToArray();
+        var sourceHandle = movableHandles.Single(handle => handle.Properties.AutomationId.ValueOrDefault == handlePrefix + sourceIndices[0]);
         var targetBlock = movableHandles[1];
         targetBlock.Patterns.ScrollItem.PatternOrDefault?.ScrollIntoView();
         sourceHandle.Patterns.ScrollItem.PatternOrDefault?.ScrollIntoView();
@@ -393,6 +399,21 @@ public sealed class MainWindowFlaUiTests
         var finish = new System.Drawing.Point(
             (int)Math.Round(targetBounds.Left + targetBounds.Width / 2d),
             (int)Math.Round(targetBounds.Top + targetBounds.Height * 0.05d));
+        if (selectedCount == 3)
+        {
+            Mouse.Click(start);
+            Keyboard.Press(VirtualKeyShort.CONTROL);
+            try
+            {
+                foreach (var blockIndex in sourceIndices.Skip(1))
+                {
+                    var handle = RequireProcessElement(handlePrefix + blockIndex);
+                    var bounds = handle.Properties.BoundingRectangle.ValueOrDefault;
+                    Mouse.Click(new System.Drawing.Point((int)bounds.Left + 12, (int)bounds.Top + 12));
+                }
+            }
+            finally { Keyboard.Release(VirtualKeyShort.CONTROL); }
+        }
         if (int.TryParse(
                 Environment.GetEnvironmentVariable(UiRecordingPauseEnvironmentVariable),
                 CultureInfo.InvariantCulture,
@@ -426,7 +447,6 @@ public sealed class MainWindowFlaUiTests
             Mouse.Up(MouseButton.Left);
         }
 
-        var relativePath = UnlimotionAutomationScenarioData.GetFeedDailyRelativePath(today);
         var reordered = WaitUntil(
             () => ReadFeedVaultText(relativePath),
             text => text.IndexOf(dragSectionMarker, StringComparison.Ordinal)
@@ -442,6 +462,15 @@ public sealed class MainWindowFlaUiTests
             .IsLessThan(reordered.IndexOf(
                 UnlimotionAutomationScenarioData.FeedNewestMarker,
                 StringComparison.Ordinal));
+        if (selectedCount == 3)
+        {
+            var a = reordered.IndexOf("Pointer drag section A", StringComparison.Ordinal);
+            var b = reordered.IndexOf("Pointer drag section B", StringComparison.Ordinal);
+            var c = reordered.IndexOf("Pointer drag section C", StringComparison.Ordinal);
+            await Assert.That(a).IsLessThan(b);
+            await Assert.That(b).IsLessThan(c);
+            await Assert.That(c).IsLessThan(reordered.IndexOf(UnlimotionAutomationScenarioData.FeedNewestMarker, StringComparison.Ordinal));
+        }
     }
 
     private static void SeedEditorDragSection(string vaultPath)
@@ -451,7 +480,7 @@ public sealed class MainWindowFlaUiTests
             .Replace('/', Path.DirectorySeparatorChar);
         File.AppendAllText(
             Path.Combine(vaultPath, relativePath),
-            "\n## Drag section <!-- unlimotion-area:area-drag -->\nPointer drag section\n",
+            "\n## Drag section <!-- unlimotion-area:area-drag -->\nPointer drag section A\n\nPointer drag section B\n\nPointer drag section C\n",
             new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
     }
 

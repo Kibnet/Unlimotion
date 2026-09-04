@@ -30,7 +30,12 @@ public sealed record MarkdownBlockSelection(int StartBlockIndex, int BlockCount)
 
 public sealed class MarkdownMutationService(IMarkdownDocumentParser parser)
 {
-    public string AppendQuickCapture(string raw, string capture, AreaReference? area)
+    public string AppendQuickCapture(string raw, string capture, AreaReference? area) =>
+        PlanQuickCapture(raw, capture, area).UpdatedText;
+
+    public sealed record CapturePlan(string UpdatedText, int ContentStart, int ContentLength);
+
+    public CapturePlan PlanQuickCapture(string raw, string capture, AreaReference? area)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(capture);
         var document = parser.Parse(raw);
@@ -41,7 +46,7 @@ public sealed class MarkdownMutationService(IMarkdownDocumentParser parser)
         {
             var firstArea = document.Blocks.FirstOrDefault(static block => block.Kind == MarkdownBlockKind.AreaHeading);
             var insertion = firstArea?.Start ?? raw.Length;
-            return InsertSeparated(raw, insertion, normalizedCapture, newLine);
+            return InsertSeparated(raw, insertion, normalizedCapture, newLine, 0, normalizedCapture.Length);
         }
 
         var stableAreaId = string.IsNullOrWhiteSpace(area.Id) ? null : area.Id;
@@ -70,13 +75,14 @@ public sealed class MarkdownMutationService(IMarkdownDocumentParser parser)
                 ? $"## {safeAreaName}"
                 : $"## {safeAreaName} <!-- unlimotion-area:{stableAreaId} -->";
             var section = string.Concat(headingText, newLine, newLine, normalizedCapture);
-            return InsertSeparated(raw, raw.Length, section, newLine);
+            return InsertSeparated(raw, raw.Length, section, newLine,
+                headingText.Length + 2 * newLine.Length, normalizedCapture.Length);
         }
 
         var nextHeading = document.Blocks
             .Skip(heading.Index + 1)
             .FirstOrDefault(static block => block.Kind == MarkdownBlockKind.AreaHeading);
-        return InsertSeparated(raw, nextHeading?.Start ?? raw.Length, normalizedCapture, newLine);
+        return InsertSeparated(raw, nextHeading?.Start ?? raw.Length, normalizedCapture, newLine, 0, normalizedCapture.Length);
     }
 
     public string ReplaceSelection(string raw, MarkdownBlockSelection selection, string replacement)
@@ -96,7 +102,8 @@ public sealed class MarkdownMutationService(IMarkdownDocumentParser parser)
         return AppendQuickCapture(withoutSelection, selectedRaw, destination);
     }
 
-    private static string InsertSeparated(string raw, int index, string insertion, string newLine)
+    private static CapturePlan InsertSeparated(string raw, int index, string insertion, string newLine,
+        int contentOffset, int contentLength)
     {
         var before = raw[..index];
         var after = raw[index..];
@@ -108,7 +115,8 @@ public sealed class MarkdownMutationService(IMarkdownDocumentParser parser)
         var suffix = after.Length == 0
             ? newLine
             : after.StartsWith(newLine, StringComparison.Ordinal) ? newLine : newLine + newLine;
-        return before + prefix + insertion + suffix + after.TrimStart('\r', '\n');
+        return new CapturePlan(before + prefix + insertion + suffix + after.TrimStart('\r', '\n'),
+            before.Length + prefix.Length + contentOffset, contentLength);
     }
 
     private static string NormalizeForDocument(string text, string newLine) => text

@@ -42,7 +42,7 @@ internal static class WorkspaceNavigationTabsUiContract
     public static async Task<WorkspaceNavigationTabsScenarioResult> ExecuteWorkspaceNavigationTabsScenarioAsync()
     {
         var result = new WorkspaceNavigationTabsScenarioResult();
-        var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        var session = HeadlessUnitTestSession.StartNew(typeof(SkiaHeadlessAppBuilder));
 
         try
         {

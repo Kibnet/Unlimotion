@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace Unlimotion.Notes.Markdown;
 
@@ -41,6 +42,9 @@ public sealed record MarkdownBlock(
         || Kind == MarkdownBlockKind.Heading && HeadingLevel >= 3;
 
     public string ContentHash => MarkdownContentHasher.Hash(Raw);
+
+    public bool IsTechnicalMoveAnchor => Kind == MarkdownBlockKind.Paragraph
+        && Regex.IsMatch(Raw.Trim(), @"^\^unlimotion-move-[A-Za-z0-9_-]+$");
 }
 
 public sealed class MarkdownDocument

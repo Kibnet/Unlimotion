@@ -341,6 +341,7 @@ public sealed class FeedAuxiliaryUiTests
             {
                 PropertyChangedThrottleTimeSpanDefault = TimeSpan.FromMilliseconds(20)
             };
+            storage.CurrentTask = task;
             using var editor = TaskClassificationEditorViewModel.ForTask(task, [
                 new TaskClassificationAreaDefinition("work", "Работа"),
                 new TaskClassificationAreaDefinition("product", "Продукт")
@@ -358,8 +359,8 @@ public sealed class FeedAuxiliaryUiTests
                 editor.TrySetGoal(true);
                 editor.TrySetAreaSelected("work", true);
                 editor.TrySetAreaSelected("product", true);
-                await Task.Delay(120);
-                RunLayoutJobs();
+                await Assert.That(WaitFor(() => storage.Snapshots.Any(snapshot =>
+                    snapshot.IsGoal && snapshot.AreaIds.Contains("work") && snapshot.AreaIds.Contains("product")))).IsTrue();
 
                 var goal = FindControl<CheckBox>(view, "FeedTaskClassificationGoalCheckBox");
                 var chips = FindControl<ItemsControl>(view, "FeedTaskClassificationSelectedAreaChips");
@@ -547,6 +548,7 @@ public sealed class FeedAuxiliaryUiTests
         public ITaskRelationsIndex Relations => null!;
         public TaskTreeManager TaskTreeManager => null!;
         public List<TaskItem> Snapshots { get; } = new();
+        public TaskItemViewModel? CurrentTask { get; set; }
         public event EventHandler<EventArgs>? Initiated;
 
         public Task Init() => Task.CompletedTask;
@@ -560,7 +562,11 @@ public sealed class FeedAuxiliaryUiTests
             return Task.FromResult(change);
         }
 
-        public Task<TaskItemViewModel> Update(TaskItem change) => throw new NotSupportedException();
+        public Task<TaskItemViewModel> Update(TaskItem change)
+        {
+            Snapshots.Add(change);
+            return Task.FromResult(CurrentTask!);
+        }
         public Task<TaskItemViewModel> Clone(TaskItemViewModel change, params TaskItemViewModel[]? additionalParents) => throw new NotSupportedException();
         public Task<bool> CopyInto(TaskItemViewModel change, TaskItemViewModel[]? additionalParents) => throw new NotSupportedException();
         public Task<bool> MoveInto(TaskItemViewModel change, TaskItemViewModel[] additionalParents, TaskItemViewModel? currentTask) => throw new NotSupportedException();

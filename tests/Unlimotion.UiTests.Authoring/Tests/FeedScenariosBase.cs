@@ -112,6 +112,11 @@ public abstract class FeedScenariosBase<TSession> : StatusContractScenariosBase<
 
     protected virtual string? DescribeDailyNoteFilenameFormatApplyAvailability() => null;
 
+    protected virtual void WaitForDailyNoteFilenameFormatImpact() { }
+
+    protected virtual bool IsDailyNoteFilenameFormatImpactReady() =>
+        TryResolve(() => Page.ConfirmNoteDailyFileNameFormatButton)?.IsEnabled == true;
+
     /// <summary>
     /// AppAutomation's Avalonia Headless TextBox model updates its visible text
     /// but does not raise the binding's source-update notification. The
@@ -465,6 +470,24 @@ public abstract class FeedScenariosBase<TSession> : StatusContractScenariosBase<
 
         apply.Invoke();
         FlushDailyNoteFilenameFormatUi();
+        var confirm = WaitForControl(
+            () => Page.ConfirmNoteDailyFileNameFormatButton,
+            "Changing the format must first warn about existing daily files.");
+        WaitForDailyNoteFilenameFormatImpact();
+        await Assert.That(ReadFeedVaultText(DailyNoteSettingsRelativePath))
+            .DoesNotContain("\"dailyFileNameFormat\": \"yyyy.MM.dd\"");
+        WaitForControl(() => Page.CancelNoteDailyFileNameFormatButton,
+            "The format impact must be cancellable.").Invoke();
+        FlushDailyNoteFilenameFormatUi();
+        await Assert.That(ReadFeedVaultText(DailyNoteSettingsRelativePath))
+            .DoesNotContain("\"dailyFileNameFormat\": \"yyyy.MM.dd\"");
+        apply.Invoke();
+        FlushDailyNoteFilenameFormatUi();
+        confirm = WaitForControl(() => Page.ConfirmNoteDailyFileNameFormatButton,
+            "Applying again must offer the same format impact confirmation.");
+        WaitForDailyNoteFilenameFormatImpact();
+        confirm.Invoke();
+        FlushDailyNoteFilenameFormatUi();
         WaitUntil(
             () => ReadFeedVaultText(DailyNoteSettingsRelativePath),
             text => text.Contains("\"dailyFileNameFormat\": \"yyyy.MM.dd\"", StringComparison.Ordinal),
@@ -484,6 +507,10 @@ public abstract class FeedScenariosBase<TSession> : StatusContractScenariosBase<
             timeoutMessage: "A second daily note filename format draft did not enable Apply.");
         apply.Invoke();
         FlushDailyNoteFilenameFormatUi();
+        WaitForDailyNoteFilenameFormatImpact();
+        WaitForControl(() => Page.ConfirmNoteDailyFileNameFormatButton,
+            "Returning to hyphenated names must warn about the existing dotted daily file.").Invoke();
+        FlushDailyNoteFilenameFormatUi();
         WaitUntil(
             () => ReadFeedVaultText(DailyNoteSettingsRelativePath),
             text => text.Contains("\"dailyFileNameFormat\": \"yyyy-MM-dd\"", StringComparison.Ordinal),
@@ -499,6 +526,10 @@ public abstract class FeedScenariosBase<TSession> : StatusContractScenariosBase<
             timeout: TimeSpan.FromSeconds(10),
             timeoutMessage: "Returning to the dotted daily note filename format did not enable Apply.");
         apply.Invoke();
+        FlushDailyNoteFilenameFormatUi();
+        WaitForDailyNoteFilenameFormatImpact();
+        WaitForControl(() => Page.ConfirmNoteDailyFileNameFormatButton,
+            "Hiding the restored daily files must require confirmation again.").Invoke();
         FlushDailyNoteFilenameFormatUi();
         WaitUntil(
             () => ReadFeedVaultText(DailyNoteSettingsRelativePath),
@@ -583,6 +614,19 @@ public abstract class FeedScenariosBase<TSession> : StatusContractScenariosBase<
             timeoutMessage: "The dotted format could not be reapplied after Reload.");
         apply.Invoke();
         FlushDailyNoteFilenameFormatUi();
+        // Depending on whether the current day was materialized while the external
+        // format was active, this last change may also have a nonempty impact.
+        WaitUntil(() => ReadFeedVaultText(DailyNoteSettingsRelativePath)
+                .Contains("\"dailyFileNameFormat\": \"yyyy.MM.dd\"", StringComparison.Ordinal)
+            || IsDailyNoteFilenameFormatImpactReady(),
+            timeout: TimeSpan.FromSeconds(20), timeoutMessage: "Neither format save nor impact preview completed.");
+        if (!ReadFeedVaultText(DailyNoteSettingsRelativePath)
+            .Contains("\"dailyFileNameFormat\": \"yyyy.MM.dd\"", StringComparison.Ordinal))
+        {
+            WaitForDailyNoteFilenameFormatImpact();
+            Page.ConfirmNoteDailyFileNameFormatButton.Invoke();
+            FlushDailyNoteFilenameFormatUi();
+        }
         WaitUntil(
             () => ReadFeedVaultText(DailyNoteSettingsRelativePath),
             text => text.Contains("\"dailyFileNameFormat\": \"yyyy.MM.dd\"", StringComparison.Ordinal),

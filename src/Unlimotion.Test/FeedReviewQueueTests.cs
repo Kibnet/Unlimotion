@@ -11,6 +11,71 @@ namespace Unlimotion.Test;
 public class FeedReviewQueueTests
 {
     [Test]
+    [Arguments("[Задача](unlimotion://task/task-1)", "task-1")]
+    [Arguments("[[Работа/Заметка|Заметка]] <!-- unlimotion-note:note-1 -->", "note-1")]
+    [Arguments("[[Ежедневные/2026-09-04#^unlimotion-move-1|Перенесено]]", "unlimotion-move-1")]
+    public async Task ConfirmedOutput_RemainsResolvedWhenBothNeighboursChange(string link, string entityId)
+    {
+        var (queue, _, _) = ConfirmedOutputQueue(link, entityId);
+        var result = queue.Build([("Ежедневные/2026-09-04.md", $"Новый верх\n\n{link}\n\nНовый низ\n")], Envelope("device", 4));
+        await Assert.That(result.Count).IsEqualTo(2);
+        await Assert.That(result.Any(candidate => candidate.Block.Raw.Trim() == link)).IsFalse();
+    }
+
+    [Test]
+    [Arguments("duplicate")]
+    [Arguments("area")]
+    [Arguments("title")]
+    [Arguments("path")]
+    [Arguments("conflict")]
+    [Arguments("missing-provenance")]
+    [Arguments("mention")]
+    public async Task ConfirmedOutput_DoesNotHideAmbiguousOrChangedContent(string change)
+    {
+        var link = change == "mention" ? "См. [Задача](unlimotion://task/task-1) и обсудить" : "[Задача](unlimotion://task/task-1)";
+        var (queue, state, locator) = ConfirmedOutputQueue(link, "task-1", change != "missing-provenance");
+        if (change == "conflict")
+            state.Add(new ReviewDecisionEvent("vault", "concurrent", Envelope("other", 1), DateTimeOffset.UtcNow,
+                locator, ReviewDecision.Deferred, "other-session"));
+        var currentLink = change == "title" ? link.Replace("Задача", "Изменено") : link;
+        var raw = $"Новый верх\n\n{currentLink}\n\nНовый низ\n";
+        if (change == "area") raw = "## Работа <!-- unlimotion-area:work -->\n" + raw;
+        if (change == "duplicate") raw += $"\n{link}\n\nПоследний\n";
+        var path = change == "path" ? "Ежедневные/2026-09-03.md" : "Ежедневные/2026-09-04.md";
+        var result = queue.Build([(path, raw)], Envelope("device", 4));
+        await Assert.That(result.Count(candidate => candidate.Block.Raw.Contains("unlimotion://task/task-1")))
+            .IsEqualTo(change == "duplicate" ? 2 : 1);
+    }
+
+    private static (FeedReviewQueue Queue, ReviewStateStore State, BlockLocator Output) ConfirmedOutputQueue(
+        string link, string entityId, bool provenance = true)
+    {
+        const string path = "Ежедневные/2026-09-04.md";
+        var state = new ReviewStateStore();
+        var queue = new FeedReviewQueue(new MarkdownDocumentParser(), state);
+        var locator = queue.Build([(path, $"До\n\n{link}\n\nПосле\n")], Envelope("device", 1))
+            .Single(candidate => candidate.Block.Raw.Trim() == link).Locator;
+        if (provenance)
+            state.Add(new ReviewDecisionEvent("vault", "source", Envelope("device", 2), DateTimeOffset.UtcNow,
+                locator with { ContentHash = "original-checkbox" }, ReviewDecision.Converted,
+                Outputs: [locator], OperationId: "operation", ResultEntityId: entityId));
+        state.Add(new ReviewDecisionEvent("vault", "output", Envelope("device", 3), DateTimeOffset.UtcNow,
+            locator, ReviewDecision.Converted, OperationId: "operation", ResultEntityId: entityId));
+        return (queue, state, locator);
+    }
+
+    [Test]
+    public async Task GeneratedMoveAnchor_IsNotAReviewItem_ButCodeExampleRemainsContent()
+    {
+        const string raw = "- [ ] Купить книгу\n^unlimotion-move-anchor\n\n```text\n^unlimotion-move-example\n```\n";
+        var queue = new FeedReviewQueue(new MarkdownDocumentParser(), new ReviewStateStore());
+        var candidates = queue.Build([("Ежедневные/2026-09-04.md", raw)], Envelope("device", 1));
+        await Assert.That(candidates.Count).IsEqualTo(2);
+        await Assert.That(candidates.Any(candidate => candidate.Block.IsTechnicalMoveAnchor)).IsFalse();
+        await Assert.That(candidates.Any(candidate => candidate.Block.Kind == MarkdownBlockKind.FencedCode)).IsTrue();
+    }
+
+    [Test]
     public async Task QueueUsesActiveDottedNamingAndSkipsOtherLayouts()
     {
         var queue = new FeedReviewQueue(

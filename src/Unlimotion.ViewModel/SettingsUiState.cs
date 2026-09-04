@@ -41,6 +41,9 @@ public sealed record NoteDailyFileNameFormatValidation(
     string? PreviewPath,
     string? ErrorMessage);
 
+public sealed record NoteDailyFileNameFormatImpact(int RecognizedDays, int UnrecognizedFiles, int LeavingFeed,
+    int PreviouslyRecognized = 0, int RetainedDays = 0);
+
 /// <summary>
 /// The current portable daily-note filename setting for one vault. SessionGeneration changes
 /// whenever Feed replaces the active vault session, including a same-root rebind.

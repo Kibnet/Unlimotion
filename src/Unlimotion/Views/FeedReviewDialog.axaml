@@ -55,6 +55,7 @@
             </Grid>
 
             <Border Grid.Row="2"
+                    IsVisible="{Binding !HasCreatedTask}"
                     Padding="12"
                     CornerRadius="8"
                     Background="{DynamicResource ThemeControlLowBrush}">
@@ -150,6 +151,8 @@
                             BorderThickness="1">
                         <StackPanel Spacing="8">
                             <ToggleSwitch IsChecked="{Binding ReviewTaskIsGoal, Mode=TwoWay}"
+                                          OnContent="{DynamicResource DialogYes}"
+                                          OffContent="{DynamicResource DialogNo}"
                                           Content="{DynamicResource FeedReviewGoal}"
                                           AutomationProperties.AutomationId="FeedReviewTaskGoalToggle" />
                             <ItemsControl ItemsSource="{Binding ReviewTaskAreas}"
@@ -215,6 +218,8 @@
                                                TextWrapping="Wrap" />
                                 </Button>
                                 <ToggleSwitch Grid.Column="2"
+                                              OnContent="{DynamicResource DialogYes}"
+                                              OffContent="{DynamicResource DialogNo}"
                                               IsChecked="{Binding CreatedTaskReference.Task.IsGoal, Mode=TwoWay}"
                                               Content="{DynamicResource FeedReviewGoal}"
                                               AutomationProperties.AutomationId="FeedCreatedTaskGoalToggle" />

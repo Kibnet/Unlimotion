@@ -3,11 +3,35 @@ using System.Threading.Tasks;
 using Unlimotion.Notes.Daily;
 using Unlimotion.Notes.Markdown;
 using Unlimotion.Notes.Search;
+using Unlimotion.ViewModel.Feed;
 
 namespace Unlimotion.Test;
 
 public class FeedSearchIndexTests
 {
+    [Test]
+    public async Task SearchPresentation_HidesGeneratedNoteMetadataInCombinedContext()
+    {
+        const string raw = "Задача [[Работа/Итог|Итог]] <!-- unlimotion-note:note-1 --> Следующая мысль";
+        await Assert.That(MarkdownLiveBlockViewModel.ToReadableText(raw)).IsEqualTo("Задача Итог Следующая мысль");
+        await Assert.That(MarkdownLiveBlockViewModel.ToReadableText("```text\n" + raw + "\n```"))
+            .Contains("unlimotion-note:note-1");
+    }
+
+    [Test]
+    public async Task SearchPresentation_ShowsReadableLabelsButKeepsOriginalNavigationIdentity()
+    {
+        var index = new FeedSearchIndex(new MarkdownDocumentParser());
+        index.IndexMarkdown("Ежедневные/2026-09-04.md",
+            "- [ ] **Подготовить** [отчёт](unlimotion://task/feed-test) и [[Проекты/Бриф|бриф]]\n");
+        var entry = index.Search(new FeedSearchQuery("отчёт")).Single();
+        var view = new FeedSearchResultViewModel(entry);
+        await Assert.That(view.Text).IsEqualTo("Подготовить отчёт и бриф");
+        await Assert.That(view.Context).DoesNotContain("unlimotion://");
+        await Assert.That(view.Entry).IsSameReferenceAs(entry);
+        await Assert.That(view.Entry.Text).Contains("unlimotion://task/feed-test");
+    }
+
     [Test]
     public async Task DottedNamingLeavesInactiveHyphenDailyFileSearchableWithoutDateFilter()
     {

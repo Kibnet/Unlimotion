@@ -80,7 +80,11 @@ public sealed class SafeHeadlessUnitTestSession : IAsyncDisposable
     public static SafeHeadlessUnitTestSession StartNew(Type appType)
     {
         var trace = TestExecutionTrace.Resource("AvaloniaHeadless");
-        try { return new SafeHeadlessUnitTestSession(HeadlessUnitTestSession.StartNew(appType), trace); }
+        // Use a consistent renderer throughout the process: mixing Skia glyph runs with
+        // HeadlessPlatformTypeface causes invalid casts in later isolated sessions.
+        // The real font stack also exercises multiline shaping used by the feed review.
+        var entryPoint = appType == typeof(App) ? typeof(SkiaHeadlessAppBuilder) : appType;
+        try { return new SafeHeadlessUnitTestSession(HeadlessUnitTestSession.StartNew(entryPoint), trace); }
         catch { trace.Dispose(); throw; }
     }
 

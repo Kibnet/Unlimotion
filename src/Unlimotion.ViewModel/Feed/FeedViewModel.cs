@@ -39,6 +39,7 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
     private const int DayPageSize = 14;
     private static readonly VaultRootRegistry SharedVaultRootRegistry = new();
     private readonly CompositeDisposable disposables = new();
+    private readonly CancellationTokenSource notificationLifetime = new();
     private readonly SemaphoreSlim operationGate = new(1, 1);
     private readonly Func<DateOnly>? explicitTodayProvider;
     private readonly Func<DateTimeOffset> localNowProvider;
@@ -61,6 +62,10 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
     private CancellationTokenSource? searchCancellation;
     private CancellationTokenSource? indexCancellation;
     private INoteVault? vault;
+    private long noteNavigationGeneration;
+    private readonly Dictionary<string, CaptureSessionDraft> captureDraftsByVault = new(StringComparer.Ordinal);
+    private sealed record CaptureSessionDraft(string Text, string? AreaIdentity, FeedTaskCaptureRequest? PendingTask,
+        string? RecoveredOperationId, bool ReplanRecoveredWrite);
     private DailyNoteService? dailyNotes;
     private DailyNoteNaming dailyNoteNaming = DailyNoteNaming.Default;
     private DailyNoteSettingsSnapshot? dailyNoteSettingsSnapshot;
@@ -109,6 +114,28 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
     private DateTimeOffset? searchToDate;
     private string searchQuery = string.Empty;
     private string quickCaptureText = string.Empty;
+    private FeedTaskCaptureRequest? pendingQuickTaskCapture;
+    private string? recoveredQuickCaptureOperationId;
+    private bool replanRecoveredQuickCaptureOnSave;
+    private MarkdownLivePreviewEditorViewModel? moveUndoEditor;
+
+    public MarkdownLivePreviewEditorViewModel? MoveUndoEditor => moveUndoEditor;
+    public bool HasMoveUndoNotice => MoveUndoEditor?.HasHiddenMovedBlocks == true;
+
+    private void SetMoveUndoEditor(MarkdownLivePreviewEditorViewModel? editor)
+    {
+        if (moveUndoEditor is not null) moveUndoEditor.PropertyChanged -= HandleMoveUndoChanged;
+        moveUndoEditor = editor;
+        if (moveUndoEditor is not null) moveUndoEditor.PropertyChanged += HandleMoveUndoChanged;
+        this.RaisePropertyChanged(nameof(MoveUndoEditor));
+        this.RaisePropertyChanged(nameof(HasMoveUndoNotice));
+    }
+
+    private void HandleMoveUndoChanged(object? sender, PropertyChangedEventArgs args)
+    {
+        if (args.PropertyName == nameof(MarkdownLivePreviewEditorViewModel.HasHiddenMovedBlocks))
+            this.RaisePropertyChanged(nameof(HasMoveUndoNotice));
+    }
     private TimeSpan dayBoundary;
     private long searchGeneration;
     private long indexGeneration;
@@ -185,7 +212,7 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
         CaptureCommand = captureCommand;
         disposables.Add(captureCommand);
 
-        var refreshCommand = ReactiveCommand.CreateFromTask(RefreshCoreAsync);
+        var refreshCommand = ReactiveCommand.CreateFromTask(() => RefreshCoreAsync());
         RefreshCommand = refreshCommand;
         disposables.Add(refreshCommand);
 
@@ -495,6 +522,24 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
             null);
     }
 
+    public async Task<NoteDailyFileNameFormatImpact> PreviewDailyNoteFileNameFormatAsync(string format)
+    {
+        var source = vault ?? throw new InvalidOperationException(L10n.Get("NoteDailyFileNameFormatRootRequired"));
+        var naming = DailyNoteNaming.Create(format);
+        var token = GetSessionToken();
+        var previousNaming = dailyNoteNaming;
+        var files = await source.ListMarkdownFilesAsync(token);
+        token.ThrowIfCancellationRequested();
+        var dailyFiles = files.Where(path => path.Replace('\\', '/').StartsWith(
+            DailyNoteNaming.DailyDirectoryName + "/", StringComparison.OrdinalIgnoreCase)).ToArray();
+        var recognized = dailyFiles.Count(path => naming.TryParseRelativePath(path, out _));
+        return new NoteDailyFileNameFormatImpact(recognized, dailyFiles.Length - recognized,
+            dailyFiles.Count(path => previousNaming.TryParseRelativePath(path, out _)
+                && !naming.TryParseRelativePath(path, out _)),
+            dailyFiles.Count(path => previousNaming.TryParseRelativePath(path, out _)),
+            dailyFiles.Count(path => previousNaming.TryParseRelativePath(path, out _) && naming.TryParseRelativePath(path, out _)));
+    }
+
     public async Task<NoteDailyFileNameFormatApplyResult> ApplyDailyNoteFileNameFormatAsync(string format)
     {
         ThrowIfDisposed();
@@ -647,6 +692,7 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
         }
     }
 
+    [AlsoNotifyFor(nameof(SearchFromCalendarDate), nameof(SearchPeriodCaption))]
     public DateTimeOffset? SearchFromDate
     {
         get => searchFromDate;
@@ -662,6 +708,7 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
         }
     }
 
+    [AlsoNotifyFor(nameof(SearchToCalendarDate), nameof(SearchPeriodCaption))]
     public DateTimeOffset? SearchToDate
     {
         get => searchToDate;
@@ -676,6 +723,21 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
             ScheduleSearchResultsRefresh();
         }
     }
+
+    public DateTime? SearchFromCalendarDate
+    {
+        get => SearchFromDate?.LocalDateTime.Date;
+        set => SearchFromDate = value is { } date ? new DateTimeOffset(date.Date) : null;
+    }
+
+    public DateTime? SearchToCalendarDate
+    {
+        get => SearchToDate?.LocalDateTime.Date;
+        set => SearchToDate = value is { } date ? new DateTimeOffset(date.Date) : null;
+    }
+
+    public string SearchPeriodCaption => L10n.Get("FeedSearchPeriod")
+        + (SearchFromDate is not null || SearchToDate is not null ? " •" : string.Empty);
 
     [AlsoNotifyFor(nameof(IsChronologyEmpty))]
     public bool HasDays { get; private set; }
@@ -1354,6 +1416,13 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
             revisionStore = loaded.RevisionStore;
             searchIndex = loaded.Snapshot.SearchIndex;
             VaultRootPath = loaded.Vault.RootPath;
+            if (captureDraftsByVault.TryGetValue(loaded.VaultId, out var savedCaptureDraft))
+            {
+                QuickCaptureText = savedCaptureDraft.Text;
+                pendingQuickTaskCapture = savedCaptureDraft.PendingTask;
+                recoveredQuickCaptureOperationId = savedCaptureDraft.RecoveredOperationId;
+                replanRecoveredQuickCaptureOnSave = savedCaptureDraft.ReplanRecoveredWrite;
+            }
             BootstrapIndexedFiles = loaded.Bootstrap.IndexedFiles;
             BootstrapPendingCheckboxes = loaded.Bootstrap.PendingCheckboxes;
             BootstrapWasReused = loaded.Bootstrap.ReusedExisting;
@@ -1375,6 +1444,8 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
 
             InstallPreparedAuxiliaryViewModels(loaded.Auxiliary
                 ?? throw new InvalidOperationException("The candidate Feed auxiliary view models are missing."));
+            if (savedCaptureDraft is not null)
+                SelectedArea = Areas.FirstOrDefault(area => area.Identity == savedCaptureDraft.AreaIdentity) ?? Areas[0];
             visibleCandidateInstalled = true;
             if (!await CompleteCommittedVaultSessionAsync(cancellationToken).ConfigureAwait(true)
                 || cancellationToken.IsCancellationRequested
@@ -1801,6 +1872,28 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
             try
             {
                 var today = EffectiveToday;
+                if (recoveredQuickCaptureOperationId is { } recoveryId && vaultId is not null)
+                {
+                    var journal = taskJournalFactory(vaultId);
+                    var record = await journal.LoadAsync(vaultId, recoveryId, cancellationToken)
+                        ?? throw new InvalidDataException("The retained capture journal is missing.");
+                    // Only the user's explicit Save after seeing the recovery warning may
+                    // plan a new append. Startup/retry never silently appends another copy.
+                    if (replanRecoveredQuickCaptureOnSave)
+                    {
+                        record = record with { RecoveredCaptureWrite = null };
+                        replanRecoveredQuickCaptureOnSave = false;
+                    }
+                    await new FeedCaptureDraftRecoveryService(vault, journal).SaveAsync(
+                        record, dailyNoteNaming, today, capture, area, cancellationToken);
+                    recoveredQuickCaptureOperationId = null;
+                    replanRecoveredQuickCaptureOnSave = false;
+                    if (QuickCaptureText == capture) QuickCaptureText = string.Empty;
+                    var pending = PendingRecoveries.FirstOrDefault(item => item.OperationId == recoveryId);
+                    if (pending is not null) RemovePendingRecovery(pending);
+                    await ReloadSnapshotAsync(cancellationToken);
+                    return;
+                }
                 var expectedRevision = Days.FirstOrDefault(day => day.Date == today)?.Revision;
                 var sourceDailyNotes = dailyNotes;
                 var sourceVault = vault;
@@ -1830,7 +1923,7 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
                 await DispatchNotificationAsync(() =>
                 {
                     searchIndex = snapshot.SearchIndex;
-                    QuickCaptureText = string.Empty;
+                    if (QuickCaptureText == capture) QuickCaptureText = string.Empty;
                     ApplySnapshot(snapshot);
                 }).ConfigureAwait(false);
                 await RefreshReviewSummaryAsync(cancellationToken).ConfigureAwait(false);
@@ -1845,7 +1938,9 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
         }
         catch (Exception exception)
         {
-            ErrorMessage = exception.Message;
+            ErrorMessage = recoveredQuickCaptureOperationId is not null
+                ? RecoveryErrorMessage(exception)
+                : exception.Message;
         }
         finally
         {
@@ -1856,7 +1951,7 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
         }
     }
 
-    private async Task RefreshCoreAsync()
+    private async Task RefreshCoreAsync(bool clearError = true)
     {
         if (dailyNotes is null || vault is null || !IsVaultInitialized)
         {
@@ -1865,7 +1960,7 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
 
         var cancellationToken = GetSessionToken();
         IsBusy = true;
-        ErrorMessage = null;
+        if (clearError && !HasPendingRecoveries) ErrorMessage = null;
         try
         {
             await operationGate.WaitAsync(cancellationToken);
@@ -2027,6 +2122,7 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
             return;
         }
 
+        await EnsureReviewSelectionCurrentAsync(cancellationToken);
         var inputs = GetCurrentInputLocators();
         if (reviewCoordinator is null || inputs.Count == 0)
         {
@@ -2055,6 +2151,7 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
             return;
         }
 
+        await EnsureReviewSelectionCurrentAsync(cancellationToken);
         var day = FindDay(currentCandidate.Locator.RelativePath);
         if (day is null)
         {
@@ -2125,6 +2222,7 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
             return;
         }
 
+        await EnsureReviewSelectionCurrentAsync(cancellationToken);
         var day = FindDay(currentCandidate.Locator.RelativePath)
             ?? throw new InvalidOperationException("The active review day is no longer available.");
         var inputs = GetCurrentInputLocators();
@@ -2207,6 +2305,7 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
             return;
         }
 
+        await EnsureReviewSelectionCurrentAsync(cancellationToken);
         var day = FindDay(currentCandidate.Locator.RelativePath)
             ?? throw new InvalidOperationException("The active review day is no longer available.");
         var inputs = GetCurrentInputLocators();
@@ -2274,6 +2373,7 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
             return;
         }
 
+        await EnsureReviewSelectionCurrentAsync(cancellationToken);
         var sourceDay = FindDay(currentCandidate.Locator.RelativePath)
             ?? throw new InvalidOperationException("The active review day is no longer available.");
         var destinationDay = Days.FirstOrDefault(day => day.Date == EffectiveToday);
@@ -2348,6 +2448,46 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
         await AdvanceReviewAsync(cancellationToken);
     });
 
+    private async Task EnsureReviewSelectionCurrentAsync(CancellationToken cancellationToken)
+    {
+        if (await ExposeCurrentReviewRecoveryAsync(cancellationToken))
+            throw new InvalidOperationException(L10n.Get("FeedRecoveryRetryHint"));
+        if (vault is null || markdownParser is null || currentCandidate is null
+            || currentReviewDocument is null || currentReviewSelection is null) return;
+        var path = currentCandidate.Locator.RelativePath;
+        var previousDay = FindDay(path);
+        if (previousDay?.MarkdownEditor.ActiveBlock?.IsDirty == true)
+            throw new InvalidOperationException(L10n.Get("FeedReviewSourceChanged"));
+        var disk = await vault.ReadAsync(path, cancellationToken);
+        if (disk is null) throw new InvalidOperationException(L10n.Get("FeedReviewSourceChanged"));
+        if (disk.Text == currentReviewDocument.Raw && disk.Revision == previousDay?.Revision) return;
+
+        var document = markdownParser.Parse(disk.Text);
+        var original = currentReviewSelection.Resolve(currentReviewDocument);
+        var matches = new List<int>();
+        for (var start = 0; start + original.Count <= document.Blocks.Count; start++)
+        {
+            if (original.Select((block, offset) => (block, next: document.Blocks[start + offset]))
+                .All(pair => pair.block.Raw == pair.next.Raw && pair.block.Kind == pair.next.Kind
+                    && pair.block.AreaId == pair.next.AreaId && pair.block.AreaName == pair.next.AreaName))
+                matches.Add(start);
+        }
+        // Never guess among duplicate text, or reuse a location after its area has changed.
+        if (matches.Count != 1) throw new InvalidOperationException(L10n.Get("FeedReviewSourceChanged"));
+        var anchorOffset = currentReviewAnchorBlockIndex - currentReviewSelection.StartBlockIndex;
+        await ReloadSnapshotAsync(cancellationToken);
+        if (FindDay(path)?.Revision != disk.Revision)
+            throw new InvalidOperationException(L10n.Get("FeedReviewSourceChanged"));
+        currentReviewDocument = document;
+        currentReviewSelection = new MarkdownBlockSelection(matches[0], original.Count);
+        currentReviewAnchorBlockIndex = matches[0] + Math.Clamp(anchorOffset, 0, original.Count - 1);
+        var anchor = document.Blocks[currentReviewAnchorBlockIndex];
+        currentCandidate = currentCandidate with { Block = anchor, Locator = CreateLocator(path, document, anchor) };
+        UpdateReviewSelectionViewModel();
+    }
+
+    public Task LoadOlderDaysAsync() => LoadOlderDaysCoreAsync();
+
     private async Task ExecuteReviewOperationAsync(Func<CancellationToken, Task> operation)
     {
         if (isDisposed || IsBusy || IsIdentityFrozen)
@@ -2375,7 +2515,16 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
         }
         catch (Exception exception)
         {
-            ErrorMessage = exception.Message;
+            System.Diagnostics.Trace.TraceError("Feed review operation failed: {0}", exception);
+            ErrorMessage = exception is VaultRevisionConflictException
+                ? L10n.Get("FeedReviewSourceChanged") : exception.Message;
+            try
+            {
+                if (await ExposeCurrentReviewRecoveryAsync(cancellationToken))
+                    ErrorMessage = L10n.Get("FeedRecoveryRetryHint");
+            }
+            catch (Exception recoveryException) when (recoveryException is not OperationCanceledException)
+            { System.Diagnostics.Trace.TraceError("Feed review recovery lookup: {0}", recoveryException); }
         }
         finally
         {
@@ -2475,20 +2624,23 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
         var start = currentReviewSelection.StartBlockIndex;
         var count = currentReviewSelection.BlockCount;
         var candidateIndex = up ? start - 1 : start + count;
+        while (candidateIndex >= 0 && candidateIndex < currentReviewDocument.Blocks.Count
+            && currentReviewDocument.Blocks[candidateIndex].Kind == MarkdownBlockKind.Blank)
+            candidateIndex += up ? -1 : 1;
         if (candidateIndex < 0 || candidateIndex >= currentReviewDocument.Blocks.Count)
         {
             return;
         }
 
         var candidate = currentReviewDocument.Blocks[candidateIndex];
-        if (candidate.Kind is MarkdownBlockKind.AreaHeading or MarkdownBlockKind.FrontMatter)
+        if (candidate.IsTechnicalMoveAnchor || candidate.Kind is MarkdownBlockKind.AreaHeading or MarkdownBlockKind.FrontMatter)
         {
             return;
         }
 
         currentReviewSelection = up
-            ? new MarkdownBlockSelection(start - 1, count + 1)
-            : new MarkdownBlockSelection(start, count + 1);
+            ? new MarkdownBlockSelection(candidateIndex, start + count - candidateIndex)
+            : new MarkdownBlockSelection(start, candidateIndex - start + 1);
         UpdateReviewSelectionViewModel();
     }
 
@@ -2503,11 +2655,15 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
         var end = start + currentReviewSelection.BlockCount - 1;
         if (fromTop && start < currentReviewAnchorBlockIndex)
         {
-            currentReviewSelection = new MarkdownBlockSelection(start + 1, currentReviewSelection.BlockCount - 1);
+            start++;
+            while (start < currentReviewAnchorBlockIndex && currentReviewDocument?.Blocks[start].Kind == MarkdownBlockKind.Blank) start++;
+            currentReviewSelection = new MarkdownBlockSelection(start, end - start + 1);
         }
         else if (!fromTop && end > currentReviewAnchorBlockIndex)
         {
-            currentReviewSelection = new MarkdownBlockSelection(start, currentReviewSelection.BlockCount - 1);
+            end--;
+            while (end > currentReviewAnchorBlockIndex && currentReviewDocument?.Blocks[end].Kind == MarkdownBlockKind.Blank) end--;
+            currentReviewSelection = new MarkdownBlockSelection(start, end - start + 1);
         }
 
         UpdateReviewSelectionViewModel();
@@ -2560,7 +2716,10 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
     {
         while (true)
         {
+            if (isDisposed) return ReviewQueueSnapshot.Empty;
+            cancellationToken.ThrowIfCancellationRequested();
             var snapshot = await GetReviewQueueSnapshotAsync(cancellationToken).ConfigureAwait(false);
+            if (isDisposed) return ReviewQueueSnapshot.Empty;
             var applied = false;
             await DispatchNotificationAsync(() =>
             {
@@ -2586,6 +2745,8 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
     {
         while (true)
         {
+            if (isDisposed) return ReviewQueueSnapshot.Empty;
+            cancellationToken.ThrowIfCancellationRequested();
             ReviewQueueBuildState? build;
             long version;
             lock (reviewQueueLock)
@@ -2605,6 +2766,7 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
             {
                 var request = await CaptureReviewQueueBuildRequestAsync(version, cancellationToken)
                     .ConfigureAwait(false);
+                if (isDisposed) return ReviewQueueSnapshot.Empty;
                 lock (reviewQueueLock)
                 {
                     if (reviewQueueVersion != version)
@@ -2744,7 +2906,6 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
             reviewQueueBuild = null;
         }
 
-        IsReviewReminderDismissed = false;
         RaiseReviewNavigationChanged();
 
         canceledBuild?.CancelAndDisposeWhenCompleted();
@@ -2893,13 +3054,14 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
             }
             catch (Exception exception)
             {
-                failures.Add($"{pendingTask.OperationId}: {exception.Message}");
+                var publicMessage = RecoveryErrorMessage(exception);
+                failures.Add(publicMessage);
                 AddPendingRecovery(new FeedPendingRecoveryViewModel(
                     pendingTask.OperationId,
                     FeedPendingRecoveryKind.TaskConversion,
                     pendingTask.SourcePath,
-                    exception.Message,
-                    pendingTask.State is FeedTaskConversionState.TaskCreated or FeedTaskConversionState.Completed,
+                    publicMessage,
+                    CanKeepTaskRecovery(pendingTask),
                     FinishPendingRecoveryAsync,
                     KeepBothPendingRecoveryAsync));
             }
@@ -2922,7 +3084,8 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
             }
             catch (Exception exception)
             {
-                failures.Add($"{pendingOperation.OperationId}: {exception.Message}");
+                var publicMessage = RecoveryErrorMessage(exception);
+                failures.Add(publicMessage);
                 AddPendingRecovery(new FeedPendingRecoveryViewModel(
                     pendingOperation.OperationId,
                     pendingOperation.Kind switch
@@ -2933,7 +3096,7 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
                         _ => throw new ArgumentOutOfRangeException()
                     },
                     pendingOperation.SourcePath,
-                    exception.Message,
+                    publicMessage,
                     pendingOperation.Kind != FeedOperationKind.HeadingAreaConversion
                     && pendingOperation.State is FeedOperationState.DestinationCreated or FeedOperationState.Completed,
                     FinishPendingRecoveryAsync,
@@ -2985,7 +3148,7 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                item.Message = exception.Message;
+                item.Message = RecoveryErrorMessage(exception);
                 throw;
             }
         });
@@ -3003,24 +3166,21 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
                 if (item.Kind == FeedPendingRecoveryKind.TaskConversion)
                 {
                     var journal = taskJournalFactory(vaultId);
+                    var pending = await journal.LoadAsync(vaultId, item.OperationId, cancellationToken)
+                        ?? throw new InvalidDataException("The task recovery journal no longer exists.");
+                    if (pending.State == FeedTaskConversionState.Pending && pending.CaptureIntent is { } intent)
+                    {
+                        var target = TaskCreationTarget ?? throw new InvalidOperationException(L10n.Get("FeedRecoveryRetryHint"));
+                        var recovery = pending.RecoveryDescriptor!;
+                        await target.FindOwnedAsync(new FeedTaskDraft(pending.TaskId, pending.OperationId,
+                            recovery.Title, recovery.Description, recovery.IsGoal, recovery.AreaIds), cancellationToken);
+                    }
                     await journal.ResolveKeepBothAsync(vaultId, item.OperationId, cancellationToken)
                         .ConfigureAwait(true);
                     var record = await journal.LoadAsync(vaultId, item.OperationId, cancellationToken)
                             .ConfigureAwait(true)
                         ?? throw new InvalidDataException("The task recovery journal no longer exists.");
-                    var descriptor = record.RecoveryDescriptor
-                        ?? throw new InvalidDataException("The task recovery descriptor is missing.");
-                    await reviewCoordinator.ApplyRecoveredDecisionAsync(
-                            RequireRecoveryReviewSessionId(descriptor.ReviewSessionId),
-                            RequireRecoveryLocators(descriptor.InputLocators, "task inputs"),
-                            ReviewDecision.Kept,
-                            outputs: null,
-                            record.OperationId + "-keep-both",
-                            record.TaskId,
-                            cancellationToken)
-                        .ConfigureAwait(true);
-                    await journal.MarkReviewAppliedAsync(vaultId, item.OperationId, cancellationToken)
-                        .ConfigureAwait(true);
+                    await CheckpointKeptTaskAsync(record, journal, cancellationToken);
                 }
                 else
                 {
@@ -3066,10 +3226,49 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                item.Message = exception.Message;
+                item.Message = RecoveryErrorMessage(exception);
                 throw;
             }
         });
+
+    private static string RecoveryErrorMessage(Exception exception)
+    {
+        System.Diagnostics.Trace.TraceError("Feed recovery: {0}", exception);
+        return exception.Message == L10n.Get("FeedRecoveryDraftOccupied") || exception.Message == L10n.Get("FeedRecoveryDraftRestored")
+            || exception.Message == L10n.Get("FeedRecoveryDraftChangedDestination")
+            ? exception.Message : L10n.Get("FeedRecoveryRetryHint");
+    }
+
+    private async Task<bool> ExposeCurrentReviewRecoveryAsync(CancellationToken cancellationToken)
+    {
+        if (vaultId is null || currentReviewOperationId is null) return false;
+        var id = currentReviewOperationId;
+        var task = await taskJournalFactory(vaultId).LoadAsync(vaultId, id, cancellationToken);
+        if (task is not null && (task.State != FeedTaskConversionState.Completed || !task.ReviewApplied))
+        {
+            AddPendingRecovery(new FeedPendingRecoveryViewModel(id, FeedPendingRecoveryKind.TaskConversion,
+                task.SourcePath, L10n.Get("FeedRecoveryRetryHint"), CanKeepTaskRecovery(task),
+                FinishPendingRecoveryAsync, KeepBothPendingRecoveryAsync));
+            return true;
+        }
+        var operation = await operationJournalFactory(vaultId).LoadAsync(vaultId, id, cancellationToken);
+        if (operation is null || operation.State == FeedOperationState.Completed && operation.ReviewApplied) return false;
+        var kind = operation.Kind switch
+        {
+            FeedOperationKind.NoteExtraction => FeedPendingRecoveryKind.NoteExtraction,
+            FeedOperationKind.MoveToToday => FeedPendingRecoveryKind.MoveToToday,
+            _ => FeedPendingRecoveryKind.HeadingAreaConversion
+        };
+        AddPendingRecovery(new FeedPendingRecoveryViewModel(id, kind, operation.SourcePath,
+            L10n.Get("FeedRecoveryRetryHint"), kind != FeedPendingRecoveryKind.HeadingAreaConversion
+                && operation.State is FeedOperationState.DestinationCreated or FeedOperationState.Completed,
+            FinishPendingRecoveryAsync, KeepBothPendingRecoveryAsync));
+        return true;
+    }
+
+    private bool CanKeepTaskRecovery(FeedTaskConversionRecord record) =>
+        record.State is FeedTaskConversionState.TaskCreated or FeedTaskConversionState.Completed
+        || record.CaptureIntent is not null && TaskCreationTarget?.SupportsReadOnlyLookup == true;
 
     private void AddPendingRecovery(FeedPendingRecoveryViewModel item)
     {
@@ -3126,6 +3325,12 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
             throw new InvalidDataException("The task conversion journal requires explicit legacy recovery.");
         }
 
+        if (pending.RecoveryResolution == FeedOperationRecoveryResolution.KeptBoth)
+        {
+            await CheckpointKeptTaskAsync(pending, journal, cancellationToken);
+            return;
+        }
+
         var target = TaskCreationTarget;
         if (target?.SupportsClassification != true)
         {
@@ -3151,9 +3356,11 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
 
         var descriptor = pending.RecoveryDescriptor
             ?? throw new InvalidDataException("The task conversion journal lost its recovery descriptor.");
-        var inputs = RequireRecoveryLocators(descriptor.InputLocators, "task inputs");
-        var outputs = RequireRecoveryLocators(descriptor.SourceOutputLocators, "task output");
-        await reviewCoordinator.ApplyRecoveredDecisionAsync(
+        if (!string.IsNullOrWhiteSpace(descriptor.ReviewSessionId))
+        {
+            var inputs = RequireRecoveryLocators(descriptor.InputLocators, "task inputs");
+            var outputs = RequireRecoveryLocators(descriptor.SourceOutputLocators, "task output");
+            await reviewCoordinator.ApplyRecoveredDecisionAsync(
                 RequireRecoveryReviewSessionId(descriptor.ReviewSessionId),
                 inputs,
                 ReviewDecision.Converted,
@@ -3161,10 +3368,71 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
                 pending.OperationId,
                 pending.TaskId,
                 cancellationToken)
-            .ConfigureAwait(true);
+                .ConfigureAwait(true);
+        }
 
         await journal.MarkReviewAppliedAsync(vaultId, pending.OperationId, cancellationToken)
             .ConfigureAwait(true);
+        CompleteQuickTaskDraft(pending.OperationId);
+    }
+
+    private async Task CheckpointKeptTaskAsync(FeedTaskConversionRecord record,
+        IFeedTaskConversionJournal journal, CancellationToken cancellationToken)
+    {
+        if (record.RecoveredCaptureWrite is not null)
+        {
+            try
+            {
+                await new FeedCaptureDraftRecoveryService(vault!, journal).ResumeAsync(record, cancellationToken);
+            }
+            catch (VaultRevisionConflictException)
+            {
+                var text = record.RecoveredCaptureWrite.CaptureText;
+                if (!string.IsNullOrEmpty(QuickCaptureText) && QuickCaptureText != text)
+                    throw new InvalidOperationException(L10n.Get("FeedRecoveryDraftOccupied"));
+                pendingQuickTaskCapture = null;
+                recoveredQuickCaptureOperationId = record.OperationId;
+                replanRecoveredQuickCaptureOnSave = true;
+                QuickCaptureText = text;
+                throw new InvalidOperationException(L10n.Get("FeedRecoveryDraftChangedDestination"));
+            }
+            if (recoveredQuickCaptureOperationId == record.OperationId)
+            {
+                recoveredQuickCaptureOperationId = null;
+                replanRecoveredQuickCaptureOnSave = false;
+                if (QuickCaptureText == record.RecoveredCaptureWrite.CaptureText) QuickCaptureText = string.Empty;
+            }
+            return;
+        }
+        // A keep decision is durable before its UI checkpoint. Never resume task creation here.
+        // If the original append is absent, keep the journal pending until the user saves the
+        // recovered draft. Closing the app must not be equivalent to discarding that text.
+        if (record.SourceRevision is null && record.CaptureIntent is { } intent)
+        {
+            var source = await vault!.ReadAsync(record.SourcePath, cancellationToken);
+            // An identical older paragraph is not evidence that this particular append happened.
+            var captureExists = source is not null && (FeedOperationHash.Compute(source.Text) == intent.AppendedTextHash
+                || intent.AppendedText is { Length: > 0 } appended
+                    && FeedOperationHash.Compute(appended) == intent.AppendedTextHash
+                    && source.Text.Contains(appended, StringComparison.Ordinal));
+            if (!captureExists)
+            {
+                if (!string.IsNullOrEmpty(QuickCaptureText) && QuickCaptureText != intent.CaptureText)
+                    throw new InvalidOperationException(L10n.Get("FeedRecoveryDraftOccupied"));
+                pendingQuickTaskCapture = null;
+                recoveredQuickCaptureOperationId = record.OperationId;
+                replanRecoveredQuickCaptureOnSave = false;
+                QuickCaptureText = intent.CaptureText;
+                throw new InvalidOperationException(L10n.Get("FeedRecoveryDraftRestored"));
+            }
+        }
+        var descriptor = record.RecoveryDescriptor!;
+        if (!string.IsNullOrWhiteSpace(descriptor.ReviewSessionId))
+            await reviewCoordinator!.ApplyRecoveredDecisionAsync(
+                descriptor.ReviewSessionId, RequireRecoveryLocators(descriptor.InputLocators, "task inputs"),
+                ReviewDecision.Kept, outputs: null, record.OperationId + "-keep-both", record.TaskId, cancellationToken);
+        await journal.MarkReviewAppliedAsync(record.VaultId, record.OperationId, cancellationToken);
+        CompleteQuickTaskDraft(record.OperationId);
     }
 
     private async Task RecoverPendingMarkdownOperationAsync(
@@ -3334,28 +3602,14 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
 
     private static BlockLocator CreateLocator(string relativePath, MarkdownDocument document, MarkdownBlock target)
     {
-        var occurrence = 0;
-        foreach (var block in document.Blocks.Where(static value => value.IsContent))
-        {
-            if (block.Index == target.Index)
-            {
-                break;
-            }
-
-            if (block.Kind == target.Kind
-                && block.ContentHash == target.ContentHash
-                && string.Equals(block.AreaId ?? block.AreaName, target.AreaId ?? target.AreaName, StringComparison.Ordinal))
-            {
-                occurrence++;
-            }
-        }
-
-        return new BlockLocator(
-            relativePath,
-            target.AreaId ?? target.AreaName,
-            target.Kind,
-            target.ContentHash,
-            occurrence);
+        if (target.IsContent)
+            return FeedReviewQueue.CoveredLocators(relativePath, document,
+                new MarkdownBlockSelection(target.Index, 1)).Single();
+        // A manually selected H1/H2/area heading is not a queue candidate.
+        return new BlockLocator(relativePath, target.AreaId ?? target.AreaName, target.Kind, target.ContentHash,
+            document.Blocks.TakeWhile(block => block.Index != target.Index).Count(block =>
+                block.Kind == target.Kind && block.ContentHash == target.ContentHash
+                && (block.AreaId ?? block.AreaName) == (target.AreaId ?? target.AreaName)));
     }
 
     private FeedDayViewModel? FindDay(string relativePath) => Days.FirstOrDefault(day =>
@@ -3744,8 +3998,11 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
         {
             var key = NormalizePath(nextDay.RelativePath);
             if (previousDays.Remove(key, out var previousDay)
-                && previousDay.MarkdownEditor.ActiveBlock?.IsDirty == true)
+                && (previousDay.MarkdownEditor.ActiveBlock?.IsDirty == true
+                    || previousDay.MarkdownEditor.Snapshot == nextDay.MarkdownEditor.Snapshot))
             {
+                if (previousDay.MarkdownEditor.ActiveBlock?.IsDirty != true)
+                    previousDay.RefreshPresentationFrom(nextDay);
                 nextDay.Dispose();
                 mergedDays.Add(previousDay);
             }
@@ -3773,7 +4030,7 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
             }
         }
 
-        Replace(Days, mergedDays.OrderByDescending(static day => day.Date));
+        ReconcileDays(Days, mergedDays.OrderByDescending(static day => day.Date));
         HasDays = Days.Count > 0;
         LoadedDayCount = Days.Count;
         TotalDayCount = snapshot.TotalDayCount;
@@ -4008,6 +4265,22 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
 
         Areas.Clear();
         Areas.Add(FeedAreaOptionViewModel.NoArea);
+        var hierarchy = AreaManagement?.Areas.Where(static area => !area.IsArchived).ToArray() ?? [];
+        var hierarchyById = hierarchy.ToDictionary(static area => area.Id, StringComparer.Ordinal);
+        foreach (var node in hierarchy)
+        {
+            if (!merged.Remove(node.Id, out var option)) continue;
+            var path = new List<string> { node.Name };
+            var parentId = node.ParentId;
+            var visited = new HashSet<string>(StringComparer.Ordinal) { node.Id };
+            while (parentId is not null && visited.Add(parentId) && hierarchyById.TryGetValue(parentId, out var parent))
+            {
+                path.Insert(0, parent.Name);
+                parentId = parent.ParentId;
+            }
+            Areas.Add(new FeedAreaOptionViewModel(option.Area, option.Identity, option.IsExistingHeadingDestination,
+                option.IsClassificationSelectable, node.Depth, string.Join(" / ", path)));
+        }
         foreach (var area in merged.Values.OrderBy(static area => area.DisplayName, StringComparer.CurrentCultureIgnoreCase))
         {
             Areas.Add(area);
@@ -4233,7 +4506,8 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
             day.ApplyAreaFilter(selectedAreas, allSelected);
         }
 
-        Replace(VisibleDays, Days.Where(static day => day.IsVisibleByAreaFilter));
+        ReconcileDays(VisibleDays, Days.Where(static day => day.IsVisibleByAreaFilter));
+        SetMoveUndoEditor(Days.Select(day => day.MarkdownEditor).FirstOrDefault(editor => editor.HasHiddenMovedBlocks));
         HasVisibleDays = VisibleDays.Count > 0;
         this.RaisePropertyChanged(nameof(ChronologyAutomationName));
     }
@@ -4287,6 +4561,11 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
 
     private async Task CaptureTaskCoreAsync()
     {
+        if (recoveredQuickCaptureOperationId is not null)
+        {
+            ErrorMessage = L10n.Get("FeedRecoveryDraftRestored");
+            return;
+        }
         if (!CanCapture
             || dailyNotes is null
             || vault is null
@@ -4303,7 +4582,16 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
         var areaIds = string.IsNullOrWhiteSpace(SelectedArea?.StableAreaId)
             ? Array.Empty<string>()
             : new[] { SelectedArea!.StableAreaId! };
-        var operationId = Guid.NewGuid().ToString("N");
+        if (pendingQuickTaskCapture is { } pending
+            && (!string.Equals(pending.Capture, capture, StringComparison.Ordinal)
+                || pending.Area != area))
+        {
+            ErrorMessage = L10n.Get("FeedCaptureResolvePrevious");
+            return;
+        }
+        var request = pendingQuickTaskCapture ??= new FeedTaskCaptureRequest(
+            vaultId, Guid.NewGuid().ToString("N"), EffectiveToday, capture, area,
+            Days.FirstOrDefault(day => day.Date == EffectiveToday)?.Revision, areaIds);
         IsBusy = true;
         ErrorMessage = null;
         try
@@ -4311,8 +4599,6 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
             await operationGate.WaitAsync(cancellationToken).ConfigureAwait(true);
             try
             {
-                var today = EffectiveToday;
-                var expectedRevision = Days.FirstOrDefault(day => day.Date == today)?.Revision;
                 var service = new FeedTaskCaptureService(
                     vault,
                     dailyNotes,
@@ -4322,19 +4608,14 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
                     taskJournalFactory(vaultId),
                     revisionStore);
                 var result = await service.CaptureAsync(
-                        new FeedTaskCaptureRequest(
-                            vaultId,
-                            operationId,
-                            today,
-                            capture,
-                            area,
-                            expectedRevision,
-                            areaIds),
+                        request,
                         cancellationToken)
                     .ConfigureAwait(true);
 
                 await ReloadSnapshotAsync(cancellationToken).ConfigureAwait(true);
-                QuickCaptureText = string.Empty;
+                CompleteQuickTaskDraft(request.OperationId);
+                var recovery = PendingRecoveries.FirstOrDefault(item => item.OperationId == request.OperationId);
+                if (recovery is not null) RemovePendingRecovery(recovery);
                 QuickCaptureCreatedTaskReference = new FeedTaskReferenceViewModel(
                     result.TaskId,
                     result.Title,
@@ -4351,7 +4632,32 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
         }
         catch (Exception exception)
         {
-            ErrorMessage = exception.Message;
+            System.Diagnostics.Trace.TraceError("Feed quick task {0}: {1}", request.OperationId, exception);
+            var message = L10n.Get("FeedCaptureRetryFailed");
+            try
+            {
+                var record = await taskJournalFactory(request.VaultId)
+                    .LoadAsync(request.VaultId, request.OperationId, cancellationToken).ConfigureAwait(true);
+                if (record is not null)
+                {
+                    var created = record.State is FeedTaskConversionState.TaskCreated or FeedTaskConversionState.Completed;
+                    message = L10n.Get(created ? "FeedCaptureLinkPending" : "FeedCaptureRetryFailed");
+                    if (!PendingRecoveries.Any(item => item.OperationId == request.OperationId))
+                        AddPendingRecovery(new FeedPendingRecoveryViewModel(request.OperationId,
+                            FeedPendingRecoveryKind.TaskConversion, record.SourcePath, message, CanKeepTaskRecovery(record),
+                            FinishPendingRecoveryAsync, KeepBothPendingRecoveryAsync));
+                }
+                else
+                {
+                    // Nothing durable was started: a corrected draft can get a new operation.
+                    pendingQuickTaskCapture = null;
+                }
+            }
+            catch (Exception recoveryException) when (recoveryException is not OperationCanceledException)
+            {
+                System.Diagnostics.Trace.TraceError("Feed capture recovery lookup: {0}", recoveryException);
+            }
+            if (!cancellationToken.IsCancellationRequested) ErrorMessage = message;
         }
         finally
         {
@@ -4360,6 +4666,14 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
                 IsBusy = false;
             }
         }
+    }
+
+    private void CompleteQuickTaskDraft(string operationId)
+    {
+        if (pendingQuickTaskCapture?.OperationId != operationId) return;
+        if (string.Equals(QuickCaptureText, pendingQuickTaskCapture.Capture, StringComparison.Ordinal))
+            QuickCaptureText = string.Empty;
+        pendingQuickTaskCapture = null;
     }
 
     private void InstallPreparedAuxiliaryViewModels(FeedAuxiliaryViewModels auxiliary)
@@ -4398,12 +4712,82 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
         _ = AreaManagement.LoadAsync();
     }
 
-    private async Task OpenThematicFileAsync(string relativePath)
+    public async Task OpenVaultLinkAsync(string target, string? sourcePath, bool wikiLink = true)
+    {
+        var navigation = ++noteNavigationGeneration;
+        var sourceVault = vault;
+        var token = GetSessionToken();
+        if (sourceVault is null || isDisposed) return;
+        try
+        {
+            var parts = target.Split('#', 2);
+            var path = Uri.UnescapeDataString(parts[0]).Replace('\\', '/');
+            if (path.Contains(':') || Path.IsPathRooted(path)) throw new InvalidDataException();
+            if (path.Length == 0) path = sourcePath ?? string.Empty;
+            else if (!path.EndsWith(".md", StringComparison.OrdinalIgnoreCase)) path += ".md";
+            if (!wikiLink && sourcePath is not null && parts[0].Length > 0)
+                path = Path.GetRelativePath(sourceVault.RootPath, Path.GetFullPath(Path.Combine(
+                    sourceVault.RootPath, Path.GetDirectoryName(sourcePath) ?? string.Empty, path))).Replace('\\', '/');
+            _ = sourceVault.ResolveSafePath(path);
+            var document = await sourceVault.ReadAsync(path, token);
+            if (document is null && wikiLink && !path.Contains('/'))
+            {
+                var matches = (await sourceVault.ListMarkdownFilesAsync(token))
+                    .Where(candidate => string.Equals(Path.GetFileName(candidate), path, StringComparison.OrdinalIgnoreCase)).ToArray();
+                if (matches.Length == 1)
+                {
+                    path = matches[0];
+                    document = await sourceVault.ReadAsync(path, token);
+                }
+            }
+            token.ThrowIfCancellationRequested();
+            if (!ReferenceEquals(sourceVault, vault) || navigation != noteNavigationGeneration) return;
+            if (document is null) throw new FileNotFoundException();
+            if (dailyNoteNaming.TryParseRelativePath(path, out _))
+            {
+                await LoadThroughSearchDayAsync(path, token);
+                token.ThrowIfCancellationRequested();
+                if (navigation != noteNavigationGeneration) return;
+                var day = FindDay(path) ?? throw new FileNotFoundException();
+                var blockIndex = day.MarkdownEditor.Blocks.FirstOrDefault(block => block.IsEditable)?.Index ?? 0;
+                if (parts.Length == 2 && parts[1].StartsWith('^'))
+                {
+                    var anchorIndex = day.MarkdownEditor.Blocks.FirstOrDefault(block => block.Block.Raw.Trim() == parts[1])?.Index
+                        ?? throw new FileNotFoundException();
+                    blockIndex = day.MarkdownEditor.Blocks.LastOrDefault(block => block.Index < anchorIndex && block.Block.IsContent)?.Index
+                        ?? anchorIndex;
+                }
+                SearchNavigationStarting?.Invoke(this, EventArgs.Empty);
+                SearchQuery = string.Empty;
+                ResetFeedAreaFilterCommand.Execute(null);
+                SelectedDay = day;
+                SearchNavigationRequested?.Invoke(this, new FeedSearchNavigationRequestedEventArgs(path, day.MarkdownEditor, blockIndex, day));
+            }
+            else
+            {
+                await OpenThematicFileAsync(path, navigation);
+            }
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        catch (Exception exception)
+        {
+            System.Diagnostics.Trace.TraceError("Feed link navigation: {0}", exception);
+            if (!token.IsCancellationRequested && ReferenceEquals(sourceVault, vault)
+                && navigation == noteNavigationGeneration) ErrorMessage = L10n.Get("FeedNoteLinkUnavailable");
+        }
+    }
+
+    private Task OpenThematicFileAsync(string relativePath) =>
+        OpenThematicFileAsync(relativePath, ++noteNavigationGeneration);
+
+    private async Task OpenThematicFileAsync(string relativePath, long navigation)
     {
         var sourceVault = vault ?? throw new InvalidOperationException("The note vault is unavailable.");
         var cancellationToken = GetSessionToken();
         var document = await sourceVault.ReadAsync(relativePath, cancellationToken).ConfigureAwait(true)
             ?? throw new FileNotFoundException("The selected note no longer exists.", relativePath);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!ReferenceEquals(sourceVault, vault) || navigation != noteNavigationGeneration) return;
         var pathHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(NormalizePath(relativePath))))
             .ToLowerInvariant()[..12];
         var editor = CreateMarkdownEditor(
@@ -4420,6 +4804,12 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
             await OfferLatestRecoveryDraftAsync(editor, watchRuntime, relativePath, cancellationToken)
                 .ConfigureAwait(true);
         }
+        if (cancellationToken.IsCancellationRequested || !ReferenceEquals(sourceVault, vault)
+            || navigation != noteNavigationGeneration)
+        {
+            editor.Dispose();
+            return;
+        }
         var previous = OpenedThematicFile;
         OpenedThematicFile = new FeedThematicDocumentViewModel(relativePath, editor);
         previous?.Dispose();
@@ -4427,6 +4817,7 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
 
     private void CloseThematicFile()
     {
+        ++noteNavigationGeneration;
         var previous = OpenedThematicFile;
         OpenedThematicFile = null;
         previous?.Dispose();
@@ -4474,7 +4865,9 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
 
     private async Task RefreshMarkdownFromWatcherAsync(CancellationToken cancellationToken)
     {
-        await RefreshCoreAsync().ConfigureAwait(true);
+        // An external file notification is not acknowledgement of a failed user
+        // operation. Keep its recovery/conflict explanation visible after refresh.
+        await RefreshCoreAsync(clearError: false).ConfigureAwait(true);
         if (FilesDrawer is not null)
         {
             await FilesDrawer.RefreshAsync().ConfigureAwait(true);
@@ -5059,6 +5452,11 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
             return;
         }
 
+        var navigation = ++noteNavigationGeneration;
+        var cancellationToken = GetSessionToken();
+        var sourceVault = vault;
+        bool IsCurrent() => navigation == noteNavigationGeneration && !cancellationToken.IsCancellationRequested
+            && ReferenceEquals(sourceVault, vault);
         ErrorMessage = null;
         try
         {
@@ -5072,15 +5470,14 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
                 return;
             }
 
-            var sourceVault = vault;
             var index = searchIndex;
             if (sourceVault is null || index is null)
             {
                 return;
             }
 
-            var cancellationToken = GetSessionToken();
             var document = await sourceVault.ReadAsync(result.RelativePath, cancellationToken).ConfigureAwait(true);
+            if (!IsCurrent()) return;
             if (document is null)
             {
                 index.Remove(result.RelativePath);
@@ -5106,6 +5503,7 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
                 if (day is null)
                 {
                     await LoadThroughSearchDayAsync(current.RelativePath, cancellationToken).ConfigureAwait(true);
+                    if (!IsCurrent()) return;
                     index = searchIndex;
                     current = index?.ResolveCurrentAnchor(result.Entry, query);
                     day = current is null ? null : FindDay(current.RelativePath);
@@ -5113,6 +5511,7 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
                 else if (day.MarkdownEditor.Snapshot?.ExpectedRevisionHash != document.Revision)
                 {
                     await RefreshCoreAsync().ConfigureAwait(true);
+                    if (!IsCurrent()) return;
                     index = searchIndex;
                     current = index?.ResolveCurrentAnchor(result.Entry, query);
                     day = current is null ? null : FindDay(current.RelativePath);
@@ -5139,7 +5538,8 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
                 return;
             }
 
-            await OpenThematicFileAsync(current.RelativePath).ConfigureAwait(true);
+            await OpenThematicFileAsync(current.RelativePath, navigation).ConfigureAwait(true);
+            if (!IsCurrent()) return;
             var thematic = OpenedThematicFile;
             if (thematic is null
                 || !TryResolveSearchBlock(thematic.MarkdownEditor, current, out _))
@@ -5159,12 +5559,12 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
                     current.BlockIndex,
                     null));
         }
-        catch (OperationCanceledException) when (GetSessionToken().IsCancellationRequested)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
         }
         catch (Exception exception)
         {
-            ErrorMessage = exception.Message;
+            if (IsCurrent()) ErrorMessage = exception.Message;
         }
     }
 
@@ -5635,6 +6035,12 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
 
     private void ResetVisibleState()
     {
+        if (vaultId is not null)
+        {
+            captureDraftsByVault[vaultId] = new CaptureSessionDraft(QuickCaptureText, SelectedArea?.Identity,
+                pendingQuickTaskCapture, recoveredQuickCaptureOperationId, replanRecoveredQuickCaptureOnSave);
+            QuickCaptureText = string.Empty;
+        }
         CancelBackgroundSearchIndexing();
         vault = null;
         dailyNotes = null;
@@ -5675,6 +6081,11 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
         ClearReviewSelection();
         QuickCaptureCreatedTaskReference = null;
         ScheduleSearchResultsRefresh();
+        pendingQuickTaskCapture = null;
+        recoveredQuickCaptureOperationId = null;
+        replanRecoveredQuickCaptureOnSave = false;
+        IsReviewReminderDismissed = false;
+        SetMoveUndoEditor(null);
         Areas.Clear();
         Areas.Add(FeedAreaOptionViewModel.NoArea);
         SelectedArea = Areas[0];
@@ -6255,14 +6666,16 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
         RxSchedulers.MainThreadScheduler.Schedule(Apply);
     }
 
-    private Task DispatchNotificationAsync(Action action)
+    private async Task DispatchNotificationAsync(Action action)
     {
         ArgumentNullException.ThrowIfNull(action);
         if (isDisposed)
         {
-            return Task.CompletedTask;
+            return;
         }
 
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(GetSessionToken(), notificationLifetime.Token);
+        var token = linked.Token;
         var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         try
         {
@@ -6270,7 +6683,7 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
             {
                 try
                 {
-                    action();
+                    if (!token.IsCancellationRequested) action();
                     completion.TrySetResult();
                 }
                 catch (Exception exception)
@@ -6284,7 +6697,8 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
             completion.TrySetException(exception);
         }
 
-        return completion.Task;
+        try { await completion.Task.WaitAsync(token).ConfigureAwait(false); }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
     }
 
     private static string CreateDefaultDeviceId()
@@ -6349,6 +6763,20 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
         }
     }
 
+    private static void ReconcileDays(ObservableCollection<FeedDayViewModel> target, IEnumerable<FeedDayViewModel> source)
+    {
+        // Reset detaches even unchanged editors, losing keyboard focus after autosave/merge.
+        var desired = source.ToArray();
+        for (var index = 0; index < desired.Length; index++)
+        {
+            if (index < target.Count && ReferenceEquals(target[index], desired[index])) continue;
+            var existing = target.IndexOf(desired[index]);
+            if (existing >= 0) target.Move(existing, index);
+            else target.Insert(index, desired[index]);
+        }
+        while (target.Count > desired.Length) target.RemoveAt(target.Count - 1);
+    }
+
     private static string NormalizePath(string path) => path.Replace('\\', '/');
 
     private static Func<string, string?> CreateUniqueAreaNameResolver(IEnumerable<AreaDefinition> areas)
@@ -6394,6 +6822,7 @@ public sealed class FeedViewModel : ReactiveObject, IDisposable
             rootReconfigureGeneration++;
         }
 
+        notificationLifetime.Cancel();
         notificationDispatcher = null;
         DetachTaskSearchTracking();
         CancelBackgroundSearchIndexing();
@@ -6732,11 +7161,11 @@ public sealed class FeedDayViewModel(
 
     public string RelativePath { get; } = relativePath;
 
-    public string Text { get; } = text;
+    public string Text { get; private set; } = text;
 
-    public string Revision { get; } = revision;
+    public string Revision { get; private set; } = revision;
 
-    public int ContentBlockCount { get; } = contentBlockCount;
+    public int ContentBlockCount { get; private set; } = contentBlockCount;
 
     public string DisplayDate => Date.ToString("D", CultureInfo.CurrentCulture);
 
@@ -6761,6 +7190,15 @@ public sealed class FeedDayViewModel(
     public string AutomationName => DisplayDate;
 
     public override string ToString() => AutomationName;
+
+    internal void RefreshPresentationFrom(FeedDayViewModel day)
+    {
+        Text = day.Text;
+        Revision = day.Revision;
+        ContentBlockCount = day.ContentBlockCount;
+        TaskReferences.Clear();
+        foreach (var reference in day.TaskReferences) TaskReferences.Add(reference);
+    }
 
     public void ApplyAreaFilter(IReadOnlyCollection<FeedAreaFilterSelection> selectedAreas, bool showAll)
     {
@@ -6837,13 +7275,17 @@ public sealed class FeedAreaOptionViewModel
         AreaReference? area,
         string? identity = null,
         bool isExistingHeadingDestination = false,
-        bool? isClassificationSelectable = null)
+        bool? isClassificationSelectable = null,
+        int depth = 0,
+        string? displayPath = null)
     {
         Area = area;
         Identity = identity ?? area?.Id ?? string.Empty;
         IsExistingHeadingDestination = isExistingHeadingDestination;
         IsClassificationSelectable = isClassificationSelectable
             ?? !string.IsNullOrWhiteSpace(area?.Id);
+        Depth = depth;
+        DisplayPath = displayPath ?? area?.Name ?? L10n.Get("FeedNoArea");
     }
 
     public AreaReference? Area { get; }
@@ -6863,9 +7305,15 @@ public sealed class FeedAreaOptionViewModel
 
     public string DisplayName => Area?.Name ?? L10n.Get("FeedNoArea");
 
+    public int Depth { get; }
+
+    public string DisplayPath { get; }
+
     public string DestinationDisplayName => IsUnclassifiedHeadingDestination
-        ? $"{DisplayName} · {L10n.Get("FeedNoArea")}"
-        : DisplayName;
+        ? $"{DisplayPath} · {L10n.Get("FeedNoArea")}"
+        : DisplayPath;
+
+    public override string ToString() => DestinationDisplayName;
 }
 
 public sealed class FeedAreaFilterOptionViewModel : ReactiveObject
@@ -6960,6 +7408,8 @@ public sealed class FeedSearchResultViewModel
         Func<string, string>? resolveAreaName = null)
     {
         Entry = entry;
+        Text = MarkdownLiveBlockViewModel.ToReadableText(entry.Text);
+        Context = MarkdownLiveBlockViewModel.ToReadableText(entry.Context);
         var automationHash = SHA256.HashData(Encoding.UTF8.GetBytes(entry.Key));
         AutomationId = "FeedSearchResult-" + Convert.ToHexString(automationHash.AsSpan(0, 8)).ToLowerInvariant();
         DisplayAreas = entry.AreaIdentities.Count == 0
@@ -6976,9 +7426,9 @@ public sealed class FeedSearchResultViewModel
 
     public DateOnly? Date => Entry.Date;
 
-    public string Text => Entry.Text;
+    public string Text { get; }
 
-    public string Context => Entry.Context;
+    public string Context { get; }
 
     public string DisplayAreas { get; }
 

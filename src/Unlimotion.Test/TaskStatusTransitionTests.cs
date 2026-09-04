@@ -518,7 +518,7 @@ public class TaskStatusTransitionTests
     [Test]
     public async Task TaskItemViewModel_StatusOptions_EnablesCompletedWhenCriterionBecomesSatisfied()
     {
-        var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        var session = HeadlessUnitTestSession.StartNew(typeof(SkiaHeadlessAppBuilder));
         var storage = new InMemoryStorage();
         using var taskStorage = new UnifiedTaskStorage(new TaskTreeManager(storage));
         TaskItemViewModel viewModel = null!;
@@ -582,7 +582,7 @@ public class TaskStatusTransitionTests
         var previousInterval = TaskItemViewModel.InProgressElapsedRefreshInterval;
         var previousScheduler = TaskItemViewModel.InProgressElapsedRefreshScheduler;
         TaskItemViewModel.InProgressElapsedRefreshInterval = TimeSpan.FromMilliseconds(10);
-        var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        var session = HeadlessUnitTestSession.StartNew(typeof(SkiaHeadlessAppBuilder));
 
         try
         {
