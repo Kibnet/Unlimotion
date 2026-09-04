@@ -28,10 +28,22 @@
             <Setter Property="TextWrapping" Value="Wrap" />
             <Setter Property="Margin" Value="0,4,0,12" />
         </Style>
+        <Style Selector="Label.SectionHint">
+            <Setter Property="Opacity" Value="0.75" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0,4,0,12" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        </Style>
         <Style Selector="TextBlock.StatusText">
             <Setter Property="TextWrapping" Value="Wrap" />
             <Setter Property="Opacity" Value="0.85" />
             <Setter Property="Margin" Value="0,8,0,0" />
+        </Style>
+        <Style Selector="Label.StatusText">
+            <Setter Property="Opacity" Value="0.85" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0,8,0,0" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
         </Style>
         <Style Selector="StackPanel.FieldGroup">
             <Setter Property="Spacing" Value="6" />
@@ -382,7 +394,100 @@
             </Border>
 
             <Border Classes="SettingsSection"
-                    IsEnabled="{Binding !IsTaskSpaceSwitching}">
+                    IsEnabled="{Binding !IsTaskSpaceSwitching}"
+                    AutomationProperties.AutomationId="NoteVaultSettingsSection">
+                <StackPanel>
+                    <TextBlock Classes="SectionTitle" Text="{DynamicResource NoteVaultTitle}" />
+                    <TextBlock Classes="SectionHint" Text="{DynamicResource NoteVaultHint}" />
+
+                    <StackPanel Classes="FieldGroup"
+                                IsVisible="{Binding IsExternalNoteVaultSupported}">
+                        <TextBlock Classes="FieldLabel" Text="{DynamicResource FeedMode}" />
+                        <CheckBox AutomationProperties.AutomationId="FeedEnabledCheckBox"
+                                  IsChecked="{Binding IsFeedEnabled, Mode=TwoWay}"
+                                  IsEnabled="{Binding CanEditNoteVaultSettings}"
+                                  IsVisible="{Binding IsExternalNoteVaultSupported}"
+                                  Content="{DynamicResource Enabled}" />
+                    </StackPanel>
+
+                    <StackPanel Classes="FieldGroup">
+                        <TextBlock Classes="FieldLabel" Text="{DynamicResource NoteVaultFolder}" />
+                        <Grid Classes="FieldActionRow" ColumnDefinitions="*,Auto">
+                            <TextBox AutomationProperties.AutomationId="NoteVaultRootPathTextBox"
+                                      Text="{Binding NoteVaultRootPath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                      ToolTip.Tip="{Binding NoteVaultRootPath}"
+                                      IsReadOnly="{Binding !CanEditNoteVaultSettings}" />
+                            <Button Grid.Column="1"
+                                    AutomationProperties.AutomationId="BrowseNoteVaultRootPathButton"
+                                    Content="{DynamicResource Browse}"
+                                    Command="{Binding BrowseNoteVaultRootPathCommand}"
+                                    IsEnabled="{Binding CanEditNoteVaultSettings}" />
+                        </Grid>
+                    </StackPanel>
+
+                    <StackPanel Classes="FieldGroup"
+                                AutomationProperties.ControlTypeOverride="Group"
+                                AutomationProperties.IsControlElementOverride="True"
+                                AutomationProperties.AutomationId="NoteDailyFileNameFormatSection"
+                                AutomationProperties.Name="{DynamicResource NoteDailyFileNameFormat}">
+                        <TextBlock Classes="FieldLabel"
+                                   Text="{DynamicResource NoteDailyFileNameFormat}" />
+                        <TextBox AutomationProperties.AutomationId="NoteDailyFileNameFormatTextBox"
+                                 Text="{Binding NoteDailyFileNameFormatDraft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                 IsReadOnly="{Binding IsNoteDailyFileNameFormatReadOnly}" />
+                        <Label Classes="SectionHint"
+                               AutomationProperties.AutomationId="NoteDailyFileNameFormatPreviewText"
+                               AutomationProperties.Name="{Binding NoteDailyFileNameFormatPreviewText}"
+                               Content="{Binding NoteDailyFileNameFormatPreviewText}" />
+                        <TextBlock Classes="SectionHint"
+                                   Text="{DynamicResource NoteDailyFileNameFormatHint}" />
+                        <Label Classes="StatusText"
+                               AutomationProperties.AutomationId="NoteDailyFileNameFormatValidationText"
+                               AutomationProperties.Name="{Binding NoteDailyFileNameFormatValidationMessage}"
+                               Content="{Binding NoteDailyFileNameFormatValidationMessage}"
+                               IsVisible="{Binding IsNoteDailyFileNameFormatValidationVisible}"
+                               AutomationProperties.LiveSetting="Polite" />
+                        <TextBlock Classes="SectionHint"
+                                   Text="{DynamicResource NoteDailyFileNameFormatRootRequired}"
+                                   IsVisible="{Binding IsNoteDailyFileNameFormatRootRequiredVisible}" />
+                        <WrapPanel Classes="ActionButtons">
+                            <Button Content="{DynamicResource NoteDailyFileNameFormatApply}"
+                                    Command="{Binding ApplyNoteDailyFileNameFormatCommand}"
+                                    IsEnabled="{Binding CanApplyNoteDailyFileNameFormat}"
+                                    AutomationProperties.AutomationId="ApplyNoteDailyFileNameFormatButton" />
+                            <Button Content="{DynamicResource NoteDailyFileNameFormatReloadExternal}"
+                                    Command="{Binding ReloadExternalNoteDailyFileNameFormatCommand}"
+                                    IsEnabled="{Binding CanReloadExternalNoteDailyFileNameFormat}"
+                                    IsVisible="{Binding HasExternalNoteDailyFileNameFormatChange}"
+                                    AutomationProperties.AutomationId="ReloadExternalNoteDailyFileNameFormatButton" />
+                        </WrapPanel>
+                        <Label Classes="StatusText"
+                               AutomationProperties.AutomationId="NoteDailyFileNameFormatStatusText"
+                               AutomationProperties.Name="{Binding NoteDailyFileNameFormatStatusText}"
+                               Content="{Binding NoteDailyFileNameFormatStatusText}"
+                               IsVisible="{Binding IsNoteDailyFileNameFormatStatusVisible}"
+                               AutomationProperties.LiveSetting="Polite" />
+                        <TextBlock Classes="SectionHint"
+                                   Text="{DynamicResource NoteDailyFileNameFormatWarning}" />
+                    </StackPanel>
+
+                    <StackPanel Classes="FieldGroup"
+                                IsEnabled="{Binding CanEditNoteVaultSettings}">
+                        <TextBlock Classes="FieldLabel" Text="{DynamicResource NoteDayBoundary}" />
+                        <TimePicker AutomationProperties.AutomationId="NoteDayBoundaryTimePicker"
+                                    IsEnabled="{Binding CanEditNoteVaultSettings}"
+                                    SelectedTime="{Binding NoteDayBoundary, Mode=TwoWay}" />
+                        <TextBlock Classes="SectionHint"
+                                   Text="{DynamicResource NoteDayBoundaryHint}" />
+                    </StackPanel>
+
+                    <TextBlock Classes="StatusText"
+                               Text="{DynamicResource NoteVaultDesktopOnlyHint}"
+                               IsVisible="{Binding !IsExternalNoteVaultSupported}" />
+                </StackPanel>
+            </Border>
+
+            <Border Classes="SettingsSection">
                 <StackPanel>
                     <TextBlock Classes="SectionTitle" Text="{DynamicResource BackupTitle}" />
                     <TextBlock Classes="SectionHint" Text="{DynamicResource BackupHint}" />

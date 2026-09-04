@@ -7,6 +7,7 @@ using TUnit.Assertions;
 using TUnit.Core;
 using Unlimotion.AppAutomation.TestHost;
 using Unlimotion.UiTests.Authoring.Pages;
+using Unlimotion.UiTests.Headless.Infrastructure;
 using Unlimotion.ViewModel;
 
 namespace Unlimotion.UiTests.Headless.Tests;
@@ -22,7 +23,9 @@ public sealed class SettingsRemoteTypeHeadlessTests
             DesktopAppSession.Launch(
                 UnlimotionAppLaunchHost.CreateHeadlessLaunchOptions(
                     UnlimotionAutomationScenario.GitRemoteSwitch,
-                    afterViewModelPrepared: vm => _vm = vm)));
+                    afterViewModelPrepared: vm => _vm = vm,
+                    viewModelFactoryDispatcher: factory => HeadlessRuntime.Dispatch(factory),
+                    headlessWindowCleanup: HeadlessSessionHooks.CloseWindow)));
     }
 
     protected override MainWindowPage CreatePage(MainWindowHeadlessTests.HeadlessRuntimeSession session)
@@ -34,7 +37,7 @@ public sealed class SettingsRemoteTypeHeadlessTests
     [NotInParallel(DesktopUiConstraint)]
     public async Task Settings_remote_type_switch_creates_ssh_copy_for_single_http_remote()
     {
-        Page.SelectTabItem(static page => page.SettingsTabItem, timeoutMs: 10_000);
+        Page.ClickButton(static page => page.GlobalSettingsButton);
         _ = WaitUntil(
             () => TryResolveDuringWait(() => Page.SettingsRoot),
             static control => control is not null,
@@ -118,7 +121,7 @@ public sealed class SettingsRemoteTypeHeadlessTests
     [NotInParallel(DesktopUiConstraint)]
     public async Task Settings_refresh_metadata_fills_empty_remote_url_from_current_local_storage()
     {
-        Page.SelectTabItem(static page => page.SettingsTabItem, timeoutMs: 10_000);
+        Page.ClickButton(static page => page.GlobalSettingsButton);
         _ = WaitUntil(
             () => TryResolveDuringWait(() => Page.SettingsRoot),
             static control => control is not null,

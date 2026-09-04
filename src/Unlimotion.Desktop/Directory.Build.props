@@ -1,7 +1,10 @@
 <Project>
+  <Import Project="..\Directory.Build.props" />
+
   <PropertyGroup>
     <Company>Kibnet</Company>
     <Authors>Kibnet</Authors>
     <Product>Unlimotion</Product>
+    <BaseIntermediateOutputPath>obj\$(MSBuildProjectName)\</BaseIntermediateOutputPath>
   </PropertyGroup>
 </Project>

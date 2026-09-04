@@ -8,6 +8,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Unlimotion.Behavior;
@@ -25,7 +26,8 @@ public class MainControlNewTaskDeadlineUiTests
     {
         await RunCreateTaskScenarioAsync(
             selectedTaskId: MainWindowViewModelFixture.RepeateTask9Id,
-            commandSelector: vm => vm.Create);
+            commandSelector: vm => vm.Create,
+            menuItemAutomationId: "GlobalTaskCreateTaskMenuItem");
     }
 
     [Test]
@@ -33,7 +35,8 @@ public class MainControlNewTaskDeadlineUiTests
     {
         await RunCreateTaskScenarioAsync(
             selectedTaskId: MainWindowViewModelFixture.RepeateTask9Id,
-            commandSelector: vm => vm.CreateSibling);
+            commandSelector: vm => vm.CreateSibling,
+            menuItemAutomationId: "GlobalTaskCreateSiblingMenuItem");
     }
 
     [Test]
@@ -42,6 +45,7 @@ public class MainControlNewTaskDeadlineUiTests
         await RunCreateTaskScenarioAsync(
             selectedTaskId: MainWindowViewModelFixture.RepeateTask9Id,
             commandSelector: vm => vm.CreateSibling,
+            menuItemAutomationId: "GlobalTaskCreateSiblingMenuItem",
             selectedTaskCreatedInFuture: true);
     }
 
@@ -50,7 +54,8 @@ public class MainControlNewTaskDeadlineUiTests
     {
         await RunCreateTaskScenarioAsync(
             selectedTaskId: MainWindowViewModelFixture.RepeateTask9Id,
-            commandSelector: vm => vm.CreateInner);
+            commandSelector: vm => vm.CreateInner,
+            menuItemAutomationId: "GlobalTaskCreateInnerMenuItem");
     }
 
     [Test]
@@ -59,6 +64,7 @@ public class MainControlNewTaskDeadlineUiTests
         await RunCreateTaskScenarioAsync(
             selectedTaskId: MainWindowViewModelFixture.RepeateTask9Id,
             commandSelector: vm => vm.CreateInner,
+            menuItemAutomationId: "GlobalTaskCreateInnerMenuItem",
             selectedTaskCreatedInFuture: true);
     }
 
@@ -68,6 +74,7 @@ public class MainControlNewTaskDeadlineUiTests
         await RunCreateTaskScenarioAsync(
             selectedTaskId: MainWindowViewModelFixture.RootTask2Id,
             commandSelector: vm => vm.Create,
+            menuItemAutomationId: "GlobalTaskCreateTaskMenuItem",
             setDatesThroughPicker: true);
     }
 
@@ -161,9 +168,10 @@ public class MainControlNewTaskDeadlineUiTests
                 TestHelpers.SetCurrentTask(vm, currentTask!.Id);
                 vm.SelectCurrentTask();
 
-                var view = new MainControl { DataContext = vm };
+                var view = new MainScreen { DataContext = vm };
                 window = CreateWindow(view);
                 window.Show();
+                window.Activate();
                 Dispatcher.UIThread.RunJobs();
 
                 var durationTextBox = FindPlannedDurationTextBox(view, currentTask);
@@ -173,7 +181,7 @@ public class MainControlNewTaskDeadlineUiTests
                 Dispatcher.UIThread.RunJobs();
 
                 var taskCountBefore = vm.taskRepository!.Tasks.Count;
-                ExecuteCreateCommandThroughMenu(view, vm.Create);
+                ExecuteCreateCommandThroughMenu(view, "GlobalTaskCreateTaskMenuItem");
                 Dispatcher.UIThread.RunJobs();
 
                 var created = WaitFor(() =>
@@ -245,6 +253,7 @@ public class MainControlNewTaskDeadlineUiTests
     private static async Task RunCreateTaskScenarioAsync(
         string selectedTaskId,
         Func<MainWindowViewModel, System.Windows.Input.ICommand> commandSelector,
+        string menuItemAutomationId,
         bool setDatesThroughPicker = false,
         bool selectedTaskCreatedInFuture = false)
     {
@@ -271,7 +280,7 @@ public class MainControlNewTaskDeadlineUiTests
                 TestHelpers.SetCurrentTask(vm, taskWithDeadline!.Id);
                 vm.SelectCurrentTask();
 
-                var view = new MainControl { DataContext = vm };
+                var view = new MainScreen { DataContext = vm };
                 window = CreateWindow(view);
                 window.Show();
                 window.Activate();
@@ -301,7 +310,8 @@ public class MainControlNewTaskDeadlineUiTests
 
                 var taskCountBefore = vm.taskRepository!.Tasks.Count;
                 var createCommand = commandSelector(vm);
-                ExecuteCreateCommandThroughMenu(view, createCommand);
+                await Assert.That(createCommand.CanExecute(null)).IsTrue();
+                ExecuteCreateCommandThroughMenu(view, menuItemAutomationId);
                 Dispatcher.UIThread.RunJobs();
 
                 var created = WaitFor(() =>
@@ -345,24 +355,54 @@ public class MainControlNewTaskDeadlineUiTests
 
     private static void ExecuteCreateCommandThroughMenu(
         Control root,
-        System.Windows.Input.ICommand createCommand)
+        string menuItemAutomationId)
     {
         var createMenuButton = root.GetVisualDescendants()
-            .OfType<DropDownButton>()
+            .OfType<Button>()
             .First(button =>
                 string.Equals(
                     AutomationProperties.GetAutomationId(button),
-                    "GlobalTaskCreateMenuButton",
-                    StringComparison.Ordinal) &&
-                button.IsVisible &&
-                button.IsEnabled);
+                    "GlobalCreateMenuButton",
+                    StringComparison.Ordinal));
 
-        if (!createCommand.CanExecute(null))
+        if (!createMenuButton.IsVisible || !createMenuButton.IsEnabled)
         {
-            throw new InvalidOperationException("Expected create command to be executable from the global create menu.");
+            throw new InvalidOperationException(
+                $"Expected global create menu button to be visible and enabled, but " +
+                $"IsVisible={createMenuButton.IsVisible}, IsEnabled={createMenuButton.IsEnabled}.");
         }
 
-        createCommand.Execute(null);
+        if (createMenuButton.Flyout is not MenuFlyout menuFlyout)
+        {
+            throw new InvalidOperationException("Global create button should use a MenuFlyout.");
+        }
+
+        menuFlyout.ShowAt(createMenuButton);
+        Dispatcher.UIThread.RunJobs();
+
+        try
+        {
+            var menuItem = menuFlyout.Items
+                .OfType<MenuItem>()
+                .First(item => string.Equals(
+                    AutomationProperties.GetAutomationId(item),
+                    menuItemAutomationId,
+                    StringComparison.Ordinal));
+
+            if (!menuItem.IsVisible || !menuItem.IsEnabled)
+            {
+                throw new InvalidOperationException(
+                    $"Expected create menu item '{menuItemAutomationId}' to be visible and enabled.");
+            }
+
+            menuItem.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent, menuItem));
+            Dispatcher.UIThread.RunJobs();
+        }
+        finally
+        {
+            menuFlyout.Hide();
+            Dispatcher.UIThread.RunJobs();
+        }
     }
 
     private static TextBox FindPlannedDurationTextBox(Control root, TaskItemViewModel task)

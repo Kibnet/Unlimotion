@@ -24,7 +24,7 @@ public sealed class TaskSpacesFlaUiTests
     {
         var launchOptions = UnlimotionAppLaunchHost.CreateDesktopLaunchOptions(
             UnlimotionAutomationScenario.TaskSpaces,
-            buildBeforeLaunch: false,
+            buildBeforeLaunch: true,
             mainWindowTimeout: TimeSpan.FromSeconds(90));
         _configPath = launchOptions.Arguments
             .Single(argument => argument.StartsWith("--config=", StringComparison.Ordinal))
@@ -124,7 +124,7 @@ public sealed class TaskSpacesFlaUiTests
     {
         var page = new MainWindowPage(
             new FlaUiControlResolver(session.MainWindow, session.ConditionFactory));
-        page.SelectTabItem(static currentPage => currentPage.SettingsTabItem, timeoutMs: 10_000);
+        page.ClickButton(static currentPage => currentPage.GlobalSettingsButton);
         WaitUntil(
             () => session.MainWindow.FindFirstDescendant(
                     session.ConditionFactory.ByAutomationId("TaskSpacesList"))

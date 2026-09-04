@@ -1,0 +1,203 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:unlimotion="clr-namespace:Unlimotion"
+             xmlns:viewModel="clr-namespace:Unlimotion.ViewModel;assembly=Unlimotion.ViewModel"
+             x:Class="Unlimotion.Views.TaskRelationsControl"
+             x:Name="Root"
+             x:CompileBindings="False"
+             mc:Ignorable="d"
+             d:DesignWidth="520"
+             d:DesignHeight="360">
+
+    <UserControl.Styles>
+        <Style Selector="Button.TaskStatusPicker">
+            <Setter Property="Width" Value="20"/>
+            <Setter Property="Height" Value="20"/>
+            <Setter Property="MinWidth" Value="20"/>
+            <Setter Property="MinHeight" Value="20"/>
+            <Setter Property="Margin" Value="0,0,8,0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Button.TaskStatusPicker:pointerover">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+        <Style Selector="Button.TaskAccentOutlineButton">
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Foreground" Value="{DynamicResource AccentButtonBackground}"/>
+            <Setter Property="Background" Value="{DynamicResource ThemeControlLowBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentButtonBackground}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="8"/>
+        </Style>
+        <Style Selector="Button.TaskAccentOutlineButton:pointerover">
+            <Setter Property="Background" Value="{DynamicResource ThemeControlMidBrush}"/>
+        </Style>
+        <Style Selector="Grid.RelationSectionHeader">
+            <Setter Property="ColumnSpacing" Value="8"/>
+            <Setter Property="Margin" Value="0,3,0,0"/>
+            <Setter Property="MinHeight" Value="30"/>
+        </Style>
+        <Style Selector="Grid.RelationSectionHeader Label">
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontSize" Value="{DynamicResource AppSmallFontSize}"/>
+            <Setter Property="Opacity" Value="0.76"/>
+        </Style>
+        <Style Selector="Button.RelationAddButton">
+            <Setter Property="Width" Value="32"/>
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="MinWidth" Value="32"/>
+            <Setter Property="MinHeight" Value="32"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="FontSize" Value="20"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style Selector="StackPanel.RelationPickerRow">
+            <Setter Property="Spacing" Value="8"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+        </Style>
+        <Style Selector="Border.RelationEditorCard">
+            <Setter Property="Margin" Value="0,0,0,8"/>
+            <Setter Property="Padding" Value="10"/>
+            <Setter Property="BorderBrush" Value="#33000000"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="8"/>
+        </Style>
+        <Style Selector="TextBox.RelationEditorSearch">
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+        </Style>
+        <Style Selector="ListBox.RelationEditorSuggestions">
+            <Setter Property="MaxHeight" Value="240"/>
+        </Style>
+        <Style Selector="Button.TaskRowRemoveButton">
+            <Setter Property="MinWidth" Value="28"/>
+            <Setter Property="MinHeight" Value="28"/>
+            <Setter Property="Width" Value="28"/>
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Foreground" Value="#B3261E"/>
+            <Setter Property="Opacity" Value="0.72"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="PathIcon.RemoveButtonIcon">
+            <Setter Property="Width" Value="12"/>
+            <Setter Property="Height" Value="12"/>
+            <Setter Property="Foreground" Value="#B3261E"/>
+        </Style>
+    </UserControl.Styles>
+
+    <UserControl.DataTemplates>
+        <DataTemplate DataType="viewModel:TaskItemViewModel">
+            <Grid ColumnDefinitions="Auto,*" Background="Transparent">
+                <unlimotion:TaskStatusPicker Task="{Binding}"
+                                             VerticalAlignment="Center"
+                                             AutomationProperties.AutomationId="TaskStatusButton"/>
+                <unlimotion:EmojiTextBlock Grid.Column="1"
+                                           EmojiText="{Binding Title}"
+                                           VerticalAlignment="Center"
+                                           HorizontalAlignment="Left"
+                                           TextWrapping="NoWrap"
+                                           TextTrimming="CharacterEllipsis"
+                                           AutomationProperties.AutomationId="InlineTaskTitleTextBlock"
+                                           Classes.IsWanted="{Binding Wanted}"
+                                           Classes.IsCanBeCompleted="{Binding !IsCanBeCompleted}"/>
+            </Grid>
+        </DataTemplate>
+        <DataTemplate DataType="viewModel:TaskWrapperViewModel">
+            <Grid ColumnDefinitions="*,Auto" Background="Transparent">
+                <ContentControl Content="{Binding TaskItem}" MinWidth="0"/>
+                <Button Grid.Column="1"
+                        Classes="TaskRowRemoveButton"
+                        ToolTip.Tip="{DynamicResource Remove}"
+                        Command="{Binding RemoveCommand}"
+                        AutomationProperties.AutomationId="ParentRelationRemoveButton">
+                    <PathIcon Classes="RemoveButtonIcon"
+                              Data="M15.5,5.9 L14.1,4.5 L10,8.6 L5.9,4.5 L4.5,5.9 L8.6,10 L4.5,14.1 L5.9,15.5 L10,11.4 L14.1,15.5 L15.5,14.1 L11.4,10 Z"/>
+                </Button>
+            </Grid>
+        </DataTemplate>
+        <DataTemplate DataType="viewModel:TaskRelationCandidateViewModel">
+            <StackPanel Margin="4,2">
+                <TextBlock Text="{Binding Title}"/>
+                <TextBlock Text="{Binding Context}"
+                           Opacity="0.7"
+                           FontSize="11"
+                           TextWrapping="Wrap"/>
+            </StackPanel>
+        </DataTemplate>
+    </UserControl.DataTemplates>
+
+    <StackPanel>
+        <Grid Classes="RelationSectionHeader" ColumnDefinitions="*,Auto">
+            <Label Content="{DynamicResource ParentsTasks}"/>
+            <Button x:Name="ParentAddButton"
+                    Grid.Column="1"
+                    Classes="RelationAddButton TaskAccentOutlineButton"
+                    Content="＋"
+                    ToolTip.Tip="{DynamicResource AddParentRelation}"
+                    AutomationProperties.Name="{DynamicResource AddParentRelation}"
+                    Click="ParentAddButton_OnClick"/>
+        </Grid>
+
+        <Border Classes="RelationEditorCard"
+                DataContext="{Binding Owner.CurrentRelationEditor, ElementName=Root}"
+                IsVisible="{Binding IsEditorOpen, ElementName=Root}">
+            <StackPanel Classes="RelationPickerRow">
+                <TextBlock Text="{Binding Header}" FontWeight="Bold"/>
+                <TextBox x:Name="ParentInput"
+                         Classes="RelationEditorSearch"
+                         Text="{Binding Query, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                         PlaceholderText="{Binding Watermark}"
+                         KeyDown="RelationEditorControl_OnKeyDown"/>
+                <ListBox x:Name="ParentSuggestions"
+                         Classes="RelationEditorSuggestions"
+                         ItemsSource="{Binding Suggestions}"
+                         SelectedItem="{Binding SelectedCandidate, Mode=TwoWay}"
+                         DoubleTapped="RelationEditorSuggestions_OnDoubleTapped"
+                         KeyDown="RelationEditorControl_OnKeyDown"/>
+                <TextBlock Text="{Binding EmptyStateText}"
+                           IsVisible="{Binding !HasSuggestions}"
+                           Opacity="0.7"
+                           TextWrapping="Wrap"/>
+                <Grid ColumnDefinitions="Auto,Auto"
+                      ColumnSpacing="8"
+                      HorizontalAlignment="Right">
+                    <Button x:Name="ParentCancelButton"
+                            Content="{DynamicResource Cancel}"
+                            Command="{Binding CancelCommand}"/>
+                    <Button x:Name="ParentConfirmButton"
+                            Grid.Column="1"
+                            Content="{DynamicResource Add}"
+                            Command="{Binding ConfirmCommand}"/>
+                </Grid>
+            </StackPanel>
+        </Border>
+
+        <TreeView x:Name="ParentsTree"
+                  ItemsSource="{Binding ParentsRoot.SubTasks, ElementName=Root}"
+                  SelectionMode="Multiple"
+                  Classes="TaskTree RelationTaskTree"
+                  ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+            <TreeView.ItemTemplate>
+                <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
+                    <ContentControl Content="{Binding .}"
+                                    DoubleTapped="ParentTask_OnDoubleTapped"/>
+                </TreeDataTemplate>
+            </TreeView.ItemTemplate>
+        </TreeView>
+    </StackPanel>
+</UserControl>

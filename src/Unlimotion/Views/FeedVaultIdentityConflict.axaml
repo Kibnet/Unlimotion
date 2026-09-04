@@ -1,0 +1,55 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:feed="clr-namespace:Unlimotion.ViewModel.Feed;assembly=Unlimotion.ViewModel"
+             x:Class="Unlimotion.Views.FeedVaultIdentityConflict"
+             x:DataType="feed:FeedVaultIdentityConflictViewModel"
+             mc:Ignorable="d">
+    <Border IsVisible="{Binding IsOpen, FallbackValue=False}"
+            Margin="16"
+            Padding="16"
+            VerticalAlignment="Top"
+            BorderBrush="{DynamicResource SystemControlErrorTextForegroundBrush}"
+            BorderThickness="2"
+            CornerRadius="10"
+            Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
+            AutomationProperties.ControlTypeOverride="Pane"
+            AutomationProperties.Name="{DynamicResource FeedIdentityConflictTitle}"
+            AutomationProperties.AutomationId="FeedIdentityConflictRoot">
+        <StackPanel Spacing="10">
+            <TextBlock FontSize="20"
+                       FontWeight="SemiBold"
+                       Text="{DynamicResource FeedIdentityConflictTitle}" />
+            <TextBlock Text="{DynamicResource FeedIdentityConflictDescription}"
+                       TextWrapping="Wrap" />
+            <Grid ColumnDefinitions="Auto,*,Auto,*" ColumnSpacing="8">
+                <TextBlock Text="{DynamicResource FeedIdentityConflictAccepted}" />
+                <TextBlock Grid.Column="1" FontWeight="SemiBold" Text="{Binding AcceptedVaultId}" />
+                <TextBlock Grid.Column="2" Text="{DynamicResource FeedIdentityConflictCurrent}" />
+                <TextBlock Grid.Column="3" FontWeight="SemiBold" Text="{Binding CurrentRootVaultId}" />
+            </Grid>
+            <TextBlock IsVisible="{Binding HasError}"
+                       Text="{Binding ErrorMessage}"
+                       TextWrapping="Wrap"
+                       Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+                       AutomationProperties.AutomationId="FeedIdentityConflictErrorText" />
+            <WrapPanel HorizontalAlignment="Right">
+                <Button Margin="0,0,8,0"
+                        Command="{Binding UseCurrentRootCommand}"
+                        IsEnabled="{Binding !IsResolving}"
+                        Content="{DynamicResource FeedIdentityConflictUseCurrent}"
+                        AutomationProperties.AutomationId="FeedIdentityConflictUseCurrentButton" />
+                <Button Margin="0,0,8,0"
+                        Command="{Binding ReconnectRootCommand}"
+                        IsEnabled="{Binding !IsResolving}"
+                        Content="{DynamicResource FeedIdentityConflictReconnect}"
+                        AutomationProperties.AutomationId="FeedIdentityConflictReconnectButton" />
+                <Button Command="{Binding StayReadOnlyCommand}"
+                        IsEnabled="{Binding !IsResolving}"
+                        Content="{DynamicResource FeedIdentityConflictReadOnly}"
+                        AutomationProperties.AutomationId="FeedIdentityConflictReadOnlyButton" />
+            </WrapPanel>
+        </StackPanel>
+    </Border>
+</UserControl>

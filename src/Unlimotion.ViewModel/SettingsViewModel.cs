@@ -4,6 +4,8 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
@@ -20,6 +22,11 @@ public class SettingsViewModel
     private const string ClientSettingsSectionName = "ClientSettings";
     private const string ClientLoginKey = "Login";
     private const string DefaultTaskStoragePath = "Tasks";
+    private const string NoteVaultSectionName = "NoteVault";
+    private const string NoteVaultRootPathKey = "RootPath";
+    private const string NoteVaultDayBoundaryMinutesKey = "DayBoundaryMinutes";
+    private const string NoteVaultIsFeedEnabledKey = "IsFeedEnabled";
+    private const string DefaultNoteDailyFileNameFormat = "yyyy-MM-dd";
     private const string TaskOutlineClipboardSectionName = "TaskOutlineClipboard";
     private const string TaskOutlineCopyAsMarkdownKey = "CopyAsMarkdown";
     private const string TaskOutlineCopyDescriptionKey = "CopyDescription";
@@ -28,6 +35,7 @@ public class SettingsViewModel
 
     private readonly IConfiguration _configuration;
     private readonly IConfiguration _taskStorageSettings;
+    private readonly IConfiguration _noteVaultSettings;
     private readonly IConfiguration _gitSettings;
     private readonly IConfiguration _appearanceSettings;
     private readonly IConfiguration _taskOutlineClipboardSettings;
@@ -36,7 +44,11 @@ public class SettingsViewModel
     private readonly IRemoteBackupService? _backupService;
     private readonly ILocalizationService _localization;
     private readonly bool _defaultIsDarkTheme;
+    private readonly bool _isExternalNoteVaultSupported;
     private readonly Func<string?>? _defaultTaskStoragePathProvider;
+    private static readonly Regex DailyNoteFileNameFormatPattern = new(
+        "^(?:yyyy|MM|dd)(?:[-._]?(?:yyyy|MM|dd)){2}$",
+        RegexOptions.CultureInvariant);
     private bool _deferTaskSpaceSettingsPersistence;
     private IApplicationUpdateService? _applicationUpdateService;
     private ApplicationUpdateInfo? _availableUpdate;
@@ -44,6 +56,26 @@ public class SettingsViewModel
 
     private ThemeMode _themeMode;
     private string? _taskStoragePath;
+    private string? _noteVaultRootPath;
+    private TimeSpan _noteDayBoundary;
+    private bool _isFeedEnabled;
+    private string _noteDailyFileNameFormatDraft = DefaultNoteDailyFileNameFormat;
+    private string _appliedNoteDailyFileNameFormat = DefaultNoteDailyFileNameFormat;
+    // Every Feed session replacement makes the original Settings operation
+    // stale. Only its own confirmed local Apply result may cross a same-root
+    // replacement.
+    private long _noteDailyFileNameFormatOperationGeneration;
+    // A local Apply may survive only a same-root Feed rebind. Changes to the
+    // selected vault, feed enablement or bridge invalidate it even if a path is
+    // later selected again.
+    private long _noteDailyFileNameFormatApplyContextGeneration;
+    private long? _noteDailyFileNameFormatFeedSessionGeneration;
+    private string? _activeNoteDailyFileNameFormatFeedRootPath;
+    private bool _isNoteDailyFileNameFormatFeedInitialized;
+    private bool _isNoteDailyFileNameFormatFeedBusyOrRecovering;
+    private Func<string, NoteDailyFileNameFormatValidation>? _noteDailyFileNameFormatValidator;
+    private Func<string, Task<NoteDailyFileNameFormatApplyResult>>? _applyNoteDailyFileNameFormatAsync;
+    private Func<Task<NoteDailyFileNameFormatState>>? _reloadNoteDailyFileNameFormatAsync;
     private string? _taskStorageUrl;
     private string? _login;
     private string? _password;
@@ -78,10 +110,12 @@ public class SettingsViewModel
         IRemoteBackupService? backupService = null,
         bool defaultIsDarkTheme = false,
         Func<string?>? defaultTaskStoragePathProvider = null,
-        ILocalizationService? localizationService = null)
+        ILocalizationService? localizationService = null,
+        bool? isExternalNoteVaultSupported = null)
     {
         _configuration = configuration;
         _taskStorageSettings = configuration.GetSection("TaskStorage");
+        _noteVaultSettings = configuration.GetSection(NoteVaultSectionName);
         _gitSettings = configuration.GetSection("Git");
         _appearanceSettings = configuration.GetSection(AppearanceSettings.SectionName);
         _taskOutlineClipboardSettings = configuration.GetSection(TaskOutlineClipboardSectionName);
@@ -90,6 +124,7 @@ public class SettingsViewModel
         _backupService = backupService;
         _localization = localizationService ?? LocalizationService.Current;
         _defaultIsDarkTheme = defaultIsDarkTheme;
+        _isExternalNoteVaultSupported = isExternalNoteVaultSupported ?? IsDesktopOperatingSystem();
         _defaultTaskStoragePathProvider = defaultTaskStoragePathProvider;
 
         _localization.SetLanguage(_appearanceSettings.GetSection(AppearanceSettings.LanguageKey).Get<string>());
@@ -99,6 +134,12 @@ public class SettingsViewModel
         _themeMode = AppearanceSettings.ParseThemeMode(
             _appearanceSettings.GetSection(AppearanceSettings.ThemeKey).Get<string>());
         _taskStoragePath = _taskStorageSettings.GetSection(nameof(TaskStorageSettings.Path)).Get<string>();
+        _noteVaultRootPath = _noteVaultSettings.GetSection(NoteVaultRootPathKey).Get<string>();
+        _noteDayBoundary = TimeSpan.FromMinutes(NormalizeDayBoundaryMinutes(
+            _noteVaultSettings.GetSection(NoteVaultDayBoundaryMinutesKey).Get<int?>() ?? 0));
+        _isFeedEnabled = _noteVaultSettings
+            .GetSection(NoteVaultIsFeedEnabledKey)
+            .Get<bool?>() ?? true;
         _taskStorageUrl = _taskStorageSettings.GetSection(nameof(TaskStorageSettings.URL)).Get<string>();
         _login = _taskStorageSettings.GetSection(nameof(TaskStorageSettings.Login)).Get<string>();
         _password = _taskStorageSettings.GetSection(nameof(TaskStorageSettings.Password)).Get<string>();
@@ -155,6 +196,9 @@ public class SettingsViewModel
     public ICommand? BackupCommand { get; set; }
     public ICommand? ResaveCommand { get; set; }
     public ICommand? BrowseTaskStoragePathCommand { get; set; }
+    public ICommand? BrowseNoteVaultRootPathCommand { get; set; }
+    public ICommand? ApplyNoteDailyFileNameFormatCommand { get; set; }
+    public ICommand? ReloadExternalNoteDailyFileNameFormatCommand { get; set; }
     public ICommand? CloneCommand { get; set; }
     public ICommand? PullCommand { get; set; }
     public ICommand? PushCommand { get; set; }
@@ -261,6 +305,12 @@ public class SettingsViewModel
         Password = storage.Password;
         IsServerMode = storage.IsServerMode;
 
+        var note = _configuration.GetSection(NoteVaultSectionName);
+        NoteVaultRootPath = note.GetSection(NoteVaultRootPathKey).Get<string>();
+        IsFeedEnabled = note.GetSection(NoteVaultIsFeedEnabledKey).Get<bool?>() ?? true;
+        NoteDayBoundary = TimeSpan.FromMinutes(NormalizeDayBoundaryMinutes(
+            note.GetSection(NoteVaultDayBoundaryMinutesKey).Get<int?>() ?? 0));
+
         var git = _configuration.Get<GitSettings>("Git") ?? new GitSettings();
         GitBackupEnabled = git.BackupEnabled;
         GitShowStatusToasts = git.ShowStatusToasts;
@@ -281,6 +331,48 @@ public class SettingsViewModel
         ReloadGitMetadata();
         RefreshStorageSelectionState();
         RefreshStorageStatusText();
+    }
+
+    private void PersistActiveNoteProfile()
+    {
+        var sourceId = _configuration
+            .GetSection(TaskSourcesSettings.SectionName)
+            .GetSection(nameof(TaskSourcesSettings.ActiveSourceId))
+            .Get<string>();
+        if (string.IsNullOrWhiteSpace(sourceId))
+        {
+            return;
+        }
+
+        var serialized = _configuration.Get<string>(TaskSourcesSettings.NoteProfilesSectionName);
+        List<TaskSourceNoteSettings> profiles;
+        try
+        {
+            profiles = string.IsNullOrWhiteSpace(serialized)
+                ? []
+                : JsonSerializer.Deserialize<List<TaskSourceNoteSettings>>(serialized) ?? [];
+        }
+        catch (JsonException)
+        {
+            return;
+        }
+
+        var profile = profiles.FirstOrDefault(candidate => string.Equals(
+            candidate.SourceId,
+            sourceId,
+            StringComparison.Ordinal));
+        if (profile is null)
+        {
+            profile = new TaskSourceNoteSettings { SourceId = sourceId };
+            profiles.Add(profile);
+        }
+
+        profile.RootPath = _noteVaultRootPath;
+        profile.IsFeedEnabled = _isFeedEnabled;
+        profile.DayBoundaryMinutes = (int)_noteDayBoundary.TotalMinutes;
+        _configuration.Set(
+            TaskSourcesSettings.NoteProfilesSectionName,
+            JsonSerializer.Serialize(profiles));
     }
 
     public void UseDeferredTaskSpaceSettingsPersistence() =>
@@ -415,6 +507,475 @@ public class SettingsViewModel
     }
 
     public string TaskStoragePathTooltip => ResolveTaskStoragePathTooltip();
+
+    [AlsoNotifyFor(
+        nameof(CanApplyNoteDailyFileNameFormat),
+        nameof(CanReloadExternalNoteDailyFileNameFormat),
+        nameof(IsNoteDailyFileNameFormatRootRequiredVisible))]
+    public string? NoteVaultRootPath
+    {
+        get => _noteVaultRootPath;
+        set
+        {
+            if (string.Equals(_noteVaultRootPath, value, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _noteVaultRootPath = value;
+            AdvanceNoteDailyFileNameFormatApplyContextGeneration();
+            ResetNoteDailyFileNameFormatFeedSession();
+            HasExternalNoteDailyFileNameFormatChange = false;
+            NoteDailyFileNameFormatStatusText = null;
+            _noteVaultSettings.GetSection(NoteVaultRootPathKey).Set(value);
+            PersistActiveNoteProfile();
+        }
+    }
+
+    [AlsoNotifyFor(
+        nameof(CanEditNoteVaultSettings),
+        nameof(IsNoteDailyFileNameFormatReadOnly),
+        nameof(CanApplyNoteDailyFileNameFormat),
+        nameof(CanReloadExternalNoteDailyFileNameFormat))]
+    public bool IsExternalNoteVaultSupported => _isExternalNoteVaultSupported;
+
+    [AlsoNotifyFor(
+        nameof(HasUnappliedNoteDailyFileNameFormatDraft),
+        nameof(CanApplyNoteDailyFileNameFormat))]
+    public string NoteDailyFileNameFormatDraft
+    {
+        get => _noteDailyFileNameFormatDraft;
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (string.Equals(_noteDailyFileNameFormatDraft, normalized, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _noteDailyFileNameFormatDraft = normalized;
+            RefreshNoteDailyFileNameFormatDraftPresentation();
+        }
+    }
+
+    [AlsoNotifyFor(nameof(HasUnappliedNoteDailyFileNameFormatDraft))]
+    public string AppliedNoteDailyFileNameFormat
+    {
+        get => _appliedNoteDailyFileNameFormat;
+        private set => _appliedNoteDailyFileNameFormat = value;
+    }
+
+    [AlsoNotifyFor(nameof(IsNoteDailyFileNameFormatValidationVisible))]
+    public string? NoteDailyFileNameFormatValidationMessage { get; private set; }
+
+    public bool IsNoteDailyFileNameFormatValidationVisible =>
+        !string.IsNullOrWhiteSpace(NoteDailyFileNameFormatValidationMessage);
+
+    [AlsoNotifyFor(nameof(NoteDailyFileNameFormatPreviewText))]
+    public string NoteDailyFileNameFormatPreview { get; private set; } =
+        $"Ежедневные/{DateOnly.FromDateTime(DateTime.Now):yyyy-MM-dd}.md";
+
+    public string NoteDailyFileNameFormatPreviewText => string.Concat(
+        _localization.Get("NoteDailyFileNameFormatPreview"),
+        NoteDailyFileNameFormatPreview);
+
+    public bool HasUnappliedNoteDailyFileNameFormatDraft =>
+        !string.Equals(
+            NoteDailyFileNameFormatDraft,
+            AppliedNoteDailyFileNameFormat,
+            StringComparison.Ordinal);
+
+    [AlsoNotifyFor(
+        nameof(CanEditNoteVaultSettings),
+        nameof(IsNoteDailyFileNameFormatReadOnly),
+        nameof(CanApplyNoteDailyFileNameFormat),
+        nameof(CanReloadExternalNoteDailyFileNameFormat))]
+    public bool IsApplyingNoteDailyFileNameFormat { get; private set; }
+
+    [AlsoNotifyFor(
+        nameof(CanApplyNoteDailyFileNameFormat),
+        nameof(CanReloadExternalNoteDailyFileNameFormat))]
+    public bool IsNoteDailyFileNameFormatFeedInitialized
+    {
+        get => _isNoteDailyFileNameFormatFeedInitialized;
+        private set => _isNoteDailyFileNameFormatFeedInitialized = value;
+    }
+
+    [AlsoNotifyFor(
+        nameof(CanApplyNoteDailyFileNameFormat),
+        nameof(CanReloadExternalNoteDailyFileNameFormat))]
+    public bool IsNoteDailyFileNameFormatFeedBusyOrRecovering
+    {
+        get => _isNoteDailyFileNameFormatFeedBusyOrRecovering;
+        private set => _isNoteDailyFileNameFormatFeedBusyOrRecovering = value;
+    }
+
+    [AlsoNotifyFor(
+        nameof(CanApplyNoteDailyFileNameFormat),
+        nameof(CanReloadExternalNoteDailyFileNameFormat))]
+    public string? ActiveNoteDailyFileNameFormatFeedRootPath
+    {
+        get => _activeNoteDailyFileNameFormatFeedRootPath;
+        private set => _activeNoteDailyFileNameFormatFeedRootPath = value;
+    }
+
+    [AlsoNotifyFor(nameof(CanReloadExternalNoteDailyFileNameFormat))]
+    public bool HasExternalNoteDailyFileNameFormatChange { get; private set; }
+
+    [AlsoNotifyFor(nameof(IsNoteDailyFileNameFormatStatusVisible))]
+    public string? NoteDailyFileNameFormatStatusText { get; private set; }
+
+    public bool IsNoteDailyFileNameFormatStatusVisible =>
+        !string.IsNullOrWhiteSpace(NoteDailyFileNameFormatStatusText);
+
+    public bool CanEditNoteVaultSettings =>
+        IsExternalNoteVaultSupported && !IsApplyingNoteDailyFileNameFormat;
+
+    public bool IsNoteDailyFileNameFormatReadOnly =>
+        !CanEditNoteVaultSettings;
+
+    public bool IsNoteDailyFileNameFormatRootRequiredVisible =>
+        IsExternalNoteVaultSupported && string.IsNullOrWhiteSpace(NoteVaultRootPath);
+
+    public bool CanApplyNoteDailyFileNameFormat =>
+        IsExternalNoteVaultSupported &&
+        IsFeedEnabled &&
+        !string.IsNullOrWhiteSpace(NoteVaultRootPath) &&
+        IsNoteDailyFileNameFormatFeedBoundToSelectedVault &&
+        IsNoteDailyFileNameFormatFeedInitialized &&
+        !IsNoteDailyFileNameFormatFeedBusyOrRecovering &&
+        !IsApplyingNoteDailyFileNameFormat &&
+        HasUnappliedNoteDailyFileNameFormatDraft &&
+        !IsNoteDailyFileNameFormatValidationVisible &&
+        _applyNoteDailyFileNameFormatAsync != null;
+
+    public bool CanReloadExternalNoteDailyFileNameFormat =>
+        HasExternalNoteDailyFileNameFormatChange &&
+        IsExternalNoteVaultSupported &&
+        IsFeedEnabled &&
+        !string.IsNullOrWhiteSpace(NoteVaultRootPath) &&
+        IsNoteDailyFileNameFormatFeedBoundToSelectedVault &&
+        IsNoteDailyFileNameFormatFeedInitialized &&
+        !IsNoteDailyFileNameFormatFeedBusyOrRecovering &&
+        !IsApplyingNoteDailyFileNameFormat &&
+        _reloadNoteDailyFileNameFormatAsync != null;
+
+    [AlsoNotifyFor(
+        nameof(CanApplyNoteDailyFileNameFormat),
+        nameof(CanReloadExternalNoteDailyFileNameFormat))]
+    public bool IsFeedEnabled
+    {
+        get => _isFeedEnabled;
+        set
+        {
+            if (_isFeedEnabled == value)
+            {
+                return;
+            }
+
+            _isFeedEnabled = value;
+            AdvanceNoteDailyFileNameFormatApplyContextGeneration();
+            ResetNoteDailyFileNameFormatFeedSession();
+            _noteVaultSettings.GetSection(NoteVaultIsFeedEnabledKey).Set(value);
+            PersistActiveNoteProfile();
+        }
+    }
+
+    public TimeSpan NoteDayBoundary
+    {
+        get => _noteDayBoundary;
+        set
+        {
+            var normalized = TimeSpan.FromMinutes(NormalizeDayBoundaryMinutes((int)value.TotalMinutes));
+            if (_noteDayBoundary == normalized)
+            {
+                return;
+            }
+
+            _noteDayBoundary = normalized;
+            _noteVaultSettings
+                .GetSection(NoteVaultDayBoundaryMinutesKey)
+                .Set((int)normalized.TotalMinutes);
+            PersistActiveNoteProfile();
+        }
+    }
+
+    /// <summary>
+    /// Connects the Settings surface to the Feed-owned portable setting without
+    /// making Settings responsible for vault persistence or reconfiguration.
+    /// </summary>
+    public void ConfigureNoteDailyFileNameFormatBridge(
+        Func<string, NoteDailyFileNameFormatValidation> validator,
+        Func<string, Task<NoteDailyFileNameFormatApplyResult>> applyAsync,
+        Func<Task<NoteDailyFileNameFormatState>> reloadAsync)
+    {
+        _noteDailyFileNameFormatValidator = validator ?? throw new ArgumentNullException(nameof(validator));
+        _applyNoteDailyFileNameFormatAsync = applyAsync ?? throw new ArgumentNullException(nameof(applyAsync));
+        _reloadNoteDailyFileNameFormatAsync = reloadAsync ?? throw new ArgumentNullException(nameof(reloadAsync));
+        AdvanceNoteDailyFileNameFormatApplyContextGeneration();
+        ResetNoteDailyFileNameFormatFeedSession();
+        RefreshNoteDailyFileNameFormatDraftPresentation();
+    }
+
+    /// <summary>
+    /// Receives Feed lifecycle availability so Apply cannot interrupt a vault
+    /// mutation, recovery or an uninitialized selected root.
+    /// </summary>
+    public void SetNoteDailyFileNameFormatFeedAvailability(
+        bool isVaultInitialized,
+        bool isBusyOrRecovering,
+        string? activeFeedVaultRootPath)
+    {
+        if (!AreNullableNoteDailyFileNameFormatVaultRootsEqual(
+                ActiveNoteDailyFileNameFormatFeedRootPath,
+                activeFeedVaultRootPath))
+        {
+            ActiveNoteDailyFileNameFormatFeedRootPath = activeFeedVaultRootPath;
+            ResetNoteDailyFileNameFormatFeedSession();
+        }
+
+        if (IsNoteDailyFileNameFormatFeedInitialized != isVaultInitialized)
+        {
+            // Feed resets IsVaultInitialized before it commits every vault
+            // session replacement. This also happens for a same-root
+            // reconfigure, so root-path comparison alone is insufficient to
+            // decide whether an async Settings command may still publish.
+            AdvanceNoteDailyFileNameFormatOperationGeneration();
+        }
+
+        IsNoteDailyFileNameFormatFeedInitialized = isVaultInitialized;
+        IsNoteDailyFileNameFormatFeedBusyOrRecovering = isBusyOrRecovering;
+    }
+
+    /// <summary>
+    /// Receives the current vault-owned setting after initialization, a local
+    /// Apply, or a watcher-driven external sidecar change.
+    /// </summary>
+    public void ApplyNoteDailyFileNameFormatState(
+        NoteDailyFileNameFormatState state,
+        bool replaceDirtyDraft = false)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        if (!IsFeedEnabled ||
+            !IsNoteDailyFileNameFormatStateForCurrentVault(state) ||
+            !TryAcceptNoteDailyFileNameFormatFeedSession(state.SessionGeneration))
+        {
+            return;
+        }
+
+        var hadDirtyDraft = HasUnappliedNoteDailyFileNameFormatDraft;
+        if (state.RequiresReload)
+        {
+            // Feed could not accept the externally written sidecar. Keep both the last
+            // known-good layout and any local draft intact, but expose the same explicit
+            // Reload path used for a competing valid external change.
+            AppliedNoteDailyFileNameFormat = state.FileNameFormat;
+            HasExternalNoteDailyFileNameFormatChange = true;
+            NoteDailyFileNameFormatStatusText = state.StatusMessage ??
+                _localization.Get("NoteDailyFileNameFormatApplyFailed");
+            return;
+        }
+
+        var shouldPublishAppliedStatus =
+            state.IsExternalChange ||
+            replaceDirtyDraft ||
+            IsApplyingNoteDailyFileNameFormat ||
+            !string.IsNullOrWhiteSpace(state.StatusMessage);
+        var appliedStatusText = _localization.Format(
+            "NoteDailyFileNameFormatApplied",
+            state.FileNameFormat);
+        var preserveSuccessfulLocalApplyStatus =
+            !state.IsExternalChange &&
+            !replaceDirtyDraft &&
+            !hadDirtyDraft &&
+            string.Equals(
+                NoteDailyFileNameFormatStatusText,
+                appliedStatusText,
+                StringComparison.Ordinal);
+        AppliedNoteDailyFileNameFormat = state.FileNameFormat;
+
+        if (hadDirtyDraft && !replaceDirtyDraft)
+        {
+            // Feed state is delivered asynchronously and may have been queued before a
+            // same-root session rebind. It may update the applied value, but a passive
+            // notification must not replace a draft the user has not explicitly applied
+            // or reloaded.
+            if (state.IsExternalChange)
+            {
+                HasExternalNoteDailyFileNameFormatChange = true;
+                NoteDailyFileNameFormatStatusText = state.StatusMessage ??
+                    _localization.Format(
+                        "NoteDailyFileNameFormatExternalChanged",
+                        state.FileNameFormat);
+            }
+
+            return;
+        }
+
+        NoteDailyFileNameFormatDraft = state.FileNameFormat;
+        HasExternalNoteDailyFileNameFormatChange = false;
+        NoteDailyFileNameFormatStatusText = state.StatusMessage ??
+            (shouldPublishAppliedStatus
+                ? state.IsExternalChange
+                    ? _localization.Format(
+                        "NoteDailyFileNameFormatExternalChanged",
+                        state.FileNameFormat)
+                    : appliedStatusText
+                : preserveSuccessfulLocalApplyStatus
+                    ? appliedStatusText
+                    : null);
+    }
+
+    public async Task ApplyNoteDailyFileNameFormatAsync()
+    {
+        if (!CanApplyNoteDailyFileNameFormat || _applyNoteDailyFileNameFormatAsync == null)
+        {
+            return;
+        }
+
+        var operationGeneration = _noteDailyFileNameFormatOperationGeneration;
+        var operationFeedSessionGeneration = _noteDailyFileNameFormatFeedSessionGeneration;
+        var operationApplyContextGeneration = _noteDailyFileNameFormatApplyContextGeneration;
+        var operationRootPath = NoteVaultRootPath;
+        var requestedFormat = NoteDailyFileNameFormatDraft;
+        var applyingStatusText = _localization.Get("NoteDailyFileNameFormatApplying");
+        IsApplyingNoteDailyFileNameFormat = true;
+        NoteDailyFileNameFormatStatusText = applyingStatusText;
+        try
+        {
+            var result = await _applyNoteDailyFileNameFormatAsync(requestedFormat)
+                .ConfigureAwait(true);
+            if (result.Succeeded && result.AppliedState is { } state)
+            {
+                var isCurrentOperation = IsCurrentNoteDailyFileNameFormatOperation(
+                    operationGeneration,
+                    operationFeedSessionGeneration,
+                    operationRootPath);
+                if (!isCurrentOperation && !IsSuccessfulLocalApplyFromNewerFeedSession(
+                        state,
+                        requestedFormat,
+                        operationFeedSessionGeneration,
+                        operationRootPath,
+                        operationApplyContextGeneration))
+                {
+                    return;
+                }
+
+                // A concurrent external writer can win after this command saved its local
+                // value. Keep the user's draft in that case, exactly as for a watcher-driven
+                // external update, and expose Reload instead of silently replacing it.
+                ApplyNoteDailyFileNameFormatState(state, replaceDirtyDraft: !state.IsExternalChange);
+                return;
+            }
+
+            if (!IsCurrentNoteDailyFileNameFormatOperation(
+                    operationGeneration,
+                    operationFeedSessionGeneration,
+                    operationRootPath))
+            {
+                return;
+            }
+
+            NoteDailyFileNameFormatStatusText = result.ErrorMessage ??
+                (result.IsCancelled
+                    ? _localization.Get("NoteDailyFileNameFormatApplyCancelled")
+                    : _localization.Get("NoteDailyFileNameFormatApplyFailed"));
+        }
+        catch (OperationCanceledException)
+        {
+            if (IsCurrentNoteDailyFileNameFormatOperation(
+                    operationGeneration,
+                    operationFeedSessionGeneration,
+                    operationRootPath))
+            {
+                NoteDailyFileNameFormatStatusText = _localization.Get("NoteDailyFileNameFormatApplyCancelled");
+            }
+        }
+        catch (Exception exception)
+        {
+            if (IsCurrentNoteDailyFileNameFormatOperation(
+                    operationGeneration,
+                    operationFeedSessionGeneration,
+                    operationRootPath))
+            {
+                NoteDailyFileNameFormatStatusText = _localization.Format(
+                    "NoteDailyFileNameFormatApplyError",
+                    exception.Message);
+            }
+        }
+        finally
+        {
+            ClearStaleNoteDailyFileNameFormatOperationStatus(
+                operationGeneration,
+                operationFeedSessionGeneration,
+                operationRootPath,
+                applyingStatusText);
+            IsApplyingNoteDailyFileNameFormat = false;
+        }
+    }
+
+    public async Task ReloadExternalNoteDailyFileNameFormatAsync()
+    {
+        if (!CanReloadExternalNoteDailyFileNameFormat || _reloadNoteDailyFileNameFormatAsync == null)
+        {
+            return;
+        }
+
+        var operationGeneration = _noteDailyFileNameFormatOperationGeneration;
+        var operationFeedSessionGeneration = _noteDailyFileNameFormatFeedSessionGeneration;
+        var operationRootPath = NoteVaultRootPath;
+        var reloadingStatusText = _localization.Get("NoteDailyFileNameFormatReloading");
+        IsApplyingNoteDailyFileNameFormat = true;
+        NoteDailyFileNameFormatStatusText = reloadingStatusText;
+        try
+        {
+            var state = await _reloadNoteDailyFileNameFormatAsync().ConfigureAwait(true);
+            if (!IsCurrentNoteDailyFileNameFormatOperation(
+                    operationGeneration,
+                    operationFeedSessionGeneration,
+                    operationRootPath) &&
+                !IsReloadResultFromNewerFeedSession(
+                    state,
+                    operationFeedSessionGeneration,
+                    operationRootPath))
+            {
+                return;
+            }
+
+            ApplyNoteDailyFileNameFormatState(state, replaceDirtyDraft: true);
+        }
+        catch (OperationCanceledException)
+        {
+            if (IsCurrentNoteDailyFileNameFormatOperation(
+                    operationGeneration,
+                    operationFeedSessionGeneration,
+                    operationRootPath))
+            {
+                NoteDailyFileNameFormatStatusText = _localization.Get("NoteDailyFileNameFormatApplyCancelled");
+            }
+        }
+        catch (Exception exception)
+        {
+            if (IsCurrentNoteDailyFileNameFormatOperation(
+                    operationGeneration,
+                    operationFeedSessionGeneration,
+                    operationRootPath))
+            {
+                NoteDailyFileNameFormatStatusText = _localization.Format(
+                    "NoteDailyFileNameFormatApplyError",
+                    exception.Message);
+            }
+        }
+        finally
+        {
+            ClearStaleNoteDailyFileNameFormatOperationStatus(
+                operationGeneration,
+                operationFeedSessionGeneration,
+                operationRootPath,
+                reloadingStatusText);
+            IsApplyingNoteDailyFileNameFormat = false;
+        }
+    }
 
     public string? TaskStorageURL
     {
@@ -1208,6 +1769,7 @@ public class SettingsViewModel
         RefreshStorageStatusText();
         RefreshBackupState();
         RefreshUpdateStatusText();
+        RefreshNoteDailyFileNameFormatDraftPresentation();
     }
 
     private void RefreshLanguageOptions()
@@ -1704,5 +2266,243 @@ public class SettingsViewModel
             .GetSection(ClientSettingsSectionName)
             .GetSection(ClientLoginKey)
             .Get<string>();
+    }
+
+    private void RefreshNoteDailyFileNameFormatDraftPresentation()
+    {
+        var validation = ValidateNoteDailyFileNameFormat(NoteDailyFileNameFormatDraft);
+        NoteDailyFileNameFormatValidationMessage = validation.IsValid
+            ? null
+            : validation.ErrorMessage ?? _localization.Get("NoteDailyFileNameFormatInvalid");
+        NoteDailyFileNameFormatPreview = validation.IsValid
+            ? validation.PreviewPath ?? BuildNoteDailyFileNameFormatPreview(NoteDailyFileNameFormatDraft)
+            : string.Empty;
+    }
+
+    private NoteDailyFileNameFormatValidation ValidateNoteDailyFileNameFormat(string format)
+    {
+        if (_noteDailyFileNameFormatValidator != null)
+        {
+            return _noteDailyFileNameFormatValidator(format);
+        }
+
+        if (string.IsNullOrWhiteSpace(format) ||
+            !DailyNoteFileNameFormatPattern.IsMatch(format))
+        {
+            return new NoteDailyFileNameFormatValidation(
+                false,
+                null,
+                _localization.Get("NoteDailyFileNameFormatInvalid"));
+        }
+
+        var tokens = Regex.Matches(format, "yyyy|MM|dd")
+            .Select(static match => match.Value)
+            .ToArray();
+        if (tokens.Length != 3 || tokens.Distinct(StringComparer.Ordinal).Count() != 3)
+        {
+            return new NoteDailyFileNameFormatValidation(
+                false,
+                null,
+                _localization.Get("NoteDailyFileNameFormatInvalid"));
+        }
+
+        try
+        {
+            return new NoteDailyFileNameFormatValidation(
+                true,
+                BuildNoteDailyFileNameFormatPreview(format),
+                null);
+        }
+        catch (FormatException)
+        {
+            return new NoteDailyFileNameFormatValidation(
+                false,
+                null,
+                _localization.Get("NoteDailyFileNameFormatInvalid"));
+        }
+    }
+
+    private static string BuildNoteDailyFileNameFormatPreview(string format)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        return $"Ежедневные/{today.ToString(format, CultureInfo.InvariantCulture)}.md";
+    }
+
+    private bool IsNoteDailyFileNameFormatStateForCurrentVault(
+        NoteDailyFileNameFormatState state)
+    {
+        return AreNoteDailyFileNameFormatVaultRootsEqual(NoteVaultRootPath, state.RootPath);
+    }
+
+    private bool IsNoteDailyFileNameFormatFeedBoundToSelectedVault =>
+        AreNoteDailyFileNameFormatVaultRootsEqual(
+            NoteVaultRootPath,
+            ActiveNoteDailyFileNameFormatFeedRootPath);
+
+    private bool IsCurrentNoteDailyFileNameFormatOperation(
+        long operationGeneration,
+        long? operationFeedSessionGeneration,
+        string? operationRootPath)
+    {
+        return operationGeneration == _noteDailyFileNameFormatOperationGeneration &&
+               operationFeedSessionGeneration == _noteDailyFileNameFormatFeedSessionGeneration &&
+               AreNoteDailyFileNameFormatVaultRootsEqual(NoteVaultRootPath, operationRootPath);
+    }
+
+    private bool IsReloadResultFromNewerFeedSession(
+        NoteDailyFileNameFormatState state,
+        long? operationFeedSessionGeneration,
+        string? operationRootPath)
+    {
+        return operationFeedSessionGeneration is { } sessionGeneration &&
+               state.SessionGeneration > sessionGeneration &&
+               AreNoteDailyFileNameFormatVaultRootsEqual(NoteVaultRootPath, operationRootPath) &&
+               IsNoteDailyFileNameFormatStateForCurrentVault(state);
+    }
+
+    private bool IsSuccessfulLocalApplyFromNewerFeedSession(
+        NoteDailyFileNameFormatState state,
+        string requestedFormat,
+        long? operationFeedSessionGeneration,
+        string? operationRootPath,
+        long operationApplyContextGeneration)
+    {
+        if (state.IsExternalChange ||
+            state.RequiresReload ||
+            !string.Equals(state.FileNameFormat, requestedFormat, StringComparison.Ordinal) ||
+            (operationFeedSessionGeneration is { } operationSessionGeneration &&
+             state.SessionGeneration <= operationSessionGeneration) ||
+            operationApplyContextGeneration != _noteDailyFileNameFormatApplyContextGeneration ||
+            !AreNoteDailyFileNameFormatVaultRootsEqual(NoteVaultRootPath, operationRootPath) ||
+            !IsNoteDailyFileNameFormatStateForCurrentVault(state))
+        {
+            return false;
+        }
+
+        if (operationFeedSessionGeneration is null)
+        {
+            // A Feed session starts at generation 1. Its confirmed Apply response may reach
+            // Settings before the queued passive state notification, but generation 0 still
+            // identifies an unbound/default response from the old session.
+            return state.SessionGeneration > 0 &&
+                   (_noteDailyFileNameFormatFeedSessionGeneration is not { } boundSessionGeneration ||
+                    state.SessionGeneration >= boundSessionGeneration);
+        }
+
+        return _noteDailyFileNameFormatFeedSessionGeneration is not { } currentSessionGeneration ||
+               state.SessionGeneration >= currentSessionGeneration;
+    }
+
+    private void ClearStaleNoteDailyFileNameFormatOperationStatus(
+        long operationGeneration,
+        long? operationFeedSessionGeneration,
+        string? operationRootPath,
+        string operationStatusText)
+    {
+        if (!IsCurrentNoteDailyFileNameFormatOperation(
+                operationGeneration,
+                operationFeedSessionGeneration,
+                operationRootPath) &&
+            string.Equals(
+                NoteDailyFileNameFormatStatusText,
+                operationStatusText,
+                StringComparison.Ordinal))
+        {
+            NoteDailyFileNameFormatStatusText = null;
+        }
+    }
+
+    private bool TryAcceptNoteDailyFileNameFormatFeedSession(long sessionGeneration)
+    {
+        if (_noteDailyFileNameFormatFeedSessionGeneration is { } currentSessionGeneration &&
+            sessionGeneration < currentSessionGeneration)
+        {
+            return false;
+        }
+
+        if (_noteDailyFileNameFormatFeedSessionGeneration != sessionGeneration)
+        {
+            _noteDailyFileNameFormatFeedSessionGeneration = sessionGeneration;
+            AdvanceNoteDailyFileNameFormatOperationGeneration();
+        }
+
+        return true;
+    }
+
+    private void ResetNoteDailyFileNameFormatFeedSession()
+    {
+        _noteDailyFileNameFormatFeedSessionGeneration = null;
+        AdvanceNoteDailyFileNameFormatOperationGeneration();
+    }
+
+    private void AdvanceNoteDailyFileNameFormatOperationGeneration()
+    {
+        unchecked
+        {
+            _noteDailyFileNameFormatOperationGeneration++;
+        }
+    }
+
+    private void AdvanceNoteDailyFileNameFormatApplyContextGeneration()
+    {
+        unchecked
+        {
+            _noteDailyFileNameFormatApplyContextGeneration++;
+        }
+    }
+
+    private static bool AreNoteDailyFileNameFormatVaultRootsEqual(
+        string? leftPath,
+        string? rightPath)
+    {
+        return TryNormalizeVaultRootPath(leftPath, out var normalizedLeftPath) &&
+               TryNormalizeVaultRootPath(rightPath, out var normalizedRightPath) &&
+               string.Equals(
+                   normalizedLeftPath,
+                   normalizedRightPath,
+                   OperatingSystem.IsWindows()
+                       ? StringComparison.OrdinalIgnoreCase
+                       : StringComparison.Ordinal);
+    }
+
+    private static bool AreNullableNoteDailyFileNameFormatVaultRootsEqual(
+        string? leftPath,
+        string? rightPath)
+    {
+        if (string.IsNullOrWhiteSpace(leftPath) && string.IsNullOrWhiteSpace(rightPath))
+        {
+            return true;
+        }
+
+        return AreNoteDailyFileNameFormatVaultRootsEqual(leftPath, rightPath);
+    }
+
+    private static bool TryNormalizeVaultRootPath(string? path, out string normalizedPath)
+    {
+        normalizedPath = string.Empty;
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return false;
+        }
+
+        try
+        {
+            normalizedPath = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+            return !string.IsNullOrWhiteSpace(normalizedPath);
+        }
+        catch (Exception exception) when (exception is ArgumentException or NotSupportedException or
+                                         PathTooLongException or UnauthorizedAccessException or
+                                         System.Security.SecurityException)
+        {
+            return false;
+        }
+    }
+
+    private static int NormalizeDayBoundaryMinutes(int minutes) =>
+        minutes is >= 0 and < 1440 ? minutes : 0;
+
+    private static bool IsDesktopOperatingSystem()
+    {
+        return OperatingSystem.IsWindows() || OperatingSystem.IsLinux() || OperatingSystem.IsMacOS();
     }
 }

@@ -1,0 +1,317 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:feed="clr-namespace:Unlimotion.ViewModel.Feed;assembly=Unlimotion.ViewModel"
+             xmlns:views="clr-namespace:Unlimotion.Views"
+             x:Class="Unlimotion.Views.MarkdownBlockLivePreviewEditor"
+             x:DataType="feed:MarkdownLivePreviewEditorViewModel"
+             mc:Ignorable="d"
+             d:DesignWidth="720"
+             d:DesignHeight="480"
+             AutomationProperties.AutomationId="{Binding RootAutomationId}"
+             AutomationProperties.Name="{DynamicResource MarkdownLivePreviewName}">
+    <UserControl.Resources>
+        <SolidColorBrush x:Key="MarkdownReviewAccentBrush"
+                         Color="{DynamicResource SystemAccentColor}" />
+    </UserControl.Resources>
+    <UserControl.Styles>
+        <Style Selector="Border.ReviewHighlight">
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="BorderThickness" Value="2" />
+            <Setter Property="BorderBrush" Value="{DynamicResource MarkdownReviewAccentBrush}" />
+            <Setter Property="Background" Value="{DynamicResource ThemeControlLowBrush}" />
+        </Style>
+        <Style Selector="Grid.MoveSelected">
+            <Setter Property="Background" Value="{DynamicResource ThemeControlMidBrush}" />
+        </Style>
+        <Style Selector="ToggleButton.BlockMoveHandle /template/ Border#PART_Border">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style Selector="TextBox.MarkdownBlockEditor">
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="FocusAdorner" Value="{x:Null}" />
+            <Setter Property="VerticalContentAlignment" Value="Top" />
+        </Style>
+        <Style Selector="TextBox.MarkdownBlockEditor:focus">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style Selector="TextBox.MarkdownBlockEditor /template/ Border#PART_BorderElement">
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style Selector="TextBox.MarkdownBlockEditor:focus /template/ Border#PART_BorderElement">
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style Selector="Button.BlockToolbarAction">
+            <Setter Property="MinWidth" Value="26" />
+            <Setter Property="MinHeight" Value="24" />
+            <Setter Property="Padding" Value="4,1" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+    </UserControl.Styles>
+    <Grid RowDefinitions="Auto,Auto,Auto,Auto"
+          RowSpacing="2">
+        <Border IsVisible="{Binding HasRecoveryDraft}"
+                Padding="10"
+                BorderBrush="{DynamicResource ThemeBorderLowBrush}"
+                BorderThickness="1"
+                CornerRadius="8"
+                Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
+                AutomationProperties.ControlTypeOverride="Pane"
+                AutomationProperties.Name="{DynamicResource FeedDraftRecoveryTitle}"
+                AutomationProperties.AutomationId="{Binding RecoveryRootAutomationId}">
+            <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto"
+                  RowSpacing="4">
+                <TextBlock FontWeight="SemiBold"
+                           Text="{DynamicResource FeedDraftRecoveryTitle}" />
+                <TextBlock Grid.Row="1"
+                           Text="{DynamicResource FeedDraftRecoveryDescription}"
+                           TextWrapping="Wrap"
+                           Opacity="0.75" />
+                <TextBlock Grid.Row="2"
+                           IsVisible="{Binding IsRecoveryDraftStale}"
+                           Text="{DynamicResource FeedDraftRecoveryStale}"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}" />
+                <TextBox Grid.Row="3"
+                         MaxHeight="120"
+                         Text="{Binding RecoveryDraft.RawMarkdown, Mode=OneWay}"
+                         IsReadOnly="True"
+                         AcceptsReturn="True"
+                         TextWrapping="Wrap"
+                         ScrollViewer.VerticalScrollBarVisibility="Auto"
+                         AutomationProperties.AutomationId="{Binding RecoveryContentAutomationId}" />
+                <Grid Grid.Row="4"
+                      ColumnDefinitions="*,Auto,Auto"
+                      ColumnSpacing="8">
+                    <TextBlock VerticalAlignment="Center"
+                               Text="{Binding RecoveryDraft.RelativePath}"
+                               TextTrimming="CharacterEllipsis"
+                               Opacity="0.68" />
+                    <Button Grid.Column="1"
+                            Command="{Binding RestoreRecoveryDraftCommand}"
+                            IsEnabled="{Binding CanRestoreRecoveryDraft}"
+                            Content="{DynamicResource AreaRestore}"
+                            AutomationProperties.AutomationId="{Binding RecoveryRestoreAutomationId}" />
+                    <Button Grid.Column="2"
+                            Command="{Binding DiscardRecoveryDraftCommand}"
+                            Content="{DynamicResource Remove}"
+                            AutomationProperties.AutomationId="{Binding RecoveryDiscardAutomationId}" />
+                </Grid>
+            </Grid>
+        </Border>
+
+        <TextBlock Grid.Row="1"
+                   IsVisible="{Binding HasDraftPersistenceError}"
+                   Text="{Binding DraftPersistenceError}"
+                   TextWrapping="Wrap"
+                   Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+                   AutomationProperties.LiveSetting="Assertive"
+                   AutomationProperties.AutomationId="{Binding DraftPersistenceErrorAutomationId}" />
+
+        <ItemsControl Grid.Row="2"
+                      ItemsSource="{Binding Blocks}"
+                      AutomationProperties.AutomationId="{Binding BlocksAutomationId}">
+        <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="feed:MarkdownLiveBlockViewModel">
+                <Grid Margin="0"
+                      ColumnDefinitions="Auto,*"
+                      IsVisible="{Binding IsFeedFilterVisible}"
+                      Classes="BlockRow"
+                      Classes.MoveSelected="{Binding IsMoveSelected}"
+                      PointerEntered="OnBlockPointerEntered"
+                      PointerExited="OnBlockPointerExited"
+                      AutomationProperties.AutomationId="{Binding BlockAutomationId}"
+                      AutomationProperties.Name="{Binding AutomationName}">
+                    <Border Grid.ColumnSpan="2"
+                            Height="2"
+                            VerticalAlignment="Top"
+                            IsVisible="{Binding IsMoveDropBefore}"
+                            Background="{DynamicResource MarkdownReviewAccentBrush}" />
+                    <Border Grid.ColumnSpan="2"
+                            Height="2"
+                            VerticalAlignment="Bottom"
+                            IsVisible="{Binding IsMoveDropAfter}"
+                            Background="{DynamicResource MarkdownReviewAccentBrush}" />
+
+                    <ToggleButton Grid.Column="0"
+                                  Classes="BlockMoveHandle"
+                                  Width="24"
+                                  MinWidth="24"
+                                  MinHeight="24"
+                                  Margin="0,0,2,0"
+                                  Padding="0"
+                                  Background="Transparent"
+                                  BorderBrush="Transparent"
+                                  BorderThickness="0"
+                                  Opacity="{Binding MoveHandleIdleOpacity}"
+                                  IsChecked="{Binding IsMoveSelected, Mode=OneWay}"
+                                  IsEnabled="{Binding IsMovable}"
+                                  KeyDown="OnMoveHandleKeyDown"
+                                  AutomationProperties.Name="{DynamicResource FeedBlockMoveHandle}"
+                                  AutomationProperties.HelpText="{DynamicResource FeedBlockMoveHelp}"
+                                  AutomationProperties.ItemStatus="{Binding MoveDropAutomationStatus}"
+                                  AutomationProperties.IsControlElementOverride="True"
+                                  AutomationProperties.ControlTypeOverride="Thumb"
+                                  AutomationProperties.AutomationId="{Binding MoveHandleAutomationId}">
+                        <TextBlock Text="{Binding MoveHandleContent}"
+                                   IsHitTestVisible="False" />
+                    </ToggleButton>
+
+                    <Grid Grid.Column="1">
+                        <Border Classes.ReviewHighlight="{Binding IsReviewHighlighted}">
+                            <views:MarkdownBlockPreviewControl Block="{Binding}"
+                                                           IsVisible="{Binding IsPreviewVisible}"
+                                                           Focusable="{Binding CanStartEdit}"
+                                                           PointerPressed="OnPreviewPointerPressed"
+                                                           KeyDown="OnPreviewKeyDown"
+                                                           LinkInvoked="OnLinkInvoked"
+                                                           BrokenTaskReferenceActionInvoked="OnBrokenTaskReferenceActionInvoked"
+                                                           AutomationProperties.AutomationId="{Binding PreviewAutomationId}"
+                                                           AutomationProperties.HelpText="{DynamicResource MarkdownBlockEditHelp}" />
+                        </Border>
+
+                        <Canvas ZIndex="20"
+                                Height="0"
+                                HorizontalAlignment="Stretch"
+                                VerticalAlignment="Top"
+                                IsVisible="{Binding IsContextToolbarVisible}">
+                            <Border Canvas.Right="0"
+                                    Canvas.Top="0"
+                                    Padding="2"
+                                    CornerRadius="6"
+                                    BorderBrush="{DynamicResource ThemeBorderMidBrush}"
+                                    BorderThickness="1"
+                                    Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
+                                    AutomationProperties.ControlTypeOverride="ToolBar"
+                                    AutomationProperties.Name="{DynamicResource FeedBlockToolbar}"
+                                    AutomationProperties.AutomationId="{Binding ContextToolbarAutomationId}">
+                                <StackPanel Orientation="Horizontal" Spacing="2">
+                                <Button Classes="BlockToolbarAction"
+                                        Click="OnMoveSelectionUpClick"
+                                        IsEnabled="{Binding CanMoveUpFromToolbar}"
+                                        Content="↑"
+                                        ToolTip.Tip="{DynamicResource FeedBlockMoveUp}" />
+                                <Button Classes="BlockToolbarAction"
+                                        Click="OnMoveSelectionDownClick"
+                                        IsEnabled="{Binding CanMoveDownFromToolbar}"
+                                        Content="↓"
+                                        ToolTip.Tip="{DynamicResource FeedBlockMoveDown}" />
+                                <Button Classes="BlockToolbarAction"
+                                        Click="OnBulletedListClick"
+                                        IsEnabled="{Binding CanTransformFromToolbar}"
+                                        Content="•"
+                                        ToolTip.Tip="{DynamicResource FeedBlockBulletedList}" />
+                                <Button Classes="BlockToolbarAction"
+                                        Click="OnNumberedListClick"
+                                        IsEnabled="{Binding CanTransformFromToolbar}"
+                                        Content="1."
+                                        ToolTip.Tip="{DynamicResource FeedBlockNumberedList}" />
+                                <Button Classes="BlockToolbarAction"
+                                        Click="OnChecklistClick"
+                                        IsEnabled="{Binding CanTransformFromToolbar}"
+                                        Content="☑"
+                                        ToolTip.Tip="{DynamicResource FeedBlockChecklist}" />
+                                <Button Classes="BlockToolbarAction"
+                                        Content="⋯"
+                                        Click="OnToolbarMoreClick"
+                                        IsEnabled="{Binding CanOpenActionsFromToolbar}"
+                                        ToolTip.Tip="{DynamicResource MoreActions}">
+                                    <Button.Flyout>
+                                        <MenuFlyout Placement="BottomEdgeAlignedRight"
+                                                    Closed="OnToolbarFlyoutClosed">
+                                            <MenuItem Click="OnCreateTaskClick"
+                                                      IsEnabled="{Binding CanOpenActionsFromToolbar}"
+                                                      Header="{DynamicResource FeedReviewTaskAction}" />
+                                            <MenuItem Click="OnCreateNoteClick"
+                                                      IsEnabled="{Binding CanOpenActionsFromToolbar}"
+                                                      Header="{DynamicResource FeedReviewNoteAction}" />
+                                            <MenuItem Click="OnChangeAreaClick"
+                                                      IsEnabled="{Binding CanOpenActionsFromToolbar}"
+                                                      Header="{DynamicResource FeedBlockChangeArea}" />
+                                            <MenuItem Click="OnConvertHeadingToAreaClick"
+                                                      IsEnabled="{Binding CanConvertToAreaFromToolbar}"
+                                                      Header="{DynamicResource FeedBlockConvertToArea}" />
+                                        </MenuFlyout>
+                                    </Button.Flyout>
+                                </Button>
+                                </StackPanel>
+                            </Border>
+                        </Canvas>
+
+                    <!-- A real text automation peer keeps the selected inline block discoverable
+                         by both Headless and FlaUI without rendering a second copy of its Markdown. -->
+                        <TextBlock Width="1"
+                               Height="1"
+                               Foreground="Transparent"
+                               IsHitTestVisible="False"
+                               IsVisible="{Binding IsReviewAnchor}"
+                               Text="{Binding ReviewSelectionAutomationName}"
+                               AutomationProperties.AutomationId="{Binding ReviewSelectionAutomationId}"
+                               AutomationProperties.Name="{Binding ReviewSelectionAutomationName}"
+                               AutomationProperties.IsControlElementOverride="True"
+                               AutomationProperties.ControlTypeOverride="Text" />
+
+                        <Grid IsVisible="{Binding IsEditing}"
+                          RowDefinitions="Auto,Auto">
+                        <TextBox Classes="MarkdownBlockEditor"
+                                  Margin="0,-1,0,-1"
+                                  AcceptsReturn="True"
+                                 TextWrapping="Wrap"
+                                  Text="{Binding EditorText, Mode=TwoWay}"
+                                  IsEnabled="{Binding !IsCommitInProgress}"
+                                  TextChanged="OnEditorTextChanged"
+                                   LostFocus="OnEditorLostFocus"
+                                 AutomationProperties.AutomationId="{Binding EditorAutomationId}"
+                                 AutomationProperties.Name="{Binding EditorAutomationName}"
+                                 AutomationProperties.HelpText="{DynamicResource MarkdownBlockCommitHelp}" />
+
+                        <Grid Grid.Row="1"
+                              Margin="0,2,0,0"
+                              ColumnDefinitions="*,Auto"
+                              ColumnSpacing="8">
+                            <TextBlock IsVisible="{Binding HasError}"
+                                       Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+                                       Text="{Binding ErrorMessage}"
+                                       TextWrapping="Wrap"
+                                       AutomationProperties.AutomationId="{Binding ErrorAutomationId}" />
+                            <ProgressBar Grid.Column="1"
+                                         Width="72"
+                                         IsIndeterminate="True"
+                                         IsVisible="{Binding IsCommitInProgress}"
+                                         AutomationProperties.AutomationId="{Binding SavingAutomationId}" />
+                        </Grid>
+                        </Grid>
+                    </Grid>
+                </Grid>
+            </DataTemplate>
+        </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <TextBlock Grid.Row="3"
+                   IsVisible="{Binding HasMoveError}"
+                   Text="{Binding MoveErrorMessage}"
+                   TextWrapping="Wrap"
+                   Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+                   AutomationProperties.LiveSetting="Assertive"
+                   AutomationProperties.AutomationId="FeedBlockMoveError" />
+    </Grid>
+</UserControl>

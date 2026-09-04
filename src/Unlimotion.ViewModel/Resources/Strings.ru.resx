@@ -148,9 +148,145 @@
   <data name="FilterSort" xml:space="preserve"><value>Сортировка</value></data>
   <data name="NoRelationCandidates" xml:space="preserve"><value>Для этого типа связи нет доступных задач.</value></data>
   <data name="FirstDayNextMonth" xml:space="preserve"><value>Первый день следующего месяца</value></data>
+  <data name="FeedCapture" xml:space="preserve"><value>Добавить</value></data>
+  <data name="FeedChooseVault" xml:space="preserve"><value>Выбрать папку базы</value></data>
+  <data name="FeedEmptyDayList" xml:space="preserve"><value>Ежедневных заметок пока нет</value></data>
+  <data name="FeedMode" xml:space="preserve"><value>Лента</value></data>
+  <data name="FeedNoArea" xml:space="preserve"><value>Без области</value></data>
+  <data name="FeedAreaFilterAll" xml:space="preserve"><value>Все области</value></data>
+  <data name="FeedAreaFilterNone" xml:space="preserve"><value>Ни одной области</value></data>
+  <data name="FeedAreaFilterSelected" xml:space="preserve"><value>Областей: {0}</value></data>
+  <data name="FeedAreaFilterEmpty" xml:space="preserve"><value>Нет записей в выбранных областях</value></data>
+  <data name="FeedAreaFilterReset" xml:space="preserve"><value>Сбросить фильтр областей</value></data>
+  <data name="FeedBlockMoveHandle" xml:space="preserve"><value>Выделить и перетащить блок</value></data>
+  <data name="FeedBlockMoveHelp" xml:space="preserve"><value>Щелчок выделяет блок. Ctrl добавляет блок, Shift выделяет диапазон. Перетащите для перемещения; Alt+Вверх или Alt+Вниз перемещает с клавиатуры.</value></data>
+  <data name="FeedBlockMoveFailed" xml:space="preserve"><value>Не удалось переместить выбранные блоки.</value></data>
+  <data name="FeedBlockToolbar" xml:space="preserve"><value>Действия с выбранными блоками</value></data>
+  <data name="FeedBlockMoveUp" xml:space="preserve"><value>Переместить выше</value></data>
+  <data name="FeedBlockMoveDown" xml:space="preserve"><value>Переместить ниже</value></data>
+  <data name="FeedBlockBulletedList" xml:space="preserve"><value>Маркированный список</value></data>
+  <data name="FeedBlockNumberedList" xml:space="preserve"><value>Нумерованный список</value></data>
+  <data name="FeedBlockChecklist" xml:space="preserve"><value>Чекбоксы</value></data>
+  <data name="FeedBlockChangeArea" xml:space="preserve"><value>Изменить область</value></data>
+  <data name="FeedBlockConvertToArea" xml:space="preserve"><value>Сделать областью</value></data>
+  <data name="TaskSpaceNoteVaultActivationFailed" xml:space="preserve"><value>Не удалось подключить базу заметок этого пространства.</value></data>
+  <data name="FeedOnboardingDescription" xml:space="preserve"><value>Выберите корневую папку существующей базы Obsidian. Файлы останутся на месте и будут редактироваться как Markdown.</value></data>
+  <data name="FeedOnboardingTitle" xml:space="preserve"><value>Подключите базу заметок</value></data>
+  <data name="FeedQuickCaptureTitle" xml:space="preserve"><value>Быстрая запись</value></data>
+  <data name="FeedQuickCaptureWatermark" xml:space="preserve"><value>Запишите мысль, задачу или Markdown-заметку...</value></data>
+  <data name="FeedQuickCaptureAsTask" xml:space="preserve"><value>Создать как задачу в сегодняшней заметке</value></data>
+  <data name="FeedQuickCaptureTask" xml:space="preserve"><value>Задача в ежедневной заметке</value></data>
+  <data name="FeedQuickCaptureNote" xml:space="preserve"><value>Новая запись</value></data>
+  <data name="FeedQuickCaptureCreated" xml:space="preserve"><value>Задача создана</value></data>
+  <data name="FeedQuickCaptureDone" xml:space="preserve"><value>Готово</value></data>
+  <data name="GlobalCreate" xml:space="preserve"><value>Создать</value></data>
+  <data name="GlobalReview" xml:space="preserve"><value>Разбор</value></data>
+  <data name="GlobalSettings" xml:space="preserve"><value>Настройки</value></data>
+  <data name="GlobalSearchWatermark" xml:space="preserve"><value>Поиск по задачам и заметкам</value></data>
+  <data name="GlobalClose" xml:space="preserve"><value>Закрыть</value></data>
+  <data name="FeedRefresh" xml:space="preserve"><value>Обновить</value></data>
+  <data name="FeedSearchArea" xml:space="preserve"><value>Область</value></data>
+  <data name="FeedSearchAreaAll" xml:space="preserve"><value>Все области</value></data>
+  <data name="FeedSearchDateFrom" xml:space="preserve"><value>Дата с</value></data>
+  <data name="FeedSearchDateTo" xml:space="preserve"><value>Дата по</value></data>
+  <data name="FeedSearchNoResults" xml:space="preserve"><value>Ничего не найдено</value></data>
+  <data name="FeedSearchType" xml:space="preserve"><value>Тип</value></data>
+  <data name="FeedSearchTypeAll" xml:space="preserve"><value>Все типы</value></data>
+  <data name="FeedSearchTypeDaily" xml:space="preserve"><value>Ежедневные</value></data>
+  <data name="FeedSearchTypeNote" xml:space="preserve"><value>Постоянные заметки</value></data>
+  <data name="FeedSearchTypeTask" xml:space="preserve"><value>Задачи</value></data>
+  <data name="FeedSearchWatermark" xml:space="preserve"><value>Поиск по заметкам</value></data>
+  <data name="FeedSearchIndexing" xml:space="preserve"><value>Индексирование заметок</value></data>
+  <data name="FeedTitle" xml:space="preserve"><value>Лента</value></data>
+  <data name="FeedExternalVaultUnsupported" xml:space="preserve"><value>На этой платформе выбор внешней базы заметок не поддерживается.</value></data>
+  <data name="FeedBootstrapIndexedFiles" xml:space="preserve"><value>Проиндексировано файлов:</value></data>
+  <data name="FeedBootstrapPendingCheckboxes" xml:space="preserve"><value>Незавершённых пунктов:</value></data>
+  <data name="FeedReviewPendingBlocks" xml:space="preserve"><value>Блоков к разбору:</value></data>
+  <data name="FeedReviewPendingDays" xml:space="preserve"><value>Дней:</value></data>
+  <data name="FeedStartReview" xml:space="preserve"><value>Разобрать</value></data>
+  <data name="FeedFinishReview" xml:space="preserve"><value>Завершить разбор</value></data>
+  <data name="FeedReviewExpandUp" xml:space="preserve"><value>Расширить вверх</value></data>
+  <data name="FeedReviewExpandDown" xml:space="preserve"><value>Расширить вниз</value></data>
+  <data name="FeedReviewShrinkUp" xml:space="preserve"><value>Сузить сверху</value></data>
+  <data name="FeedReviewShrinkDown" xml:space="preserve"><value>Сузить снизу</value></data>
+  <data name="FeedReviewAssignArea" xml:space="preserve"><value>Назначить область</value></data>
+  <data name="FeedReviewLeave" xml:space="preserve"><value>Оставить</value></data>
+  <data name="FeedReviewSkip" xml:space="preserve"><value>Пропустить</value></data>
+  <data name="FeedReviewMoveToday" xml:space="preserve"><value>Перенести на сегодня</value></data>
+  <data name="FeedReviewTaskOptions" xml:space="preserve"><value>Задача или цель</value></data>
+  <data name="FeedReviewGoal" xml:space="preserve"><value>Цель</value></data>
+  <data name="FeedReviewCreateTask" xml:space="preserve"><value>Создать задачу</value></data>
+  <data name="FeedReviewNoteTitle" xml:space="preserve"><value>Название заметки</value></data>
+  <data name="FeedReviewNoteFolder" xml:space="preserve"><value>Тематическая папка</value></data>
+  <data name="FeedReviewCreateNote" xml:space="preserve"><value>Создать заметку</value></data>
+  <data name="FeedReviewContinue" xml:space="preserve"><value>Продолжить</value></data>
+  <data name="FeedReviewPrevious" xml:space="preserve"><value>← Предыдущий</value></data>
+  <data name="FeedReviewNext" xml:space="preserve"><value>Следующий →</value></data>
+  <data name="FeedReviewTaskAction" xml:space="preserve"><value>Задача</value></data>
+  <data name="FeedReviewNoteAction" xml:space="preserve"><value>Заметка</value></data>
+  <data name="FeedReviewMoveTodayShort" xml:space="preserve"><value>На сегодня</value></data>
+  <data name="Retry" xml:space="preserve"><value>Повторить</value></data>
+  <data name="FeedIdentityConflictTitle" xml:space="preserve"><value>Изменилась identity базы</value></data>
+  <data name="FeedIdentityConflictDescription" xml:space="preserve"><value>Запись приостановлена. Обе ветви identity и разбора сохранены; выберите, как переподключить эту папку.</value></data>
+  <data name="FeedIdentityConflictAccepted" xml:space="preserve"><value>Подключённая identity:</value></data>
+  <data name="FeedIdentityConflictCurrent" xml:space="preserve"><value>Текущая папка:</value></data>
+  <data name="FeedIdentityConflictUseCurrent" xml:space="preserve"><value>Использовать identity текущей папки</value></data>
+  <data name="FeedIdentityConflictReconnect" xml:space="preserve"><value>Переподключить другую папку</value></data>
+  <data name="FeedIdentityConflictReadOnly" xml:space="preserve"><value>Остаться только для чтения</value></data>
+  <data name="FeedReviewRecoveryTitle" xml:space="preserve"><value>Незавершённый разбор на другом устройстве</value></data>
+  <data name="FeedReviewRecoveryDescription" xml:space="preserve"><value>Продолжите ту же сессию разбора или явно завершите её. Новая сессия не будет создана молча.</value></data>
+  <data name="FeedReviewRecoveryContinue" xml:space="preserve"><value>Продолжить этот разбор</value></data>
+  <data name="FeedReviewRecoveryAbandon" xml:space="preserve"><value>Завершить незавершённый разбор</value></data>
+  <data name="FeedReviewRecoveryOwner" xml:space="preserve"><value>Устройство</value></data>
+  <data name="FeedReviewUntitledNote" xml:space="preserve"><value>Новая заметка</value></data>
+  <data name="AreaArchivedBadge" xml:space="preserve"><value>Архив</value></data>
+  <data name="AreaArchive" xml:space="preserve"><value>Архивировать</value></data>
+  <data name="AreaRestore" xml:space="preserve"><value>Восстановить</value></data>
+  <data name="AreaCreateChild" xml:space="preserve"><value>Создать дочернюю</value></data>
+  <data name="AreaCreateRoot" xml:space="preserve"><value>Создать корневую</value></data>
+  <data name="AreaDefaultNoteFolderWatermark" xml:space="preserve"><value>Папка заметок по умолчанию</value></data>
+  <data name="AreaManagementList" xml:space="preserve"><value>Области</value></data>
+  <data name="AreaManagementTitle" xml:space="preserve"><value>Управление областями</value></data>
+  <data name="AreaNameRequired" xml:space="preserve"><value>Название области не может быть пустым.</value></data>
+  <data name="AreaNameWatermark" xml:space="preserve"><value>Название области</value></data>
+  <data name="AreaParentLabel" xml:space="preserve"><value>Родительская область</value></data>
+  <data name="AreaPropertiesTitle" xml:space="preserve"><value>Свойства области</value></data>
+  <data name="FeedConflictDescription" xml:space="preserve"><value>Заметка изменилась на диске во время редактирования блока. Выберите версию, которую нужно сохранить.</value></data>
+  <data name="FeedConflictDiskVersion" xml:space="preserve"><value>Версия на диске</value></data>
+  <data name="FeedConflictEditorVersion" xml:space="preserve"><value>Версия редактора</value></data>
+  <data name="FeedConflictSaveBoth" xml:space="preserve"><value>Сохранить обе</value></data>
+  <data name="FeedConflictTitle" xml:space="preserve"><value>Конфликт редактирования заметки</value></data>
+  <data name="FeedConflictUseDisk" xml:space="preserve"><value>Использовать версию с диска</value></data>
+  <data name="FeedConflictUseEditor" xml:space="preserve"><value>Использовать версию редактора</value></data>
+  <data name="FeedFilesEmpty" xml:space="preserve"><value>Тематические Markdown-заметки не найдены</value></data>
+  <data name="FeedFilesTitle" xml:space="preserve"><value>Файлы</value></data>
+  <data name="FeedVaultIdentityFrozen" xml:space="preserve"><value>Идентификатор базы изменился извне. Редактирование приостановлено до повторного подключения и проверки базы.</value></data>
+  <data name="FeedDraftRecoveryTitle" xml:space="preserve"><value>Найден несохранённый Markdown</value></data>
+  <data name="FeedDraftRecoveryDescription" xml:space="preserve"><value>Восстановите локальный черновик или явно удалите его. До вашего выбора заметка не изменится.</value></data>
+  <data name="FeedDraftRecoveryStale" xml:space="preserve"><value>После сохранения черновика заметка изменилась. Оставьте черновик для разрешения конфликта или явно удалите его.</value></data>
+  <data name="TaskAreas" xml:space="preserve"><value>Области</value></data>
+  <data name="TaskClassificationTitle" xml:space="preserve"><value>Классификация</value></data>
+  <data name="TaskClassificationOldServerExplanation" xml:space="preserve"><value>Этот сервер не поддерживает признаки цели и областей. Редактирование отключено, чтобы не потерять данные.</value></data>
+  <data name="TaskIsGoal" xml:space="preserve"><value>Цель</value></data>
+  <data name="MarkdownBlockedLinkHelp" xml:space="preserve"><value>URI-схема небезопасна, поэтому ссылка неактивна.</value></data>
+  <data name="MarkdownBlockedLinkName" xml:space="preserve"><value>Заблокированная ссылка: {0}</value></data>
+  <data name="MarkdownBlockedLinkTooltip" xml:space="preserve"><value>Небезопасная URI-схема заблокирована</value></data>
+  <data name="MarkdownBlockAutomationName" xml:space="preserve"><value>Markdown-блок {0}: {1}</value></data>
+  <data name="MarkdownBlockCommitHelp" xml:space="preserve"><value>Ctrl+Enter — сохранить. Esc — отменить.</value></data>
+  <data name="MarkdownBlockEditHelp" xml:space="preserve"><value>Enter или F2 — редактировать блок.</value></data>
+  <data name="MarkdownBlockEditorAutomationName" xml:space="preserve"><value>Редактирование Markdown-блока {0}</value></data>
+  <data name="MarkdownBlockSaveFailed" xml:space="preserve"><value>Не удалось сохранить Markdown-блок.</value></data>
+  <data name="MarkdownEditingUnavailable" xml:space="preserve"><value>Редактирование недоступно: не задан обработчик сохранения.</value></data>
+  <data name="MarkdownLinkName" xml:space="preserve"><value>Ссылка: {0}</value></data>
+  <data name="MarkdownLivePreviewName" xml:space="preserve"><value>Live Preview Markdown</value></data>
+  <data name="MarkdownPatchAcknowledgementInvalid" xml:space="preserve"><value>Хранилище вернуло некорректное подтверждение Markdown-патча.</value></data>
+  <data name="MarkdownTaskCompleted" xml:space="preserve"><value>Выполнено</value></data>
+  <data name="MarkdownTaskIncomplete" xml:space="preserve"><value>Не выполнено</value></data>
+  <data name="MarkdownUnsupportedRawName" xml:space="preserve"><value>Неподдерживаемый Markdown. Исходный текст.</value></data>
   <data name="FiveDays" xml:space="preserve"><value>5 дней</value></data>
   <data name="FiveMinutes" xml:space="preserve"><value>5 минут</value></data>
   <data name="FolderPickerDataFolder" xml:space="preserve"><value>Папка с данными</value></data>
+  <data name="FolderPickerNoteVaultRoot" xml:space="preserve"><value>Папка базы Obsidian</value></data>
   <data name="FolderPickerSshKeyStoragePath" xml:space="preserve"><value>Папка SSH-ключей</value></data>
   <data name="FolderPickerTaskStoragePath" xml:space="preserve"><value>Папка хранилища задач</value></data>
   <data name="FontSize" xml:space="preserve"><value>Размер текста</value></data>
@@ -279,6 +415,28 @@
   <data name="NextFriday" xml:space="preserve"><value>Следующая пятница</value></data>
   <data name="NextMonday" xml:space="preserve"><value>Следующий понедельник</value></data>
   <data name="None" xml:space="preserve"><value>Нет</value></data>
+  <data name="NoteVaultDesktopOnlyHint" xml:space="preserve"><value>Внешняя база заметок доступна в desktop-версии приложения.</value></data>
+  <data name="NoteVaultFolder" xml:space="preserve"><value>Папка базы</value></data>
+  <data name="NoteVaultFolderPickerFailed" xml:space="preserve"><value>Не удалось выбрать папку базы заметок: {0}</value></data>
+  <data name="NoteVaultHint" xml:space="preserve"><value>Выберите корневую папку существующей базы Obsidian. Unlimotion работает с её Markdown-файлами на месте.</value></data>
+  <data name="NoteVaultTitle" xml:space="preserve"><value>База заметок</value></data>
+  <data name="NoteDailyFileNameFormat" xml:space="preserve"><value>Формат имени ежедневной заметки</value></data>
+  <data name="NoteDailyFileNameFormatApply" xml:space="preserve"><value>Применить</value></data>
+  <data name="NoteDailyFileNameFormatApplyCancelled" xml:space="preserve"><value>Применение формата имени ежедневной заметки отменено.</value></data>
+  <data name="NoteDailyFileNameFormatApplyError" xml:space="preserve"><value>Не удалось применить формат имени ежедневной заметки: {0}</value></data>
+  <data name="NoteDailyFileNameFormatApplyFailed" xml:space="preserve"><value>Не удалось применить формат имени ежедневной заметки. Попробуйте ещё раз.</value></data>
+  <data name="NoteDailyFileNameFormatApplied" xml:space="preserve"><value>Формат имени ежедневной заметки применён: {0}</value></data>
+  <data name="NoteDailyFileNameFormatApplying" xml:space="preserve"><value>Применение формата имени ежедневной заметки…</value></data>
+  <data name="NoteDailyFileNameFormatExternalChanged" xml:space="preserve"><value>Формат имени ежедневной заметки изменён в другой копии базы: {0}</value></data>
+  <data name="NoteDailyFileNameFormatHint" xml:space="preserve"><value>Укажите только основу имени. «Ежедневные/» и .md Unlimotion добавит сам.</value></data>
+  <data name="NoteDailyFileNameFormatInvalid" xml:space="preserve"><value>Используйте yyyy, MM и dd по одному разу; между ними допустимы только -, . или _.</value></data>
+  <data name="NoteDailyFileNameFormatPreview" xml:space="preserve"><value>Пример: </value></data>
+  <data name="NoteDailyFileNameFormatReloadExternal" xml:space="preserve"><value>Загрузить внешнее значение</value></data>
+  <data name="NoteDailyFileNameFormatReloading" xml:space="preserve"><value>Загрузка формата имени ежедневной заметки…</value></data>
+  <data name="NoteDailyFileNameFormatRootRequired" xml:space="preserve"><value>Выберите и инициализируйте папку базы, прежде чем применять формат имени ежедневной заметки.</value></data>
+  <data name="NoteDailyFileNameFormatWarning" xml:space="preserve"><value>При смене формата файлы не переименовываются. Выберите формат, соответствующий именам вашей истории.</value></data>
+  <data name="NoteDayBoundary" xml:space="preserve"><value>Начало нового дня</value></data>
+  <data name="NoteDayBoundaryHint" xml:space="preserve"><value>Записи до этого локального времени попадут в ежедневную заметку предыдущего дня.</value></data>
   <data name="OneDay" xml:space="preserve"><value>1 день</value></data>
   <data name="OneHour" xml:space="preserve"><value>1 час</value></data>
   <data name="OneMinute" xml:space="preserve"><value>1 минута</value></data>
@@ -449,6 +607,7 @@
   <data name="TaskCardPlanning" xml:space="preserve"><value>Планирование</value></data>
   <data name="TaskCardRelations" xml:space="preserve"><value>Связи</value></data>
   <data name="TaskStorageNotConfigured" xml:space="preserve"><value>Хранилище задач не настроено.</value></data>
+  <data name="TasksMode" xml:space="preserve"><value>Задачи</value></data>
   <data name="TenDays" xml:space="preserve"><value>10 дней</value></data>
   <data name="TenMinutes" xml:space="preserve"><value>10 минут</value></data>
   <data name="ThemeDark" xml:space="preserve"><value>Темная</value></data>
@@ -575,4 +734,42 @@
   <data name="TaskSpaceSettingsSaving" xml:space="preserve"><value>Настройки пространства сохраняются…</value></data>
   <data name="TaskSpaceSettingsSaveFailed" xml:space="preserve"><value>Настройки пространства не сохранены: {0}. Повторите сохранение перед переключением пространства или закрытием приложения.</value></data>
   <data name="TaskSpaceSettingsRetry" xml:space="preserve"><value>Повторить сохранение</value></data>
+  <data name="FeedPendingRecoveryFailed" xml:space="preserve"><value>Для {0} операций Ленты всё ещё требуется восстановление. Данные сохранены, журнал остаётся незавершённым.&#10;{1}</value></data>
+  <data name="FeedLoadOlderDays" xml:space="preserve"><value>Показать предыдущие дни</value></data>
+  <data name="FeedDayCollapseToggle" xml:space="preserve"><value>Свернуть или развернуть этот день</value></data>
+  <data name="FeedBrokenTaskReference" xml:space="preserve"><value>Сломанная ссылка на задачу</value></data>
+  <data name="FeedBrokenTaskReferenceName" xml:space="preserve"><value>Сломанная ссылка на задачу: {0}</value></data>
+  <data name="FeedBrokenTaskFind" xml:space="preserve"><value>Найти</value></data>
+  <data name="FeedBrokenTaskUnlink" xml:space="preserve"><value>Отвязать</value></data>
+  <data name="FeedBrokenTaskRestoreRevision" xml:space="preserve"><value>Восстановить из revision</value></data>
+  <data name="FeedBrokenTaskRevisionUnavailable" xml:space="preserve"><value>Безопасная revision с исходным текстом не найдена.</value></data>
+  <data name="FeedBrokenTaskActionFailed" xml:space="preserve"><value>Не удалось изменить сломанную ссылку.</value></data>
+  <data name="FeedPendingRecoveryTitle" xml:space="preserve"><value>Требуется восстановление</value></data>
+  <data name="FeedPendingRecoveryDescription" xml:space="preserve"><value>Некоторые операции Ленты были прерваны. Завершите замену или сохраните обе версии; данные никогда не удаляются автоматически.</value></data>
+  <data name="FeedRecoveryFinishReplacement" xml:space="preserve"><value>Завершить замену</value></data>
+  <data name="FeedRecoveryKeepBoth" xml:space="preserve"><value>Сохранить обе версии</value></data>
+  <data name="FeedIdentitySafePendingTitle" xml:space="preserve"><value>Фрагменты, требующие проверки</value></data>
+  <data name="FeedIdentitySafePendingDescription" xml:space="preserve"><value>Эти ссылки на блоки сохранены из другой ветки identity базы. Проверьте их перед дальнейшими изменениями.</value></data>
+  <data name="FeedPendingRecoveryKindTask" xml:space="preserve"><value>Задача</value></data>
+  <data name="FeedPendingRecoveryKindNote" xml:space="preserve"><value>Заметка</value></data>
+  <data name="FeedPendingRecoveryKindMove" xml:space="preserve"><value>Перенос</value></data>
+  <data name="FeedPendingRecoveryKindArea" xml:space="preserve"><value>Область</value></data>
+  <data name="AreaExternalConflict" xml:space="preserve"><value>Области были изменены и в Unlimotion, и извне. Выберите, какую версию сохранить.</value></data>
+  <data name="AreaUseLocalDraft" xml:space="preserve"><value>Использовать версию Unlimotion</value></data>
+  <data name="AreaUseExternal" xml:space="preserve"><value>Использовать внешнюю версию</value></data>
+  <data name="TaskGoalFilterAll" xml:space="preserve"><value>Все</value></data>
+  <data name="TaskGoalFilterGoals" xml:space="preserve"><value>Цели</value></data>
+  <data name="TaskGoalFilterRegular" xml:space="preserve"><value>Обычные</value></data>
+  <data name="FeedChronologyAutomationName" xml:space="preserve">
+    <value>Хронология: дней — {0}</value>
+  </data>
+  <data name="MarkdownHeadingAreaTitle" xml:space="preserve"><value>Превратить заголовок в область</value></data>
+  <data name="MarkdownHeadingAreaDescription" xml:space="preserve"><value>Создайте область с необязательным родителем или свяжите заголовок с существующей областью.</value></data>
+  <data name="MarkdownHeadingAreaExisting" xml:space="preserve"><value>Область</value></data>
+  <data name="MarkdownHeadingAreaName" xml:space="preserve"><value>Название</value></data>
+  <data name="MarkdownHeadingAreaParent" xml:space="preserve"><value>Родитель</value></data>
+  <data name="MarkdownHeadingAreaConfirm" xml:space="preserve"><value>Превратить в область</value></data>
+  <data name="MarkdownCreateNewArea" xml:space="preserve"><value>Создать новую область</value></data>
+  <data name="MarkdownSelectedHeadingUnavailable" xml:space="preserve"><value>Выбранный заголовок больше недоступен.</value></data>
+  <data name="MarkdownSelectedAreaUnavailable" xml:space="preserve"><value>Выбранная область больше недоступна.</value></data>
 </root>

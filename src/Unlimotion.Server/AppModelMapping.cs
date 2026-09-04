@@ -42,6 +42,26 @@ namespace Unlimotion.Server
                 .ForMember(m => m.UserId, e => e.Ignore())
                 .ForMember(m => m.CreatedDateTime, e => e.Ignore())
                 .ForMember(m => m.ExtensionData, e => e.Ignore())
+                .ForMember(
+                    task => task.IsGoal,
+                    options =>
+                    {
+                        options.PreCondition(mold =>
+                            mold.TaskClassificationSchemaVersion >=
+                            TaskStorageCapabilities.CurrentTaskClassificationSchemaVersion &&
+                            mold.IsGoal.HasValue);
+                        options.MapFrom(mold => mold.IsGoal!.Value);
+                    })
+                .ForMember(
+                    task => task.AreaIds,
+                    options =>
+                    {
+                        options.PreCondition(mold =>
+                            mold.TaskClassificationSchemaVersion >=
+                            TaskStorageCapabilities.CurrentTaskClassificationSchemaVersion &&
+                            mold.AreaIds != null);
+                        options.MapFrom(mold => mold.AreaIds!);
+                    })
                 .IgnoreComputedStatusMembers();
 
             cfg.CreateMap<User, UserProfileMold>();

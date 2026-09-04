@@ -86,6 +86,7 @@
 		<ProjectReference Include="..\Unlimotion.TaskTreeManager\Unlimotion.TaskTree.csproj" />
 		<ProjectReference Include="..\Unlimotion.ViewModel\Unlimotion.ViewModel.csproj" />
 		<ProjectReference Include="..\Unlimotion.Interface\Unlimotion.Interface.csproj" />
+		<ProjectReference Include="..\Unlimotion.Notes\Unlimotion.Notes.csproj" />
 		<ProjectReference Include="..\Unlimotion.Server.ServiceModel\Unlimotion.Server.ServiceModel.csproj" />
 	</ItemGroup>
 	<ItemGroup>
