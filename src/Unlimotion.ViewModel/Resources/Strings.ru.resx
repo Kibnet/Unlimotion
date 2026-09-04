@@ -149,6 +149,11 @@
   <data name="NoRelationCandidates" xml:space="preserve"><value>Для этого типа связи нет доступных задач.</value></data>
   <data name="FirstDayNextMonth" xml:space="preserve"><value>Первый день следующего месяца</value></data>
   <data name="FeedCapture" xml:space="preserve"><value>Добавить</value></data>
+  <data name="FeedSearchPeriod" xml:space="preserve"><value>Период</value></data>
+  <data name="FeedSearchClearPeriod" xml:space="preserve"><value>За всё время</value></data>
+  <data name="FeedCaptureResolvePrevious" xml:space="preserve"><value>Сначала завершите предыдущую запись через панель восстановления. Изменённый черновик останется здесь.</value></data>
+  <data name="FeedCaptureRetryFailed" xml:space="preserve"><value>Не удалось завершить создание задачи. Черновик сохранён в панели. Повторите попытку или завершите операцию через восстановление.</value></data>
+  <data name="FeedCaptureLinkPending" xml:space="preserve"><value>Задача создана, но ссылка в записи ещё не подтверждена. Завершите операцию или оставьте обе записи как есть.</value></data>
   <data name="FeedChooseVault" xml:space="preserve"><value>Выбрать папку базы</value></data>
   <data name="FeedEmptyDayList" xml:space="preserve"><value>Ежедневных заметок пока нет</value></data>
   <data name="FeedMode" xml:space="preserve"><value>Лента</value></data>
@@ -272,7 +277,21 @@
   <data name="MarkdownBlockedLinkName" xml:space="preserve"><value>Заблокированная ссылка: {0}</value></data>
   <data name="MarkdownBlockedLinkTooltip" xml:space="preserve"><value>Небезопасная URI-схема заблокирована</value></data>
   <data name="MarkdownBlockAutomationName" xml:space="preserve"><value>Markdown-блок {0}: {1}</value></data>
-  <data name="MarkdownBlockCommitHelp" xml:space="preserve"><value>Ctrl+Enter — сохранить. Esc — отменить.</value></data>
+  <data name="MarkdownBlockCommitHelp" xml:space="preserve"><value>Enter — новый блок. Ctrl+Enter — строка внутри блока. Ctrl+S — сохранить. Esc — отменить.</value></data>
+  <data name="FeedUndoUnsafe" xml:space="preserve"><value>Запись уже изменилась. Отмена недоступна, чтобы не потерять новые изменения.</value></data>
+  <data name="FeedRecoveryRetryHint" xml:space="preserve"><value>Операцию не удалось завершить. Имеющиеся данные и журнал восстановления сохранены. Повторите попытку или оставьте данные как есть.</value></data>
+  <data name="FeedRecoveryDraftOccupied" xml:space="preserve"><value>Сначала сохраните или очистите другой черновик быстрого ввода, чтобы восстановить исходную запись, не затирая его.</value></data>
+  <data name="FeedRecoveryDraftChangedDestination" xml:space="preserve"><value>Файл изменён другим редактором. Текст восстановлен в быстром вводе; проверьте, не сохранился ли он уже в заметке. Нажатие «Добавить» сохранит ещё одну запись. Автоматически ничего не перезаписано.</value></data>
+  <data name="FeedToolbarTask" xml:space="preserve"><value>Задача</value></data>
+  <data name="FeedToolbarNote" xml:space="preserve"><value>Заметка</value></data>
+  <data name="FeedClipboardUnavailable" xml:space="preserve"><value>Буфер обмена временно недоступен. Ваш текст не изменён. Попробуйте вставить ещё раз.</value></data>
+  <data name="FeedClipboardTargetChanged" xml:space="preserve"><value>Место вставки изменилось во время чтения буфера. Повторите вставку в новой позиции.</value></data>
+  <data name="NoteDailyFileNameFormatImpact" xml:space="preserve"><value>В ленте останется {0} из {1} прежних ежедневных файлов. Остальные доступны в Файлах. Новый формат распознаёт всего {2} ежедневных файлов; не распознано: {3}. Файлы не будут переименованы или удалены. Применить формат?</value></data>
+  <data name="NoteDailyFileNameFormatConfirm" xml:space="preserve"><value>Подтвердить смену формата</value></data>
+  <data name="FeedReviewSourceChanged" xml:space="preserve"><value>Выделенный текст или его область изменились. Операция остановлена. Сохраните черновик и выберите фрагмент заново; если операция не завершена, воспользуйтесь восстановлением.</value></data>
+  <data name="FeedRecoveryDraftRestored" xml:space="preserve"><value>Исходный текст восстановлен в быстром вводе. Сохраните его как запись, чтобы завершить восстановление. До этого его резервная копия остаётся в журнале.</value></data>
+  <data name="FeedUndoChange" xml:space="preserve"><value>Отменить</value></data>
+  <data name="FeedMoveHidden" xml:space="preserve"><value>Блоки перемещены за пределы выбранных областей.</value></data>
   <data name="MarkdownBlockEditHelp" xml:space="preserve"><value>Enter или F2 — редактировать блок.</value></data>
   <data name="MarkdownBlockEditorAutomationName" xml:space="preserve"><value>Редактирование Markdown-блока {0}</value></data>
   <data name="MarkdownBlockSaveFailed" xml:space="preserve"><value>Не удалось сохранить Markdown-блок.</value></data>
@@ -747,7 +766,7 @@
   <data name="FeedPendingRecoveryTitle" xml:space="preserve"><value>Требуется восстановление</value></data>
   <data name="FeedPendingRecoveryDescription" xml:space="preserve"><value>Некоторые операции Ленты были прерваны. Завершите замену или сохраните обе версии; данные никогда не удаляются автоматически.</value></data>
   <data name="FeedRecoveryFinishReplacement" xml:space="preserve"><value>Завершить замену</value></data>
-  <data name="FeedRecoveryKeepBoth" xml:space="preserve"><value>Сохранить обе версии</value></data>
+  <data name="FeedRecoveryKeepBoth" xml:space="preserve"><value>Оставить как есть</value></data>
   <data name="FeedIdentitySafePendingTitle" xml:space="preserve"><value>Фрагменты, требующие проверки</value></data>
   <data name="FeedIdentitySafePendingDescription" xml:space="preserve"><value>Эти ссылки на блоки сохранены из другой ветки identity базы. Проверьте их перед дальнейшими изменениями.</value></data>
   <data name="FeedPendingRecoveryKindTask" xml:space="preserve"><value>Задача</value></data>
@@ -772,4 +791,5 @@
   <data name="MarkdownCreateNewArea" xml:space="preserve"><value>Создать новую область</value></data>
   <data name="MarkdownSelectedHeadingUnavailable" xml:space="preserve"><value>Выбранный заголовок больше недоступен.</value></data>
   <data name="MarkdownSelectedAreaUnavailable" xml:space="preserve"><value>Выбранная область больше недоступна.</value></data>
+  <data name="FeedNoteLinkUnavailable" xml:space="preserve"><value>Не удалось открыть заметку по ссылке. Проверьте, что Markdown-файл существует внутри этой базы и его имя однозначно.</value></data>
 </root>

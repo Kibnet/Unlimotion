@@ -14,6 +14,8 @@
     <UserControl.Resources>
         <SolidColorBrush x:Key="MarkdownReviewAccentBrush"
                          Color="{DynamicResource SystemAccentColor}" />
+        <SolidColorBrush x:Key="MarkdownSelectionBrush"
+                         Color="{DynamicResource SystemAccentColor}" Opacity="0.16" />
     </UserControl.Resources>
     <UserControl.Styles>
         <Style Selector="Border.ReviewHighlight">
@@ -24,7 +26,10 @@
             <Setter Property="Background" Value="{DynamicResource ThemeControlLowBrush}" />
         </Style>
         <Style Selector="Grid.MoveSelected">
-            <Setter Property="Background" Value="{DynamicResource ThemeControlMidBrush}" />
+            <Setter Property="Background" Value="{DynamicResource MarkdownSelectionBrush}" />
+        </Style>
+        <Style Selector="Grid.ToolbarVisible">
+            <Setter Property="ZIndex" Value="30" />
         </Style>
         <Style Selector="ToggleButton.BlockMoveHandle /template/ Border#PART_Border">
             <Setter Property="Background" Value="Transparent" />
@@ -133,10 +138,11 @@
         <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="feed:MarkdownLiveBlockViewModel">
                 <Grid Margin="0"
-                      ColumnDefinitions="Auto,*"
+                      ColumnDefinitions="26,*"
                       IsVisible="{Binding IsFeedFilterVisible}"
                       Classes="BlockRow"
                       Classes.MoveSelected="{Binding IsMoveSelected}"
+                      Classes.ToolbarVisible="{Binding IsContextToolbarVisible}"
                       PointerEntered="OnBlockPointerEntered"
                       PointerExited="OnBlockPointerExited"
                       AutomationProperties.AutomationId="{Binding BlockAutomationId}"
@@ -165,6 +171,7 @@
                                   Opacity="{Binding MoveHandleIdleOpacity}"
                                   IsChecked="{Binding IsMoveSelected, Mode=OneWay}"
                                   IsEnabled="{Binding IsMovable}"
+                                  IsVisible="{Binding IsMovable}"
                                   KeyDown="OnMoveHandleKeyDown"
                                   AutomationProperties.Name="{DynamicResource FeedBlockMoveHandle}"
                                   AutomationProperties.HelpText="{DynamicResource FeedBlockMoveHelp}"
@@ -194,8 +201,9 @@
                                 HorizontalAlignment="Stretch"
                                 VerticalAlignment="Top"
                                 IsVisible="{Binding IsContextToolbarVisible}">
-                            <Border Canvas.Right="0"
-                                    Canvas.Top="0"
+                            <Border Canvas.Left="0"
+                                    Canvas.Top="-28"
+                                    AttachedToVisualTree="OnToolbarAttached"
                                     Padding="2"
                                     CornerRadius="6"
                                     BorderBrush="{DynamicResource ThemeBorderMidBrush}"
@@ -204,56 +212,45 @@
                                     AutomationProperties.ControlTypeOverride="ToolBar"
                                     AutomationProperties.Name="{DynamicResource FeedBlockToolbar}"
                                     AutomationProperties.AutomationId="{Binding ContextToolbarAutomationId}">
-                                <StackPanel Orientation="Horizontal" Spacing="2">
+                                <WrapPanel Orientation="Horizontal">
                                 <Button Classes="BlockToolbarAction"
-                                        Click="OnMoveSelectionUpClick"
-                                        IsEnabled="{Binding CanMoveUpFromToolbar}"
-                                        Content="↑"
-                                        ToolTip.Tip="{DynamicResource FeedBlockMoveUp}" />
+                                        Click="OnCreateTaskClick"
+                                        IsEnabled="{Binding CanOpenActionsFromToolbar}"
+                                        Content="{DynamicResource FeedToolbarTask}" />
                                 <Button Classes="BlockToolbarAction"
-                                        Click="OnMoveSelectionDownClick"
-                                        IsEnabled="{Binding CanMoveDownFromToolbar}"
-                                        Content="↓"
-                                        ToolTip.Tip="{DynamicResource FeedBlockMoveDown}" />
+                                        Click="OnCreateNoteClick"
+                                        IsEnabled="{Binding CanOpenActionsFromToolbar}"
+                                        Content="{DynamicResource FeedToolbarNote}" />
                                 <Button Classes="BlockToolbarAction"
-                                        Click="OnBulletedListClick"
-                                        IsEnabled="{Binding CanTransformFromToolbar}"
-                                        Content="•"
-                                        ToolTip.Tip="{DynamicResource FeedBlockBulletedList}" />
-                                <Button Classes="BlockToolbarAction"
-                                        Click="OnNumberedListClick"
-                                        IsEnabled="{Binding CanTransformFromToolbar}"
-                                        Content="1."
-                                        ToolTip.Tip="{DynamicResource FeedBlockNumberedList}" />
-                                <Button Classes="BlockToolbarAction"
-                                        Click="OnChecklistClick"
-                                        IsEnabled="{Binding CanTransformFromToolbar}"
-                                        Content="☑"
-                                        ToolTip.Tip="{DynamicResource FeedBlockChecklist}" />
+                                        Click="OnChangeAreaClick"
+                                        IsEnabled="{Binding CanOpenActionsFromToolbar}"
+                                        Content="{DynamicResource FeedSearchArea}" />
                                 <Button Classes="BlockToolbarAction"
                                         Content="⋯"
                                         Click="OnToolbarMoreClick"
-                                        IsEnabled="{Binding CanOpenActionsFromToolbar}"
+                                        IsEnabled="{Binding IsMovable}"
                                         ToolTip.Tip="{DynamicResource MoreActions}">
                                     <Button.Flyout>
                                         <MenuFlyout Placement="BottomEdgeAlignedRight"
                                                     Closed="OnToolbarFlyoutClosed">
-                                            <MenuItem Click="OnCreateTaskClick"
-                                                      IsEnabled="{Binding CanOpenActionsFromToolbar}"
-                                                      Header="{DynamicResource FeedReviewTaskAction}" />
-                                            <MenuItem Click="OnCreateNoteClick"
-                                                      IsEnabled="{Binding CanOpenActionsFromToolbar}"
-                                                      Header="{DynamicResource FeedReviewNoteAction}" />
-                                            <MenuItem Click="OnChangeAreaClick"
-                                                      IsEnabled="{Binding CanOpenActionsFromToolbar}"
-                                                      Header="{DynamicResource FeedBlockChangeArea}" />
+                                            <MenuItem Click="OnMoveSelectionUpClick" IsEnabled="{Binding CanMoveUpFromToolbar}"
+                                                      Header="{DynamicResource FeedBlockMoveUp}" />
+                                            <MenuItem Click="OnMoveSelectionDownClick" IsEnabled="{Binding CanMoveDownFromToolbar}"
+                                                      Header="{DynamicResource FeedBlockMoveDown}" />
+                                            <Separator />
+                                            <MenuItem Click="OnBulletedListClick" IsEnabled="{Binding CanTransformFromToolbar}"
+                                                      Header="{DynamicResource FeedBlockBulletedList}" />
+                                            <MenuItem Click="OnNumberedListClick" IsEnabled="{Binding CanTransformFromToolbar}"
+                                                      Header="{DynamicResource FeedBlockNumberedList}" />
+                                            <MenuItem Click="OnChecklistClick" IsEnabled="{Binding CanTransformFromToolbar}"
+                                                      Header="{DynamicResource FeedBlockChecklist}" />
                                             <MenuItem Click="OnConvertHeadingToAreaClick"
                                                       IsEnabled="{Binding CanConvertToAreaFromToolbar}"
                                                       Header="{DynamicResource FeedBlockConvertToArea}" />
                                         </MenuFlyout>
                                     </Button.Flyout>
                                 </Button>
-                                </StackPanel>
+                                </WrapPanel>
                             </Border>
                         </Canvas>
 
@@ -261,6 +258,9 @@
                          by both Headless and FlaUI without rendering a second copy of its Markdown. -->
                         <TextBlock Width="1"
                                Height="1"
+                               TextWrapping="NoWrap"
+                               MaxLines="1"
+                               ClipToBounds="True"
                                Foreground="Transparent"
                                IsHitTestVisible="False"
                                IsVisible="{Binding IsReviewAnchor}"
@@ -271,8 +271,8 @@
                                AutomationProperties.ControlTypeOverride="Text" />
 
                         <Grid IsVisible="{Binding IsEditing}"
-                          RowDefinitions="Auto,Auto">
-                        <TextBox Classes="MarkdownBlockEditor"
+                          RowDefinitions="Auto,Auto,Auto">
+                        <views:SafeClipboardTextBox x:Name="BlockEditor" Classes="MarkdownBlockEditor"
                                   Margin="0,-1,0,-1"
                                   AcceptsReturn="True"
                                  TextWrapping="Wrap"
@@ -283,6 +283,10 @@
                                  AutomationProperties.AutomationId="{Binding EditorAutomationId}"
                                  AutomationProperties.Name="{Binding EditorAutomationName}"
                                  AutomationProperties.HelpText="{DynamicResource MarkdownBlockCommitHelp}" />
+
+                        <TextBlock Grid.Row="2" Text="{Binding #BlockEditor.ClipboardError}"
+                                   IsVisible="{Binding #BlockEditor.HasClipboardError}" TextWrapping="Wrap"
+                                   AutomationProperties.LiveSetting="Polite" />
 
                         <Grid Grid.Row="1"
                               Margin="0,2,0,0"

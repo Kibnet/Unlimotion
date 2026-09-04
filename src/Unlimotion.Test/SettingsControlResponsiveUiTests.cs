@@ -193,7 +193,7 @@ public class SettingsControlResponsiveUiTests
     [Test]
     public async Task SettingsControl_TaskOutlineClipboardCheckBoxes_PersistSettings()
     {
-        var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        var session = HeadlessUnitTestSession.StartNew(typeof(SkiaHeadlessAppBuilder));
         try
         {
             await session.DispatchAsync(async () =>
@@ -281,7 +281,7 @@ public class SettingsControlResponsiveUiTests
     [Test]
     public async Task SettingsControl_UpdateSection_ShowsVersionAndDownloadsAvailableUpdate()
     {
-        var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        var session = HeadlessUnitTestSession.StartNew(typeof(SkiaHeadlessAppBuilder));
         try
         {
             await session.DispatchAsync(async () =>
@@ -692,6 +692,63 @@ public class SettingsControlResponsiveUiTests
     }
 
     [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task Daily_format_preview_requires_confirmation_and_handles_scan_failure(bool scanFails)
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var settings = new SettingsViewModel(new ConfigurationBuilder().AddInMemoryCollection().Build(),
+                isExternalNoteVaultSupported: true) { NoteVaultRootPath = "PreviewVault" };
+            var writes = 0;
+            settings.ConfigureNoteDailyFileNameFormatBridge(
+                _ => new NoteDailyFileNameFormatValidation(true, "Ежедневные/2026.09.04.md", null),
+                _ => { writes++; return Task.FromResult(new NoteDailyFileNameFormatApplyResult(true)); },
+                () => Task.FromResult(new NoteDailyFileNameFormatState("yyyy-MM-dd", "PreviewVault", "revision")),
+                _ => scanFails ? Task.FromException<NoteDailyFileNameFormatImpact>(new System.IO.IOException("scan failed"))
+                    : Task.FromResult(new NoteDailyFileNameFormatImpact(17, 23, 12, 29, 17)));
+            settings.SetNoteDailyFileNameFormatFeedAvailability(true, false, "PreviewVault");
+            settings.NoteDailyFileNameFormatDraft = "yyyy.MM.dd";
+            settings.ApplyNoteDailyFileNameFormatCommand = new TestAsyncCommand(settings.ApplyNoteDailyFileNameFormatAsync);
+            settings.ConfirmNoteDailyFileNameFormatCommand = new TestAsyncCommand(settings.ConfirmNoteDailyFileNameFormatAsync);
+            settings.CancelNoteDailyFileNameFormatCommand = new TestAsyncCommand(() =>
+            { settings.CancelNoteDailyFileNameFormatPreview(); return Task.CompletedTask; });
+            var view = new SettingsControl { DataContext = settings };
+            var window = CreateWindow(view, 720, 1000);
+            try
+            {
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+                await settings.ApplyNoteDailyFileNameFormatAsync();
+                Dispatcher.UIThread.RunJobs();
+                await Assert.That(writes).IsEqualTo(0);
+                var panel = FindControlByAutomationId<StackPanel>(view, "NoteDailyFileNameFormatImpactPanel");
+                await Assert.That(panel.IsVisible).IsEqualTo(!scanFails);
+                if (scanFails)
+                {
+                    await Assert.That(settings.NoteDailyFileNameFormatImpactText).IsNull();
+                    await Assert.That(settings.IsNoteDailyFileNameFormatStatusVisible).IsTrue();
+                    return;
+                }
+                await Assert.That(settings.NoteDailyFileNameFormatImpactText).Contains("17");
+                await Assert.That(settings.NoteDailyFileNameFormatImpactText).Contains("23");
+                var cancel = FindControlByAutomationId<Button>(view, "CancelNoteDailyFileNameFormatButton");
+                await ClickControlAsync(window, cancel);
+                Dispatcher.UIThread.RunJobs();
+                await Assert.That(panel.IsVisible).IsFalse();
+                await Assert.That(writes).IsEqualTo(0);
+                await settings.ApplyNoteDailyFileNameFormatAsync();
+                var confirm = FindControlByAutomationId<Button>(view, "ConfirmNoteDailyFileNameFormatButton");
+                await ClickControlAsync(window, confirm);
+                Dispatcher.UIThread.RunJobs();
+                await Assert.That(writes).IsEqualTo(1);
+            }
+            finally { window.Close(); }
+        }, CancellationToken.None);
+    }
+
+    [Test]
     public async Task Daily_note_filename_format_has_supported_unsupported_and_applying_states()
     {
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
@@ -833,6 +890,45 @@ public class SettingsControlResponsiveUiTests
             {
                 window?.Close();
             }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    [Arguments(true, 2)]
+    [Arguments(true, 1)]
+    [Arguments(false, 2)]
+    public async Task Daily_format_preview_is_invalidated_by_external_session_change(bool losesFiles, long sessionGeneration)
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var settings = new SettingsViewModel(new ConfigurationBuilder().AddInMemoryCollection().Build(),
+                isExternalNoteVaultSupported: true) { NoteVaultRootPath = "PreviewVault" };
+            var scans = 0;
+            var writes = 0;
+            settings.ConfigureNoteDailyFileNameFormatBridge(
+                _ => new NoteDailyFileNameFormatValidation(true, "Ежедневные/2026.09.04.md", null),
+                _ => { writes++; return Task.FromResult(new NoteDailyFileNameFormatApplyResult(true)); },
+                () => Task.FromResult(new NoteDailyFileNameFormatState("yyyy-MM-dd", "PreviewVault", "r1")),
+                _ => { scans++; return Task.FromResult(new NoteDailyFileNameFormatImpact(10, 0, losesFiles ? 4 : 0)); });
+            settings.SetNoteDailyFileNameFormatFeedAvailability(true, false, "PreviewVault");
+            settings.ApplyNoteDailyFileNameFormatState(new NoteDailyFileNameFormatState("yyyy-MM-dd", "PreviewVault", "r1", SessionGeneration: 1));
+            settings.NoteDailyFileNameFormatDraft = "yyyy.MM.dd";
+            await settings.ApplyNoteDailyFileNameFormatAsync();
+            if (!losesFiles)
+            {
+                await Assert.That(writes).IsEqualTo(1);
+                await Assert.That(settings.HasNoteDailyFileNameFormatImpact).IsFalse();
+                return;
+            }
+            await Assert.That(settings.HasNoteDailyFileNameFormatImpact).IsTrue();
+            settings.ApplyNoteDailyFileNameFormatState(new NoteDailyFileNameFormatState("dd-MM-yyyy", "PreviewVault", "r2",
+                IsExternalChange: true, SessionGeneration: sessionGeneration));
+            await Assert.That(settings.HasNoteDailyFileNameFormatImpact).IsFalse();
+            await settings.ConfirmNoteDailyFileNameFormatAsync();
+            await Assert.That(scans).IsEqualTo(2);
+            await Assert.That(writes).IsEqualTo(0);
+            await Assert.That(settings.HasNoteDailyFileNameFormatImpact).IsTrue();
         }, CancellationToken.None);
     }
 

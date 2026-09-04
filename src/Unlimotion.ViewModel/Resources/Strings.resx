@@ -149,6 +149,11 @@
   <data name="NoRelationCandidates" xml:space="preserve"><value>No available tasks for this relation.</value></data>
   <data name="FirstDayNextMonth" xml:space="preserve"><value>First day of next month</value></data>
   <data name="FeedCapture" xml:space="preserve"><value>Add</value></data>
+  <data name="FeedSearchPeriod" xml:space="preserve"><value>Period</value></data>
+  <data name="FeedSearchClearPeriod" xml:space="preserve"><value>All time</value></data>
+  <data name="FeedCaptureResolvePrevious" xml:space="preserve"><value>Finish the previous capture using recovery first. Your edited draft will remain here.</value></data>
+  <data name="FeedCaptureRetryFailed" xml:space="preserve"><value>Could not finish creating the task. Your draft remains in the panel. Retry or finish the operation using recovery.</value></data>
+  <data name="FeedCaptureLinkPending" xml:space="preserve"><value>The task was created, but the note link is not yet confirmed. Finish the operation or keep both entries as they are.</value></data>
   <data name="FeedChooseVault" xml:space="preserve"><value>Choose vault folder</value></data>
   <data name="FeedEmptyDayList" xml:space="preserve"><value>No daily notes yet</value></data>
   <data name="FeedMode" xml:space="preserve"><value>Feed</value></data>
@@ -272,7 +277,21 @@
   <data name="MarkdownBlockedLinkName" xml:space="preserve"><value>Blocked link: {0}</value></data>
   <data name="MarkdownBlockedLinkTooltip" xml:space="preserve"><value>Unsafe URI scheme blocked</value></data>
   <data name="MarkdownBlockAutomationName" xml:space="preserve"><value>Markdown block {0}: {1}</value></data>
-  <data name="MarkdownBlockCommitHelp" xml:space="preserve"><value>Ctrl+Enter saves. Escape cancels.</value></data>
+  <data name="MarkdownBlockCommitHelp" xml:space="preserve"><value>Enter creates a block. Ctrl+Enter adds an internal line. Ctrl+S saves. Escape cancels.</value></data>
+  <data name="FeedUndoUnsafe" xml:space="preserve"><value>The note has changed. Undo is unavailable to protect newer changes.</value></data>
+  <data name="FeedRecoveryRetryHint" xml:space="preserve"><value>The operation could not be completed. Existing data and the recovery journal were kept. Retry, or leave the existing data as it is.</value></data>
+  <data name="FeedRecoveryDraftOccupied" xml:space="preserve"><value>Save or clear the other quick-entry draft first, so the original capture can be restored without overwriting it.</value></data>
+  <data name="FeedRecoveryDraftChangedDestination" xml:space="preserve"><value>Another editor changed the file. The text is back in quick entry; check whether the note already contains it. Clicking Add will save another entry. Nothing was overwritten automatically.</value></data>
+  <data name="FeedToolbarTask" xml:space="preserve"><value>Task</value></data>
+  <data name="FeedToolbarNote" xml:space="preserve"><value>Note</value></data>
+  <data name="FeedClipboardUnavailable" xml:space="preserve"><value>The clipboard is temporarily unavailable. Your text is unchanged. Try pasting again.</value></data>
+  <data name="FeedClipboardTargetChanged" xml:space="preserve"><value>The insertion point changed while reading the clipboard. Paste again at the new position.</value></data>
+  <data name="NoteDailyFileNameFormatImpact" xml:space="preserve"><value>{0} of {1} previously recognized daily files will remain in the feed. The other files remain available in Files. The new format recognizes {2} daily files in total; {3} are unrecognized. No files will be renamed or deleted. Apply this format?</value></data>
+  <data name="NoteDailyFileNameFormatConfirm" xml:space="preserve"><value>Confirm format change</value></data>
+  <data name="FeedReviewSourceChanged" xml:space="preserve"><value>The selected text or its area has changed. The operation was stopped. Save any draft and select the fragment again; if an operation is pending, finish it using recovery.</value></data>
+  <data name="FeedRecoveryDraftRestored" xml:space="preserve"><value>The original text is back in quick entry. Save it as a note to finish recovery. Its durable recovery copy remains available until then.</value></data>
+  <data name="FeedUndoChange" xml:space="preserve"><value>Undo</value></data>
+  <data name="FeedMoveHidden" xml:space="preserve"><value>Blocks moved outside the selected areas.</value></data>
   <data name="MarkdownBlockEditHelp" xml:space="preserve"><value>Press Enter or F2 to edit this block.</value></data>
   <data name="MarkdownBlockEditorAutomationName" xml:space="preserve"><value>Edit Markdown block {0}</value></data>
   <data name="MarkdownBlockSaveFailed" xml:space="preserve"><value>Could not save the Markdown block.</value></data>
@@ -747,7 +766,7 @@
   <data name="FeedPendingRecoveryTitle" xml:space="preserve"><value>Recovery required</value></data>
   <data name="FeedPendingRecoveryDescription" xml:space="preserve"><value>Some Feed operations were interrupted. Finish the replacement or keep both versions; data is never deleted automatically.</value></data>
   <data name="FeedRecoveryFinishReplacement" xml:space="preserve"><value>Finish replacement</value></data>
-  <data name="FeedRecoveryKeepBoth" xml:space="preserve"><value>Keep both versions</value></data>
+  <data name="FeedRecoveryKeepBoth" xml:space="preserve"><value>Leave as is</value></data>
   <data name="FeedIdentitySafePendingTitle" xml:space="preserve"><value>Items requiring review</value></data>
   <data name="FeedIdentitySafePendingDescription" xml:space="preserve"><value>These block references were preserved from the other vault identity branch. Review them before making further changes.</value></data>
   <data name="FeedPendingRecoveryKindTask" xml:space="preserve"><value>Task</value></data>
@@ -772,4 +791,5 @@
   <data name="MarkdownCreateNewArea" xml:space="preserve"><value>Create new area</value></data>
   <data name="MarkdownSelectedHeadingUnavailable" xml:space="preserve"><value>The selected heading is no longer available.</value></data>
   <data name="MarkdownSelectedAreaUnavailable" xml:space="preserve"><value>The selected area is no longer available.</value></data>
+  <data name="FeedNoteLinkUnavailable" xml:space="preserve"><value>Cannot open this note link. Check that the Markdown file exists inside this vault and its name is unambiguous.</value></data>
 </root>

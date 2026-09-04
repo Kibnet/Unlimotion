@@ -168,20 +168,31 @@
                                          AutomationProperties.AutomationId="TasksModeButton" />
                         </StackPanel>
 
-                        <Grid x:Name="GlobalSearchHost" Grid.Column="3">
-                            <TextBox x:Name="GlobalSearchBox"
+                        <Grid x:Name="GlobalSearchHost" Grid.Column="3" RowDefinitions="Auto,Auto">
+                            <views:SafeClipboardTextBox x:Name="GlobalSearchBox"
                                      MinWidth="0"
                                      HorizontalAlignment="Stretch"
                                      Text="{Binding Feed.SearchQuery, Mode=TwoWay}"
                                      PlaceholderText="{DynamicResource GlobalSearchWatermark}"
                                      AutomationProperties.AutomationId="GlobalSearchBox" />
-                            <Popup IsOpen="{Binding Feed.IsSearchActive}"
+                            <TextBlock Grid.Row="1"
+                                       IsVisible="{Binding #GlobalSearchBox.HasClipboardError}"
+                                       Text="{Binding #GlobalSearchBox.ClipboardError}"
+                                       TextWrapping="Wrap"
+                                       AutomationProperties.AutomationId="GlobalSearchClipboardError" />
+                            <Popup
                                    Placement="Bottom"
                                    PlacementTarget="{Binding #GlobalSearchBox}"
                                    HorizontalOffset="0"
                                    VerticalOffset="6"
                                    AutomationProperties.AutomationId="GlobalSearchFlyout">
-                                <Border Width="620"
+                                <Popup.IsOpen>
+                                    <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                        <Binding Path="Feed.IsSearchActive" />
+                                        <Binding Path="IsTasksMode" />
+                                    </MultiBinding>
+                                </Popup.IsOpen>
+                                <Border x:Name="GlobalSearchPopupBody" Width="620"
                                         MaxHeight="520"
                                         Padding="12"
                                         CornerRadius="10"
@@ -189,37 +200,7 @@
                                         BorderBrush="{DynamicResource ThemeBorderMidBrush}"
                                         BorderThickness="1">
                                     <Grid RowDefinitions="Auto,*" RowSpacing="10">
-                                        <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="8">
-                                            <ComboBox ItemsSource="{Binding Feed.SearchTypeOptions}"
-                                                      SelectedItem="{Binding Feed.SelectedSearchType, Mode=TwoWay}"
-                                                      AutomationProperties.Name="{DynamicResource FeedSearchType}"
-                                                      AutomationProperties.AutomationId="GlobalSearchTypePicker">
-                                                <ComboBox.ItemTemplate>
-                                                    <DataTemplate>
-                                                        <TextBlock Text="{Binding DisplayName}" />
-                                                    </DataTemplate>
-                                                </ComboBox.ItemTemplate>
-                                            </ComboBox>
-                                            <ComboBox Grid.Column="1"
-                                                      ItemsSource="{Binding Feed.SearchAreaOptions}"
-                                                      SelectedItem="{Binding Feed.SelectedSearchArea, Mode=TwoWay}"
-                                                      AutomationProperties.Name="{DynamicResource FeedSearchArea}"
-                                                      AutomationProperties.AutomationId="GlobalSearchAreaPicker">
-                                                <ComboBox.ItemTemplate>
-                                                    <DataTemplate>
-                                                        <TextBlock Text="{Binding DisplayName}" />
-                                                    </DataTemplate>
-                                                </ComboBox.ItemTemplate>
-                                            </ComboBox>
-                                            <DatePicker Grid.Column="2"
-                                                        SelectedDate="{Binding Feed.SearchFromDate, Mode=TwoWay}"
-                                                        AutomationProperties.Name="{DynamicResource FeedSearchDateFrom}"
-                                                        AutomationProperties.AutomationId="GlobalSearchFromDatePicker" />
-                                            <DatePicker Grid.Column="3"
-                                                        SelectedDate="{Binding Feed.SearchToDate, Mode=TwoWay}"
-                                                        AutomationProperties.Name="{DynamicResource FeedSearchDateTo}"
-                                                        AutomationProperties.AutomationId="GlobalSearchToDatePicker" />
-                                        </Grid>
+                                        <views:FeedSearchFiltersControl DataContext="{Binding Feed}" />
                                         <Grid Grid.Row="1">
                                             <TextBlock IsVisible="{Binding Feed.IsSearchEmpty}"
                                                        Margin="12"
@@ -445,23 +426,29 @@
                             <StackPanel IsVisible="{Binding !Feed.HasQuickCaptureCreatedTask}"
                                         Spacing="12">
                                 <ToggleSwitch IsChecked="{Binding IsQuickCaptureTask, Mode=TwoWay}"
+                                              OnContent="{DynamicResource DialogYes}"
+                                              OffContent="{DynamicResource DialogNo}"
                                               Content="{DynamicResource FeedQuickCaptureAsTask}"
                                               AutomationProperties.AutomationId="GlobalQuickCaptureTaskToggle" />
                                 <ComboBox ItemsSource="{Binding Feed.Areas}"
                                           SelectedItem="{Binding Feed.SelectedArea, Mode=TwoWay}"
+                                          AutomationProperties.Name="{DynamicResource FeedSearchArea}"
                                           AutomationProperties.AutomationId="GlobalQuickCaptureAreaPicker">
                                     <ComboBox.ItemTemplate>
                                         <DataTemplate>
-                                            <TextBlock Text="{Binding DisplayName}" />
+                                            <TextBlock Text="{Binding DestinationDisplayName}" />
                                         </DataTemplate>
                                     </ComboBox.ItemTemplate>
                                 </ComboBox>
-                                <TextBox MinHeight="120"
+                                <views:SafeClipboardTextBox x:Name="CaptureEditor" MinHeight="120"
                                          AcceptsReturn="True"
                                          TextWrapping="Wrap"
                                          Text="{Binding Feed.QuickCaptureText, Mode=TwoWay}"
                                          PlaceholderText="{DynamicResource FeedQuickCaptureWatermark}"
                                          AutomationProperties.AutomationId="GlobalQuickCaptureTextBox" />
+                                <TextBlock Text="{Binding #CaptureEditor.ClipboardError}"
+                                           IsVisible="{Binding #CaptureEditor.HasClipboardError}" TextWrapping="Wrap"
+                                           AutomationProperties.LiveSetting="Polite" />
                                 <TextBlock IsVisible="{Binding Feed.HasError}"
                                            Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
                                            Text="{Binding Feed.ErrorMessage}"
@@ -497,6 +484,8 @@
                                                    TextWrapping="Wrap"
                                                    FontWeight="SemiBold" />
                                         <ToggleSwitch Grid.Column="2"
+                                                      OnContent="{DynamicResource DialogYes}"
+                                                      OffContent="{DynamicResource DialogNo}"
                                                       IsChecked="{Binding Feed.QuickCaptureCreatedTaskReference.Task.IsGoal, Mode=TwoWay}"
                                                       Content="{DynamicResource FeedReviewGoal}" />
                                     </Grid>

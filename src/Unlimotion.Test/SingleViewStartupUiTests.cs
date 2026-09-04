@@ -79,7 +79,7 @@ public class SingleViewStartupUiTests
     [Test]
     public async Task SingleViewStartup_DoesNotReloadInitializedTaskStorage()
     {
-        var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        var session = HeadlessUnitTestSession.StartNew(typeof(SkiaHeadlessAppBuilder));
         try
         {
             await session.DispatchAsync(async () =>

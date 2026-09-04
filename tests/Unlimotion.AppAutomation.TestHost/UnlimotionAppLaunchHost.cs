@@ -104,7 +104,8 @@ public static class UnlimotionAppLaunchHost
         Action<string>? feedVaultPrepared = null,
         Action<MainWindowViewModel>? beforeViewModelInitialized = null,
         Func<Func<MainWindowViewModel>, MainWindowViewModel>? viewModelFactoryDispatcher = null,
-        Action<Window>? headlessWindowCleanup = null)
+        Action<Window>? headlessWindowCleanup = null,
+        Func<Func<Task>, Task>? prepareViewModelDispatcher = null)
     {
         var launchData = UnlimotionAutomationLaunchData.Create(scenario, language, currentTaskId, theme);
         if (scenario == UnlimotionAutomationScenario.Feed)
@@ -124,16 +125,24 @@ public static class UnlimotionAppLaunchHost
             {
                 async Task PrepareViewModelAsync()
                 {
+                    ReportHeadlessProgress("prepare.begin");
                     if (launchData.ExpandAllTaskTrees)
                     {
                         TaskWrapperViewModel.DefaultIsExpanded = true;
                     }
 
-                    vm = viewModelFactoryDispatcher is null
+                    vm = viewModelFactoryDispatcher is null || Dispatcher.UIThread.CheckAccess()
                         ? CreateHeadlessViewModel(launchData, lifetime)
                         : viewModelFactoryDispatcher(() => CreateHeadlessViewModel(launchData, lifetime));
+                    vm.Feed.SetNotificationDispatcher(action =>
+                    {
+                        if (Dispatcher.UIThread.CheckAccess()) action();
+                        else Dispatcher.UIThread.Post(action);
+                    });
                     beforeViewModelInitialized?.Invoke(vm);
+                    ReportHeadlessProgress("connect.begin");
                     await vm.Connect();
+                    ReportHeadlessProgress("connect.completed");
 
                     if (scenario == UnlimotionAutomationScenario.Feed)
                     {
@@ -141,6 +150,7 @@ public static class UnlimotionAppLaunchHost
                         vm.Feed.TaskOwner = vm;
                         vm.Feed.TaskResolver = taskId => FindTaskById(vm, taskId);
                         await vm.Feed.InitializeVaultAsync(launchData.VaultPath);
+                        ReportHeadlessProgress("vault.completed");
                     }
 
                     if (!IsTaskSpaceRecoveryScenario(scenario))
@@ -149,22 +159,24 @@ public static class UnlimotionAppLaunchHost
                     }
                     ApplyAutomationWindowTitle(vm, launchData);
                     afterViewModelPrepared?.Invoke(vm);
+                    ReportHeadlessProgress("prepare.completed");
                 }
 
-                if (scenario == UnlimotionAutomationScenario.StatusContract)
+                // DesktopAppSession.Launch synchronously waits for this callback. Neither the
+                // preparation nor this continuation may capture the caller's TUnit context.
+                // UI-owned construction still goes through viewModelFactoryDispatcher above.
+                if (prepareViewModelDispatcher is not null)
                 {
-                    // Status commands capture their cache context on first use. Prepare this
-                    // synthetic ViewModel without inheriting TUnit's context so the real UI
-                    // command can capture the Headless dispatcher context deterministically.
-                    await Task.Run(PrepareViewModelAsync, cancellationToken);
+                    await prepareViewModelDispatcher(PrepareViewModelAsync).ConfigureAwait(false);
                 }
                 else
                 {
-                    await PrepareViewModelAsync();
+                    await Task.Run(PrepareViewModelAsync, cancellationToken).ConfigureAwait(false);
                 }
             },
             CreateMainWindow = () =>
             {
+                ReportHeadlessProgress("window.create");
                 ApplyAutomationTheme(theme);
                 window = new MainWindow
                 {
@@ -195,6 +207,18 @@ public static class UnlimotionAppLaunchHost
                 }
             }
         };
+    }
+
+    private static void ReportHeadlessProgress(string phase)
+    {
+        var entry = $"{DateTimeOffset.UtcNow:O} pid={Environment.ProcessId} thread={Environment.CurrentManagedThreadId} {phase}";
+        Console.Error.WriteLine(entry);
+        var directory = Environment.GetEnvironmentVariable("UNLIMOTION_TEST_TRACE_DIRECTORY");
+        if (!string.IsNullOrWhiteSpace(directory))
+        {
+            Directory.CreateDirectory(directory);
+            File.AppendAllText(Path.Combine(directory, $"headless-launch-{Environment.ProcessId}.log"), entry + Environment.NewLine);
+        }
     }
 
     private static void ApplyAutomationTheme(string? theme)

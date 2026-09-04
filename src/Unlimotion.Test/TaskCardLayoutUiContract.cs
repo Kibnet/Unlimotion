@@ -64,7 +64,7 @@ internal static class TaskCardLayoutUiContract
     {
         var result = new TaskCardLayoutScenarioResult();
 
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             ResetSharedUiState();

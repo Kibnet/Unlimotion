@@ -916,7 +916,10 @@ public class App : Application
         settings.ConfigureNoteDailyFileNameFormatBridge(
             viewModel.Feed.ValidateDailyNoteFileNameFormat,
             viewModel.Feed.ApplyDailyNoteFileNameFormatAsync,
-            viewModel.Feed.ReloadDailyNoteFileNameFormatAsync);
+            viewModel.Feed.ReloadDailyNoteFileNameFormatAsync,
+            viewModel.Feed.PreviewDailyNoteFileNameFormatAsync);
+        settings.ConfirmNoteDailyFileNameFormatCommand = ReactiveCommand.CreateFromTask(settings.ConfirmNoteDailyFileNameFormatAsync);
+        settings.CancelNoteDailyFileNameFormatCommand = ReactiveCommand.Create(settings.CancelNoteDailyFileNameFormatPreview);
         settings.ApplyNoteDailyFileNameFormatCommand = ReactiveCommand.CreateFromTask(
             settings.ApplyNoteDailyFileNameFormatAsync);
         settings.ReloadExternalNoteDailyFileNameFormatCommand = ReactiveCommand.CreateFromTask(

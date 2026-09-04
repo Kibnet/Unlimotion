@@ -19,6 +19,18 @@ public interface ITaskClassificationCapabilityProvider
 public sealed class TaskStorageFeedTaskCreationTarget(Func<ITaskStorage?> storageProvider) : IFeedTaskCreationTarget
 {
     private const string OperationMetadataKey = "unlimotionFeedOperationId";
+    public bool SupportsReadOnlyLookup => true;
+
+    public async Task<FeedCreatedTask?> FindOwnedAsync(FeedTaskDraft draft, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var repository = storageProvider() ?? throw new InvalidOperationException("Task storage is not connected.");
+        var stored = await repository.TaskTreeManager.Storage.Load(draft.TaskId).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (stored is null) return null;
+        EnsureOperationOwnership(stored, draft);
+        return new FeedCreatedTask(stored.Id, stored.Title);
+    }
 
     public bool SupportsClassification
     {
@@ -103,8 +115,8 @@ public sealed class TaskStorageFeedTaskCreationTarget(Func<ITaskStorage?> storag
             throw new InvalidDataException("The resolved task does not match the conversion task ID.");
         }
 
-        if (task.ExtensionData?.TryGetValue(OperationMetadataKey, out var operation) == true
-            && !string.Equals(operation.Value<string>(), draft.OperationId, StringComparison.Ordinal))
+        if (task.ExtensionData is not { } metadata || !metadata.TryGetValue(OperationMetadataKey, out var operation)
+            || !string.Equals(operation.Value<string>(), draft.OperationId, StringComparison.Ordinal))
         {
             throw new InvalidDataException("The stable feed task ID belongs to another conversion operation.");
         }
