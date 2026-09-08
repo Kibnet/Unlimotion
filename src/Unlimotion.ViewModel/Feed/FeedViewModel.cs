@@ -7185,6 +7185,10 @@ public sealed class FeedDayViewModel(
 
     public string CollapseAutomationId => $"FeedDay-{Date:yyyyMMdd}-CollapseToggle";
 
+    public string ServiceDataAutomationId => $"FeedDay-{Date:yyyyMMdd}-ServiceDataToggle";
+
+    public string HeaderAutomationId => $"FeedDay-{Date:yyyyMMdd}-DateText";
+
     public string AutomationId => $"FeedDay-{Date:yyyyMMdd}";
 
     public string AutomationName => DisplayDate;
