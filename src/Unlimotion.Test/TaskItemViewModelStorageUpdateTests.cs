@@ -161,6 +161,72 @@ public sealed class TaskItemViewModelStorageUpdateTests
         }
     }
 
+    [Test]
+    public async Task StorageUpdate_PreservesNestedRepeaterPatternChange()
+    {
+        using var storage = new TestTaskStorage();
+        using var viewModel = new TaskItemViewModel(CreateTask(), storage, () => true)
+        {
+            PropertyChangedThrottleTimeSpanDefault = TimeSpan.FromDays(1)
+        };
+        viewModel.Repeater!.Period = 2;
+
+        var authoritative = CreateTask() with
+        {
+            Repeater = new RepeaterPattern { Type = RepeaterType.Monthly, Period = 3 }
+        };
+        viewModel.Update(authoritative, storageRevision: 1);
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(viewModel.Repeater!.Type).IsEqualTo(RepeaterType.Daily);
+            await Assert.That(viewModel.Repeater.Period).IsEqualTo(2);
+        }
+    }
+
+    [Test]
+    [Arguments(nameof(TaskCompletionCriterion.Text))]
+    [Arguments(nameof(TaskCompletionCriterion.IsSatisfied))]
+    public async Task StorageUpdate_PreservesNestedCompletionCriterionChange(string changedProperty)
+    {
+        using var storage = new TestTaskStorage();
+        using var viewModel = new TaskItemViewModel(CreateTask(), storage, () => true)
+        {
+            PropertyChangedThrottleTimeSpanDefault = TimeSpan.FromDays(1)
+        };
+        var criterion = viewModel.CompletionCriteria.Single();
+        if (changedProperty == nameof(TaskCompletionCriterion.Text))
+        {
+            criterion.Text = "local nested criterion";
+        }
+        else
+        {
+            criterion.IsSatisfied = true;
+        }
+
+        var authoritative = CreateTask() with
+        {
+            CompletionCriteria =
+            [
+                new TaskCompletionCriterion
+                {
+                    Id = "storage",
+                    Text = "storage criterion",
+                    IsSatisfied = false
+                }
+            ]
+        };
+        viewModel.Update(authoritative, storageRevision: 1);
+
+        var preserved = viewModel.CompletionCriteria.Single();
+        await Assert.That(preserved.Text).IsEqualTo(
+            changedProperty == nameof(TaskCompletionCriterion.Text)
+                ? "local nested criterion"
+                : "initial criterion");
+        await Assert.That(preserved.IsSatisfied).IsEqualTo(
+            changedProperty == nameof(TaskCompletionCriterion.IsSatisfied));
+    }
+
     private static readonly DateTimeOffset LocalPlanningBegin = new(2030, 4, 5, 10, 0, 0, TimeSpan.Zero);
 
     private static TaskItem CreateTask() => new()
@@ -175,6 +241,7 @@ public sealed class TaskItemViewModelStorageUpdateTests
         PlannedDuration = TimeSpan.FromHours(1),
         Importance = 1,
         Wanted = false,
+        Repeater = new RepeaterPattern { Type = RepeaterType.Daily, Period = 1 },
         CompletionCriteria = [new TaskCompletionCriterion { Id = "initial", Text = "initial criterion" }]
     };
 
