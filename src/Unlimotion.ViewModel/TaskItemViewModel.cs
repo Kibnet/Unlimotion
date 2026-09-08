@@ -78,6 +78,8 @@ namespace Unlimotion.ViewModel
         private long _editableRevision;
         private long _persistedEditableRevision;
         private TaskItem? _latestEditorSnapshot;
+        private readonly Dictionary<PendingTaskField, long> _latestEditableRevisionByField = [];
+        private readonly Dictionary<PendingTaskField, long> _persistedEditableRevisionByField = [];
         private int _statusOperationCount;
         private Task? _sealedPendingSavesTask;
         private bool _isUpdatingFromModel;
@@ -102,7 +104,7 @@ namespace Unlimotion.ViewModel
             {
                 lock (_editorStateLock)
                 {
-                    return _editableRevision > _persistedEditableRevision;
+                    return GetPendingEditableFieldsNoLock() != PendingTaskField.None;
                 }
             }
         }
@@ -118,10 +120,10 @@ namespace Unlimotion.ViewModel
                 var pendingEditor = CapturePendingEditorState();
                 var revision = pendingEditor?.Revision ?? GetEditableRevision();
                 var snapshot = pendingEditor is { } editor
-                    ? MergeAuthoritativeStateWithEditorFields(Model, editor.Snapshot)
+                    ? MergeAuthoritativeStateWithPendingLocalFields(Model, editor.Snapshot, editor.Fields)
                     : TaskItemSnapshot.Clone(Model);
                 await taskStorage.Update(snapshot);
-                MarkEditableRevisionPersisted(revision);
+                MarkEditableRevisionPersisted(revision, pendingEditor?.Fields ?? PendingTaskField.None);
             });
             var saveExceptionSubscription = SaveItemCommand.ThrownExceptions
                 .Subscribe(new ObservableExceptionHandler(NotificationManager));
@@ -229,25 +231,10 @@ namespace Unlimotion.ViewModel
                     .FromEventPattern<PropertyChangedEventHandler, PropertyChangedEventArgs>(
                         h => inpc.PropertyChanged += h,
                         h => inpc.PropertyChanged -= h)
-                    .Where(changed =>
-                    {
-                        switch (changed.EventArgs.PropertyName)
-                        {
-                            case nameof(Title):
-                            case nameof(Description):
-                            case nameof(PlannedBeginDateTime):
-                            case nameof(PlannedEndDateTime):
-                            case nameof(PlannedDuration):
-                            case nameof(Repeater):
-                            case nameof(Importance):
-                            case nameof(Wanted):
-                                return true;
-                            default:
-                                return false;
-                        }
-                    })
+                    .Select(changed => GetPendingTaskField(changed.EventArgs.PropertyName))
+                    .Where(field => field != PendingTaskField.None)
                     .Where(_ => CanTrackEditableChange)
-                    .Do(_ => MarkEditableChanged())
+                    .Do(MarkEditableChanged)
                     .Throttle(PropertyChangedThrottleTimeSpanDefault)
                     .Where(_ => CanAutosave);
 
@@ -350,7 +337,7 @@ namespace Unlimotion.ViewModel
             var saveSubscription = repeaterChanges
                 .Where(changed => IsRepeaterPatternPersistenceProperty(changed.EventArgs.PropertyName))
                 .Where(_ => CanTrackEditableChange)
-                .Do(_ => MarkEditableChanged())
+                .Do(_ => MarkEditableChanged(PendingTaskField.Repeater))
                 .Throttle(TimeSpan.FromSeconds(2))
                 .Where(_ => CanAutosave)
                 .Subscribe(_ => ExecuteSaveCommand());
@@ -1145,7 +1132,10 @@ namespace Unlimotion.ViewModel
                 return false;
             }
 
-            Update(taskItem);
+            var pendingEditor = CapturePendingEditorState();
+            Update(pendingEditor is { } editor
+                ? MergeAuthoritativeStateWithPendingLocalFields(taskItem, editor.Snapshot, editor.Fields)
+                : taskItem);
             return true;
         }
 
@@ -1238,7 +1228,7 @@ namespace Unlimotion.ViewModel
         {
             if (CanTrackEditableChange)
             {
-                MarkEditableChanged();
+                MarkEditableChanged(PendingTaskField.CompletionCriteria);
             }
 
             RegisterCompletionCriteriaPropertyChangedSubscription();
@@ -1263,7 +1253,7 @@ namespace Unlimotion.ViewModel
 
                 subscriptions.Add(criterionChanges
                     .Where(_ => CanTrackEditableChange)
-                    .Subscribe(_ => MarkEditableChanged()));
+                    .Subscribe(_ => MarkEditableChanged(PendingTaskField.CompletionCriteria)));
                 subscriptions.Add(criterionChanges
                     .ObserveOn(RxSchedulers.MainThreadScheduler)
                     .Subscribe(_ => RefreshStatusOptions()));
@@ -1504,11 +1494,7 @@ namespace Unlimotion.ViewModel
                     if (result.AuthoritativeTask is { } authoritativeTask &&
                         string.Equals(authoritativeTask.Id, Id, StringComparison.Ordinal))
                     {
-                        var pendingEditor = CapturePendingEditorState();
-                        var taskToApply = pendingEditor is { } editor
-                            ? MergeAuthoritativeStateWithEditorFields(authoritativeTask, editor.Snapshot)
-                            : authoritativeTask;
-                        Update(taskToApply, result.StorageRevision);
+                        Update(authoritativeTask, result.StorageRevision);
                     }
 
                     try
@@ -1558,11 +1544,12 @@ namespace Unlimotion.ViewModel
         {
             while (CapturePendingEditorState() is { } pendingEditor)
             {
-                var editorSnapshot = MergeAuthoritativeStateWithEditorFields(
+                var editorSnapshot = MergeAuthoritativeStateWithPendingLocalFields(
                     Model,
-                    pendingEditor.Snapshot);
+                    pendingEditor.Snapshot,
+                    pendingEditor.Fields);
                 await _taskStorage.Update(editorSnapshot);
-                MarkEditableRevisionPersisted(pendingEditor.Revision);
+                MarkEditableRevisionPersisted(pendingEditor.Revision, pendingEditor.Fields);
             }
         }
 
@@ -1609,26 +1596,112 @@ namespace Unlimotion.ViewModel
             }
         }
 
-        private static TaskItem MergeAuthoritativeStateWithEditorFields(
+        private static TaskItem MergeAuthoritativeStateWithPendingLocalFields(
             TaskItem authoritative,
-            TaskItem editor)
+            TaskItem editor,
+            PendingTaskField pendingFields)
         {
             var merged = TaskItemSnapshot.Clone(authoritative);
             var editorClone = TaskItemSnapshot.Clone(editor);
-            merged.Title = editorClone.Title;
-            merged.Description = editorClone.Description;
-            merged.PlannedBeginDateTime = editorClone.PlannedBeginDateTime;
-            merged.PlannedEndDateTime = editorClone.PlannedEndDateTime;
-            merged.PlannedDuration = editorClone.PlannedDuration;
-            merged.CompletionCriteria = editorClone.CompletionCriteria;
-            merged.Repeater = editorClone.Repeater;
-            merged.Importance = editorClone.Importance;
-            merged.Wanted = editorClone.Wanted;
+            if (pendingFields.HasFlag(PendingTaskField.Title)) merged.Title = editorClone.Title;
+            if (pendingFields.HasFlag(PendingTaskField.Description)) merged.Description = editorClone.Description;
+            if (pendingFields.HasFlag(PendingTaskField.Planning))
+            {
+                merged.PlannedBeginDateTime = editorClone.PlannedBeginDateTime;
+                merged.PlannedEndDateTime = editorClone.PlannedEndDateTime;
+                merged.PlannedDuration = editorClone.PlannedDuration;
+            }
+
+            if (pendingFields.HasFlag(PendingTaskField.CompletionCriteria))
+                merged.CompletionCriteria = editorClone.CompletionCriteria;
+            if (pendingFields.HasFlag(PendingTaskField.Repeater)) merged.Repeater = editorClone.Repeater;
+            if (pendingFields.HasFlag(PendingTaskField.Importance)) merged.Importance = editorClone.Importance;
+            if (pendingFields.HasFlag(PendingTaskField.Wanted)) merged.Wanted = editorClone.Wanted;
             return merged;
         }
 
-        private void MarkEditableChanged()
+        [Flags]
+        private enum PendingTaskField
         {
+            None = 0,
+            Title = 1 << 0,
+            Description = 1 << 1,
+            Planning = 1 << 2,
+            Importance = 1 << 3,
+            Wanted = 1 << 4,
+            Repeater = 1 << 5,
+            CompletionCriteria = 1 << 6
+        }
+
+        private readonly record struct PendingEditorState(
+            long Revision,
+            TaskItem Snapshot,
+            PendingTaskField Fields);
+
+        private static PendingTaskField GetPendingTaskField(string? propertyName) => propertyName switch
+        {
+            nameof(Title) => PendingTaskField.Title,
+            nameof(Description) => PendingTaskField.Description,
+            nameof(PlannedBeginDateTime) or nameof(PlannedEndDateTime) or nameof(PlannedDuration) =>
+                PendingTaskField.Planning,
+            nameof(Importance) => PendingTaskField.Importance,
+            nameof(Wanted) => PendingTaskField.Wanted,
+            nameof(Repeater) => PendingTaskField.Repeater,
+            _ => PendingTaskField.None
+        };
+
+        private PendingTaskField GetPendingEditableFieldsNoLock()
+        {
+            var pendingFields = PendingTaskField.None;
+            foreach (var field in EnumeratePendingTaskFields(AllPendingTaskFields))
+            {
+                if (_latestEditableRevisionByField.TryGetValue(field, out var latestRevision) &&
+                    (!_persistedEditableRevisionByField.TryGetValue(field, out var persistedRevision) ||
+                     latestRevision > persistedRevision))
+                {
+                    pendingFields |= field;
+                }
+            }
+
+            return pendingFields;
+        }
+
+        private static IEnumerable<PendingTaskField> EnumeratePendingTaskFields(PendingTaskField fields)
+        {
+            foreach (var field in new[]
+                     {
+                         PendingTaskField.Title,
+                         PendingTaskField.Description,
+                         PendingTaskField.Planning,
+                         PendingTaskField.Importance,
+                         PendingTaskField.Wanted,
+                         PendingTaskField.Repeater,
+                         PendingTaskField.CompletionCriteria
+                     })
+            {
+                if (fields.HasFlag(field))
+                {
+                    yield return field;
+                }
+            }
+        }
+
+        private const PendingTaskField AllPendingTaskFields =
+            PendingTaskField.Title |
+            PendingTaskField.Description |
+            PendingTaskField.Planning |
+            PendingTaskField.Importance |
+            PendingTaskField.Wanted |
+            PendingTaskField.Repeater |
+            PendingTaskField.CompletionCriteria;
+
+        private void MarkEditableChanged(PendingTaskField fields)
+        {
+            if (fields == PendingTaskField.None)
+            {
+                return;
+            }
+
             lock (_pendingSavesLock)
             {
                 if (!_acceptingSaves)
@@ -1641,20 +1714,28 @@ namespace Unlimotion.ViewModel
                 {
                     _editableRevision++;
                     _latestEditorSnapshot = snapshot;
+                    foreach (var field in EnumeratePendingTaskFields(fields))
+                    {
+                        _latestEditableRevisionByField[field] = _editableRevision;
+                    }
                 }
             }
         }
 
-        private (long Revision, TaskItem Snapshot)? CapturePendingEditorState()
+        private PendingEditorState? CapturePendingEditorState()
         {
             lock (_editorStateLock)
             {
-                if (_editableRevision <= _persistedEditableRevision || _latestEditorSnapshot is null)
+                var pendingFields = GetPendingEditableFieldsNoLock();
+                if (pendingFields == PendingTaskField.None || _latestEditorSnapshot is null)
                 {
                     return null;
                 }
 
-                return (_editableRevision, TaskItemSnapshot.Clone(_latestEditorSnapshot));
+                return new PendingEditorState(
+                    _editableRevision,
+                    TaskItemSnapshot.Clone(_latestEditorSnapshot),
+                    pendingFields);
             }
         }
 
@@ -1666,13 +1747,22 @@ namespace Unlimotion.ViewModel
             }
         }
 
-        private void MarkEditableRevisionPersisted(long revision)
+        private void MarkEditableRevisionPersisted(long revision, PendingTaskField persistedFields)
         {
             lock (_editorStateLock)
             {
                 if (_persistedEditableRevision < revision)
                 {
                     _persistedEditableRevision = revision;
+                }
+
+                foreach (var field in EnumeratePendingTaskFields(persistedFields))
+                {
+                    if (_latestEditableRevisionByField.TryGetValue(field, out var latestRevision) &&
+                        latestRevision <= revision)
+                    {
+                        _persistedEditableRevisionByField[field] = latestRevision;
+                    }
                 }
             }
         }
