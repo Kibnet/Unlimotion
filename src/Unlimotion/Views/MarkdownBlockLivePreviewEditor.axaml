@@ -72,7 +72,7 @@
             <Setter Property="VerticalContentAlignment" Value="Center" />
         </Style>
     </UserControl.Styles>
-    <Grid RowDefinitions="Auto,Auto,Auto,Auto"
+    <Grid x:Name="ReadingColumn" RowDefinitions="Auto,Auto,Auto,Auto"
           RowSpacing="2">
         <Border IsVisible="{Binding HasRecoveryDraft}"
                 Padding="10"
@@ -139,7 +139,7 @@
             <DataTemplate x:DataType="feed:MarkdownLiveBlockViewModel">
                 <Grid Margin="0"
                       ColumnDefinitions="26,*"
-                      IsVisible="{Binding IsFeedFilterVisible}"
+                      IsVisible="{Binding IsPresentationVisible}"
                       Classes="BlockRow"
                       Classes.MoveSelected="{Binding IsMoveSelected}"
                       Classes.ToolbarVisible="{Binding IsContextToolbarVisible}"
