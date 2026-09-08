@@ -1,0 +1,163 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:feed="clr-namespace:Unlimotion.ViewModel.Feed;assembly=Unlimotion.ViewModel"
+             x:Class="Unlimotion.Views.AreaManagement"
+             x:Name="Root"
+             x:DataType="feed:AreaManagementViewModel"
+             x:CompileBindings="False"
+             mc:Ignorable="d"
+             d:DesignWidth="860"
+             d:DesignHeight="640">
+    <Border IsVisible="{Binding IsOpen, FallbackValue=False}"
+            Padding="16"
+            BorderBrush="{DynamicResource ThemeBorderLowBrush}"
+            BorderThickness="1"
+            CornerRadius="10"
+            Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
+            AutomationProperties.ControlTypeOverride="Pane"
+            AutomationProperties.Name="{DynamicResource AreaManagementTitle}"
+            AutomationProperties.AutomationId="AreaManagementRoot">
+        <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="12">
+            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                <TextBlock VerticalAlignment="Center"
+                           FontSize="20"
+                           FontWeight="SemiBold"
+                           Text="{DynamicResource AreaManagementTitle}" />
+                <Button Grid.Column="1"
+                        Command="{Binding RefreshCommand}"
+                        Content="{DynamicResource FeedRefresh}"
+                        AutomationProperties.AutomationId="AreaManagementRefreshButton" />
+                <Button Grid.Column="2"
+                        Command="{Binding CloseCommand}"
+                        Content="×"
+                        ToolTip.Tip="{DynamicResource Close}"
+                        AutomationProperties.Name="{DynamicResource Close}"
+                        AutomationProperties.AutomationId="AreaManagementCloseButton" />
+            </Grid>
+
+            <Grid Grid.Row="1" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                <TextBox Text="{Binding NewAreaName, Mode=TwoWay}"
+                         PlaceholderText="{DynamicResource AreaNameWatermark}"
+                         AutomationProperties.Name="{DynamicResource AreaNameWatermark}"
+                         AutomationProperties.AutomationId="AreaManagementNewNameTextBox" />
+                <Button Grid.Column="1"
+                        Command="{Binding CreateRootCommand}"
+                        Content="{DynamicResource AreaCreateRoot}"
+                        AutomationProperties.AutomationId="AreaManagementCreateRootButton" />
+                <Button Grid.Column="2"
+                        Command="{Binding CreateChildCommand}"
+                        IsEnabled="{Binding HasSelectedArea}"
+                        Content="{DynamicResource AreaCreateChild}"
+                        AutomationProperties.AutomationId="AreaManagementCreateChildButton" />
+            </Grid>
+
+            <Grid x:Name="ContentGrid"
+                  Grid.Row="2"
+                  ColumnDefinitions="260,*"
+                  RowDefinitions="*"
+                  ColumnSpacing="16"
+                  RowSpacing="12">
+                <Border x:Name="AreaListPane"
+                        Padding="8"
+                        BorderBrush="{DynamicResource ThemeBorderLowBrush}"
+                        BorderThickness="1"
+                        CornerRadius="8">
+                    <ListBox ItemsSource="{Binding Areas}"
+                             SelectedItem="{Binding SelectedArea, Mode=TwoWay}"
+                             AutomationProperties.Name="{DynamicResource AreaManagementList}"
+                             AutomationProperties.AutomationId="AreaManagementList">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="feed:AreaManagementAreaViewModel">
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <TextBlock Text="{Binding DisplayName}"
+                                               TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Grid.Column="1"
+                                               IsVisible="{Binding IsArchived}"
+                                               Text="{DynamicResource AreaArchivedBadge}"
+                                               Opacity="0.68" />
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Border>
+
+                <Border x:Name="AreaEditorPane"
+                        Grid.Column="1"
+                        Padding="12"
+                        BorderBrush="{DynamicResource ThemeBorderLowBrush}"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        IsEnabled="{Binding HasSelectedArea}"
+                        AutomationProperties.AutomationId="AreaManagementEditor">
+                    <StackPanel Spacing="10">
+                        <TextBlock FontWeight="SemiBold"
+                                   Text="{DynamicResource AreaPropertiesTitle}" />
+                        <TextBox Text="{Binding DraftName, Mode=TwoWay}"
+                                 PlaceholderText="{DynamicResource AreaNameWatermark}"
+                                 AutomationProperties.Name="{DynamicResource AreaNameWatermark}"
+                                 AutomationProperties.AutomationId="AreaManagementNameTextBox" />
+                        <ComboBox ItemsSource="{Binding ParentOptions}"
+                                  SelectedItem="{Binding SelectedParent, Mode=TwoWay}"
+                                  PlaceholderText="{DynamicResource AreaParentLabel}"
+                                  AutomationProperties.Name="{DynamicResource AreaParentLabel}"
+                                  AutomationProperties.AutomationId="AreaManagementParentComboBox">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="feed:AreaParentOptionViewModel">
+                                    <TextBlock Text="{Binding Name}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <TextBox Text="{Binding DraftDefaultNoteFolder, Mode=TwoWay}"
+                                 PlaceholderText="{DynamicResource AreaDefaultNoteFolderWatermark}"
+                                 AutomationProperties.Name="{DynamicResource AreaDefaultNoteFolderWatermark}"
+                                 AutomationProperties.AutomationId="AreaManagementDefaultFolderTextBox" />
+                        <WrapPanel HorizontalAlignment="Right">
+                            <Button Margin="0,0,8,0"
+                                    Command="{Binding ToggleArchiveCommand}"
+                                    Content="{Binding ArchiveActionTitle}"
+                                    AutomationProperties.AutomationId="AreaManagementArchiveRestoreButton" />
+                            <Button Command="{Binding SaveSelectedCommand}"
+                                    Content="{DynamicResource Save}"
+                                    AutomationProperties.AutomationId="AreaManagementSaveButton" />
+                        </WrapPanel>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <StackPanel Grid.Row="3" Spacing="6">
+                <Border IsVisible="{Binding HasExternalConflict}"
+                        Padding="10"
+                        BorderBrush="{DynamicResource SystemControlErrorTextForegroundBrush}"
+                        BorderThickness="1"
+                        CornerRadius="6"
+                        AutomationProperties.LiveSetting="Assertive"
+                        AutomationProperties.AutomationId="AreaManagementExternalConflict">
+                    <Grid RowDefinitions="Auto,Auto" RowSpacing="8">
+                        <TextBlock Text="{DynamicResource AreaExternalConflict}"
+                                   TextWrapping="Wrap" />
+                        <WrapPanel Grid.Row="1" HorizontalAlignment="Right">
+                            <Button Margin="0,0,8,0"
+                                    Command="{Binding UseLocalDraftCommand}"
+                                    Content="{DynamicResource AreaUseLocalDraft}"
+                                    AutomationProperties.AutomationId="AreaManagementUseLocalButton" />
+                            <Button Command="{Binding UseExternalAreasCommand}"
+                                    Content="{DynamicResource AreaUseExternal}"
+                                    AutomationProperties.AutomationId="AreaManagementUseExternalButton" />
+                        </WrapPanel>
+                    </Grid>
+                </Border>
+                <ProgressBar IsIndeterminate="True"
+                             IsVisible="{Binding IsBusy}"
+                             AutomationProperties.AutomationId="AreaManagementBusyIndicator" />
+                <TextBlock IsVisible="{Binding HasError}"
+                           Text="{Binding ErrorMessage}"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+                           AutomationProperties.LiveSetting="Assertive"
+                           AutomationProperties.AutomationId="AreaManagementErrorText" />
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>

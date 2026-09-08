@@ -1,0 +1,73 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:feed="clr-namespace:Unlimotion.ViewModel.Feed;assembly=Unlimotion.ViewModel"
+             x:Class="Unlimotion.Views.TaskClassificationControl"
+             x:Name="Root"
+             x:CompileBindings="False"
+             mc:Ignorable="d"
+             d:DesignWidth="520"
+             d:DesignHeight="260">
+    <StackPanel DataContext="{Binding EffectiveEditor, ElementName=Root}"
+                Spacing="8"
+                AutomationProperties.ControlTypeOverride="Group"
+                AutomationProperties.Name="{DynamicResource TaskClassificationTitle}"
+                x:Name="ClassificationRoot">
+        <CheckBox x:Name="GoalCheckBox"
+                  IsChecked="{Binding IsGoal, Mode=TwoWay}"
+                  IsEnabled="{Binding IsEditingSupported}"
+                  Content="{DynamicResource TaskIsGoal}" />
+
+        <TextBlock IsVisible="{Binding IsEditingBlocked}"
+                   Text="{Binding EditingBlockedExplanation}"
+                   TextWrapping="Wrap"
+                   Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+                   AutomationProperties.LiveSetting="Polite"
+                   x:Name="BlockedExplanation" />
+
+        <ItemsControl ItemsSource="{Binding SelectedAreas}"
+                      x:Name="SelectedAreaChips">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <WrapPanel />
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="feed:TaskClassificationChipViewModel">
+                    <Border Margin="0,0,6,6"
+                            Padding="8,3"
+                            CornerRadius="10"
+                            BorderBrush="{DynamicResource ThemeBorderLowBrush}"
+                            BorderThickness="1"
+                            ToolTip.Tip="{Binding Id}">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <TextBlock Text="{Binding Name}" />
+                            <TextBlock IsVisible="{Binding IsUnresolved}"
+                                       Text="?"
+                                       Opacity="0.72" />
+                        </StackPanel>
+                    </Border>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <Expander Header="{DynamicResource TaskAreas}"
+                  IsEnabled="{Binding IsEditingSupported}"
+                  x:Name="AreaPickerExpander">
+            <ListBox ItemsSource="{Binding Areas}"
+                     MaxHeight="220"
+                     x:Name="AreaOptionsList">
+                <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="feed:TaskClassificationAreaOptionViewModel">
+                        <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                  IsEnabled="{Binding CanSelect}"
+                                  Content="{Binding Name}"
+                                  AutomationProperties.Name="{Binding Name}"
+                                  AutomationProperties.AutomationId="TaskClassificationAreaCheckBox" />
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </Expander>
+    </StackPanel>
+</UserControl>

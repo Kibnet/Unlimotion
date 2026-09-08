@@ -65,6 +65,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Unlimotion.Cli", "Unlimotio
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Unlimotion.FileStorage", "Unlimotion.FileStorage\Unlimotion.FileStorage.csproj", "{7F6AB531-472F-4A1C-A65E-519E0E2D86CC}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Unlimotion.Notes", "Unlimotion.Notes\Unlimotion.Notes.csproj", "{F86AE8E1-0F67-4A2E-8D71-CBF3C106E653}"
+EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Unlimotion.TaskTreeManager", "Unlimotion.TaskTreeManager", "{06DF352E-4491-1B4C-8BD2-5F8CA486392E}"
 EndProject
 Global
@@ -77,6 +79,18 @@ Global
 		Release|x86 = Release|x86
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{F86AE8E1-0F67-4A2E-8D71-CBF3C106E653}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F86AE8E1-0F67-4A2E-8D71-CBF3C106E653}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F86AE8E1-0F67-4A2E-8D71-CBF3C106E653}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{F86AE8E1-0F67-4A2E-8D71-CBF3C106E653}.Debug|x64.Build.0 = Debug|Any CPU
+		{F86AE8E1-0F67-4A2E-8D71-CBF3C106E653}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{F86AE8E1-0F67-4A2E-8D71-CBF3C106E653}.Debug|x86.Build.0 = Debug|Any CPU
+		{F86AE8E1-0F67-4A2E-8D71-CBF3C106E653}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F86AE8E1-0F67-4A2E-8D71-CBF3C106E653}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F86AE8E1-0F67-4A2E-8D71-CBF3C106E653}.Release|x64.ActiveCfg = Release|Any CPU
+		{F86AE8E1-0F67-4A2E-8D71-CBF3C106E653}.Release|x64.Build.0 = Release|Any CPU
+		{F86AE8E1-0F67-4A2E-8D71-CBF3C106E653}.Release|x86.ActiveCfg = Release|Any CPU
+		{F86AE8E1-0F67-4A2E-8D71-CBF3C106E653}.Release|x86.Build.0 = Release|Any CPU
 		{7F213DC0-4CB1-477D-A526-70A95AE3E622}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{7F213DC0-4CB1-477D-A526-70A95AE3E622}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{7F213DC0-4CB1-477D-A526-70A95AE3E622}.Debug|x64.ActiveCfg = Debug|Any CPU

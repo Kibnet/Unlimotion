@@ -76,6 +76,39 @@ public sealed class TaskSourceManagerTests : IDisposable
     }
 
     [Test]
+    public async Task LoadOrCreate_MigratesLegacyNoteVaultToEveryExistingSpaceIdempotently()
+    {
+        var configuration = CreateConfiguration();
+        var legacyVault = Path.Combine(_rootPath, "legacy-vault");
+        var settings = new TaskSourcesSettings
+        {
+            ActiveSourceId = "personal",
+            Sources =
+            [
+                new TaskSourceDescriptor { Id = "personal", Kind = TaskSourceKind.File, Path = Path.Combine(_rootPath, "personal") },
+                new TaskSourceDescriptor { Id = "work", Kind = TaskSourceKind.File, Path = Path.Combine(_rootPath, "work") }
+            ]
+        };
+        TaskSourceSettingsAdapter.Save(configuration, settings);
+        configuration.GetSection("NoteVault").GetSection("RootPath").Set(legacyVault);
+        configuration.GetSection("NoteVault").GetSection("IsFeedEnabled").Set(false);
+        configuration.GetSection("NoteVault").GetSection("DayBoundaryMinutes").Set(180);
+
+        var migrated = TaskSourceSettingsAdapter.LoadOrCreate(configuration, Path.Combine(_rootPath, "fallback"));
+        var reloaded = TaskSourceSettingsAdapter.LoadOrCreate(configuration, Path.Combine(_rootPath, "fallback"));
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(migrated.NoteSettings.Count).IsEqualTo(2);
+            await Assert.That(migrated.NoteSettings.All(note => note.RootPath == legacyVault)).IsTrue();
+            await Assert.That(migrated.NoteSettings.All(static note => !note.IsFeedEnabled)).IsTrue();
+            await Assert.That(migrated.NoteSettings.All(static note => note.DayBoundaryMinutes == 180)).IsTrue();
+            await Assert.That(reloaded.NoteSettings.Select(static note => note.SourceId))
+                .IsEquivalentTo(new[] { "personal", "work" });
+        }
+    }
+
+    [Test]
     public async Task EnsureServerSettings_DoesNotCopyLegacyTokensToNonDefaultSource()
     {
         var configuration = CreateConfiguration();
@@ -562,6 +595,7 @@ public sealed class TaskSourceManagerTests : IDisposable
         await Assert.That(manager.ActiveSource?.Descriptor.Id).IsEqualTo(TaskSourceDescriptor.DefaultSourceId);
         await Assert.That(persisted.Sources.Select(source => source.Id)).DoesNotContain(created.Id);
         await Assert.That(persisted.SyncSettings.Select(sync => sync.SourceId)).DoesNotContain(created.Id);
+        await Assert.That(persisted.NoteSettings.Select(note => note.SourceId)).DoesNotContain(created.Id);
         await Assert.That(persisted.Sources.Single().Id).IsEqualTo(TaskSourceDescriptor.DefaultSourceId);
     }
 

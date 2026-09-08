@@ -14,6 +14,12 @@ namespace Unlimotion.Views
 
         private void MainWindow_OnKeyDown(object? sender, KeyEventArgs e)
         {
+            if (MainScreen.TryHandleShellHotkey(e))
+            {
+                e.Handled = true;
+                return;
+            }
+
             MainScreen.TryHandleHotkeyHelpKey(e);
         }
     }

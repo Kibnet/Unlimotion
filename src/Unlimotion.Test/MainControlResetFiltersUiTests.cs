@@ -147,7 +147,7 @@ public class MainControlResetFiltersUiTests
     [Test]
     public async Task StatusFilterComboBox_SelectionIsIndependentPerTab()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -211,7 +211,7 @@ public class MainControlResetFiltersUiTests
     [Test]
     public async Task WantedFilterComboBox_IsAvailableOnUnlockedAndRoadmapTabs_WithDefaultAllOption()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();

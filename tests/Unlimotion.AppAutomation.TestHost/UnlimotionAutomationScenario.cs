@@ -8,5 +8,6 @@ public enum UnlimotionAutomationScenario
     StatusContract,
     TaskSpaces,
     TaskSpacesDuplicateCatalogRecovery,
-    TaskSpacesOrphanCatalogRecovery
+    TaskSpacesOrphanCatalogRecovery,
+    Feed
 }

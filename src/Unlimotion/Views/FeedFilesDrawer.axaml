@@ -1,0 +1,97 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:feed="clr-namespace:Unlimotion.ViewModel.Feed;assembly=Unlimotion.ViewModel"
+             x:Class="Unlimotion.Views.FeedFilesDrawer"
+             x:DataType="feed:FeedFilesDrawerViewModel"
+             mc:Ignorable="d"
+             d:DesignWidth="420"
+             d:DesignHeight="640">
+    <Border x:Name="DrawerBorder"
+            IsVisible="{Binding IsOpen, FallbackValue=False}"
+            Width="420"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Stretch"
+            Padding="16"
+            BorderBrush="{DynamicResource ThemeBorderLowBrush}"
+            BorderThickness="1,0,0,0"
+            Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
+            AutomationProperties.ControlTypeOverride="Pane"
+            AutomationProperties.Name="{DynamicResource FeedFilesTitle}"
+            AutomationProperties.AutomationId="FeedFilesDrawerRoot">
+        <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="12">
+            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                <TextBlock VerticalAlignment="Center"
+                           FontSize="20"
+                           FontWeight="SemiBold"
+                           Text="{DynamicResource FeedFilesTitle}" />
+                <Button Grid.Column="1"
+                        Command="{Binding RefreshCommand}"
+                        Content="{DynamicResource FeedRefresh}"
+                        AutomationProperties.AutomationId="FeedFilesRefreshButton" />
+                <Button Grid.Column="2"
+                        Command="{Binding CloseCommand}"
+                        Content="×"
+                        ToolTip.Tip="{DynamicResource Close}"
+                        AutomationProperties.Name="{DynamicResource Close}"
+                        AutomationProperties.AutomationId="FeedFilesCloseButton" />
+            </Grid>
+
+            <ProgressBar Grid.Row="1"
+                         IsIndeterminate="True"
+                         IsVisible="{Binding IsBusy}"
+                         AutomationProperties.AutomationId="FeedFilesBusyIndicator" />
+
+            <Grid Grid.Row="2">
+                <ListBox ItemsSource="{Binding Files}"
+                         IsVisible="{Binding HasFiles}"
+                         AutomationProperties.Name="{DynamicResource FeedFilesTitle}"
+                         AutomationProperties.AutomationId="FeedFilesList">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="feed:FeedFileItemViewModel">
+                            <Button HorizontalAlignment="Stretch"
+                                    HorizontalContentAlignment="Stretch"
+                                    Padding="8"
+                                    Click="OpenFile_OnClick"
+                                    AutomationProperties.Name="{Binding RelativePath}"
+                                    AutomationProperties.AutomationId="FeedFileOpenButton">
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <StackPanel Spacing="2">
+                                        <TextBlock Text="{Binding Name}"
+                                                   TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{Binding Folder}"
+                                                   FontSize="11"
+                                                   Opacity="0.68"
+                                                   TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="1"
+                                               VerticalAlignment="Center"
+                                               Text="›"
+                                               FontSize="18" />
+                                </Grid>
+                            </Button>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+
+                <TextBlock HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           IsVisible="{Binding !HasFiles}"
+                           Text="{DynamicResource FeedFilesEmpty}"
+                           TextWrapping="Wrap"
+                           TextAlignment="Center"
+                           Opacity="0.68"
+                           AutomationProperties.AutomationId="FeedFilesEmptyState" />
+            </Grid>
+
+            <TextBlock Grid.Row="3"
+                       IsVisible="{Binding HasError}"
+                       Text="{Binding ErrorMessage}"
+                       TextWrapping="Wrap"
+                       Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+                       AutomationProperties.LiveSetting="Assertive"
+                       AutomationProperties.AutomationId="FeedFilesErrorText" />
+        </Grid>
+    </Border>
+</UserControl>

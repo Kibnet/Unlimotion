@@ -315,33 +315,38 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
 
     public async Task<TaskItemViewModel> Update(TaskItem change)
     {
+        ThrowIfDisposed();
         var connItemList = (await TaskTreeManager.UpdateTask(change)).OrderBy(t => t.CreatedDateTime).ToList();
         var last = connItemList.Last();
         TaskItemViewModel? lastViewModel = null;
 
-        foreach (var task in connItemList)
+        await RunOnCacheSynchronizationContextAsync(() =>
         {
-            var cached = Tasks.Lookup(task.Id);
-            if (cached.HasValue)
+            foreach (var task in connItemList)
             {
-                cached.Value.Update(task);
-                if (task.Id == last.Id)
+                var cached = Tasks.Lookup(task.Id);
+                if (cached.HasValue)
                 {
-                    lastViewModel = cached.Value;
+                    cached.Value.Update(task);
+                    if (task.Id == last.Id)
+                    {
+                        lastViewModel = cached.Value;
+                    }
+
+                    continue;
                 }
 
-                continue;
+                var created = CreateTaskViewModel(task);
+                Tasks.AddOrUpdate(created);
+                if (task.Id == last.Id)
+                {
+                    lastViewModel = created;
+                }
             }
 
-            var created = CreateTaskViewModel(task);
-            Tasks.AddOrUpdate(created);
-            if (task.Id == last.Id)
-            {
-                lastViewModel = created;
-            }
-        }
-
-        RefreshRelations();
+            RefreshRelations();
+        });
+        ThrowIfDisposed();
         return lastViewModel!;
     }
 

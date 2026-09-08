@@ -21,7 +21,7 @@ internal static class WorkspaceBreadcrumbsLastOpenedUiContract
         ExecuteWorkspaceBreadcrumbsLastOpenedScenarioAsync()
     {
         var result = new WorkspaceBreadcrumbsLastOpenedScenarioResult();
-        var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        var session = HeadlessUnitTestSession.StartNew(typeof(SkiaHeadlessAppBuilder));
 
         try
         {

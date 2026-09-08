@@ -20,7 +20,7 @@ internal static class WantedImportanceUiContract
     public static async Task<WantedImportanceScenarioResult> ExecuteWantedImportanceScenarioAsync()
     {
         var result = new WantedImportanceScenarioResult();
-        var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        var session = HeadlessUnitTestSession.StartNew(typeof(SkiaHeadlessAppBuilder));
 
         try
         {

@@ -12,6 +12,8 @@ public abstract partial class MainWindowScenariosBase<TSession> : UiTestBase<TSe
 {
     protected virtual string ExpectedCurrentTaskTitle => UnlimotionAppLaunchHost.CurrentTaskTitle;
 
+    protected virtual void PrepareMainTabSelection(string automationId) { }
+
     [Test]
     [NotInParallel(DesktopUiConstraint)]
     public async Task Main_window_loads_current_task_on_launch()
@@ -56,8 +58,8 @@ public abstract partial class MainWindowScenariosBase<TSession> : UiTestBase<TSe
                 .IsEqualTo("CurrentTaskDescriptionSection");
             await Assert.That(Page.CurrentTaskPlanningSection.AutomationId)
                 .IsEqualTo("CurrentTaskPlanningSection");
-            await Assert.That(Page.CurrentTaskRepeaterSection.AutomationId)
-                .IsEqualTo("CurrentTaskRepeaterSection");
+            // The launch fixture has no planned start. Repeater controls are intentionally
+            // hidden until one is set; their show/hide contract has its own UI scenario.
             await Assert.That(Page.CurrentTaskRelationsSection.AutomationId)
                 .IsEqualTo("CurrentTaskRelationsSection");
         }
@@ -105,27 +107,35 @@ public abstract partial class MainWindowScenariosBase<TSession> : UiTestBase<TSe
     {
         await Assert.That(Page.MainTabs.AutomationId).IsEqualTo("MainTabs");
 
+        PrepareMainTabSelection("LastCreatedTabItem");
         Page.SelectTabItem(static page => page.LastCreatedTabItem, timeoutMs: 10_000);
         await Assert.That(Page.LastCreatedTree.AutomationId).IsEqualTo("LastCreatedTree");
 
+        PrepareMainTabSelection("LastUpdatedTabItem");
         Page.SelectTabItem(static page => page.LastUpdatedTabItem, timeoutMs: 10_000);
         await Assert.That(Page.LastUpdatedTree.AutomationId).IsEqualTo("LastUpdatedTree");
 
+        PrepareMainTabSelection("UnlockedTabItem");
         Page.SelectTabItem(static page => page.UnlockedTabItem, timeoutMs: 10_000);
         await Assert.That(Page.UnlockedTree.AutomationId).IsEqualTo("UnlockedTree");
 
+        PrepareMainTabSelection("InProgressTabItem");
         Page.SelectTabItem(static page => page.InProgressTabItem, timeoutMs: 10_000);
         await Assert.That(Page.InProgressTree.AutomationId).IsEqualTo("InProgressTree");
 
+        PrepareMainTabSelection("CompletedTabItem");
         Page.SelectTabItem(static page => page.CompletedTabItem, timeoutMs: 10_000);
         await Assert.That(Page.CompletedTree.AutomationId).IsEqualTo("CompletedTree");
 
+        PrepareMainTabSelection("ArchivedTabItem");
         Page.SelectTabItem(static page => page.ArchivedTabItem, timeoutMs: 10_000);
         await Assert.That(Page.ArchivedTree.AutomationId).IsEqualTo("ArchivedTree");
 
+        PrepareMainTabSelection("LastOpenedTabItem");
         Page.SelectTabItem(static page => page.LastOpenedTabItem, timeoutMs: 10_000);
         await Assert.That(Page.LastOpenedTree.AutomationId).IsEqualTo("LastOpenedTree");
 
+        PrepareMainTabSelection("RoadmapTabItem");
         Page.SelectTabItem(static page => page.RoadmapTabItem, timeoutMs: 10_000);
         var roadmapRoot = WaitUntil(
             () => TryResolveDuringWait(() => Page.RoadmapRoot),
@@ -134,7 +144,7 @@ public abstract partial class MainWindowScenariosBase<TSession> : UiTestBase<TSe
             timeoutMessage: "Roadmap root did not become available.")!;
         await Assert.That(roadmapRoot.AutomationId).IsEqualTo("RoadmapRoot");
 
-        Page.SelectTabItem(static page => page.SettingsTabItem, timeoutMs: 10_000);
+        Page.ClickButton(static page => page.GlobalSettingsButton);
         var settingsRoot = WaitUntil(
             () => TryResolveDuringWait(() => Page.SettingsRoot),
             static control => control is not null,
@@ -149,7 +159,7 @@ public abstract partial class MainWindowScenariosBase<TSession> : UiTestBase<TSe
     {
         await Assert.That(Page.MainTabs.AutomationId).IsEqualTo("MainTabs");
 
-        Page.SelectTabItem(static page => page.SettingsTabItem, timeoutMs: 10_000);
+        Page.ClickButton(static page => page.GlobalSettingsButton);
         _ = WaitUntil(
             () => TryResolveDuringWait(() => Page.SettingsRoot),
             static control => control is not null,
