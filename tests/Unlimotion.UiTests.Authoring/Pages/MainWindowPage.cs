@@ -67,6 +67,8 @@ namespace Unlimotion.UiTests.Authoring.Pages;
 [UiControl("TaskStatusOptionCompleted", UiControlType.AutomationElement, "TaskStatusOptionCompleted")]
 [UiControl("TaskStatusOptionArchived", UiControlType.AutomationElement, "TaskStatusOptionArchived")]
 [UiControl("CurrentTaskDescriptionSection", UiControlType.AutomationElement, "CurrentTaskDescriptionSection")]
+[UiControl("CurrentTaskCompletionCriteriaSection", UiControlType.AutomationElement, "CurrentTaskCompletionCriteriaSection")]
+[UiControl("CompletionCriteriaItems", UiControlType.AutomationElement, "CompletionCriteriaItems")]
 [UiControl("CurrentTaskPlanningSection", UiControlType.AutomationElement, "CurrentTaskPlanningSection")]
 [UiControl("CurrentTaskRepeaterSection", UiControlType.AutomationElement, "CurrentTaskRepeaterSection")]
 [UiControl("CurrentTaskRelationsSection", UiControlType.AutomationElement, "CurrentTaskRelationsSection")]

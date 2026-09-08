@@ -19,6 +19,7 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
     private readonly IDatabaseWatcher? _dbWatcher;
     private readonly ConcurrentDictionary<string, PendingFileChange> _pendingFileChanges =
         new(StringComparer.OrdinalIgnoreCase);
+    private readonly SemaphoreSlim _watcherUpdateGate = new(1, 1);
     private long _nextPendingGeneration;
     private bool _disposed;
 
@@ -51,21 +52,16 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
         RemovePendingFileChange(e.Id);
         var refresh = await WithDirectoryLockAsync(async () =>
         {
-            var revisionBefore = LiveGraphRevision;
-            var loaded = await Load(taskId, forced: true);
+            var loadedTask = await Load(taskId, forced: true);
+            var graph = await ReadGraphAsync();
             var sourcePath = System.IO.Path.Combine(Path, e.Id);
             var physicallyAbsent = !File.Exists(sourcePath) || new FileInfo(sourcePath).Length == 0;
+            var refreshedTaskId = loadedTask?.Id ?? taskId;
             return new FileRefreshResult(
-                loaded,
+                graph.TasksById.GetValueOrDefault(refreshedTaskId),
                 physicallyAbsent,
-                revisionBefore,
-                LiveGraphRevision);
+                graph.Revision);
         });
-
-        if (refresh.RevisionBefore > 0 && refresh.RevisionBefore == refresh.RevisionAfter)
-        {
-            return;
-        }
 
         if (refresh.Task == null && !refresh.PhysicallyAbsent)
         {
@@ -74,11 +70,12 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
             return;
         }
 
-        RaiseUpdating(new TaskStorageUpdateEventArgs
+        RaiseUpdating(new FileStorageUpdateEventArgs
         {
             Id = refresh.Task?.Id ?? taskId,
             Type = refresh.Task == null ? UpdateType.Removed : UpdateType.Saved,
-            StorageRevision = refresh.RevisionAfter
+            StorageRevision = refresh.RevisionAfter,
+            Snapshot = refresh.Task == null ? null : TaskItemSnapshot.Clone(refresh.Task)
         });
     }
 
@@ -123,8 +120,16 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
 
         watcher.OnUpdated += async (_, args) =>
         {
+            var entered = false;
             try
             {
+                await _watcherUpdateGate.WaitAsync();
+                entered = true;
+                if (_disposed)
+                {
+                    return;
+                }
+
                 await OnUpdatingAsync(new TaskStorageUpdateEventArgs
                 {
                     Id = args.Id,
@@ -134,6 +139,13 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
             catch (Exception ex)
             {
                 Debug.WriteLine($"Failed to process file storage update for '{args.Id}': {ex}");
+            }
+            finally
+            {
+                if (entered)
+                {
+                    _watcherUpdateGate.Release();
+                }
             }
         };
     }
@@ -197,7 +209,6 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
     private sealed record FileRefreshResult(
         TaskItem? Task,
         bool PhysicallyAbsent,
-        long RevisionBefore,
         long RevisionAfter);
 
     private static string PreparePath(string path)
@@ -216,4 +227,9 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
             throw new InvalidOperationException(L10n.Format("FileStorageNoAccess", normalizedPath), ex);
         }
     }
+}
+
+internal sealed class FileStorageUpdateEventArgs : TaskStorageUpdateEventArgs
+{
+    public TaskItem? Snapshot { get; init; }
 }

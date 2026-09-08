@@ -1,12 +1,12 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Avalonia.Threading;
 using DynamicData;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -49,6 +49,9 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
     public bool StatusModelMigrationWasApplied { get; private set; }
 
     public event EventHandler<EventArgs>? Initiated;
+
+    public void BindToCurrentSynchronizationContext() =>
+        CaptureCacheSynchronizationContext(replaceExisting: true);
 
     public async Task Init()
     {
@@ -1130,56 +1133,44 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
 
     private async void TaskStorageOnUpdating(object? sender, TaskStorageUpdateEventArgs e)
     {
-        if (!Dispatcher.UIThread.CheckAccess())
+        try
         {
-            var completion = new TaskCompletionSource();
-            Dispatcher.UIThread.Post(async () =>
+            switch (e.Type)
             {
-                try
-                {
-                    await HandleTaskStorageUpdatingAsync(e);
-                    completion.SetResult();
-                }
-                catch (Exception exception)
-                {
-                    completion.SetException(exception);
-                }
-            });
-
-            await completion.Task;
-            return;
+                case UpdateType.Saved:
+                    var taskItem = (e as FileStorageUpdateEventArgs)?.Snapshot ??
+                        await TaskTreeManager.Storage.Load(e.Id).ConfigureAwait(false);
+                    if (taskItem?.Id != null)
+                    {
+                        await RunOnCacheSynchronizationContextAsync(() =>
+                        {
+                            HydrateCache(taskItem, create: true, e.StorageRevision);
+                            RefreshRelations();
+                        }).ConfigureAwait(false);
+                    }
+                    break;
+                case UpdateType.Removed:
+                    await RunOnCacheSynchronizationContextAsync(() => RemoveTaskFromCache(e)).ConfigureAwait(false);
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException();
+            }
         }
-
-        await HandleTaskStorageUpdatingAsync(e);
+        catch (Exception exception)
+        {
+            Debug.WriteLine($"Failed to apply task storage update for '{e.Id}': {exception}");
+        }
     }
 
-    private async Task HandleTaskStorageUpdatingAsync(TaskStorageUpdateEventArgs e)
+    private void RemoveTaskFromCache(TaskStorageUpdateEventArgs e)
     {
-        switch (e.Type)
+        // Handle file storage ID mapping
+        var taskId = isFileStorage ? new FileInfo(e.Id).Name : e.Id;
+        var deletedItem = Tasks.Lookup(taskId);
+        if (TryAcceptStorageRevision(taskId, e.StorageRevision) && deletedItem.HasValue)
         {
-            case UpdateType.Saved:
-                var taskItem = await TaskTreeManager.Storage.Load(e.Id);
-                if (taskItem?.Id != null)
-                {
-                    HydrateCache(taskItem, create: true, e.StorageRevision);
-                    RefreshRelations();
-                }
-                break;
-            case UpdateType.Removed:
-                // Handle file storage ID mapping
-                var taskId = isFileStorage ? new FileInfo(e.Id).Name : e.Id;
-                var deletedItem = Tasks.Lookup(taskId);
-                if (TryAcceptStorageRevision(taskId, e.StorageRevision))
-                {
-                    if (deletedItem.HasValue)
-                    {
-                        RemoveTasksFromCache([taskId]);
-                        RefreshRelations();
-                    }
-                }
-                break;
-            default:
-                throw new ArgumentOutOfRangeException();
+            RemoveTasksFromCache([taskId]);
+            RefreshRelations();
         }
     }
 

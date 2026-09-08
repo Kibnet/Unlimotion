@@ -31,6 +31,10 @@ public static class UnlimotionAutomationScenarioData
     public const string StatusContractBlockerTaskId = "status-contract-blocker";
     public const string StatusContractBlockerTaskTitle = "Status contract blocker";
     public const string StatusContractWindowTitle = "Unlimotion Status Contract";
+    public const string CliLiveRefreshTaskId = "cli-live-refresh";
+    public const string CliLiveRefreshParentTaskId = "external-graph-parent";
+    public const string CliLiveRefreshChildTaskId = "external-graph-child";
+    public const string CliLiveRefreshWindowTitle = "Unlimotion CLI live refresh";
     public const string TaskSpacesTaskId = "task-spaces-shared-id";
     public const string TaskSpacesSpaceATitle = "Space A task";
     public const string TaskSpacesSpaceBTitle = "Space B task";
@@ -58,6 +62,7 @@ public static class UnlimotionAutomationScenarioData
                 ? ReadmeDemoCurrentTaskIdRu
                 : ReadmeDemoCurrentTaskId,
             UnlimotionAutomationScenario.StatusContract => StatusContractTerminalTaskId,
+            UnlimotionAutomationScenario.CliLiveRefresh => CliLiveRefreshTaskId,
             UnlimotionAutomationScenario.TaskSpaces or
                 UnlimotionAutomationScenario.TaskSpacesDuplicateCatalogRecovery or
                 UnlimotionAutomationScenario.TaskSpacesOrphanCatalogRecovery => TaskSpacesTaskId,
@@ -112,6 +117,12 @@ public static class UnlimotionAutomationScenarioData
                 StatusContractBlockerTaskId => StatusContractBlockerTaskTitle,
                 _ => StatusContractTerminalTaskTitle
             },
+            UnlimotionAutomationScenario.CliLiveRefresh => taskId switch
+            {
+                CliLiveRefreshParentTaskId => "External graph parent",
+                CliLiveRefreshChildTaskId => "External graph child",
+                _ => "CLI live refresh task"
+            },
             UnlimotionAutomationScenario.TaskSpaces or
                 UnlimotionAutomationScenario.TaskSpacesDuplicateCatalogRecovery or
                 UnlimotionAutomationScenario.TaskSpacesOrphanCatalogRecovery => TaskSpacesSpaceATitle,
@@ -150,6 +161,7 @@ public static class UnlimotionAutomationScenarioData
                 ? ReadmeDemoWindowTitleRu
                 : ReadmeDemoWindowTitle,
             UnlimotionAutomationScenario.StatusContract => StatusContractWindowTitle,
+            UnlimotionAutomationScenario.CliLiveRefresh => CliLiveRefreshWindowTitle,
             UnlimotionAutomationScenario.TaskSpaces or
                 UnlimotionAutomationScenario.TaskSpacesDuplicateCatalogRecovery or
                 UnlimotionAutomationScenario.TaskSpacesOrphanCatalogRecovery => TaskSpacesWindowTitle,
@@ -174,6 +186,9 @@ public static class UnlimotionAutomationScenarioData
                 break;
             case UnlimotionAutomationScenario.StatusContract:
                 SeedStatusContractTasks(tasksPath);
+                break;
+            case UnlimotionAutomationScenario.CliLiveRefresh:
+                SeedCliLiveRefreshTasks(tasksPath);
                 break;
             case UnlimotionAutomationScenario.TaskSpaces:
             case UnlimotionAutomationScenario.TaskSpacesDuplicateCatalogRecovery:
@@ -202,6 +217,9 @@ public static class UnlimotionAutomationScenarioData
                 WriteReadmeDemoConfig(configPath, tasksPath, language);
                 break;
             case UnlimotionAutomationScenario.StatusContract:
+                WriteStatusContractConfig(configPath, tasksPath, language, theme);
+                break;
+            case UnlimotionAutomationScenario.CliLiveRefresh:
                 WriteStatusContractConfig(configPath, tasksPath, language, theme);
                 break;
             case UnlimotionAutomationScenario.TaskSpaces:
@@ -645,6 +663,56 @@ public static class UnlimotionAutomationScenarioData
                 BlocksTasks = [StatusContractBlockedTaskId],
                 IsCanBeCompleted = true,
                 CreatedDateTime = seedTime.AddMinutes(-3),
+                UpdatedDateTime = seedTime.AddMinutes(-1),
+                Version = 1
+            }
+        };
+
+        foreach (var task in tasks)
+        {
+            WriteStatusContractTaskJson(Path.Combine(tasksPath, task.Id), task);
+        }
+    }
+
+    private static void SeedCliLiveRefreshTasks(string tasksPath)
+    {
+        var seedTime = DateTimeOffset.UtcNow;
+        var tasks = new[]
+        {
+            new TaskItem
+            {
+                Id = CliLiveRefreshTaskId,
+                Title = "CLI live refresh task",
+                Description = "Task mutated by the production CLI while the desktop window remains open.",
+                Status = Domain.TaskStatus.Prepared,
+                StatusHistory =
+                [
+                    CreateStatusHistoryEntry(Domain.TaskStatus.NotReady, seedTime.AddMinutes(-2)),
+                    CreateStatusHistoryEntry(Domain.TaskStatus.Prepared, seedTime.AddMinutes(-1))
+                ],
+                CompletionCriteria =
+                [
+                    new TaskCompletionCriterion { Id = "criterion-one", Text = "First criterion", IsSatisfied = false },
+                    new TaskCompletionCriterion { Id = "criterion-two", Text = "Second criterion", IsSatisfied = false }
+                ],
+                IsCanBeCompleted = false,
+                CreatedDateTime = seedTime.AddMinutes(-2),
+                UpdatedDateTime = seedTime.AddMinutes(-1),
+                Version = 1
+            },
+            new TaskItem
+            {
+                Id = CliLiveRefreshParentTaskId,
+                Title = "External graph parent",
+                Description = "Parent used to verify external graph refresh.",
+                Status = Domain.TaskStatus.Prepared,
+                StatusHistory =
+                [
+                    CreateStatusHistoryEntry(Domain.TaskStatus.NotReady, seedTime.AddMinutes(-2)),
+                    CreateStatusHistoryEntry(Domain.TaskStatus.Prepared, seedTime.AddMinutes(-1))
+                ],
+                IsCanBeCompleted = true,
+                CreatedDateTime = seedTime.AddMinutes(-2),
                 UpdatedDateTime = seedTime.AddMinutes(-1),
                 Version = 1
             }
