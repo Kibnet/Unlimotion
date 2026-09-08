@@ -702,10 +702,12 @@ public class MainControlFilterToolbarResponsiveUiTests
 
                 var filterPanel = FindControlInDetachedContent<Border>(filterFlyoutContent, "AllTasksFilterPanel")
                                   ?? throw new InvalidOperationException("All Tasks filter panel was not found.");
-                var referenceBackground = filterPanel.Background;
-                var referenceBorderBrush = filterPanel.BorderBrush;
-                var referenceBorderThickness = filterPanel.BorderThickness;
-                var referenceCornerRadius = filterPanel.CornerRadius;
+                var filterPresenter = filterPanel.GetVisualAncestors().OfType<FlyoutPresenter>().FirstOrDefault()
+                                      ?? throw new InvalidOperationException("All Tasks flyout presenter was not found.");
+                var referenceBackground = filterPresenter.Background;
+                var referenceBorderBrush = filterPresenter.BorderBrush;
+                var referenceBorderThickness = filterPresenter.BorderThickness;
+                var referenceCornerRadius = filterPresenter.CornerRadius;
 
                 filterFlyout.Hide();
                 RunLayoutJobs();
@@ -721,8 +723,13 @@ public class MainControlFilterToolbarResponsiveUiTests
                 await Assert.That(emojiDropDown.BorderBrush).IsEqualTo(referenceBorderBrush);
                 await Assert.That(emojiDropDown.BorderThickness).IsEqualTo(referenceBorderThickness);
                 await Assert.That(emojiDropDown.CornerRadius).IsEqualTo(referenceCornerRadius);
+                await Assert.That(emojiDropDown.ClipToBounds).IsTrue();
+                await Assert.That(emojiDropDown.Background).IsAssignableTo<ISolidColorBrush>();
+                await Assert.That(((ISolidColorBrush)emojiDropDown.Background!).Color.A).IsEqualTo(byte.MaxValue);
+                await Assert.That(emojiList.Background).IsEqualTo(referenceBackground);
                 await Assert.That(emojiList.Background).IsAssignableTo<ISolidColorBrush>();
-                await Assert.That(((ISolidColorBrush)emojiList.Background!).Color.A).IsEqualTo((byte)0);
+                await Assert.That(((ISolidColorBrush)emojiList.Background!).Color.A).IsEqualTo(byte.MaxValue);
+                SaveEmojiDiagnosticFrame(window, $"popup-chrome-window-{(darkTheme ? "dark" : "light")}");
             }
             finally
             {

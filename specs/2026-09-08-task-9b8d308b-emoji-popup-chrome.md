@@ -15,8 +15,8 @@
   - `git blame` подтверждает, что background/border emoji popup добавлены в `3bd0983d0`, radius `4` — в `b3c55aaf2`, а reference radius `6` существует в `FilterOverflowPanel` с `a103b106e`;
   - текущий checkout `feat/daily-feed` содержит unrelated пользовательские изменения. EXEC выполняется в отдельном worktree от текущего `HEAD`; эти изменения не переносятся и не редактируются.
 - Корневая проблема: два соседних popup одного toolbar имеют почти одинаковый chrome, но radius задан независимо и уже расходится (`4` против `6`); тест закрепляет значение одного popup вместо сравнения с визуальным reference.
-- Наблюдаемый outcome: открытые popup emoji-фильтра и popup общих фильтров используют одинаковые background, border brush, border thickness и corner radius в светлой и тёмной теме; содержимое, размеры и поведение popup не меняются.
-- Уточнение после desktop screenshot: parity относится к фактически видимому chrome. Внутренний `ListBox` не должен закрашивать внешний rounded surface непрозрачным прямоугольником; совпадение только computed-свойств внешнего `Border` недостаточно.
+- Наблюдаемый outcome: открытые popup emoji-фильтра и фактический `FlyoutPresenter` общих фильтров используют одинаковые background, border brush, border thickness и corner radius в светлой и тёмной теме; содержимое, размеры и поведение popup не меняются.
+- Уточнение после desktop screenshot и повторной обратной связи: parity относится к фактически видимому chrome. Popup и список должны иметь непрозрачный theme background, а внешний rounded `Border` должен обрезать дочернее содержимое по своим углам; совпадение только computed-свойств внешнего `Border` недостаточно.
 - Effective runtime для SPEC: Codex subagent в локальной Windows-среде; репозиторий Avalonia/.NET; `global.json` и `dotnet --version` разрешают SDK `10.0.400`; TUnit/Microsoft.Testing.Platform. Реальный EXEC runtime и commit фиксируются в журнале перед изменениями.
 
 ### Non-Goals и ограничения
@@ -50,8 +50,8 @@ emoji popup          filter popup          emoji popup          filter popup
 
 | Observable scenario / решение (owner) | AC / ожидаемый результат | Команда / evidence |
 | --- | --- | --- |
-| Пользователь открывает emoji popup рядом с popup фильтров в светлой теме. Решение: reference — реальный `FilterOverflowPanel`, а не продублированные литералы (agent). | AC1: computed `Background`, `BorderBrush`, `BorderThickness`, `CornerRadius` внешних `Border` равны; reference radius сейчас `6`. | Новый headless regression в `MainControlFilterToolbarResponsiveUiTests`; сначала RED на radius, затем GREEN. |
-| Пользователь визуально различает рамку и скруглённые углы emoji popup. Решение: внутренний список не рисует собственную непрозрачную прямоугольную поверхность поверх outer chrome (agent по screenshot feedback пользователя). | AC1b: `EmojiFilterList` имеет прозрачный background, поэтому видимым surface остаётся `EmojiFilterDropDown`; placement, размеры и padding не меняются. | Сначала падающий headless assertion на фактическую opacity списка, затем desktop screenshot открытого popup. |
+| Пользователь открывает emoji popup рядом с popup фильтров в светлой теме. Решение: reference — фактически рисующий chrome `FlyoutPresenter`, а не внутренний `FilterOverflowPanel` с неразрешёнными legacy resource keys (agent после RED). | AC1: computed `Background`, `BorderBrush`, `BorderThickness`, `CornerRadius` emoji popup равны свойствам реального `FlyoutPresenter`. | Headless regression в `MainControlFilterToolbarResponsiveUiTests`; RED/GREEN на реальном rendered control tree. |
+| Пользователь визуально различает цельный непрозрачный popup, рамку и скруглённые углы. Решение: внешний `Border` обрезает непрозрачный список по своему `CornerRadius` (user correction + agent implementation choice). | AC1b: `EmojiFilterDropDown` и `EmojiFilterList` используют один непрозрачный `FlyoutPresenterBackground`; `EmojiFilterDropDown.ClipToBounds=true`; placement, размеры и padding не меняются. | Падающий headless assertion на clipping и opacity, затем screenshot открытого popup. |
 | Пользователь переключает приложение в тёмную тему и снова открывает оба popup. Решение: сохранить существующие dynamic theme resources (agent). | AC2: background/border берутся из существующих dynamic resources и остаются читаемыми после смены темы; hard-coded color не появляется. | Headless test на обе темы либо один параметризованный test; дополнительно inspection XAML diff. |
 | Пользователь продолжает искать и выбирать emoji после визуальной правки. | AC3: open/search/toggle/close flow, placement, max height и light-dismiss не изменены. | Существующий `Toolbar_EmojiFilters_OpenFullListThenSearchAndToggleWithoutClosing` и весь `MainControlFilterToolbarResponsiveUiTests`. |
 | Пользователь открывает popup в узком окне. | AC4: popup остаётся внутри viewport; размеры и содержимое не меняются. | `Toolbar_EmojiFilters_PopupStaysVisibleInNarrowViewport`. |
@@ -67,8 +67,8 @@ emoji popup          filter popup          emoji popup          filter popup
 | `specs/2026-09-08-task-9b8d308b-emoji-popup-chrome.md` | QUEST audit | Обновлять журнал SPEC/EXEC, проверки, review findings и фактический outcome. |
 
 - Интеграция: `EmojiFilterMultiSelectSearchBox` используется в task tabs и Roadmap; reference `FilterOverflowPanel` существует в `MainControl.axaml` и `GraphControl.axaml`. Production logic/ViewModel не затрагиваются.
-- Инвариант: source of visual truth в тесте — computed свойства reference popup в том же rendered control tree; тест не должен закреплять два независимых набора литералов.
-- Инвариант видимой поверхности: background внутренних list/container controls прозрачен; фон и форма popup принадлежат внешнему `EmojiFilterDropDown`.
+- Инвариант: source of visual truth в тесте — computed свойства фактического `FlyoutPresenter` в том же rendered control tree; внутренний content panel не считается chrome, если его resource key резолвится в `null`.
+- Инвариант видимой поверхности: внешний `EmojiFilterDropDown` и внутренний `EmojiFilterList` используют один непрозрачный theme background, а внешний border обрезает содержимое по своему rounded bounds.
 - Ошибки/recovery: если headless harness не может одновременно materialize оба popup, test сначала получает reference `Border` из detached Flyout content и computed style после attachment; отсутствие materialization считается test-design failure, а не основанием ослабить AC. При неоднозначном visual target EXEC останавливается без расширения scope.
 - Данные/состояние: persistent data и task model не меняются. Временное состояние theme/popup в тесте восстанавливается в `finally` по существующему fixture pattern.
 - Performance: неприменимо — меняется одно style value и несколько assertions; новых subscriptions, layout containers или runtime вычислений нет.
@@ -131,7 +131,7 @@ dotnet test --project tests\Unlimotion.UiTests.Headless\Unlimotion.UiTests.Headl
 | «Не превратится ли маленькая правка в redesign popup?» | Non-Goals запрещают изменение content, padding, size, placement, behavior и theme architecture; diff gate ограничивает scope. |
 | «Будет ли это работать в обеих темах и Roadmap?» | Сохраняются dynamic resources; тест параметризуется по theme и проверяет оба места использования либо общий control contract плюс Roadmap smoke. |
 | «Можно ли считать работу завершённой по XAML diff?» | Нет: обязательны expected RED, targeted GREEN, full suites и UI/headless evidence. |
-| «Почему на screenshot рамка выглядит прозрачной, между полем и содержимым видна пустота, а серый popup остаётся квадратным?» | Desktop evidence показал, что opaque background внутреннего `ListBox` визуально перекрывает rounded outer chrome. Исправление должно убрать второй surface, а не менять radius ещё раз. |
+| «Почему на screenshot popup просвечивает, а углы снова квадратные?» | Прозрачность внутреннего списка была ошибочным исправлением. Новый контракт требует непрозрачный background и rounded clipping дочернего содержимого внешним `Border`. |
 | «Не потеряются ли мои текущие изменения в `feat/daily-feed`?» | EXEC только в отдельном worktree от зафиксированного commit; dirty checkout не редактируется. |
 
 User-owned решение было получено перед EXEC: разрешён минимальный repair task graph, чтобы CLI смог безопасно закрепить задачу:
@@ -276,6 +276,55 @@ User-owned решение было получено перед EXEC: разре�
 - Fix/re-review: исходный structural false positive устранён проверкой inner background alpha; временные диагностические изменения удалены; `git diff --check` повторяется перед завершением.
 - Stop decision: PASS для локального исправления и проверенного UI-контракта; residual risk ограничен platform-specific native popup rendering и незавершающимся full-unit runner.
 
+### Повторно открытый EXEC — непрозрачный rounded surface
+
+- User correction: прозрачный `ListBox` отменён; popup должен быть полностью непрозрачным, сохраняя видимое скругление.
+- TDD RED: новый контракт упал в Light/Dark на `EmojiFilterDropDown.ClipToBounds == false`. После включения clipping следующий запуск выявил корневую проблему прежнего теста: `ThemeBackgroundBrush` у bare `Popup` резолвился в `null`, как и у внутреннего `FilterOverflowPanel`, поэтому их равенство было ложноположительным.
+- Исправление: bare emoji `Popup` теперь воспроизводит фактический chrome стандартного `FlyoutPresenter` через `FlyoutPresenterBackground`, `FlyoutBorderThemeBrush` и `OverlayCornerRadius`; внешний `Border` получил `ClipToBounds=true`, внутренний `ListBox` использует тот же непрозрачный `FlyoutPresenterBackground`.
+- Reference regression: тест сравнивает emoji surface с реально отрисованным `FlyoutPresenter`, а также требует alpha `255` у внешнего и внутреннего background.
+- Visual evidence (local-only, не коммитится): просмотрены `chat-artifacts/emoji-popup-chrome/20260908-201232/diagnostics-emoji-popup-chrome-window-dark.png` и `...-light.png`; нижележащие строки не просвечивают, фон цельный, четыре угла скруглены.
+- Validation:
+  - target Light/Dark — `2/2`;
+  - `MainControlFilterToolbarResponsiveUiTests` — `18/18`;
+  - `dotnet build src\Unlimotion.sln -c Release --no-restore -p:UseSharedCompilation=false --nologo` — exit `0`, errors `0`, existing warnings `31`;
+  - первый full Headless — `48/49`, unrelated transient `Daily_note_filename_format_settings`; изолированно `1/1`, повторный full Headless в свежем процессе — `49/49`;
+  - full `Unlimotion.Test` serial — `1443/1443` за `21m 04s`.
+
+### Повторный post-EXEC review
+
+- Статус: **PASS**.
+- Scope/Evidence pass: проверены утверждённая SPEC, production/test diff, `git status --short`, `git diff --stat`, `git diff --check`, Light/Dark screenshots и все validation outcomes выше; tracked scope ограничен XAML, UI regression и SPEC.
+- Contract pass: observable popup непрозрачен, совпадает с фактическим filter flyout chrome и обрезает содержимое по rounded bounds; placement, padding, размеры, bindings, automation IDs и popup behavior не менялись.
+- Adversarial risk pass: найдено и исправлено ложное сравнение двух `null` legacy brushes. Временная попытка назвать одинаковый full-window capture отдельным popup-surface evidence удалена; финальный evidence не делает этого неподтверждённого утверждения.
+- Role-Based pass:
+  - UX / designer: PASS — нет просвечивания, квадратной подложки и визуальной щели; Light/Dark просмотрены;
+  - Tester / validation: PASS — RED доказал clipping defect, regression требует opaque alpha и real presenter parity; targeted, class и full suites green;
+  - Developer / architect: PASS — используются штатные Fluent flyout resources без hard-coded цветов и новой abstraction;
+  - Delivery / operations: PASS — только локальный detached worktree; push/merge/release не выполнялись, screenshots не добавлены в Git.
+- Fix and re-review: после удаления misleading surface-capture ветки повторяются targeted test и `git diff --check`; production diff не менялся после полного green validation.
+- Stop decision: PASS после повторной точечной проверки; остаточный риск ограничен отсутствием отдельного native-compositor capture, при этом inspected Avalonia rendered frames и полный UI regression green.
+
+### Delivery preparation после rebase на `main`
+
+- Статус: **PASS — ветка изолирована и готова к review**.
+- Rebase: исходный checkout находился на detached `HEAD` поверх незамерженной ветки Daily Feed. Создана ветка `fix/emoji-popup-chrome`; только три emoji-коммита перебазированы через `git rebase --onto origin/main dfb0377d`, поэтому Daily Feed не попадает в PR.
+- Scope/Evidence pass: `origin/main...HEAD` содержит только эту SPEC, `EmojiFilterMultiSelectSearchBox.axaml` и `MainControlFilterToolbarResponsiveUiTests.cs`; `git rev-list --left-right --count origin/main...HEAD` перед delivery показал `0 3`, rebase прошёл без конфликтов.
+- Contract pass: production/test diff после rebase сохраняет утверждённый opaque rounded popup contract; новая база не потребовала изменений кода.
+- Validation на актуальном `origin/main`:
+  - Light/Dark regression — `2/2`;
+  - `MainControlFilterToolbarResponsiveUiTests` — `18/18`;
+  - `dotnet build src\Unlimotion.sln -c Release --no-restore -p:UseSharedCompilation=false --nologo` — exit `0`, errors `0`, existing warnings `122`;
+  - full `Unlimotion.UiTests.Headless` serial — `38/38` за `2m 15s`;
+  - full `Unlimotion.Test` serial — `967/967` за `20m 50s`.
+- Adversarial risk pass: отдельно проверена ловушка с базой ветки — обычный rebase перенёс бы десять Daily Feed коммитов; `--onto` оставил только связанный scope. Проверки после rebase выполнены заново, а не перенесены из старой базы.
+- Role-Based pass:
+  - UX / designer: PASS — ранее просмотренные Light/Dark screenshots подтверждают непрозрачный скруглённый popup; screenshots остаются local-only и не коммитятся;
+  - Tester / validation: PASS — targeted, affected class и оба полных набора green на новой базе;
+  - Developer / architect: PASS — diff не тянет зависимость от Daily Feed и не меняет API/behavior вне popup chrome;
+  - Delivery / operations: PASS — ветка соответствует naming policy, rebase clean, unrelated commits/files исключены; push/PR выполняются только по явной команде пользователя.
+- Video fallback: recorder в применённом headless harness отсутствует, отдельного автоматизированного FlaUI сценария emoji popup нет; next-best evidence — deterministic rendered assertions, full Headless suite и local-only Light/Dark screenshots.
+- Stop decision: PASS для push ветки и создания ready-for-review PR; merge/release не авторизованы.
+
 ## Approval
 
 Получена точная combined phrase из раздела «Риск, objections и открытые решения». Фазовые правила central `quest-mode` соблюдены; расширений scope после approval не было.
@@ -296,3 +345,7 @@ User-owned решение было получено перед EXEC: разре�
 | EXEC / review | Full post-EXEC review PASS; 0.98 | Scope/contract/adversarial/role/fix passes; diff-check green; no unrelated tracked changes | Локальный commit, task result, Completed/read-back | Выполнено |
 | EXEC / completion | Task formally closed; 1.00 | CLI success; authoritative status/history author read-back; final validate green with 2858 tasks and no issues | Уведомить пользователя через root | Выполнено |
 | EXEC / desktop acceptance feedback | Первоначальный PASS отозван; 1.00 | Реальный screenshot показывает квадратный opaque list surface поверх rounded outer border; пользователь явно попросил исправить | Добавить RED на list opacity и выполнить минимальный XAML fix | Решение пользователя получено: «Исправь» |
+| EXEC / opaque surface correction | Transparent fix отозван; фактический `FlyoutPresenter` выбран как visual source of truth; 1.00 | RED на missing clipping, затем evidence `ThemeBackgroundBrush == null`; финальные Light/Dark кадры непрозрачны и скруглены | Полные regression suites и review | Решение пользователя: фон не должен быть прозрачным |
+| EXEC / final validation and review | Повторный post-EXEC PASS; 0.99 | target 2/2, class 18/18, build 0 errors, Headless 49/49, unit 1443/1443; screenshots inspected; no unrelated tracked files | Локальный commit и отчёт пользователю | Выполнено |
+| EXEC / delivery after main rebase | Только три emoji-коммита перенесены на `origin/main`; post-rebase проверки green; 1.00 | `0 3` commits, 3 tracked files; target 2/2, class 18/18, build 0 errors, Headless 38/38, unit 967/967 | Push `fix/emoji-popup-chrome`, создать ready PR и проверить CI | Явная команда пользователя: «Отребейзь на мейн. Оформи PR» |
+| EXEC / follow-up rebase | PR #291 повторно перебазирован на `main@91b2d281`; 1.00 | Rebase без конфликтов; `origin/main...HEAD` = `0 3`; target 2/2 и class 18/18 green; production/test diff не изменился | Amend audit, push с exact `--force-with-lease`, проверить PR/CI | Явная команда пользователя от 2026-09-09: «Отребейзь на мейн» |
