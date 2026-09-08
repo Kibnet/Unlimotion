@@ -700,6 +700,7 @@ namespace Unlimotion.ViewModel
         public Task BindInitializedStorage(ITaskStorage storage)
         {
             ArgumentNullException.ThrowIfNull(storage);
+            storage.BindToCurrentSynchronizationContext();
             ResetTaskSpaceSelection();
             DetailsAreOpen = false;
             Search.SearchText = string.Empty;

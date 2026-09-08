@@ -50,7 +50,7 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
 
     public event EventHandler<EventArgs>? Initiated;
 
-    internal void BindToCurrentSynchronizationContext() =>
+    public void BindToCurrentSynchronizationContext() =>
         CaptureCacheSynchronizationContext(replaceExisting: true);
 
     public async Task Init()

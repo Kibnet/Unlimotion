@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -642,6 +643,64 @@ public sealed class TaskSpaceTransactionTests : IDisposable
         await Assert.That(vm.Search.SearchText).IsEmpty();
         await Assert.That(vm.taskRepository).IsSameReferenceAs(second);
         await Assert.That(vm.taskRepository?.Tasks.Items.Single().Title).IsEqualTo("Space B");
+    }
+
+    [Test]
+    public async Task BindInitializedStorage_RebindsBackgroundStorageUpdatesToUiContext()
+    {
+        var configuration = CreateConfiguration(out _);
+        var rawStorage = new ConfigurableStorage();
+        rawStorage.Items.Add(new TaskItem { Id = "bound-task", Title = "Before external update" });
+        UnifiedTaskStorage? initializedStorage = null;
+        await Task.Run(async () =>
+        {
+            initializedStorage = new UnifiedTaskStorage(new TaskTreeManager(rawStorage));
+            await initializedStorage.Init();
+        });
+        using var storage = initializedStorage
+            ?? throw new InvalidOperationException("Background storage was not initialized.");
+        using var vm = new MainWindowViewModel(
+            appNameService: null,
+            new NotificationManagerWrapper(null),
+            configuration);
+        var uiContext = new PumpSynchronizationContext();
+        var previousContext = SynchronizationContext.Current;
+        Task bind;
+        try
+        {
+            SynchronizationContext.SetSynchronizationContext(uiContext);
+            bind = vm.BindInitializedStorage(storage);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previousContext);
+        }
+
+        PumpUntilCompleted(bind, uiContext);
+        await bind;
+        var postsBeforeUpdate = uiContext.PostCount;
+
+        await Task.Run(() => rawStorage.PublishSaved(new TaskItem
+        {
+            Id = "bound-task",
+            Title = "After external update"
+        }, storageRevision: 2));
+        await WaitUntilAsync(
+            () => uiContext.PostCount > postsBeforeUpdate,
+            TimeSpan.FromSeconds(5));
+
+        await Assert.That(storage.Tasks.Lookup("bound-task").Value.Title)
+            .IsEqualTo("Before external update");
+        while (storage.Tasks.Lookup("bound-task").Value.Title != "After external update")
+        {
+            if (!uiContext.ExecuteOne(TimeSpan.FromSeconds(1)))
+            {
+                throw new TimeoutException("The rebound UI context did not receive the storage update.");
+            }
+        }
+
+        await Assert.That(storage.Tasks.Lookup("bound-task").Value.Title)
+            .IsEqualTo("After external update");
     }
 
     [Test]
@@ -1595,11 +1654,7 @@ public sealed class TaskSpaceTransactionTests : IDisposable
         public Exception? InitialLoadException { get; init; }
         public Exception? DisconnectException { get; set; }
 
-        public event EventHandler<TaskStorageUpdateEventArgs>? Updating
-        {
-            add { }
-            remove { }
-        }
+        public event EventHandler<TaskStorageUpdateEventArgs>? Updating;
 
         public event Action<Exception?>? OnConnectionError
         {
@@ -1609,7 +1664,8 @@ public sealed class TaskSpaceTransactionTests : IDisposable
 
         public Task<TaskItem> Save(TaskItem item) => Task.FromResult(item);
         public Task<bool> Remove(string itemId) => Task.FromResult(true);
-        public Task<TaskItem?> Load(string itemId) => Task.FromResult<TaskItem?>(null);
+        public Task<TaskItem?> Load(string itemId) =>
+            Task.FromResult(Items.FirstOrDefault(item => string.Equals(item.Id, itemId, StringComparison.Ordinal)));
         public async IAsyncEnumerable<TaskItem> GetAll()
         {
             if (InitialLoadException != null)
@@ -1639,6 +1695,65 @@ public sealed class TaskSpaceTransactionTests : IDisposable
             }
 
             return Task.CompletedTask;
+        }
+
+        public void PublishSaved(TaskItem item, long storageRevision)
+        {
+            Items.RemoveAll(existing => string.Equals(existing.Id, item.Id, StringComparison.Ordinal));
+            Items.Add(item);
+            Updating?.Invoke(this, new TaskStorageUpdateEventArgs
+            {
+                Id = item.Id,
+                Type = UpdateType.Saved,
+                StorageRevision = storageRevision
+            });
+        }
+    }
+
+    private sealed class PumpSynchronizationContext : SynchronizationContext
+    {
+        private readonly BlockingCollection<(SendOrPostCallback Callback, object? State)> _queue = new();
+        private int _postCount;
+
+        public int PostCount => Volatile.Read(ref _postCount);
+
+        public override void Post(SendOrPostCallback callback, object? state)
+        {
+            Interlocked.Increment(ref _postCount);
+            _queue.Add((callback, state));
+        }
+
+        public bool ExecuteOne(TimeSpan timeout)
+        {
+            if (!_queue.TryTake(out var work, timeout))
+            {
+                return false;
+            }
+
+            work.Callback(work.State);
+            return true;
+        }
+    }
+
+    private static void PumpUntilCompleted(Task task, PumpSynchronizationContext context)
+    {
+        while (!task.IsCompleted)
+        {
+            context.ExecuteOne(TimeSpan.FromMilliseconds(100));
+        }
+    }
+
+    private static async Task WaitUntilAsync(Func<bool> condition, TimeSpan timeout)
+    {
+        var deadline = DateTimeOffset.UtcNow + timeout;
+        while (!condition())
+        {
+            if (DateTimeOffset.UtcNow >= deadline)
+            {
+                throw new TimeoutException("Timed out waiting for the task-space test condition.");
+            }
+
+            await Task.Delay(10);
         }
     }
 
