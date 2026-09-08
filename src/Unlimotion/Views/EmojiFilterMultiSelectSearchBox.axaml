@@ -60,6 +60,7 @@
             <Setter Property="Foreground" Value="#F59E0B"/>
         </Style>
         <Style Selector="ListBox.EmojiFilterList">
+            <Setter Property="Background" Value="Transparent"/>
             <Setter Property="MaxHeight" Value="220"/>
             <Setter Property="FontSize" Value="{DynamicResource AppFontSize}"/>
             <Setter Property="ClipToBounds" Value="True"/>

@@ -16,6 +16,7 @@
   - текущий checkout `feat/daily-feed` содержит unrelated пользовательские изменения. EXEC выполняется в отдельном worktree от текущего `HEAD`; эти изменения не переносятся и не редактируются.
 - Корневая проблема: два соседних popup одного toolbar имеют почти одинаковый chrome, но radius задан независимо и уже расходится (`4` против `6`); тест закрепляет значение одного popup вместо сравнения с визуальным reference.
 - Наблюдаемый outcome: открытые popup emoji-фильтра и popup общих фильтров используют одинаковые background, border brush, border thickness и corner radius в светлой и тёмной теме; содержимое, размеры и поведение popup не меняются.
+- Уточнение после desktop screenshot: parity относится к фактически видимому chrome. Внутренний `ListBox` не должен закрашивать внешний rounded surface непрозрачным прямоугольником; совпадение только computed-свойств внешнего `Border` недостаточно.
 - Effective runtime для SPEC: Codex subagent в локальной Windows-среде; репозиторий Avalonia/.NET; `global.json` и `dotnet --version` разрешают SDK `10.0.400`; TUnit/Microsoft.Testing.Platform. Реальный EXEC runtime и commit фиксируются в журнале перед изменениями.
 
 ### Non-Goals и ограничения
@@ -50,6 +51,7 @@ emoji popup          filter popup          emoji popup          filter popup
 | Observable scenario / решение (owner) | AC / ожидаемый результат | Команда / evidence |
 | --- | --- | --- |
 | Пользователь открывает emoji popup рядом с popup фильтров в светлой теме. Решение: reference — реальный `FilterOverflowPanel`, а не продублированные литералы (agent). | AC1: computed `Background`, `BorderBrush`, `BorderThickness`, `CornerRadius` внешних `Border` равны; reference radius сейчас `6`. | Новый headless regression в `MainControlFilterToolbarResponsiveUiTests`; сначала RED на radius, затем GREEN. |
+| Пользователь визуально различает рамку и скруглённые углы emoji popup. Решение: внутренний список не рисует собственную непрозрачную прямоугольную поверхность поверх outer chrome (agent по screenshot feedback пользователя). | AC1b: `EmojiFilterList` имеет прозрачный background, поэтому видимым surface остаётся `EmojiFilterDropDown`; placement, размеры и padding не меняются. | Сначала падающий headless assertion на фактическую opacity списка, затем desktop screenshot открытого popup. |
 | Пользователь переключает приложение в тёмную тему и снова открывает оба popup. Решение: сохранить существующие dynamic theme resources (agent). | AC2: background/border берутся из существующих dynamic resources и остаются читаемыми после смены темы; hard-coded color не появляется. | Headless test на обе темы либо один параметризованный test; дополнительно inspection XAML diff. |
 | Пользователь продолжает искать и выбирать emoji после визуальной правки. | AC3: open/search/toggle/close flow, placement, max height и light-dismiss не изменены. | Существующий `Toolbar_EmojiFilters_OpenFullListThenSearchAndToggleWithoutClosing` и весь `MainControlFilterToolbarResponsiveUiTests`. |
 | Пользователь открывает popup в узком окне. | AC4: popup остаётся внутри viewport; размеры и содержимое не меняются. | `Toolbar_EmojiFilters_PopupStaysVisibleInNarrowViewport`. |
@@ -66,6 +68,7 @@ emoji popup          filter popup          emoji popup          filter popup
 
 - Интеграция: `EmojiFilterMultiSelectSearchBox` используется в task tabs и Roadmap; reference `FilterOverflowPanel` существует в `MainControl.axaml` и `GraphControl.axaml`. Production logic/ViewModel не затрагиваются.
 - Инвариант: source of visual truth в тесте — computed свойства reference popup в том же rendered control tree; тест не должен закреплять два независимых набора литералов.
+- Инвариант видимой поверхности: background внутренних list/container controls прозрачен; фон и форма popup принадлежат внешнему `EmojiFilterDropDown`.
 - Ошибки/recovery: если headless harness не может одновременно materialize оба popup, test сначала получает reference `Border` из detached Flyout content и computed style после attachment; отсутствие materialization считается test-design failure, а не основанием ослабить AC. При неоднозначном visual target EXEC останавливается без расширения scope.
 - Данные/состояние: persistent data и task model не меняются. Временное состояние theme/popup в тесте восстанавливается в `finally` по существующему fixture pattern.
 - Performance: неприменимо — меняется одно style value и несколько assertions; новых subscriptions, layout containers или runtime вычислений нет.
@@ -128,6 +131,7 @@ dotnet test --project tests\Unlimotion.UiTests.Headless\Unlimotion.UiTests.Headl
 | «Не превратится ли маленькая правка в redesign popup?» | Non-Goals запрещают изменение content, padding, size, placement, behavior и theme architecture; diff gate ограничивает scope. |
 | «Будет ли это работать в обеих темах и Roadmap?» | Сохраняются dynamic resources; тест параметризуется по theme и проверяет оба места использования либо общий control contract плюс Roadmap smoke. |
 | «Можно ли считать работу завершённой по XAML diff?» | Нет: обязательны expected RED, targeted GREEN, full suites и UI/headless evidence. |
+| «Почему на screenshot рамка выглядит прозрачной, между полем и содержимым видна пустота, а серый popup остаётся квадратным?» | Desktop evidence показал, что opaque background внутреннего `ListBox` визуально перекрывает rounded outer chrome. Исправление должно убрать второй surface, а не менять radius ещё раз. |
 | «Не потеряются ли мои текущие изменения в `feat/daily-feed`?» | EXEC только в отдельном worktree от зафиксированного commit; dirty checkout не редактируется. |
 
 User-owned решение было получено перед EXEC: разрешён минимальный repair task graph, чтобы CLI смог безопасно закрепить задачу:
@@ -244,6 +248,34 @@ User-owned решение было получено перед EXEC: разре�
 - Residual risk: возможны platform-specific differences реального compositor/theme rendering, не покрытые headless; изменение не публиковалось и не интегрировалось в основную ветку.
 - Stop decision: PASS — результат записан в task, CLI перевёл её в `Completed`; authoritative read-back подтвердил `Completed` и author `/root/task_pull_worker`; финальный graph validate green (`taskCount=2858`, `isValid=true`).
 
+### Reopened EXEC по desktop feedback
+
+- Статус: **NEEDS-FIX** — пользовательский screenshot выявил ложноположительный PASS исходного structural test.
+- Evidence: `chat-artifacts/emoji-popup-chrome/task-narrow-alltasks-emoji-open.png`; внешний `Border` имеет radius `6`, но opaque rectangular surface внутреннего `ListBox` доминирует визуально, а светлые border/padding сливаются с фоном окна.
+- Scope: остаётся в подтверждённом outcome и тех же target XAML/test/spec files; popup behavior, placement, padding, размеры, bindings и ViewModel не меняются.
+- План исправления: TDD RED на opacity фактического `EmojiFilterList` -> прозрачный list background -> targeted/class/full UI validation -> новый desktop screenshot -> повторный post-EXEC review.
+- Stop decision: продолжить EXEC по явной команде пользователя «Исправь» как исправление незакрытого visual acceptance criteria; нового product/UX решения не требуется.
+
+### Reopened EXEC — результат и evidence
+
+- TDD RED: новый assertion в `Toolbar_EmojiFilterPopup_UsesFilterFlyoutChrome` упал в Light и Dark с `Expected alpha 0 but received 255`, подтвердив непрозрачный внутренний rectangle как причину screenshot-дефекта.
+- Исправление: стиль `ListBox.EmojiFilterList` получил `Background="Transparent"`; outer `EmojiFilterDropDown` остаётся единственным background/border surface. Radius, padding, placement, размеры, bindings и popup logic не менялись.
+- Targeted GREEN: `Toolbar_EmojiFilterPopup_UsesFilterFlyoutChrome*` — `2/2`.
+- Class regression: `MainControlFilterToolbarResponsiveUiTests/*` — `18/18`.
+- Affected solution build: `dotnet build src\Unlimotion.sln -c Debug -p:UseSharedCompilation=false` — exit `0`, errors `0`; остаются существующие Android/package/analyzer warnings.
+- Headless UI suite: `Unlimotion.UiTests.Headless` — `49/49`.
+- Full unit suite: запускался дважды последовательно. Первый запуск выявил два несвязанных transient failure (`FeedControlUiTests` file lock и live `ServerStorageCrudRealtime`), после чего завис без итоговой сводки; оба теста отдельно прошли (`2/2` и `1/1`). Повторный full run не сообщил новых failures, но снова остался в ожидании после завершения дочернего test host и был остановлен. Поэтому полный suite не заявляется как PASS.
+- Desktop evidence boundary: исправленный desktop build успешен, но новый screenshot открытого native popup не получен. FlaUI click завершился Windows `Access denied`; диагностическое автооткрытие не попало в отдельный popup-host кадра. Временный capture/auto-open код полностью удалён и в tracked diff не входит.
+
+### Reopened post-EXEC review
+
+- Scope/Evidence: PASS — permanent diff ограничен XAML, точечным UI regression и этой SPEC; исходная причина доказана RED/GREEN на фактической opacity дочернего surface.
+- Contract: PASS — outer chrome по-прежнему совпадает с filter flyout; внутренний list больше не создаёт независимую прямоугольную подложку.
+- Adversarial: PASS с границей evidence — поведение popup и viewport regression зелёные, но compositor-level screenshot после исправления отсутствует.
+- Roles: пользователь получает заметный rounded chrome без ложной «прозрачной рамки»; tester получает assertion на причину; developer не получает capture hooks; delivery не включает push/merge/release.
+- Fix/re-review: исходный structural false positive устранён проверкой inner background alpha; временные диагностические изменения удалены; `git diff --check` повторяется перед завершением.
+- Stop decision: PASS для локального исправления и проверенного UI-контракта; residual risk ограничен platform-specific native popup rendering и незавершающимся full-unit runner.
+
 ## Approval
 
 Получена точная combined phrase из раздела «Риск, objections и открытые решения». Фазовые правила central `quest-mode` соблюдены; расширений scope после approval не было.
@@ -263,3 +295,4 @@ User-owned решение было получено перед EXEC: разре�
 | EXEC / visual evidence | Использован предусмотренный SPEC headless fallback; 0.95 | Computed properties Light/Dark и interaction/viewport suites green; real-window screenshot/video не выполнялись | Честно зафиксировать residual risk | Решение агента в пределах SPEC |
 | EXEC / review | Full post-EXEC review PASS; 0.98 | Scope/contract/adversarial/role/fix passes; diff-check green; no unrelated tracked changes | Локальный commit, task result, Completed/read-back | Выполнено |
 | EXEC / completion | Task formally closed; 1.00 | CLI success; authoritative status/history author read-back; final validate green with 2858 tasks and no issues | Уведомить пользователя через root | Выполнено |
+| EXEC / desktop acceptance feedback | Первоначальный PASS отозван; 1.00 | Реальный screenshot показывает квадратный opaque list surface поверх rounded outer border; пользователь явно попросил исправить | Добавить RED на list opacity и выполнить минимальный XAML fix | Решение пользователя получено: «Исправь» |

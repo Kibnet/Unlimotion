@@ -716,10 +716,13 @@ public class MainControlFilterToolbarResponsiveUiTests
                 RunLayoutJobs();
 
                 var emojiDropDown = GetEmojiFilterDropDown(includeControl);
+                var emojiList = GetEmojiFilterList(includeControl);
                 await Assert.That(emojiDropDown.Background).IsEqualTo(referenceBackground);
                 await Assert.That(emojiDropDown.BorderBrush).IsEqualTo(referenceBorderBrush);
                 await Assert.That(emojiDropDown.BorderThickness).IsEqualTo(referenceBorderThickness);
                 await Assert.That(emojiDropDown.CornerRadius).IsEqualTo(referenceCornerRadius);
+                await Assert.That(emojiList.Background).IsAssignableTo<ISolidColorBrush>();
+                await Assert.That(((ISolidColorBrush)emojiList.Background!).Color.A).IsEqualTo((byte)0);
             }
             finally
             {
