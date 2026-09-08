@@ -207,6 +207,9 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
     private string? moveErrorMessage;
     private bool isDisposed;
     private long areaFilterGeneration;
+    private bool isServiceFrontMatterExpanded;
+    private bool hasServiceFrontMatter;
+    private int serviceFrontMatterAreaCount;
     private StructuralUndo? structuralUndo;
     private sealed record StructuralUndo(MarkdownLiveDocumentSnapshot Before, MarkdownLiveDocumentSnapshot After,
         int BlockIndex, int CaretIndex, bool IsMove);
@@ -231,9 +234,54 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
         RestoreRecoveryDraftCommand = ReactiveCommand.Create(RestoreRecoveryDraft);
         DiscardRecoveryDraftCommand = ReactiveCommand.CreateFromTask(DiscardRecoveryDraftAsync);
         UndoStructuralChangeCommand = ReactiveCommand.CreateFromTask(async () => { await UndoStructuralChangeAsync(); });
+        ToggleServiceFrontMatterCommand = ReactiveCommand.Create(ToggleServiceFrontMatter);
     }
 
     public ObservableCollection<MarkdownLiveBlockViewModel> Blocks { get; } = new();
+
+    public bool HasServiceFrontMatter => hasServiceFrontMatter;
+
+    public bool IsServiceFrontMatterExpanded => isServiceFrontMatterExpanded;
+
+    public string ServiceFrontMatterSummary => serviceFrontMatterAreaCount > 0
+        ? L10n.Format("FeedServiceDataAreasFormat", serviceFrontMatterAreaCount)
+        : L10n.Get("FeedServiceData");
+
+    public bool CanToggleServiceFrontMatter => HasServiceFrontMatter && ActiveBlock is null && !IsMoveInProgress && !isDisposed;
+
+    public ReactiveCommand<Unit, Unit> ToggleServiceFrontMatterCommand { get; }
+
+    public void ToggleServiceFrontMatter()
+    {
+        if (!CanToggleServiceFrontMatter) return;
+        isServiceFrontMatterExpanded = !isServiceFrontMatterExpanded;
+        this.RaisePropertyChanged(nameof(IsServiceFrontMatterExpanded));
+        Blocks.FirstOrDefault()?.RaisePresentationVisibilityChanged();
+    }
+
+    private void RefreshReadingPresentation()
+    {
+        var first = Blocks.FirstOrDefault();
+        var count = 0;
+        var recognized = first is { Block.Kind: MarkdownBlockKind.FrontMatter, Block.Start: 0 }
+            && MarkdownReadingPresentation.TryGetServiceFrontMatter(first.EditorText, out count);
+        if (recognized && ReferenceEquals(ActiveBlock, first)) RevealServiceFrontMatter(first!);
+        hasServiceFrontMatter = recognized;
+        serviceFrontMatterAreaCount = count;
+        this.RaisePropertyChanged(nameof(HasServiceFrontMatter));
+        this.RaisePropertyChanged(nameof(ServiceFrontMatterSummary));
+        this.RaisePropertyChanged(nameof(CanToggleServiceFrontMatter));
+        first?.RaisePresentationVisibilityChanged();
+    }
+
+    private void RevealServiceFrontMatter(MarkdownLiveBlockViewModel block)
+    {
+        if (block.Block is not { Kind: MarkdownBlockKind.FrontMatter, Start: 0 }
+            || isServiceFrontMatterExpanded) return;
+        isServiceFrontMatterExpanded = true;
+        this.RaisePropertyChanged(nameof(IsServiceFrontMatterExpanded));
+        block.RaisePresentationVisibilityChanged();
+    }
 
     public System.Windows.Input.ICommand UndoStructuralChangeCommand { get; }
     public MarkdownLiveDocumentSnapshot? GetSnapshotWithActiveDraft() => Snapshot is not { } current ? null
@@ -402,7 +450,11 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
     public MarkdownLiveBlockViewModel? ActiveBlock
     {
         get => activeBlock;
-        private set => this.RaiseAndSetIfChanged(ref activeBlock, value);
+        private set
+        {
+            this.RaiseAndSetIfChanged(ref activeBlock, value);
+            this.RaisePropertyChanged(nameof(CanToggleServiceFrontMatter));
+        }
     }
 
     public bool HasDocument => Snapshot is not null;
@@ -429,6 +481,7 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
         private set
         {
             this.RaiseAndSetIfChanged(ref isMoveInProgress, value);
+            this.RaisePropertyChanged(nameof(CanToggleServiceFrontMatter));
             RaiseMoveStateChanged();
             RaiseStructuralUndoChanged();
         }
@@ -734,6 +787,12 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
             || undo.After.Raw != documentSnapshot.Raw || undo.After.RelativePath != documentSnapshot.RelativePath))
             InvalidateStructuralUndo();
 
+        if (!string.Equals(Snapshot?.RelativePath, documentSnapshot.RelativePath, StringComparison.Ordinal))
+        {
+            isServiceFrontMatterExpanded = false;
+            this.RaisePropertyChanged(nameof(IsServiceFrontMatterExpanded));
+        }
+
         ReplaceSession();
         hasDeferredCommitNotification = false;
         ActiveBlock?.CancelEdit();
@@ -748,6 +807,8 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
         {
             Blocks.Add(new MarkdownLiveBlockViewModel(this, block, document.NewLine));
         }
+
+        RefreshReadingPresentation();
 
         ApplyReviewSelection();
         ApplyMoveSelection();
@@ -1186,6 +1247,7 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
         {
             var isHighlighted = reviewSelectionIndices.Contains(block.Index);
             var isAnchor = isHighlighted && reviewAnchorBlockIndex == block.Index;
+            if (isHighlighted) RevealServiceFrontMatter(block);
             block.SetReviewHighlight(
                 isHighlighted,
                 isAnchor,
@@ -1204,6 +1266,7 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
 
         if (ReferenceEquals(ActiveBlock, block))
         {
+            RevealServiceFrontMatter(block);
             return true;
         }
 
@@ -1220,6 +1283,7 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
         }
 
         ActiveBlock?.CancelEdit();
+        RevealServiceFrontMatter(block);
         ActiveBlock = block;
         block.BeginEdit();
         DirtyStateChanged?.Invoke(this, EventArgs.Empty);
@@ -1552,6 +1616,10 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
 
     internal void NotifyBlockStateChanged(MarkdownLiveBlockViewModel block)
     {
+        if (!isDisposed && ReferenceEquals(Blocks.FirstOrDefault(), block)
+            && block.Block.Kind == MarkdownBlockKind.FrontMatter)
+            RefreshReadingPresentation();
+
         if (!isDisposed && ReferenceEquals(ActiveBlock, block))
         {
             if (block.IsDirty)
@@ -1956,6 +2024,7 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
         RestoreRecoveryDraftCommand.Dispose();
         DiscardRecoveryDraftCommand.Dispose();
         (UndoStructuralChangeCommand as IDisposable)?.Dispose();
+        ToggleServiceFrontMatterCommand.Dispose();
         InvalidateStructuralUndo();
         this.RaisePropertyChanged(nameof(HasDocument));
         this.RaisePropertyChanged(nameof(CanEdit));
@@ -2059,9 +2128,17 @@ public sealed class MarkdownLiveBlockViewModel : ReactiveObject
 
     public bool IsFeedFilterVisible => isFeedFilterVisible && !IsTechnicalMoveAnchor;
 
+    public bool IsPresentationVisible => IsFeedFilterVisible
+        && !(Index == 0 && Block.Kind == MarkdownBlockKind.FrontMatter
+             && Owner.HasServiceFrontMatter && !Owner.IsServiceFrontMatterExpanded
+             && !ReferenceEquals(Owner.ActiveBlock, this));
+
+    internal void RaisePresentationVisibilityChanged() => this.RaisePropertyChanged(nameof(IsPresentationVisible));
+
     internal void SetFeedFilterVisible(bool value)
     {
         this.RaiseAndSetIfChanged(ref isFeedFilterVisible, value, nameof(IsFeedFilterVisible));
+        RaisePresentationVisibilityChanged();
     }
 
     public bool IsMoveSelected => isMoveSelected;

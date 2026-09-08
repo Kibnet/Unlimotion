@@ -358,6 +358,11 @@ namespace Unlimotion.Views
             }
 
             var modifiers = e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Shift | KeyModifiers.Alt);
+            if (e.Key == Key.Home && modifiers == KeyModifiers.Alt && FeedView.CanReturnToCurrentDay)
+            {
+                _ = FeedView.ReturnToCurrentDayAsync();
+                return true;
+            }
             if (e.Key == Key.Space
                 && modifiers == (KeyModifiers.Control | KeyModifiers.Shift))
             {

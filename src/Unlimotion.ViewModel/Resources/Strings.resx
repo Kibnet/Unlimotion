@@ -792,4 +792,9 @@
   <data name="MarkdownSelectedHeadingUnavailable" xml:space="preserve"><value>The selected heading is no longer available.</value></data>
   <data name="MarkdownSelectedAreaUnavailable" xml:space="preserve"><value>The selected area is no longer available.</value></data>
   <data name="FeedNoteLinkUnavailable" xml:space="preserve"><value>Cannot open this note link. Check that the Markdown file exists inside this vault and its name is unambiguous.</value></data>
+  <data name="FeedReturnToday" xml:space="preserve"><value>Today ↑</value></data>
+  <data name="FeedReturnLatest" xml:space="preserve"><value>Latest entries ↑</value></data>
+  <data name="FeedReturnDateFormat" xml:space="preserve"><value>Start of entry for {0} · Alt+Home</value></data>
+  <data name="FeedServiceData" xml:space="preserve"><value>Service data</value></data>
+  <data name="FeedServiceDataAreasFormat" xml:space="preserve"><value>Service data · areas: {0}</value></data>
 </root>

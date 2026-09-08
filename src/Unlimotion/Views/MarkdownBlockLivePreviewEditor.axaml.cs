@@ -33,6 +33,8 @@ public partial class MarkdownBlockLivePreviewEditor : UserControl
     public MarkdownBlockLivePreviewEditor()
     {
         InitializeComponent();
+        SizeChanged += (_, _) => UpdateReadingColumn();
+        AttachedToVisualTree += (_, _) => UpdateReadingColumn();
         AddHandler(
             InputElement.KeyDownEvent,
             OnEditorKeyDown,
@@ -48,6 +50,16 @@ public partial class MarkdownBlockLivePreviewEditor : UserControl
     }
 
     public event EventHandler<MarkdownLinkInvokedEventArgs>? LinkInvoked;
+
+    private void UpdateReadingColumn()
+    {
+        var bounded = Bounds.Width > 1000;
+        ReadingColumn.MaxWidth = bounded ? 960 : double.PositiveInfinity;
+        ReadingColumn.HorizontalAlignment = bounded
+            ? Avalonia.Layout.HorizontalAlignment.Center
+            : Avalonia.Layout.HorizontalAlignment.Stretch;
+        ReadingColumn.Width = bounded ? 960 : double.NaN;
+    }
 
     public event EventHandler<BrokenTaskReferenceActionEventArgs>? BrokenTaskReferenceActionInvoked;
 
@@ -808,8 +820,8 @@ public partial class MarkdownBlockLivePreviewEditor : UserControl
         keyEvent.Handled = true;
 
         var targetBeforeCommit = movingPrevious
-            ? editor.Blocks.LastOrDefault(candidate => candidate.Index < block.Index && candidate.IsEditable && candidate.IsFeedFilterVisible)
-            : editor.Blocks.FirstOrDefault(candidate => candidate.Index > block.Index && candidate.IsEditable && candidate.IsFeedFilterVisible);
+            ? editor.Blocks.LastOrDefault(candidate => candidate.Index < block.Index && candidate.IsEditable && candidate.IsPresentationVisible)
+            : editor.Blocks.FirstOrDefault(candidate => candidate.Index > block.Index && candidate.IsEditable && candidate.IsPresentationVisible);
         if (targetBeforeCommit is null)
         {
             return true;
@@ -837,8 +849,8 @@ public partial class MarkdownBlockLivePreviewEditor : UserControl
 
             var target = ResolveBlock(editor, targetLocator)
                 ?? (movingPrevious
-                    ? editor.Blocks.LastOrDefault(candidate => candidate.Index < sourceIndex && candidate.IsEditable)
-                    : editor.Blocks.FirstOrDefault(candidate => candidate.Index > sourceIndex && candidate.IsEditable));
+                    ? editor.Blocks.LastOrDefault(candidate => candidate.Index < sourceIndex && candidate.IsEditable && candidate.IsPresentationVisible)
+                    : editor.Blocks.FirstOrDefault(candidate => candidate.Index > sourceIndex && candidate.IsEditable && candidate.IsPresentationVisible));
             if (target is null || !editor.BeginEdit(target))
             {
                 return false;
