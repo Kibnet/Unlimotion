@@ -346,7 +346,7 @@
                           AutomationProperties.ControlTypeOverride="Group"
                           AutomationProperties.IsControlElementOverride="True"
                           AutomationProperties.AutomationId="FeedModeRoot">
-                        <views:FeedControl DataContext="{Binding Feed}" />
+                        <views:FeedControl x:Name="FeedView" DataContext="{Binding Feed}" />
                     </Grid>
                 </Grid>
 

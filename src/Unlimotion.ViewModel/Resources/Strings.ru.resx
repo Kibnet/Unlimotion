@@ -792,4 +792,9 @@
   <data name="MarkdownSelectedHeadingUnavailable" xml:space="preserve"><value>Выбранный заголовок больше недоступен.</value></data>
   <data name="MarkdownSelectedAreaUnavailable" xml:space="preserve"><value>Выбранная область больше недоступна.</value></data>
   <data name="FeedNoteLinkUnavailable" xml:space="preserve"><value>Не удалось открыть заметку по ссылке. Проверьте, что Markdown-файл существует внутри этой базы и его имя однозначно.</value></data>
+  <data name="FeedReturnToday" xml:space="preserve"><value>Сегодня ↑</value></data>
+  <data name="FeedReturnLatest" xml:space="preserve"><value>К последним записям ↑</value></data>
+  <data name="FeedReturnDateFormat" xml:space="preserve"><value>К началу записи за {0} · Alt+Home</value></data>
+  <data name="FeedServiceData" xml:space="preserve"><value>Служебные данные</value></data>
+  <data name="FeedServiceDataAreasFormat" xml:space="preserve"><value>Служебные данные · областей: {0}</value></data>
 </root>

@@ -26,12 +26,15 @@ public partial class FeedControl : UserControl
     public FeedControl()
     {
         InitializeComponent();
+        InitializeReadingNavigation();
         ChronologyScroller.ScrollChanged += OnChronologyScrollChanged;
         DataContextChanged += (_, _) => ObserveDataContext();
         AttachedToVisualTree += (_, _) =>
         {
             ObserveDataContext();
             UpdateLocalToolbarLayout();
+            ObserveContextSources();
+            UpdateNavigationState();
         };
         DetachedFromVisualTree += (_, _) => StopObservingDataContext();
         SizeChanged += (_, _) => UpdateLocalToolbarLayout();
@@ -65,7 +68,10 @@ public partial class FeedControl : UserControl
     }
 
     private async void OnChronologyScrollChanged(object? sender, ScrollChangedEventArgs e)
-        => await TryLoadOlderDaysFromCurrentPositionAsync();
+    {
+        UpdateNavigationState();
+        await TryLoadOlderDaysFromCurrentPositionAsync();
+    }
 
     private async Task TryLoadOlderDaysFromCurrentPositionAsync()
     {
@@ -171,7 +177,10 @@ public partial class FeedControl : UserControl
         observedViewModel.SearchNavigationStarting += OnSearchNavigationStarting;
         observedViewModel.SearchNavigationRequested += OnSearchNavigationRequested;
         observedViewModel.ReviewNavigationRequested += OnReviewNavigationRequested;
+        observedViewModel.VisibleDays.CollectionChanged += OnVisibleDaysChanged;
         wasSearchActive = observedViewModel.IsSearchActive;
+        ObserveContextSources();
+        UpdateNavigationState();
     }
 
     private void StopObservingDataContext()
@@ -189,12 +198,23 @@ public partial class FeedControl : UserControl
         observedViewModel.SearchNavigationStarting -= OnSearchNavigationStarting;
         observedViewModel.SearchNavigationRequested -= OnSearchNavigationRequested;
         observedViewModel.ReviewNavigationRequested -= OnReviewNavigationRequested;
+        observedViewModel.VisibleDays.CollectionChanged -= OnVisibleDaysChanged;
+        StopObservingContextSources();
         observedViewModel = null;
         loadOlderDaysWhenIdle = false;
     }
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (!Dispatcher.UIThread.CheckAccess())
+        {
+            Dispatcher.UIThread.Post(() => OnViewModelPropertyChanged(sender, e));
+            return;
+        }
+
+        if (!ReferenceEquals(sender, observedViewModel)) return;
+        ObserveContextSources();
+        UpdateNavigationState();
         if (e.PropertyName is nameof(FeedViewModel.SearchQuery) or nameof(FeedViewModel.IsSearchActive))
         {
             UpdateSearchModeState();

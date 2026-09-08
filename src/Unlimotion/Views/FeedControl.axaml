@@ -26,6 +26,12 @@
         <Style Selector="ToggleButton.FeedDayCollapseToggle:checked">
             <Setter Property="Content" Value="▸" />
         </Style>
+        <Style Selector="ToggleButton.ServiceDataToggle TextBlock.ServiceDataChevron">
+            <Setter Property="Text" Value="▸" />
+        </Style>
+        <Style Selector="ToggleButton.ServiceDataToggle:checked TextBlock.ServiceDataChevron">
+            <Setter Property="Text" Value="▾" />
+        </Style>
     </UserControl.Styles>
     <Grid RowDefinitions="Auto,*">
         <Border Padding="12,8"
@@ -219,10 +225,27 @@
                                                 AutomationProperties.Name="{Binding AutomationName}">
                                             <StackPanel Spacing="6">
                                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                                  <WrapPanel Orientation="Horizontal">
                                                     <TextBlock FontSize="17"
+                                                               Margin="0,0,10,0"
+                                                               AutomationProperties.AutomationId="{Binding HeaderAutomationId}"
                                                                FontWeight="SemiBold"
                                                                VerticalAlignment="Center"
                                                                Text="{Binding DisplayDate}" />
+                                                    <ToggleButton Classes="ServiceDataToggle" IsVisible="{Binding MarkdownEditor.HasServiceFrontMatter}"
+                                                                  IsChecked="{Binding MarkdownEditor.IsServiceFrontMatterExpanded, Mode=OneWay}"
+                                                                  IsEnabled="{Binding MarkdownEditor.CanToggleServiceFrontMatter}"
+                                                                  Command="{Binding MarkdownEditor.ToggleServiceFrontMatterCommand}"
+                                                                  Padding="5,2" MinHeight="24" FontSize="12"
+                                                                  Background="Transparent" BorderThickness="0"
+                                                                  AutomationProperties.Name="{Binding MarkdownEditor.ServiceFrontMatterSummary}"
+                                                                  AutomationProperties.AutomationId="{Binding ServiceDataAutomationId}">
+                                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                                            <TextBlock Classes="ServiceDataChevron" />
+                                                            <TextBlock Text="{Binding MarkdownEditor.ServiceFrontMatterSummary}" />
+                                                        </StackPanel>
+                                                    </ToggleButton>
+                                                  </WrapPanel>
                                                     <ToggleButton Grid.Column="1"
                                                                   Classes="FeedDayCollapseToggle"
                                                                   IsChecked="{Binding IsCollapsed, Mode=TwoWay}"
@@ -241,6 +264,21 @@
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
                         </ScrollViewer>
+                        <Button x:Name="ReturnToCurrentDayButton"
+                                IsVisible="False" Focusable="False"
+                                HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                Margin="8,8,22,12" Padding="12,6" CornerRadius="14"
+                                Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
+                                BorderBrush="{DynamicResource ThemeBorderMidBrush}" BorderThickness="1"
+                                Click="OnReturnToCurrentDayClick"
+                                AutomationProperties.AutomationId="FeedReturnToCurrentDayButton" />
+                        <TextBlock x:Name="ReturnNavigationError" IsVisible="False"
+                                   HorizontalAlignment="Left" VerticalAlignment="Bottom"
+                                   Margin="8,8,180,12" MaxWidth="380" TextWrapping="Wrap"
+                                   Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
+                                   Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+                                   AutomationProperties.LiveSetting="Assertive"
+                                   AutomationProperties.AutomationId="FeedReturnNavigationError" />
                         <Button Grid.Row="1"
                                 HorizontalAlignment="Center"
                                 IsVisible="{Binding HasOlderDaysLoadError}"
@@ -250,7 +288,7 @@
                     </Grid>
 
                     <Grid IsVisible="{Binding IsSearchActive}" RowDefinitions="Auto,*" RowSpacing="8">
-                        <views:FeedSearchFiltersControl />
+                        <views:FeedSearchFiltersControl x:Name="SearchFilters" />
                         <TextBlock Grid.Row="1" IsVisible="{Binding IsSearchEmpty}"
                                    HorizontalAlignment="Center"
                                    VerticalAlignment="Top"
@@ -324,11 +362,27 @@
                             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                                 <StackPanel Spacing="2">
                                     <TextBlock FontSize="18"
+                                               x:Name="ThematicTitle"
+                                               AutomationProperties.AutomationId="FeedThematicTitle"
                                                FontWeight="SemiBold"
                                                Text="{Binding OpenedThematicFile.DisplayName}" />
                                     <TextBlock Opacity="0.68"
                                                Text="{Binding OpenedThematicFile.RelativePath}"
                                                TextTrimming="CharacterEllipsis" />
+                                    <ToggleButton Classes="ServiceDataToggle" HorizontalAlignment="Left"
+                                                  IsVisible="{Binding OpenedThematicFile.MarkdownEditor.HasServiceFrontMatter}"
+                                                  IsChecked="{Binding OpenedThematicFile.MarkdownEditor.IsServiceFrontMatterExpanded, Mode=OneWay}"
+                                                  IsEnabled="{Binding OpenedThematicFile.MarkdownEditor.CanToggleServiceFrontMatter}"
+                                                  Command="{Binding OpenedThematicFile.MarkdownEditor.ToggleServiceFrontMatterCommand}"
+                                                  Padding="5,2" MinHeight="24" FontSize="12"
+                                                  Background="Transparent" BorderThickness="0"
+                                                  AutomationProperties.Name="{Binding OpenedThematicFile.MarkdownEditor.ServiceFrontMatterSummary}"
+                                                  AutomationProperties.AutomationId="FeedThematicServiceDataToggle">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Classes="ServiceDataChevron" />
+                                            <TextBlock Text="{Binding OpenedThematicFile.MarkdownEditor.ServiceFrontMatterSummary}" />
+                                        </StackPanel>
+                                    </ToggleButton>
                                 </StackPanel>
                                 <Button Grid.Column="1"
                                         Command="{Binding CloseThematicFileCommand}"
