@@ -1,10 +1,12 @@
 using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Runtime.Caching;
-using L10n = Unlimotion.ViewModel.Localization.Localization;
+using System.Threading;
 using System.Threading.Tasks;
 using Unlimotion.TaskTree;
+using L10n = Unlimotion.ViewModel.Localization.Localization;
 
 namespace Unlimotion.ViewModel
 {
@@ -17,10 +19,11 @@ namespace Unlimotion.ViewModel
         public event EventHandler<DbUpdatedEventArgs>? OnUpdated;
         public event EventHandler<DbUpdatedEventArgs>? OnRawUpdated;
         public event EventHandler? OnInvalidated;
-        private readonly MemoryCache cache = new("EventThrottlerCache");
+        private readonly ConcurrentDictionary<string, CancellationTokenSource> pendingUpdates =
+            new(StringComparer.OrdinalIgnoreCase);
         private readonly TimeSpan throttlePeriod = TimeSpan.FromSeconds(1);
-        private bool isEnable;
-        private bool isDisposed;
+        private volatile bool isEnable;
+        private volatile bool isDisposed;
     private readonly INotificationManagerWrapper? _notificationManager;
     private readonly object itLockEnable = new();
 
@@ -126,10 +129,7 @@ namespace Unlimotion.ViewModel
                 if (fullPath.EndsWith(GitLockPostfix)) 
                     fullPath = e.FullPath.Replace(GitLockPostfix, "");
                 
-                if (cache.Get(fullPath) != null) 
-                    cache.Set(fullPath, fullPath, GetCachePolicy(() => handler(s, e)));
-                else 
-                    cache.Add(fullPath, fullPath, GetCachePolicy(() => handler(s, e)));
+                ScheduleUpdate(fullPath, () => handler(s, e));
             };
         }
 
@@ -180,17 +180,41 @@ namespace Unlimotion.ViewModel
             fileName.EndsWith(".bak", StringComparison.OrdinalIgnoreCase) ||
             fileName.EndsWith(".report", StringComparison.OrdinalIgnoreCase);
         
-        private CacheItemPolicy GetCachePolicy(Action handler)
+        private void ScheduleUpdate(string fullPath, Action handler)
         {
-            return new CacheItemPolicy
+            if (isDisposed)
             {
-                AbsoluteExpiration = DateTimeOffset.Now.Add(throttlePeriod),
-                RemovedCallback = args =>
+                return;
+            }
+
+            var next = new CancellationTokenSource();
+            pendingUpdates.AddOrUpdate(fullPath, next, (_, existing) =>
+            {
+                TryCancel(existing);
+                return next;
+            });
+
+            _ = Task.Run(async () =>
+            {
+                try
                 {
-                    if (args.RemovedReason != CacheEntryRemovedReason.Expired) return;
-                    Task.Run(handler);
+                    await Task.Delay(throttlePeriod, next.Token);
+                    if (((ICollection<KeyValuePair<string, CancellationTokenSource>>)pendingUpdates)
+                        .Remove(new KeyValuePair<string, CancellationTokenSource>(fullPath, next)) &&
+                        !isDisposed)
+                    {
+                        handler();
+                    }
                 }
-            };
+                catch (OperationCanceledException)
+                {
+                    // A newer event superseded this debounce interval.
+                }
+                finally
+                {
+                    next.Dispose();
+                }
+            });
         }
 
         public void Dispose()
@@ -210,7 +234,24 @@ namespace Unlimotion.ViewModel
                 watcher.Dispose();
             }
 
-            cache.Dispose();
+            foreach (var pending in pendingUpdates.Values)
+            {
+                TryCancel(pending);
+            }
+
+            pendingUpdates.Clear();
+        }
+
+        private static void TryCancel(CancellationTokenSource cancellation)
+        {
+            try
+            {
+                cancellation.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+                // A completed debounce can dispose while AddOrUpdate retries its value factory.
+            }
         }
     }
 }

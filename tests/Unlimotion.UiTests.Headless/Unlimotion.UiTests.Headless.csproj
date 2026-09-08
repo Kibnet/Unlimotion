@@ -17,5 +17,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Unlimotion.AppAutomation.TestHost\Unlimotion.AppAutomation.TestHost.csproj" />
     <ProjectReference Include="..\Unlimotion.UiTests.Authoring\Unlimotion.UiTests.Authoring.csproj" />
+    <ProjectReference Include="..\..\src\Unlimotion.Cli\Unlimotion.Cli.csproj" />
+    <ProjectReference Include="..\..\src\Unlimotion.FileStorage\Unlimotion.FileStorage.csproj" />
   </ItemGroup>
 </Project>

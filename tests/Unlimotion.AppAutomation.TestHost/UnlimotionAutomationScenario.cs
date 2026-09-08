@@ -6,6 +6,7 @@ public enum UnlimotionAutomationScenario
     ReadmeDemo,
     GitRemoteSwitch,
     StatusContract,
+    CliLiveRefresh,
     TaskSpaces,
     TaskSpacesDuplicateCatalogRecovery,
     TaskSpacesOrphanCatalogRecovery

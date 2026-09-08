@@ -833,21 +833,44 @@ public class FileStorageTaskStatusTests
         try
         {
             var storage = new TestFileStorage(tempDir);
-            var task = new TaskItem { Id = "updated-task", Title = "Old title" };
+            var task = new TaskItem
+            {
+                Id = "updated-task",
+                Title = "Old title",
+                CompletionCriteria =
+                [
+                    new TaskCompletionCriterion
+                    {
+                        Id = "updated-criterion",
+                        Text = "Observe snapshot",
+                        IsSatisfied = false
+                    }
+                ]
+            };
             await storage.Save(task);
-            _ = await storage.Load(task.Id, forced: true);
+            await storage.EnableLiveGraphAsync();
             task.Title = "New title";
+            task.CompletionCriteria.Single().IsSatisfied = true;
             await File.WriteAllTextAsync(
                 Path.Combine(tempDir, task.Id),
                 JsonConvert.SerializeObject(task));
             string? observedTitle = null;
+            TaskStorageUpdateEventArgs? observedUpdate = null;
 
             storage.Updating += (_, args) =>
+            {
+                observedUpdate = args;
                 observedTitle = storage.Load(args.Id).GetAwaiter().GetResult()?.Title;
+            };
 
             await storage.TriggerUpdatingAsync(task.Id);
 
             await Assert.That(observedTitle).IsEqualTo("New title");
+            await Assert.That(observedUpdate).IsNotNull();
+            await Assert.That(observedUpdate!.StorageRevision).IsGreaterThan(0);
+            var observedSnapshot = (observedUpdate as FileStorageUpdateEventArgs)?.Snapshot;
+            await Assert.That(observedSnapshot?.Title).IsEqualTo("New title");
+            await Assert.That(observedSnapshot?.CompletionCriteria.Single().IsSatisfied).IsTrue();
         }
         finally
         {
