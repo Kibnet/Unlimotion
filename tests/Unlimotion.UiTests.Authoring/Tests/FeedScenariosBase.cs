@@ -224,6 +224,7 @@ public abstract class FeedScenariosBase<TSession> : StatusContractScenariosBase<
     [NotInParallel(DesktopUiConstraint)]
     public async Task Feed_shell_switch_preserves_task_context()
     {
+        PrepareMainTabSelection("LastCreatedTabItem");
         Page.SelectTabItem(static page => page.LastCreatedTabItem, timeoutMs: 10_000);
         await Assert.That(Page.LastCreatedTabItem.IsSelected).IsTrue();
 
