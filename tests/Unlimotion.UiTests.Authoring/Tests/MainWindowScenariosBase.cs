@@ -12,6 +12,8 @@ public abstract partial class MainWindowScenariosBase<TSession> : UiTestBase<TSe
 {
     protected virtual string ExpectedCurrentTaskTitle => UnlimotionAppLaunchHost.CurrentTaskTitle;
 
+    protected virtual void PrepareMainTabSelection(string automationId) { }
+
     [Test]
     [NotInParallel(DesktopUiConstraint)]
     public async Task Main_window_loads_current_task_on_launch()
@@ -105,27 +107,35 @@ public abstract partial class MainWindowScenariosBase<TSession> : UiTestBase<TSe
     {
         await Assert.That(Page.MainTabs.AutomationId).IsEqualTo("MainTabs");
 
+        PrepareMainTabSelection("LastCreatedTabItem");
         Page.SelectTabItem(static page => page.LastCreatedTabItem, timeoutMs: 10_000);
         await Assert.That(Page.LastCreatedTree.AutomationId).IsEqualTo("LastCreatedTree");
 
+        PrepareMainTabSelection("LastUpdatedTabItem");
         Page.SelectTabItem(static page => page.LastUpdatedTabItem, timeoutMs: 10_000);
         await Assert.That(Page.LastUpdatedTree.AutomationId).IsEqualTo("LastUpdatedTree");
 
+        PrepareMainTabSelection("UnlockedTabItem");
         Page.SelectTabItem(static page => page.UnlockedTabItem, timeoutMs: 10_000);
         await Assert.That(Page.UnlockedTree.AutomationId).IsEqualTo("UnlockedTree");
 
+        PrepareMainTabSelection("InProgressTabItem");
         Page.SelectTabItem(static page => page.InProgressTabItem, timeoutMs: 10_000);
         await Assert.That(Page.InProgressTree.AutomationId).IsEqualTo("InProgressTree");
 
+        PrepareMainTabSelection("CompletedTabItem");
         Page.SelectTabItem(static page => page.CompletedTabItem, timeoutMs: 10_000);
         await Assert.That(Page.CompletedTree.AutomationId).IsEqualTo("CompletedTree");
 
+        PrepareMainTabSelection("ArchivedTabItem");
         Page.SelectTabItem(static page => page.ArchivedTabItem, timeoutMs: 10_000);
         await Assert.That(Page.ArchivedTree.AutomationId).IsEqualTo("ArchivedTree");
 
+        PrepareMainTabSelection("LastOpenedTabItem");
         Page.SelectTabItem(static page => page.LastOpenedTabItem, timeoutMs: 10_000);
         await Assert.That(Page.LastOpenedTree.AutomationId).IsEqualTo("LastOpenedTree");
 
+        PrepareMainTabSelection("RoadmapTabItem");
         Page.SelectTabItem(static page => page.RoadmapTabItem, timeoutMs: 10_000);
         var roadmapRoot = WaitUntil(
             () => TryResolveDuringWait(() => Page.RoadmapRoot),

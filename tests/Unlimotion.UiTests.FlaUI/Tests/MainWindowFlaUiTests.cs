@@ -857,6 +857,27 @@ public sealed class MainWindowFlaUiTests
 
     protected override bool IsArchivedContractTaskVisible() => FindArchivedTaskElement() is not null;
 
+    protected override void PrepareMainTabSelection(string automationId)
+    {
+        var directTab = Session.Inner.MainWindow.FindFirstDescendant(
+            Session.Inner.ConditionFactory.ByAutomationId(automationId));
+        if (directTab is not null && !directTab.Properties.IsOffscreen.ValueOrDefault) return;
+
+        InvokeMainWindowButton("MainTabsOverflowButton");
+        var overflowItem = WaitUntil(
+            () => FindProcessElement("MainTabsOverflow" + automationId),
+            static element => element is not null && !element.Properties.IsOffscreen.ValueOrDefault,
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: $"Main-tabs overflow did not expose {automationId}.")!;
+        overflowItem.Click();
+        WaitUntil(
+            () => Session.Inner.MainWindow.FindFirstDescendant(
+                Session.Inner.ConditionFactory.ByAutomationId(automationId)),
+            static element => element is not null && !element.Properties.IsOffscreen.ValueOrDefault,
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: $"Selected tab {automationId} did not become available.");
+    }
+
     protected override void OpenArchivedTab()
     {
         var directTab = Session.Inner.MainWindow.FindFirstDescendant(
