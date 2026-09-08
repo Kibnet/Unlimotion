@@ -14,6 +14,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.LogicalTree;
+using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using DynamicData;
@@ -650,6 +651,79 @@ public class MainControlFilterToolbarResponsiveUiTests
             }
             finally
             {
+                window?.Close();
+                await fixture.CleanTasksAsync();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task Toolbar_EmojiFilterPopup_UsesFilterFlyoutChrome(bool darkTheme)
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            var app = Application.Current ?? throw new InvalidOperationException("Application was not initialized.");
+            var previousTheme = app.RequestedThemeVariant;
+            Window? window = null;
+
+            try
+            {
+                app.RequestedThemeVariant = darkTheme ? ThemeVariant.Dark : ThemeVariant.Light;
+
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+                vm.AllTasksMode = true;
+                vm.DetailsAreOpen = false;
+                await PrepareEmojiFilterData(vm);
+
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view, 390, 760);
+                window.Show();
+                RunLayoutJobs();
+                SelectTab(view, 0);
+
+                var filtersButton = FindVisibleControlByAutomationId<DropDownButton>(view, "AllTasksFiltersButton");
+                if (filtersButton.Flyout is not Flyout filterFlyout)
+                {
+                    throw new InvalidOperationException("Filter button must use a Flyout.");
+                }
+
+                filterFlyout.ShowAt(filtersButton);
+                RunLayoutJobs();
+
+                if (filterFlyout.Content is not Control filterFlyoutContent)
+                {
+                    throw new InvalidOperationException("Filter flyout content was not found.");
+                }
+
+                var filterPanel = FindControlInDetachedContent<Border>(filterFlyoutContent, "AllTasksFilterPanel")
+                                  ?? throw new InvalidOperationException("All Tasks filter panel was not found.");
+                var referenceBackground = filterPanel.Background;
+                var referenceBorderBrush = filterPanel.BorderBrush;
+                var referenceBorderThickness = filterPanel.BorderThickness;
+                var referenceCornerRadius = filterPanel.CornerRadius;
+
+                filterFlyout.Hide();
+                RunLayoutJobs();
+
+                var toolbar = FindVisibleFilterToolbar(view);
+                var (includeControl, _) = FindVisibleToolbarEmojiFilterControls(toolbar);
+                await ClickControlAsync(window, GetEmojiFilterInput(includeControl));
+                RunLayoutJobs();
+
+                var emojiDropDown = GetEmojiFilterDropDown(includeControl);
+                await Assert.That(emojiDropDown.Background).IsEqualTo(referenceBackground);
+                await Assert.That(emojiDropDown.BorderBrush).IsEqualTo(referenceBorderBrush);
+                await Assert.That(emojiDropDown.BorderThickness).IsEqualTo(referenceBorderThickness);
+                await Assert.That(emojiDropDown.CornerRadius).IsEqualTo(referenceCornerRadius);
+            }
+            finally
+            {
+                app.RequestedThemeVariant = previousTheme;
                 window?.Close();
                 await fixture.CleanTasksAsync();
             }
@@ -1604,7 +1678,6 @@ public class MainControlFilterToolbarResponsiveUiTests
                     var dropDownBounds = GetBoundsRelativeTo(window, dropDown);
                     await Assert.That(Math.Abs(dropDownBounds.Left - inputBounds.Left)).IsLessThanOrEqualTo(2);
                     await Assert.That(Math.Abs(dropDownBounds.Top - inputBounds.Bottom)).IsLessThanOrEqualTo(2);
-                    await Assert.That(dropDown.CornerRadius).IsEqualTo(new CornerRadius(4));
                     AssertVisibleItemsStayInsideDropDown(dropDown, includeList);
 
                     await ClickControlAsync(window, includeInput);
