@@ -374,6 +374,14 @@ public sealed class FeedAuxiliaryUiTests
                     await Assert.That(goal.IsChecked).IsTrue();
                     await Assert.That(chips.ItemCount).IsEqualTo(2);
                 }
+
+                editor.TrySetGoal(false);
+                editor.TrySetAreaSelected("work", false);
+                await Assert.That(WaitFor(() => storage.Snapshots.Any(snapshot =>
+                    !snapshot.IsGoal && snapshot.AreaIds.SequenceEqual(new[] { "product" })))).IsTrue();
+                RunLayoutJobs();
+                await Assert.That(goal.IsChecked).IsFalse();
+                await Assert.That(chips.ItemCount).IsEqualTo(1);
             }
             finally
             {
