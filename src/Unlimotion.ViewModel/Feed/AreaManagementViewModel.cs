@@ -34,6 +34,14 @@ public sealed class AreaManagementViewModel : ReactiveObject, IDisposable
     private bool isDraftDirty;
     private bool hasExternalConflict;
     private int disposed;
+    private AreaRootTaskReference? draftRootTask;
+    private string? loadedRootTaskId;
+    private string? rootTaskLoadError;
+    private Func<string, AreaRootTaskReference?>? readRootTask;
+    private Func<string, AreaRootTaskReference?, Task>? saveRootTask;
+    private Func<Task<AreaRootTaskReference?>>? pickRootTask;
+    private Action<string>? openRootTask;
+    private string? pendingAreaId;
 
     public AreaManagementViewModel(AreaCatalogStore store)
     {
@@ -46,6 +54,25 @@ public sealed class AreaManagementViewModel : ReactiveObject, IDisposable
         UseLocalDraftCommand = ReactiveCommand.CreateFromTask(() => ExecuteSafelyAsync(UseLocalDraftAsync));
         UseExternalAreasCommand = ReactiveCommand.Create(() => UseExternalAreas());
         CloseCommand = ReactiveCommand.Create(() => { IsOpen = false; });
+        PickRootTaskCommand = ReactiveCommand.CreateFromTask(() => ExecuteSafelyAsync(async () =>
+        {
+            var areaId = SelectedArea?.Id;
+            if (areaId is null || pickRootTask is null) return;
+            var picked = await pickRootTask();
+            if (picked is not null && areaId == SelectedArea?.Id) DraftRootTask = picked;
+        }));
+        ClearRootTaskCommand = ReactiveCommand.Create(() => { DraftRootTask = null; });
+        OpenRootTaskCommand = ReactiveCommand.Create(() =>
+        {
+            if (DraftRootTask is { } root) openRootTask?.Invoke(root.Id);
+        });
+        SaveAndSwitchAreaCommand = ReactiveCommand.CreateFromTask(() => ExecuteSafelyAsync(async () =>
+        {
+            await SaveSelectedAsync();
+            CompletePendingAreaSwitch();
+        }));
+        DiscardAndSwitchAreaCommand = ReactiveCommand.Create(() => CompletePendingAreaSwitch());
+        CancelAreaSwitchCommand = ReactiveCommand.Create(() => { PendingAreaId = null; });
         ParentOptions.Add(AreaParentOptionViewModel.NoParent);
         SelectedParent = ParentOptions[0];
     }
@@ -71,6 +98,63 @@ public sealed class AreaManagementViewModel : ReactiveObject, IDisposable
     public ReactiveCommand<Unit, Unit> UseExternalAreasCommand { get; }
 
     public ReactiveCommand<Unit, Unit> CloseCommand { get; }
+    public ReactiveCommand<Unit, Unit> PickRootTaskCommand { get; }
+    public ReactiveCommand<Unit, Unit> ClearRootTaskCommand { get; }
+    public ReactiveCommand<Unit, Unit> OpenRootTaskCommand { get; }
+    public ReactiveCommand<Unit, Unit> SaveAndSwitchAreaCommand { get; }
+    public ReactiveCommand<Unit, Unit> DiscardAndSwitchAreaCommand { get; }
+    public ReactiveCommand<Unit, Unit> CancelAreaSwitchCommand { get; }
+    public bool HasPendingAreaSwitch => PendingAreaId is not null;
+    private string? PendingAreaId
+    {
+        get => pendingAreaId;
+        set { this.RaiseAndSetIfChanged(ref pendingAreaId, value); this.RaisePropertyChanged(nameof(HasPendingAreaSwitch)); }
+    }
+
+    public async Task OpenAreaAsync(string areaId)
+    {
+        IsOpen = true;
+        if (IsDraftDirty && SelectedArea?.Id != areaId)
+        {
+            PendingAreaId = areaId;
+            return;
+        }
+        if (snapshot is null) await LoadAsync();
+        SelectedArea = Areas.FirstOrDefault(area => area.Id == areaId);
+    }
+
+    private void CompletePendingAreaSwitch()
+    {
+        var id = PendingAreaId;
+        PendingAreaId = null;
+        if (id is not null) SelectedArea = Areas.FirstOrDefault(area => area.Id == id);
+    }
+
+    public bool SupportsRootTasks => readRootTask is not null && saveRootTask is not null;
+    public FeedTaskParentDraftViewModel? RootTaskPicker { get; set; }
+    public bool HasRootTask => DraftRootTask is not null;
+    public AreaRootTaskReference? DraftRootTask
+    {
+        get => draftRootTask;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref draftRootTask, value);
+            this.RaisePropertyChanged(nameof(HasRootTask));
+            UpdateDraftDirtyState();
+        }
+    }
+
+    /// <summary>Callbacks must be bound to one captured task space and validated vault identity.</summary>
+    public void ConfigureRootTasks(Func<string, AreaRootTaskReference?> read,
+        Func<string, AreaRootTaskReference?, Task> save, Func<Task<AreaRootTaskReference?>> pick, Action<string> open)
+    {
+        readRootTask = read;
+        saveRootTask = save;
+        pickRootTask = pick;
+        openRootTask = open;
+        this.RaisePropertyChanged(nameof(SupportsRootTasks));
+        if (!IsDraftDirty) LoadDraft(SelectedArea);
+    }
 
     public bool IsOpen
     {
@@ -273,14 +357,30 @@ public sealed class AreaManagementViewModel : ReactiveObject, IDisposable
 
     public async Task SaveSelectedAsync()
     {
+        if (rootTaskLoadError is not null) throw new InvalidOperationException(rootTaskLoadError);
         var areaId = SelectedArea?.Id ?? throw new InvalidOperationException("Select an area before saving it.");
         var parentId = SelectedParent?.Id;
+        var rootTask = DraftRootTask;
         await MutateAsync(areaId, area =>
         {
             area.Name = RequireName(DraftName);
             area.ParentId = NormalizeOptional(parentId);
             area.DefaultNoteFolder = NormalizeOptional(DraftDefaultNoteFolder);
         });
+        if (saveRootTask is not null)
+        {
+            try
+            {
+                await saveRootTask(areaId, rootTask);
+                if (SelectedArea?.Id == areaId) LoadDraft(SelectedArea);
+            }
+            catch
+            {
+                // Portable fields may have saved, but keep the unsaved local root visible and dirty.
+                if (SelectedArea?.Id == areaId) DraftRootTask = rootTask;
+                throw;
+            }
+        }
     }
 
     public async Task ToggleSelectedArchiveAsync()
@@ -313,6 +413,13 @@ public sealed class AreaManagementViewModel : ReactiveObject, IDisposable
         UseLocalDraftCommand.Dispose();
         UseExternalAreasCommand.Dispose();
         CloseCommand.Dispose();
+        PickRootTaskCommand.Dispose();
+        ClearRootTaskCommand.Dispose();
+        OpenRootTaskCommand.Dispose();
+        RootTaskPicker?.Dispose();
+        SaveAndSwitchAreaCommand.Dispose();
+        DiscardAndSwitchAreaCommand.Dispose();
+        CancelAreaSwitchCommand.Dispose();
     }
 
     private async Task<AreaManagementAreaViewModel> CreateAsync(
@@ -384,6 +491,7 @@ public sealed class AreaManagementViewModel : ReactiveObject, IDisposable
 
     private async Task UseLocalDraftAsync()
     {
+        var rootTask = DraftRootTask;
         var external = pendingExternalSnapshot
             ?? throw new InvalidOperationException("There is no external area change to resolve.");
         var areaId = SelectedArea?.Id
@@ -400,6 +508,7 @@ public sealed class AreaManagementViewModel : ReactiveObject, IDisposable
             area.DefaultNoteFolder = NormalizeOptional(DraftDefaultNoteFolder);
             candidate.Validate();
             snapshot = await store.SaveAsync(candidate, external.Revision, lifetime.Token);
+            if (saveRootTask is not null) await saveRootTask(areaId, rootTask);
             pendingExternalSnapshot = null;
             HasExternalConflict = false;
             ApplySnapshot(snapshot, areaId);
@@ -445,7 +554,8 @@ public sealed class AreaManagementViewModel : ReactiveObject, IDisposable
         }
         catch (Exception exception)
         {
-            ErrorMessage = exception.Message;
+            ErrorMessage = exception.Message == "FeedTaskSourceMismatch"
+                ? L10n.Get("FeedTaskSourceMismatch") : exception.Message;
         }
     }
 
@@ -509,10 +619,22 @@ public sealed class AreaManagementViewModel : ReactiveObject, IDisposable
         {
             DraftName = area?.Name ?? string.Empty;
             DraftDefaultNoteFolder = area?.DefaultNoteFolder ?? string.Empty;
+            try
+            {
+                DraftRootTask = area is null ? null : readRootTask?.Invoke(area.Id);
+                rootTaskLoadError = null;
+            }
+            catch (Exception error)
+            {
+                DraftRootTask = null;
+                rootTaskLoadError = error.Message;
+                ErrorMessage = error.Message;
+            }
             RebuildParentOptions(area);
             loadedDraftName = DraftName;
             loadedDraftDefaultNoteFolder = DraftDefaultNoteFolder;
             loadedParentId = SelectedParent?.Id;
+            loadedRootTaskId = DraftRootTask?.Id;
             IsDraftDirty = false;
         }
         finally
@@ -531,6 +653,7 @@ public sealed class AreaManagementViewModel : ReactiveObject, IDisposable
         IsDraftDirty = SelectedArea is not null
             && (!string.Equals(DraftName, loadedDraftName, StringComparison.Ordinal)
                 || !string.Equals(DraftDefaultNoteFolder, loadedDraftDefaultNoteFolder, StringComparison.Ordinal)
+                || !string.Equals(DraftRootTask?.Id, loadedRootTaskId, StringComparison.Ordinal)
                 || !string.Equals(SelectedParent?.Id, loadedParentId, StringComparison.Ordinal));
     }
 
@@ -627,3 +750,5 @@ public sealed record AreaParentOptionViewModel(string? Id, string Name)
 {
     public static AreaParentOptionViewModel NoParent { get; } = new(null, "—");
 }
+
+public sealed record AreaRootTaskReference(string Id, string Title);

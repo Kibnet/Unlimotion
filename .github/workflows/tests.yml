@@ -15,6 +15,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  EMX_TELEMETRY_OPTOUT: "1"
   DOTNET_CLI_TELEMETRY_OPTOUT: "1"
   DOTNET_NOLOGO: "1"
   TEST_RESULTS_ROOT: artifacts/test-results/${{ github.run_id }}-${{ github.run_attempt }}

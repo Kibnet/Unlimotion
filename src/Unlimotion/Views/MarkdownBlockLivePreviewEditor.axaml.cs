@@ -12,6 +12,7 @@ using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Unlimotion.ViewModel.Feed;
+using L10n = Unlimotion.ViewModel.Localization.Localization;
 
 namespace Unlimotion.Views;
 
@@ -24,6 +25,7 @@ public partial class MarkdownBlockLivePreviewEditor : UserControl
     private Point dragStart;
     private bool dragTargetAfter;
     private bool isDraggingSelection;
+    private bool clearSelectionOnRelease;
     private MarkdownLiveBlockViewModel? pointerOverBlock;
     private MarkdownLiveBlockViewModel? toolbarFlyoutBlock;
     private double? preferredCaretX;
@@ -33,6 +35,7 @@ public partial class MarkdownBlockLivePreviewEditor : UserControl
     public MarkdownBlockLivePreviewEditor()
     {
         InitializeComponent();
+        AddHandler(PointerPressedEvent, OnEditingContextPointerPressed, RoutingStrategies.Tunnel);
         SizeChanged += (_, _) => UpdateReadingColumn();
         AttachedToVisualTree += (_, _) => UpdateReadingColumn();
         AddHandler(
@@ -65,6 +68,7 @@ public partial class MarkdownBlockLivePreviewEditor : UserControl
 
     private void OnEditorAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
     {
+        InitializeBlockEditorTypography();
         pointerEventHost = TopLevel.GetTopLevel(this);
         pointerEventHost?.AddHandler(
             InputElement.PointerMovedEvent,
@@ -110,6 +114,7 @@ public partial class MarkdownBlockLivePreviewEditor : UserControl
 
         var toggleSelection = e.KeyModifiers.HasFlag(KeyModifiers.Control);
         var extendSelection = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+        clearSelectionOnRelease = block.IsMoveSelected && !toggleSelection && !extendSelection;
         if ((!block.IsMoveSelected || toggleSelection || extendSelection)
             && !editor.SelectMoveBlock(block, toggleSelection, extendSelection))
         {
@@ -126,14 +131,8 @@ public partial class MarkdownBlockLivePreviewEditor : UserControl
 
     private void OnEditorPointerMoved(object? sender, PointerEventArgs e)
     {
-        // The host also receives pointer events over modal overlays. Geometry alone would
-        // reveal toolbars behind quick capture/settings even though the editor is not hit.
-        var fromEditor = e.Source is Visual source
-            && (ReferenceEquals(source, this) || source.GetVisualAncestors().Contains(this)
-                // Transparent gaps may hit a containing panel, but never a sibling overlay.
-                || this.GetVisualAncestors().Contains(source));
-        UpdatePointerOverBlock(fromEditor ? e.GetPosition(this) : new Point(-1, -1));
-
+        // Normal hover is handled by the row. Only the active drag scans geometry;
+        // scanning every block of every realized day on each pointer move stalls input.
         if (dragSourceBlock is null
             || DataContext is not MarkdownLivePreviewEditorViewModel editor)
         {
@@ -172,6 +171,8 @@ public partial class MarkdownBlockLivePreviewEditor : UserControl
         var target = dragTargetBlock;
         var after = dragTargetAfter;
         var shouldMove = isDraggingSelection && target is not null;
+        var shouldClear = clearSelectionOnRelease && !isDraggingSelection;
+        clearSelectionOnRelease = false;
         dragSourceBlock = null;
         dragTargetBlock = null;
         dragTargetAfter = false;
@@ -180,6 +181,7 @@ public partial class MarkdownBlockLivePreviewEditor : UserControl
         if (DataContext is MarkdownLivePreviewEditorViewModel editor)
         {
             editor.SetMoveDropTarget(null, after: false);
+            if (shouldClear) editor.ClearMoveSelection();
             if (shouldMove)
             {
                 await editor.MoveSelectionToTargetAsync(target!, after);
@@ -216,13 +218,7 @@ public partial class MarkdownBlockLivePreviewEditor : UserControl
                 editor.SelectMoveBlock(block, toggle: false, extendRange: false);
             }
 
-            Dispatcher.UIThread.Post(
-                () => FindByAutomationId<Border>(block.ContextToolbarAutomationId)?
-                    .GetVisualDescendants()
-                    .OfType<Button>()
-                    .FirstOrDefault()?
-                    .Focus(),
-                DispatcherPriority.Input);
+            OpenBlockContextMenu((Control)sender, block, null);
             e.Handled = true;
             return;
         }
@@ -442,6 +438,7 @@ public partial class MarkdownBlockLivePreviewEditor : UserControl
 
     private async void OnPreviewPointerPressed(object? sender, PointerPressedEventArgs e)
     {
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
         if (e.Source is Control source
             && (source is Button || source.GetVisualAncestors().OfType<Button>().Any()))
         {
@@ -880,6 +877,7 @@ public partial class MarkdownBlockLivePreviewEditor : UserControl
     private async void OnEditorLostFocus(object? sender, RoutedEventArgs e)
     {
         if (isSwitchingBlock
+            || isBlockContextMenuOpen
             || isExplicitCommit
             || sender is not TextBox { DataContext: MarkdownLiveBlockViewModel block }
             || block.IsCommitInProgress

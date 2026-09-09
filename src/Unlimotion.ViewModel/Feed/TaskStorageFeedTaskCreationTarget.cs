@@ -16,7 +16,9 @@ public interface ITaskClassificationCapabilityProvider
     bool SupportsTaskClassification { get; }
 }
 
-public sealed class TaskStorageFeedTaskCreationTarget(Func<ITaskStorage?> storageProvider) : IFeedTaskCreationTarget
+public sealed class TaskStorageFeedTaskCreationTarget(
+    Func<ITaskStorage?> storageProvider,
+    Func<FeedTaskSourceIdentity?>? taskSourceIdentityProvider = null) : IFeedTaskCreationTarget
 {
     private const string OperationMetadataKey = "unlimotionFeedOperationId";
     public bool SupportsReadOnlyLookup => true;
@@ -24,6 +26,7 @@ public sealed class TaskStorageFeedTaskCreationTarget(Func<ITaskStorage?> storag
     public async Task<FeedCreatedTask?> FindOwnedAsync(FeedTaskDraft draft, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        FeedTaskSourceIdentity.RequireCurrent(draft.TaskSourceIdentity, taskSourceIdentityProvider);
         var repository = storageProvider() ?? throw new InvalidOperationException("Task storage is not connected.");
         var stored = await repository.TaskTreeManager.Storage.Load(draft.TaskId).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
@@ -48,23 +51,23 @@ public sealed class TaskStorageFeedTaskCreationTarget(Func<ITaskStorage?> storag
         cancellationToken.ThrowIfCancellationRequested();
         var repository = storageProvider()
             ?? throw new InvalidOperationException("Task storage is not connected.");
+        EnsureCurrent(repository, draft, cancellationToken);
         if (!SupportsClassificationFor(repository))
         {
             throw new InvalidOperationException(
                 "The active task storage does not support goal and area classification.");
         }
 
-        var cached = repository.Tasks.Lookup(draft.TaskId);
-        if (cached.HasValue)
-        {
-            EnsureOperationOwnership(cached.Value.Model, draft);
-            return new FeedCreatedTask(cached.Value.Id, cached.Value.Title);
-        }
+        // Resolve all parents before creating anything. A missing/archived root never silently becomes a rootless task.
+        foreach (var parentId in (draft.ParentTaskIds ?? []).Distinct(StringComparer.Ordinal))
+            await RequireParentAsync(repository, draft, parentId, cancellationToken).ConfigureAwait(false);
 
         var stored = await repository.TaskTreeManager.Storage.Load(draft.TaskId).ConfigureAwait(false);
         if (stored is not null)
         {
             EnsureOperationOwnership(stored, draft);
+            stored = await EnsureParentsAsync(repository, draft, stored, cancellationToken).ConfigureAwait(false);
+            EnsureCurrent(repository, draft, cancellationToken);
             var reconciled = await repository.Update(stored).ConfigureAwait(false);
             return new FeedCreatedTask(reconciled.Id, reconciled.Title);
         }
@@ -81,6 +84,7 @@ public sealed class TaskStorageFeedTaskCreationTarget(Func<ITaskStorage?> storag
                 [OperationMetadataKey] = JValue.CreateString(draft.OperationId)
             }
         };
+        EnsureCurrent(repository, draft, cancellationToken);
         var createdGraph = await repository.TaskTreeManager.AddTask(task).ConfigureAwait(false);
         var created = createdGraph.FirstOrDefault(value =>
             string.Equals(value.Id, draft.TaskId, StringComparison.Ordinal));
@@ -95,6 +99,8 @@ public sealed class TaskStorageFeedTaskCreationTarget(Func<ITaskStorage?> storag
         }
 
         EnsureOperationOwnership(created, draft);
+        created = await EnsureParentsAsync(repository, draft, created, cancellationToken).ConfigureAwait(false);
+        EnsureCurrent(repository, draft, cancellationToken);
         var viewModel = await repository.Update(created).ConfigureAwait(false);
         if (viewModel is null || !string.Equals(viewModel.Id, draft.TaskId, StringComparison.Ordinal))
         {
@@ -102,6 +108,54 @@ public sealed class TaskStorageFeedTaskCreationTarget(Func<ITaskStorage?> storag
         }
 
         return new FeedCreatedTask(viewModel.Id, viewModel.Title);
+    }
+
+    private void EnsureCurrent(ITaskStorage repository, FeedTaskDraft draft, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        FeedTaskSourceIdentity.RequireCurrent(draft.TaskSourceIdentity, taskSourceIdentityProvider);
+        if (!ReferenceEquals(storageProvider(), repository))
+            throw new InvalidOperationException("FeedTaskSourceMismatch");
+    }
+
+    private async Task<TaskItem> RequireParentAsync(ITaskStorage repository, FeedTaskDraft draft, string parentId,
+        CancellationToken cancellationToken)
+    {
+        EnsureCurrent(repository, draft, cancellationToken);
+        if (string.IsNullOrWhiteSpace(parentId) || parentId == draft.TaskId)
+            throw new InvalidOperationException("AreaRootTaskUnavailable");
+        var parent = await repository.TaskTreeManager.Storage.Load(parentId).ConfigureAwait(false);
+        EnsureCurrent(repository, draft, cancellationToken);
+        if (parent is null || parent.IsCompleted is null)
+            throw new InvalidOperationException("AreaRootTaskUnavailable");
+        return parent;
+    }
+
+    private async Task<TaskItem> EnsureParentsAsync(ITaskStorage repository, FeedTaskDraft draft, TaskItem task,
+        CancellationToken cancellationToken)
+    {
+        foreach (var parentId in (draft.ParentTaskIds ?? []).Distinct(StringComparer.Ordinal))
+        {
+            var parent = await RequireParentAsync(repository, draft, parentId, cancellationToken).ConfigureAwait(false);
+            // Retry repairs either side of a partially persisted relation, rather than trusting the task cache.
+            if (!task.ParentTasks.Contains(parentId) || !parent.ContainsTasks.Contains(task.Id))
+            {
+                EnsureCurrent(repository, draft, cancellationToken);
+                var graph = await repository.TaskTreeManager.AddNewParentToTask(task, parent).ConfigureAwait(false);
+                foreach (var changed in graph)
+                {
+                    EnsureCurrent(repository, draft, cancellationToken);
+                    await repository.Update(changed).ConfigureAwait(false);
+                }
+            }
+            EnsureCurrent(repository, draft, cancellationToken);
+            task = await repository.TaskTreeManager.Storage.Load(draft.TaskId).ConfigureAwait(false)
+                ?? throw new IOException("Task storage did not persist the feed conversion task.");
+            parent = await RequireParentAsync(repository, draft, parentId, cancellationToken).ConfigureAwait(false);
+            if (!task.ParentTasks.Contains(parentId) || !parent.ContainsTasks.Contains(task.Id))
+                throw new IOException("Task storage did not persist the feed parent relation.");
+        }
+        return task;
     }
 
     private static bool SupportsClassificationFor(ITaskStorage repository) =>

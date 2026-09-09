@@ -22,12 +22,19 @@ public partial class FeedControl : UserControl
     private bool wasSearchActive;
     private bool suppressNextChronologyRestore;
     private bool loadOlderDaysWhenIdle;
+    private FeedThematicDocumentViewModel? displayedDocument;
 
     public FeedControl()
     {
         InitializeComponent();
         InitializeReadingNavigation();
         ChronologyScroller.ScrollChanged += OnChronologyScrollChanged;
+        DocumentScroller.ScrollChanged += (_, _) =>
+        {
+            if (displayedDocument is not null) displayedDocument.ScrollOffset = DocumentScroller.Offset.Y;
+        };
+        AddHandler(KeyDownEvent, OnDocumentKeyDown, RoutingStrategies.Tunnel);
+        AddHandler(PointerPressedEvent, OnFeedBackgroundPressed, RoutingStrategies.Bubble);
         DataContextChanged += (_, _) => ObserveDataContext();
         AttachedToVisualTree += (_, _) =>
         {
@@ -38,6 +45,15 @@ public partial class FeedControl : UserControl
         };
         DetachedFromVisualTree += (_, _) => StopObservingDataContext();
         SizeChanged += (_, _) => UpdateLocalToolbarLayout();
+    }
+
+    private void OnFeedBackgroundPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (DataContext is not FeedViewModel feed || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed
+            || e.Source is not Control source || source is not (Panel or Border or Avalonia.Controls.Presenters.ScrollContentPresenter)) return;
+        if (source.GetVisualAncestors().Any(control => control is MarkdownBlockLivePreviewEditor or TextBox or Button
+                or Avalonia.Controls.Primitives.ScrollBar or MenuBase)) return;
+        feed.BlockSelection.Clear();
     }
 
     private void UpdateLocalToolbarLayout()
@@ -178,6 +194,7 @@ public partial class FeedControl : UserControl
         observedViewModel.SearchNavigationRequested += OnSearchNavigationRequested;
         observedViewModel.ReviewNavigationRequested += OnReviewNavigationRequested;
         observedViewModel.VisibleDays.CollectionChanged += OnVisibleDaysChanged;
+        observedViewModel.AttachPresentation();
         wasSearchActive = observedViewModel.IsSearchActive;
         ObserveContextSources();
         UpdateNavigationState();
@@ -213,6 +230,35 @@ public partial class FeedControl : UserControl
         }
 
         if (!ReferenceEquals(sender, observedViewModel)) return;
+        observedViewModel?.AttachPresentation();
+        if (e.PropertyName == nameof(FeedViewModel.OpenedThematicFile))
+        {
+            observedViewModel?.BlockSelection.Clear();
+            displayedDocument = observedViewModel?.OpenedThematicFile;
+            var document = displayedDocument;
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (ReferenceEquals(document, displayedDocument))
+                {
+                    DocumentScroller.Offset = new Vector(0, document?.ScrollOffset ?? 0);
+                    if (document?.MarkdownEditor.ActiveBlock is { } active)
+                    {
+                        var input = DocumentScroller.GetVisualDescendants().OfType<TextBox>().FirstOrDefault(control =>
+                            AutomationProperties.GetAutomationId(control) == active.EditorAutomationId);
+                        if (input is not null)
+                        {
+                            var caret = document.MarkdownEditor.LastCaretPosition;
+                            input.Focus();
+                            if (caret is not null)
+                            {
+                                input.SelectionStart = Math.Clamp(caret.SelectionStart, 0, input.Text?.Length ?? 0);
+                                input.SelectionEnd = Math.Clamp(caret.SelectionEnd, 0, input.Text?.Length ?? 0);
+                            }
+                        }
+                    }
+                }
+            }, DispatcherPriority.Loaded);
+        }
         ObserveContextSources();
         UpdateNavigationState();
         if (e.PropertyName is nameof(FeedViewModel.SearchQuery) or nameof(FeedViewModel.IsSearchActive))
@@ -266,6 +312,26 @@ public partial class FeedControl : UserControl
         wasSearchActive = isSearchActive;
     }
 
+    private async void OnDocumentKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (DataContext is not FeedViewModel feed) return;
+        if (e.Key == Key.Escape) feed.BlockSelection.Clear();
+        if (!e.KeyModifiers.HasFlag(KeyModifiers.Control)) return;
+        if (e.Key == Key.W && feed.HasOpenedThematicFile)
+        {
+            e.Handled = true;
+            await feed.CloseDocumentAsync(feed.OpenedThematicFile);
+        }
+        else if (e.Key == Key.Tab && feed.DocumentWorkspace.Documents.Count > 0)
+        {
+            e.Handled = true;
+            var documents = feed.DocumentWorkspace.Documents;
+            var index = feed.OpenedThematicFile is null ? 0 : documents.IndexOf(feed.OpenedThematicFile) + 1;
+            index = (index + (e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? -1 : 1) + documents.Count + 1) % (documents.Count + 1);
+            await feed.ActivateDocumentAsync(index == 0 ? null : documents[index - 1]);
+        }
+    }
+
     private void OnSearchNavigationStarting(object? sender, EventArgs e) => suppressNextChronologyRestore = true;
 
     private void OnSearchNavigationRequested(object? sender, FeedSearchNavigationRequestedEventArgs e)
@@ -314,6 +380,7 @@ public partial class FeedControl : UserControl
 
         var preview = this.GetVisualDescendants()
             .OfType<Control>()
+            .Where(control => control.IsEffectivelyVisible)
             .FirstOrDefault(control => string.Equals(
                 AutomationProperties.GetAutomationId(control),
                 block.PreviewAutomationId,

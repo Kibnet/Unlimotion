@@ -81,7 +81,6 @@ namespace Unlimotion.UiTests.Authoring.Pages;
 [UiControl("CurrentTaskPlanningSection", UiControlType.AutomationElement, "CurrentTaskPlanningSection")]
 [UiControl("CurrentTaskRepeaterSection", UiControlType.AutomationElement, "CurrentTaskRepeaterSection")]
 [UiControl("CurrentTaskRelationsSection", UiControlType.AutomationElement, "CurrentTaskRelationsSection")]
-[UiControl("GlobalTaskCreateMenuButton", UiControlType.AutomationElement, "GlobalTaskCreateMenuButton")]
 [UiControl("CurrentTaskActionsMenuButton", UiControlType.Button, "CurrentTaskActionsMenuButton")]
 [UiControl("CurrentTaskArchiveMenuItem", UiControlType.Button, "CurrentTaskArchiveMenuItem")]
 [UiControl("CurrentTaskTitleTextBox", UiControlType.TextBox, "CurrentTaskTitleTextBox")]

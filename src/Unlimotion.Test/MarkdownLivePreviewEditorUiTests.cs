@@ -503,7 +503,7 @@ public class MarkdownLivePreviewEditorUiTests
     }
 
     [Test]
-    public async Task SelectedBlocksShowToolbarAndTransformAtomicallyToChecklist()
+    public async Task SelectedBlocksContextMenuTransformsAtomicallyToChecklist()
     {
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
@@ -530,22 +530,20 @@ public class MarkdownLivePreviewEditorUiTests
             {
                 window.Show();
                 RunLayoutJobs();
-                var toolbar = FindControlByAutomationId<Border>(view, selected[0].ContextToolbarAutomationId);
-                var more = toolbar.GetVisualDescendants().OfType<Button>().Single(button => button.Flyout is MenuFlyout);
-                more.Flyout!.ShowAt(more);
-                RunLayoutJobs();
-                var checklist = ((MenuFlyout)more.Flyout!).Items.OfType<MenuItem>().Single(item =>
+                var menu = OpenBlockContextMenu(view, selected[0]);
+                var checklist = menu.Items.OfType<MenuItem>().Single(item =>
                     Equals(item.Header, Unlimotion.ViewModel.Localization.Localization.Get("FeedBlockChecklist")));
                 using (Assert.Multiple())
                 {
-                    await Assert.That(toolbar.IsEffectivelyVisible).IsTrue();
+                    await Assert.That(menu.IsOpen).IsTrue();
                     await Assert.That(checklist.IsEnabled).IsTrue();
                     await Assert.That(selected.All(static block => block.IsMoveSelected)).IsTrue();
-                    await Assert.That(viewModel.Blocks.Count(block => block.IsContextToolbarVisible)).IsEqualTo(1);
+                    await Assert.That(view.GetVisualDescendants().OfType<Border>().Any(control =>
+                        AutomationProperties.GetAutomationId(control) == selected[0].ContextToolbarAutomationId)).IsFalse();
                 }
 
                 checklist.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
-                more.Flyout.Hide();
+                menu.Close();
                 await Assert.That(WaitFor(() => commitCount == 1)).IsTrue();
                 await Assert.That(viewModel.Snapshot!.Raw).IsEqualTo("- [ ] Альфа\n\n- [ ] Бета\n");
                 await Assert.That(viewModel.SelectedMoveBlockCount).IsEqualTo(2);
@@ -1195,12 +1193,13 @@ public class MarkdownLivePreviewEditorUiTests
     [Test]
     [Arguments(320)]
     [Arguments(500)]
-    public async Task HoverToolbar_RemainsInsideNarrowViewport(int width)
+    public async Task NativeContextMenuCommandsRemainReachableAtNarrowWidth(int width)
     {
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             using var viewModel = new MarkdownLivePreviewEditorViewModel();
+            viewModel.CommitBlockAsync = (_, _) => throw new InvalidOperationException("Menu inspection must not save text.");
             viewModel.MoveBlocksAsync = (_, _) => Task.FromResult(MarkdownBlocksMoveResult.Rejected("not invoked"));
             viewModel.Load(new MarkdownLiveDocumentSnapshot("Первый блок\n\nВторой блок\n", "revision-1", false, "note.md"));
             var blockModel = viewModel.Blocks.First(static block => block.Kind == MarkdownBlockKind.Paragraph);
@@ -1210,23 +1209,27 @@ public class MarkdownLivePreviewEditorUiTests
             {
                 window.Show();
                 RunLayoutJobs();
-                viewModel.SetPointerOverBlock(blockModel, true);
-                RunLayoutJobs();
-                var toolbar = FindControlByAutomationId<Border>(view, blockModel.ContextToolbarAutomationId);
+                var menu = OpenBlockContextMenu(view, blockModel);
                 var handle = FindControlByAutomationId<ToggleButton>(view, blockModel.MoveHandleAutomationId);
-                var toolbarOrigin = toolbar.TranslatePoint(default, view)
-                    ?? throw new InvalidOperationException("Toolbar position could not be resolved.");
+                var checklist = MenuCommand(menu, "FeedBlockChecklist");
+                checklist.BringIntoView();
+                RunLayoutJobs();
 
                 using (Assert.Multiple())
                 {
-                    await Assert.That(toolbarOrigin.X).IsGreaterThanOrEqualTo(0);
-                    await Assert.That(toolbarOrigin.X + toolbar.Bounds.Width).IsLessThanOrEqualTo(view.Bounds.Width + 0.5);
-                    await Assert.That(handle.Bounds.Width).IsGreaterThanOrEqualTo(24);
-                    await Assert.That(toolbar.GetVisualDescendants().OfType<Button>().Count()).IsEqualTo(4);
-                    await Assert.That(toolbarOrigin.X).IsLessThanOrEqualTo(32);
-                    await Assert.That(blockModel.CanMoveUpFromToolbar).IsFalse();
-                    await Assert.That(blockModel.CanMoveDownFromToolbar).IsTrue();
+                    await Assert.That(menu.IsOpen).IsTrue();
+                    await Assert.That(menu.Bounds.Width).IsGreaterThan(0);
+                    await Assert.That(menu.Bounds.Width).IsLessThanOrEqualTo(width);
+                    await Assert.That(handle.Bounds.Width + handle.Margin.Left + handle.Margin.Right).IsEqualTo(20);
+                    await Assert.That(handle.Bounds.Height).IsGreaterThanOrEqualTo(24);
+                    await Assert.That(checklist.IsEffectivelyVisible).IsTrue();
+                    await Assert.That(checklist.Bounds.Height).IsGreaterThan(0);
+                    await Assert.That(checklist.IsEnabled).IsTrue();
+                    await Assert.That(MenuCommand(menu, "FeedBlockMoveUp").IsEnabled).IsFalse();
+                    await Assert.That(MenuCommand(menu, "FeedBlockMoveDown").IsEnabled).IsTrue();
+                    await Assert.That(viewModel.ActiveBlock).IsNull();
                 }
+                menu.Close();
             }
             finally
             {
@@ -1236,13 +1239,15 @@ public class MarkdownLivePreviewEditorUiTests
     }
 
     [Test]
-    public async Task TechnicalBlocks_DisableSemanticToolbarActions()
+    public async Task TechnicalBlocksContextMenuDisablesAllBlockMutations()
     {
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             using var viewModel = new MarkdownLivePreviewEditorViewModel();
-            viewModel.SelectionActionAsync = (_, _, _, _) => Task.CompletedTask;
+            viewModel.CommitBlockAsync = (_, _) => throw new InvalidOperationException("Technical blocks must not save text.");
+            viewModel.MoveBlocksAsync = (_, _) => throw new InvalidOperationException("Technical blocks must not move.");
+            viewModel.SelectionActionAsync = (_, _, _, _) => throw new InvalidOperationException("Technical blocks must not invoke semantic actions.");
             viewModel.Load(new MarkdownLiveDocumentSnapshot("---\ntitle: demo\n---\n\nText\n", "revision-1", false, "note.md"));
             var rawIndex = viewModel.Blocks.Count;
             viewModel.Blocks.Add(new MarkdownLiveBlockViewModel(
@@ -1269,13 +1274,10 @@ public class MarkdownLivePreviewEditorUiTests
 
                 foreach (var block in technicalBlocks)
                 {
-                    viewModel.SetPointerOverBlock(block, true);
-                    RunLayoutJobs();
-                    var toolbar = FindControlByAutomationId<Border>(view, block.ContextToolbarAutomationId);
-                    var more = toolbar.GetVisualDescendants()
-                        .OfType<Button>()
-                        .Single(button => string.Equals(button.Content as string, "⋯", StringComparison.Ordinal));
-                    var toolbarButtons = toolbar.GetVisualDescendants().OfType<Button>().ToArray();
+                    viewModel.ClearMoveSelection();
+                    // Service/blank blocks can be hidden from reading, but their routed
+                    // context request must never expose a mutation of another block.
+                    var menu = OpenBlockContextMenu(view, block);
 
                     using (Assert.Multiple())
                     {
@@ -1284,12 +1286,14 @@ public class MarkdownLivePreviewEditorUiTests
                         await Assert.That(block.CanMoveDownFromToolbar).IsFalse();
                         await Assert.That(block.CanTransformFromToolbar).IsFalse();
                         await Assert.That(block.CanOpenActionsFromToolbar).IsFalse();
-                        await Assert.That(more.IsEnabled).IsFalse();
-                        await Assert.That(toolbarButtons.Length).IsEqualTo(4);
-                        await Assert.That(toolbarButtons.All(static button => !button.IsEnabled)).IsTrue();
+                        foreach (var key in new[] { "FeedToolbarTask", "FeedToolbarNote", "FeedSearchArea",
+                                     "FeedBlockMoveUp", "FeedBlockMoveDown", "FeedBlockPlainText",
+                                     "FeedBlockBulletedList", "FeedBlockNumberedList", "FeedBlockChecklist", "FeedBlockConvertToArea" })
+                            await Assert.That(MenuCommand(menu, key).IsEnabled).IsFalse();
+                        await Assert.That(viewModel.ActiveBlock).IsNull();
+                        await Assert.That(viewModel.SelectedMoveBlockCount).IsEqualTo(0);
                     }
-
-                    viewModel.SetPointerOverBlock(block, false);
+                    menu.Close();
                 }
             }
             finally
@@ -1300,7 +1304,7 @@ public class MarkdownLivePreviewEditorUiTests
     }
 
     [Test]
-    public async Task MoreActionsFlyout_KeepsToolbarVisibleUntilActionAndClose()
+    public async Task ContextMenuKeepsHeadingTargetWhenPointerLeavesAndConvertsExactlyThatBlock()
     {
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
@@ -1308,6 +1312,7 @@ public class MarkdownLivePreviewEditorUiTests
             MarkdownSelectionSemanticAction? invokedAction = null;
             IReadOnlyList<int>? invokedIndices = null;
             using var viewModel = new MarkdownLivePreviewEditorViewModel();
+            viewModel.CommitBlockAsync = (_, _) => throw new InvalidOperationException("Opening a heading action must not save text.");
             viewModel.SelectionActionAsync = (_, indices, action, _) =>
             {
                 invokedIndices = indices;
@@ -1318,56 +1323,48 @@ public class MarkdownLivePreviewEditorUiTests
             var block = viewModel.Blocks.Single(static candidate => candidate.Kind == MarkdownBlockKind.Heading);
             var view = new MarkdownBlockLivePreviewEditor { DataContext = viewModel };
             var window = new Window { Width = 720, Height = 320, Content = view };
-            MenuFlyout? flyout = null;
+            ContextMenu? menu = null;
             try
             {
                 window.Show();
                 RunLayoutJobs();
-                viewModel.SetPointerOverBlock(block, true);
-                RunLayoutJobs();
-                var toolbar = FindControlByAutomationId<Border>(view, block.ContextToolbarAutomationId);
-                var more = toolbar.GetVisualDescendants()
-                    .OfType<Button>()
-                    .Single(button => string.Equals(button.Content as string, "⋯", StringComparison.Ordinal));
-                flyout = more.Flyout as MenuFlyout
-                    ?? throw new InvalidOperationException("More actions button should use a MenuFlyout.");
-
-                more.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, more));
-                flyout.ShowAt(more);
-                RunLayoutJobs();
+                menu = OpenBlockContextMenu(view, block);
                 viewModel.SetPointerOverBlock(block, false);
                 RunLayoutJobs();
 
                 using (Assert.Multiple())
                 {
-                    await Assert.That(block.IsToolbarFlyoutOpen).IsTrue();
-                    await Assert.That(toolbar.IsEffectivelyVisible).IsTrue();
+                    await Assert.That(menu.IsOpen).IsTrue();
+                    await Assert.That(block.IsMoveSelected).IsTrue();
+                    await Assert.That(viewModel.ActiveBlock).IsNull();
                     await Assert.That(block.MoveHandleIdleOpacity).IsEqualTo(1);
                 }
 
-                var convertArea = flyout.Items.OfType<MenuItem>().Single(item =>
+                var convertArea = menu.Items.OfType<MenuItem>().Single(item =>
                     Equals(item.Header, Unlimotion.ViewModel.Localization.Localization.Get("FeedBlockConvertToArea")));
+                await Assert.That(convertArea.IsEnabled).IsTrue();
                 convertArea.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent, convertArea));
                 await Assert.That(WaitFor(() => invokedAction == MarkdownSelectionSemanticAction.ConvertHeadingToArea)).IsTrue();
                 await Assert.That(invokedIndices).IsNotNull();
                 await Assert.That(invokedIndices!).IsEquivalentTo([block.Index]);
 
-                flyout.Hide();
+                menu.Close();
                 RunLayoutJobs();
                 using (Assert.Multiple())
                 {
-                    await Assert.That(block.IsToolbarFlyoutOpen).IsFalse();
+                    await Assert.That(menu.IsOpen).IsFalse();
                     await Assert.That(block.IsMoveSelected).IsTrue();
-                    await Assert.That(toolbar.IsEffectivelyVisible).IsTrue();
+                    await Assert.That(block.MoveHandleIdleOpacity).IsEqualTo(1);
                 }
 
                 viewModel.ClearMoveSelection();
+                window.Focus();
                 RunLayoutJobs();
-                await Assert.That(toolbar.IsEffectivelyVisible).IsFalse();
+                await Assert.That(block.MoveHandleIdleOpacity).IsEqualTo(0);
             }
             finally
             {
-                flyout?.Hide();
+                menu?.Close();
                 window.Close();
             }
         }, CancellationToken.None);
@@ -1427,7 +1424,7 @@ public class MarkdownLivePreviewEditorUiTests
     }
 
     [Test]
-    public async Task HoveringBlock_ShowsMoveHandleAndInlineToolbarWithoutChangingGeometry()
+    public async Task HoveringBlockShowsOnlyMoveHandleWithoutEditingOrChangingGeometry()
     {
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
@@ -1449,18 +1446,18 @@ public class MarkdownLivePreviewEditorUiTests
                 viewModel.SetPointerOverBlock(blockModel, true);
                 RunLayoutJobs();
 
-                var toolbar = FindControlByAutomationId<Border>(
-                    view,
-                    $"MarkdownLivePreview-BlockToolbar-{blockModel.Index}");
                 using (Assert.Multiple())
                 {
                     await Assert.That(handle.Opacity).IsEqualTo(1);
-                    await Assert.That(toolbar.IsEffectivelyVisible).IsTrue();
+                    await Assert.That(block.ContextMenu?.IsOpen == true).IsFalse();
+                    await Assert.That(view.GetVisualDescendants().Any(control =>
+                        AutomationProperties.GetAutomationId(control) == blockModel.ContextToolbarAutomationId)).IsFalse();
                     await Assert.That(Math.Abs(block.Bounds.Height - before)).IsLessThanOrEqualTo(0.5);
                     await Assert.That(viewModel.SelectedMoveBlockCount).IsEqualTo(0);
+                    await Assert.That(viewModel.ActiveBlock).IsNull();
                 }
                 var container = block.FindAncestorOfType<Avalonia.Controls.Presenters.ContentPresenter>()!;
-                await Assert.That(container.GetValue(Panel.ZIndexProperty)).IsEqualTo(30);
+                await Assert.That(container.GetValue(Panel.ZIndexProperty)).IsEqualTo(0);
                 viewModel.SetPointerOverBlock(blockModel, false);
                 RunLayoutJobs();
                 await Assert.That(container.GetValue(Panel.ZIndexProperty)).IsEqualTo(0);
@@ -1497,7 +1494,7 @@ public class MarkdownLivePreviewEditorUiTests
     }
 
     [Test]
-    public async Task RoutedPointerOverModalOverlay_DoesNotRevealUnderlyingBlockToolbar()
+    public async Task ModalOverlayContextRequestDoesNotTargetUnderlyingBlock()
     {
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
@@ -1515,19 +1512,36 @@ public class MarkdownLivePreviewEditorUiTests
                 RunLayoutJobs();
                 var preview = FindControlByAutomationId<MarkdownBlockPreviewControl>(view, "MarkdownLivePreview-BlockPreview-0");
                 var point = preview.TranslatePoint(new Point(Math.Min(40, preview.Bounds.Width / 2), preview.Bounds.Height / 2), window)!.Value;
-                // Test routing independently of Headless's compositor hit-test fallback panel.
-                var pointer = new Pointer(1, PointerType.Mouse, true);
-                var properties = new PointerPointProperties(RawInputModifiers.None, PointerUpdateKind.Other);
-                preview.RaiseEvent(new PointerEventArgs(InputElement.PointerMovedEvent, preview, pointer,
-                    window, point, 0, properties, KeyModifiers.None));
+                // Enter/exit now owns hover; a fabricated PointerMoved event no longer
+                // exercises the production route. Drive the actual hit-tested pointer.
+                window.MouseMove(new Point(1, 1));
+                window.MouseMove(point);
                 RunLayoutJobs();
-                await Assert.That(model.Blocks[0].IsContextToolbarVisible).IsTrue();
+                await Assert.That(model.Blocks[0].IsPointerOverBlock).IsTrue();
+                var menu = OpenBlockContextMenu(view, model.Blocks[0]);
+                await Assert.That(menu.IsOpen).IsTrue();
+                menu.Close();
+                model.ClearMoveSelection();
                 cover.IsVisible = true;
                 RunLayoutJobs();
-                cover.RaiseEvent(new PointerEventArgs(InputElement.PointerMovedEvent, cover, pointer,
-                    window, point + new Vector(1, 0), 1, properties, KeyModifiers.None));
+                var coveredPoint = point + new Vector(1, 0);
+                // Refresh the headless composition hit-test snapshot after showing the cover.
+                // Layout jobs alone can leave the previously rendered preview as the hit target.
+                using (var frame = window.CaptureRenderedFrame()) { }
+                // Do not send the next pointer gesture until the modal cover actually owns it.
+                await Assert.That(WaitFor(() => window.InputHitTest(coveredPoint) is { } coveredHit
+                    && (ReferenceEquals(coveredHit, cover)
+                        || coveredHit is Visual coveredVisual && coveredVisual.GetVisualAncestors().Contains(cover))))
+                    .IsTrue();
+                window.MouseMove(coveredPoint);
+                window.MouseDown(coveredPoint, MouseButton.Right);
+                window.MouseUp(coveredPoint, MouseButton.Right);
                 RunLayoutJobs();
-                await Assert.That(model.Blocks[0].IsContextToolbarVisible).IsFalse();
+                await Assert.That(model.Blocks[0].IsPointerOverBlock).IsFalse();
+                await Assert.That(menu.IsOpen).IsFalse();
+                await Assert.That(cover.ContextMenu).IsNull();
+                await Assert.That(model.SelectedMoveBlockCount).IsEqualTo(0);
+                await Assert.That(model.ActiveBlock).IsNull();
             }
             finally { window.Close(); }
         }, CancellationToken.None);
@@ -1598,6 +1612,17 @@ public class MarkdownLivePreviewEditorUiTests
             }
         }, CancellationToken.None);
     }
+
+    private static ContextMenu OpenBlockContextMenu(Control root, MarkdownLiveBlockViewModel block)
+    {
+        var row = FindControlByAutomationId<Grid>(root, block.BlockAutomationId);
+        row.RaiseEvent(new ContextRequestedEventArgs { Source = row });
+        RunLayoutJobs();
+        return row.ContextMenu ?? throw new InvalidOperationException("The block context request did not create a native ContextMenu.");
+    }
+
+    private static MenuItem MenuCommand(ContextMenu menu, string key) => menu.Items.OfType<MenuItem>().Single(item =>
+        Equals(item.Header, Unlimotion.ViewModel.Localization.Localization.Get(key)));
 
     private static T FindControlByAutomationId<T>(Control root, string automationId)
         where T : Control
