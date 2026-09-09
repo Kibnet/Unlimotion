@@ -457,6 +457,16 @@ UI video evidence: до изменения записать current behavior dee
 - Пользователь разрешил «Закоммить что нужно». Включаются production, профильные regression tests, текущая SPEC и отдельная адаптация test navigation к existing overflow. Commit не означает полную приёмку10/10, публикацию или разрешение push.
 - Local-only output, видео/PNG, диагностика, промежуточные build folders и посторонняя SPEC про emoji не включаются.
 
+### Rebase на актуальный main, 2026-09-09
+
+- По запросу «Отребейзь на мейн» выполнен fetch и rebase12 коммитов на `origin/main`=`3aa24c8f` в worktree `eff3`. Исходный tip=`03abc8c1`; после переноса=`46765ddf`. Push не выполнялся.
+- Единственный конфликт — `TaskItemViewModel`: сохранён новый field-level pending-edit механизм main. `IsGoal` включён в scalar tracking, `AreaIds` — в collection tracking; оба включены в merge, field enumeration и pending mask. Это сохраняет поведение ленты вместе с защитой локальных правок из main. Остальные11 коммитов перенесены без изменений patch по range-diff.
+- Добавлены2 варианта regression test для stale storage update и расширена UI-проверка обратного переключения цели/удаления области, включая сохранённый snapshot, checkbox и chips.
+- Обычная solution build остановилась на NETSDK1147: в SDK10.0.400 отсутствует `wasm-tools` для Android/iOS. Обычная test-project build затем упёрлась в DLL, занятые пользовательскими Unlimotion/Visual Studio; остановлена. Эти процессы и workloads не изменялись.
+- Fallback: `dotnet build src/Unlimotion.Test --nologo --artifacts-path output/rebase-main-2026-09-09/artifacts` —0 ошибок,96 предупреждений,51.74s. Это успешная изолированная сборка desktop/test зависимостей, не полная solution build.
+- На собранной DLL с `--treenode-filter /*/*/<Class>/* --minimum-expected-tests 1 --maximum-parallel-tests 1 --output Detailed`: `TaskItemViewModelStorageUpdateTests`14/14, `FeedAuxiliaryUiTests`12/12, `FeedReadingPolishUiTests`14/14 — PASS. Всего40 проверок, из них26 UI; без пропусков. Логи local-only: `output/rebase-main-2026-09-09/`.
+- Self-review: проверены scalar/collection paths, suppression при storage hydration, независимость authoritative полей, сохранение локальных pending fields и обратное снятие классификации. No additional findings. Full main/Headless/FlaUI/CI после rebase не запускались; прежние full-run результаты не выдаются за проверку этой истории.
+
 ## Approval
 SPEC и шесть правок авторского ревью подтверждены пользователем фразой «Спеку подтверждаю». Макет v2 подтверждён 2026-09-06 ответом «Да, выглядит хорошо». Production EXEC разрешён; commit/push не запрошены.
 
