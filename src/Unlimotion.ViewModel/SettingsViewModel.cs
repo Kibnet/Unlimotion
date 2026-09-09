@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using System.Windows.Input;
 using Microsoft.Extensions.Configuration;
 using PropertyChanged;
+using ReactiveUI;
 using Unlimotion.ViewModel.Localization;
 using L10n = Unlimotion.ViewModel.Localization.Localization;
 
@@ -38,6 +39,8 @@ public class SettingsViewModel
     private readonly IConfiguration _noteVaultSettings;
     private readonly IConfiguration _gitSettings;
     private readonly IConfiguration _appearanceSettings;
+    private readonly IConfiguration _feedAppearanceSettings;
+    private readonly AreaRootTaskSettingsStore _areaRootTaskSettings;
     private readonly IConfiguration _taskOutlineClipboardSettings;
     private readonly IConfiguration _taskTreeExpansionStateSettings;
     private readonly IConfiguration _updateSettings;
@@ -59,6 +62,7 @@ public class SettingsViewModel
     private string? _noteVaultRootPath;
     private TimeSpan _noteDayBoundary;
     private bool _isFeedEnabled;
+    private string _displayDateFormatDraft = FeedDateDisplaySettings.DefaultFormat;
     private string _noteDailyFileNameFormatDraft = DefaultNoteDailyFileNameFormat;
     private string _appliedNoteDailyFileNameFormat = DefaultNoteDailyFileNameFormat;
     // Every Feed session replacement makes the original Settings operation
@@ -122,6 +126,8 @@ public class SettingsViewModel
         _noteVaultSettings = configuration.GetSection(NoteVaultSectionName);
         _gitSettings = configuration.GetSection("Git");
         _appearanceSettings = configuration.GetSection(AppearanceSettings.SectionName);
+        _feedAppearanceSettings = configuration.GetSection(FeedDateDisplaySettings.SectionName);
+        _areaRootTaskSettings = new AreaRootTaskSettingsStore(configuration);
         _taskOutlineClipboardSettings = configuration.GetSection(TaskOutlineClipboardSectionName);
         _taskTreeExpansionStateSettings = configuration.GetSection(TaskTreeExpansionStateSectionName);
         _updateSettings = configuration.GetSection(ApplicationUpdateSettings.SectionName);
@@ -134,6 +140,11 @@ public class SettingsViewModel
         _localization.SetLanguage(_appearanceSettings.GetSection(AppearanceSettings.LanguageKey).Get<string>());
         NewTaskSpaceName = _localization.Get("TaskSpacesDefaultName");
         _localization.CultureChanged += (_, __) => RefreshLocalizedText();
+
+        DisplayDateFormat = FeedDateDisplaySettings.NormalizeFormat(
+            _feedAppearanceSettings[FeedDateDisplaySettings.FormatKey]);
+        _displayDateFormatDraft = DisplayDateFormat;
+        ResetDisplayDateFormatCommand = ReactiveCommand.Create(ResetDisplayDateFormat);
 
         _themeMode = AppearanceSettings.ParseThemeMode(
             _appearanceSettings.GetSection(AppearanceSettings.ThemeKey).Get<string>());
@@ -301,6 +312,15 @@ public class SettingsViewModel
         IsConflictResolutionMode &&
         TaskSpaces.Any(space =>
             space.IsActive && string.Equals(space.SourceId, sourceId, StringComparison.Ordinal));
+
+    public string? GetAreaRootTaskId(string sourceId, string vaultId, string areaId) =>
+        _areaRootTaskSettings.GetRootTaskId(sourceId, vaultId, areaId);
+
+    public Task SetAreaRootTaskIdAsync(string sourceId, string vaultId, string areaId, string? rootId)
+    {
+        _areaRootTaskSettings.SetRootTaskId(sourceId, vaultId, areaId, rootId);
+        return Task.CompletedTask;
+    }
 
     public void ReloadActiveTaskSpaceSettings()
     {
@@ -544,6 +564,53 @@ public class SettingsViewModel
         nameof(CanApplyNoteDailyFileNameFormat),
         nameof(CanReloadExternalNoteDailyFileNameFormat))]
     public bool IsExternalNoteVaultSupported => _isExternalNoteVaultSupported;
+
+    public string DisplayDateFormat { get; private set; } = FeedDateDisplaySettings.DefaultFormat;
+
+    public string DisplayDateFormatDraft
+    {
+        get => _displayDateFormatDraft;
+        set
+        {
+            var draft = value ?? string.Empty;
+            if (_displayDateFormatDraft == draft) return;
+            _displayDateFormatDraft = draft;
+            if (FeedDateDisplaySettings.IsValidFormat(draft) && DisplayDateFormat != draft)
+            {
+                _feedAppearanceSettings.GetSection(FeedDateDisplaySettings.FormatKey).Set(draft);
+                DisplayDateFormat = draft;
+                DisplayDatePresentationVersion++;
+            }
+            RefreshDisplayDateFormatPresentation();
+        }
+    }
+
+    public int DisplayDatePresentationVersion { get; private set; }
+    public string DisplayDateCultureName => _localization.CurrentCulture.Name;
+    public string DisplayDateFormatPreview { get; private set; } = string.Empty;
+    [AlsoNotifyFor(nameof(IsDisplayDateFormatValidationVisible))]
+    public string? DisplayDateFormatValidationMessage { get; private set; }
+    public bool IsDisplayDateFormatValidationVisible => DisplayDateFormatValidationMessage is not null;
+    public ICommand ResetDisplayDateFormatCommand { get; }
+
+    public void ResetDisplayDateFormat()
+    {
+        DisplayDateFormatDraft = FeedDateDisplaySettings.DefaultFormat;
+        if (_feedAppearanceSettings[FeedDateDisplaySettings.FormatKey] != FeedDateDisplaySettings.DefaultFormat)
+            _feedAppearanceSettings.GetSection(FeedDateDisplaySettings.FormatKey).Set(FeedDateDisplaySettings.DefaultFormat);
+    }
+
+    public string FormatFeedDate(DateOnly date) =>
+        FeedDateDisplaySettings.Format(date, DisplayDateFormat, _localization.CurrentCulture);
+
+    private void RefreshDisplayDateFormatPresentation()
+    {
+        var valid = FeedDateDisplaySettings.IsValidFormat(DisplayDateFormatDraft);
+        DisplayDateFormatValidationMessage = valid ? null : _localization.Get("FeedDisplayDateFormatInvalid");
+        DisplayDateFormatPreview = valid
+            ? _localization.Get("FeedDisplayDateFormatPreview") + FormatFeedDate(DateOnly.FromDateTime(DateTime.Now))
+            : string.Empty;
+    }
 
     [AlsoNotifyFor(
         nameof(HasUnappliedNoteDailyFileNameFormatDraft),
@@ -1811,6 +1878,8 @@ public class SettingsViewModel
 
     private void RefreshLocalizedText()
     {
+        RefreshDisplayDateFormatPresentation();
+        DisplayDatePresentationVersion++;
         RefreshLanguageOptions();
         RefreshBackupAuthMode();
         RefreshStorageStatusText();

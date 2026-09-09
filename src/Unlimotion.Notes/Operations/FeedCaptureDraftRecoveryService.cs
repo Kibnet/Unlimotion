@@ -5,11 +5,13 @@ using Unlimotion.Notes.Vault;
 namespace Unlimotion.Notes.Operations;
 
 /// <summary>A restored draft keeps its original identity even when saved on another day.</summary>
-public sealed class FeedCaptureDraftRecoveryService(INoteVault vault, IFeedTaskConversionJournal journal)
+public sealed class FeedCaptureDraftRecoveryService(INoteVault vault, IFeedTaskConversionJournal journal,
+    Func<FeedTaskSourceIdentity?>? taskSourceIdentityProvider = null)
 {
     public async Task SaveAsync(FeedTaskConversionRecord operation, DailyNoteNaming naming, DateOnly today,
         string capture, AreaReference? area, CancellationToken cancellationToken = default)
     {
+        FeedTaskSourceIdentity.RequireCurrent(operation.TaskSourceIdentity, taskSourceIdentityProvider);
         if (operation.CaptureIntent is null || operation.RecoveryResolution != FeedOperationRecoveryResolution.KeptBoth)
             throw new InvalidOperationException("Only a retained capture draft may be saved as a note.");
         if (operation.RecoveredCaptureWrite is { } pending && (pending.CaptureText != capture || pending.Area != area))
@@ -33,6 +35,7 @@ public sealed class FeedCaptureDraftRecoveryService(INoteVault vault, IFeedTaskC
 
     public async Task ResumeAsync(FeedTaskConversionRecord operation, CancellationToken cancellationToken = default)
     {
+        FeedTaskSourceIdentity.RequireCurrent(operation.TaskSourceIdentity, taskSourceIdentityProvider);
         var write = operation.RecoveredCaptureWrite ?? throw new InvalidDataException("The retained draft has no write intent.");
         var source = await vault.ReadAsync(write.RelativePath, cancellationToken).ConfigureAwait(false);
         var outputRevision = VaultRevision.Compute(VaultRevision.Encode(write.Text, write.HasUtf8Bom));
@@ -40,6 +43,7 @@ public sealed class FeedCaptureDraftRecoveryService(INoteVault vault, IFeedTaskC
         {
             if (source?.Revision != write.ExpectedRevision)
                 throw new VaultRevisionConflictException(write.RelativePath, write.ExpectedRevision, source?.Revision);
+            FeedTaskSourceIdentity.RequireCurrent(operation.TaskSourceIdentity, taskSourceIdentityProvider);
             if (source is null)
                 await vault.CreateAsync(write.RelativePath, write.Text, write.HasUtf8Bom, cancellationToken).ConfigureAwait(false);
             else

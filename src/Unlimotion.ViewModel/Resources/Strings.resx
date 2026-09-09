@@ -797,4 +797,45 @@
   <data name="FeedReturnDateFormat" xml:space="preserve"><value>Start of entry for {0} · Alt+Home</value></data>
   <data name="FeedServiceData" xml:space="preserve"><value>Service data</value></data>
   <data name="FeedServiceDataAreasFormat" xml:space="preserve"><value>Service data · areas: {0}</value></data>
+  <data name="FeedDisplayDateFormat" xml:space="preserve">
+    <value>Feed date display format</value>
+  </data>
+  <data name="FeedDisplayDateFormatHint" xml:space="preserve">
+    <value>.NET date format, for example d MMMM yyyy, dddd. Applies to every workspace and does not change note filenames.</value>
+  </data>
+  <data name="FeedDisplayDateFormatPreview" xml:space="preserve">
+    <value>Preview: </value>
+  </data>
+  <data name="FeedDisplayDateFormatInvalid" xml:space="preserve">
+    <value>Enter a valid single-line date format (up to 128 characters). The last valid format remains active.</value>
+  </data>
+  <data name="FeedDisplayDateFormatReset" xml:space="preserve">
+    <value>Use default</value>
+  </data>
+  <data name="AreaRootTaskLabel" xml:space="preserve"><value>Root task</value></data>
+  <data name="AreaRootTaskHint" xml:space="preserve"><value>Tasks from this area's notes are created inside the selected task.</value></data>
+  <data name="AreaChooseRootTask" xml:space="preserve"><value>Choose task</value></data>
+  <data name="AreaClearRootTask" xml:space="preserve"><value>Clear root task</value></data>
+  <data name="AreaRootTaskUnavailable" xml:space="preserve"><value>The root task is unavailable. Choose another task or remove it from the parents.</value></data>
+  <data name="FeedTaskSourceMismatch" xml:space="preserve"><value>Open the original task space to continue this operation.</value></data>
+  <data name="FeedSelectAdjacentBlocks" xml:space="preserve"><value>Select adjacent blocks for this operation.</value></data>
+  <data name="FeedSelectOneNote" xml:space="preserve"><value>Select blocks from one note for this operation.</value></data>
+  <data name="FeedAreaSettings" xml:space="preserve"><value>Area settings…</value></data>
+  <data name="FeedBlockPlainText" xml:space="preserve"><value>Plain text</value></data>
+  <data name="FeedCopyPath" xml:space="preserve"><value>Copy file path</value></data>
+  <data name="AreaRootTaskSettingsInvalid" xml:space="preserve"><value>Area root task settings could not be read. Existing settings were not changed.</value></data>
+  <data name="FeedApplyAreaParents" xml:space="preserve"><value>Apply area parents</value></data>
+  <data name="FeedAreaUnsavedDraft" xml:space="preserve"><value>Save or discard the current area's changes before switching.</value></data>
+  <data name="FeedDiscardAreaChanges" xml:space="preserve"><value>Discard changes</value></data>
+  <data name="Cut" xml:space="preserve"><value>Cut</value></data>
+  <data name="Copy" xml:space="preserve"><value>Copy</value></data>
+  <data name="Paste" xml:space="preserve"><value>Paste</value></data>
+  <data name="SelectAll" xml:space="preserve"><value>Select all</value></data>
+  <data name="FeedLegacySourceConfirm" xml:space="preserve"><value>I confirm this operation was created in the selected task space</value></data>
+  <data name="FeedLegacyVerifySource" xml:space="preserve"><value>Verify task source</value></data>
+  <data name="FeedLegacySourceVerified" xml:space="preserve"><value>Task source verified. You can now finish the operation.</value></data>
+  <data name="FeedLegacySourceUnverifiable" xml:space="preserve"><value>No task with the original operation metadata was found in this space. Automatic recovery is unavailable.</value></data>
+  <data name="FeedBlockMoveToArea" xml:space="preserve"><value>Move to area…</value></data>
+  <data name="FeedDocumentMissing" xml:space="preserve"><value>The file is missing. The open text is retained; unsaved changes remain available in recovery.</value></data>
+  <data name="FeedDocumentConflictPending" xml:space="preserve"><value>The file changed outside the app. Your draft is retained; resolve the conflict before saving.</value></data>
 </root>

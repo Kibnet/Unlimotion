@@ -797,4 +797,45 @@
   <data name="FeedReturnDateFormat" xml:space="preserve"><value>К началу записи за {0} · Alt+Home</value></data>
   <data name="FeedServiceData" xml:space="preserve"><value>Служебные данные</value></data>
   <data name="FeedServiceDataAreasFormat" xml:space="preserve"><value>Служебные данные · областей: {0}</value></data>
+  <data name="FeedDisplayDateFormat" xml:space="preserve">
+    <value>Формат отображения даты в ленте</value>
+  </data>
+  <data name="FeedDisplayDateFormatHint" xml:space="preserve">
+    <value>Формат даты .NET, например d MMMM yyyy, dddd. Общий для всех пространств, не меняет имена файлов заметок.</value>
+  </data>
+  <data name="FeedDisplayDateFormatPreview" xml:space="preserve">
+    <value>Предпросмотр: </value>
+  </data>
+  <data name="FeedDisplayDateFormatInvalid" xml:space="preserve">
+    <value>Введите корректный формат даты в одну строку (до 128 символов). Последний корректный формат остаётся действующим.</value>
+  </data>
+  <data name="FeedDisplayDateFormatReset" xml:space="preserve">
+    <value>По умолчанию</value>
+  </data>
+  <data name="AreaRootTaskLabel" xml:space="preserve"><value>Корневая задача</value></data>
+  <data name="AreaRootTaskHint" xml:space="preserve"><value>Задачи из заметок этой области создаются внутри выбранной задачи.</value></data>
+  <data name="AreaChooseRootTask" xml:space="preserve"><value>Выбрать задачу</value></data>
+  <data name="AreaClearRootTask" xml:space="preserve"><value>Убрать корневую задачу</value></data>
+  <data name="AreaRootTaskUnavailable" xml:space="preserve"><value>Корневая задача недоступна. Выберите другую задачу или уберите её из родителей.</value></data>
+  <data name="FeedTaskSourceMismatch" xml:space="preserve"><value>Откройте исходное пространство задач для продолжения этой операции.</value></data>
+  <data name="FeedSelectAdjacentBlocks" xml:space="preserve"><value>Для этой операции выберите соседние блоки.</value></data>
+  <data name="FeedSelectOneNote" xml:space="preserve"><value>Для этой операции выберите блоки одной заметки.</value></data>
+  <data name="FeedAreaSettings" xml:space="preserve"><value>Настройки области…</value></data>
+  <data name="FeedBlockPlainText" xml:space="preserve"><value>Обычный текст</value></data>
+  <data name="FeedCopyPath" xml:space="preserve"><value>Копировать путь к файлу</value></data>
+  <data name="AreaRootTaskSettingsInvalid" xml:space="preserve"><value>Не удалось прочитать настройки корневых задач областей. Существующие настройки не изменены.</value></data>
+  <data name="FeedApplyAreaParents" xml:space="preserve"><value>Применить родителей областей</value></data>
+  <data name="FeedAreaUnsavedDraft" xml:space="preserve"><value>Сохраните или отмените изменения текущей области перед переходом.</value></data>
+  <data name="FeedDiscardAreaChanges" xml:space="preserve"><value>Не сохранять</value></data>
+  <data name="Cut" xml:space="preserve"><value>Вырезать</value></data>
+  <data name="Copy" xml:space="preserve"><value>Копировать</value></data>
+  <data name="Paste" xml:space="preserve"><value>Вставить</value></data>
+  <data name="SelectAll" xml:space="preserve"><value>Выделить всё</value></data>
+  <data name="FeedLegacySourceConfirm" xml:space="preserve"><value>Подтверждаю, что эта операция создана в выбранном пространстве задач</value></data>
+  <data name="FeedLegacyVerifySource" xml:space="preserve"><value>Проверить источник</value></data>
+  <data name="FeedLegacySourceVerified" xml:space="preserve"><value>Источник проверен. Теперь можно завершить операцию.</value></data>
+  <data name="FeedLegacySourceUnverifiable" xml:space="preserve"><value>В этом пространстве не найдена задача с метаданными исходной операции. Автоматическое восстановление недоступно.</value></data>
+  <data name="FeedBlockMoveToArea" xml:space="preserve"><value>Переместить в область…</value></data>
+  <data name="FeedDocumentMissing" xml:space="preserve"><value>Файл отсутствует. Открытый текст сохранён в окне; несохранённые изменения доступны в восстановлении.</value></data>
+  <data name="FeedDocumentConflictPending" xml:space="preserve"><value>Файл изменён вне приложения. Черновик сохранён; перед сохранением разрешите конфликт.</value></data>
 </root>

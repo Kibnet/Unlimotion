@@ -901,7 +901,10 @@ public class App : Application
         viewModel.Feed.IsExternalVaultSupported = settings.IsExternalNoteVaultSupported;
         viewModel.Feed.DayBoundary = settings.NoteDayBoundary;
         viewModel.Feed.TaskOwner = viewModel;
-        viewModel.Feed.TaskCreationTarget = new TaskStorageFeedTaskCreationTarget(() => viewModel.taskRepository);
+        Func<Unlimotion.Notes.Operations.FeedTaskSourceIdentity?> sourceIdentity = () =>
+            FeedTaskSourceIdentityFactory.Capture(_storageFactory?.SourceManager, viewModel.taskRepository);
+        viewModel.Feed.ConfigureTaskSourceParents(sourceIdentity, settings.GetAreaRootTaskId, settings.SetAreaRootTaskIdAsync);
+        viewModel.Feed.TaskCreationTarget = new TaskStorageFeedTaskCreationTarget(() => viewModel.taskRepository, sourceIdentity);
         viewModel.Feed.TaskResolver = taskId =>
             viewModel.taskRepository?.Tasks.Items.FirstOrDefault(task =>
                 string.Equals(task.Id, taskId, StringComparison.Ordinal));

@@ -168,6 +168,8 @@
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
+                            <views:TaskRelationsControl Draft="{Binding ReviewParents}" AutomationIdPrefix="FeedReviewDraftParents" />
+                            <Button Command="{Binding ApplyAreaParentDefaultsCommand}" Content="{DynamicResource FeedApplyAreaParents}" />
                             <Button HorizontalAlignment="Right"
                                     IsEnabled="{Binding CanCreateReviewTask}"
                                     Command="{Binding CreateTaskCommand}"

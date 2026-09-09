@@ -1,10 +1,10 @@
 using System;
-using System.Collections.Generic;
 using System.ComponentModel;
-using System.Linq;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
+using Avalonia.Controls.Primitives;
 using Avalonia.Data;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -133,17 +133,14 @@ public sealed class MarkdownBlockPreviewControl : ContentControl
         var panel = CreateInlinePanel(block);
         panel.Margin = new Thickness(0, block.HeadingLevel <= 2 ? 8 : 4, 0, 2);
         panel.VerticalAlignment = VerticalAlignment.Center;
-        foreach (var textBlock in panel.Children.OfType<TextBlock>())
+        panel.FontWeight = block.HeadingLevel <= 2 ? FontWeight.SemiBold : FontWeight.Medium;
+        panel.FontSize = block.HeadingLevel switch
         {
-            textBlock.FontWeight = block.HeadingLevel <= 2 ? FontWeight.SemiBold : FontWeight.Medium;
-            textBlock.FontSize = block.HeadingLevel switch
-            {
-                <= 1 => 22,
-                2 => 18,
-                3 => 16,
-                _ => 14
-            };
-        }
+            <= 1 => 22,
+            2 => 18,
+            3 => 16,
+            _ => 14
+        };
 
         return panel;
     }
@@ -215,11 +212,16 @@ public sealed class MarkdownBlockPreviewControl : ContentControl
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(4),
             Padding = new Thickness(10, 8),
-            Child = new SelectableTextBlock
+            Child = new ScrollViewer
             {
-                Text = block.PreviewText,
-                FontFamily = new FontFamily("Consolas, Menlo, monospace"),
-                TextWrapping = TextWrapping.Wrap
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                Content = new SelectableTextBlock
+                {
+                    Text = block.PreviewText,
+                    FontFamily = new FontFamily("Consolas, Menlo, monospace"),
+                    TextWrapping = TextWrapping.NoWrap
+                }
             }
         };
     }
@@ -246,27 +248,43 @@ public sealed class MarkdownBlockPreviewControl : ContentControl
         };
     }
 
-    private WrapPanel CreateInlinePanel(MarkdownLiveBlockViewModel block)
+    private TextBlock CreateInlinePanel(MarkdownLiveBlockViewModel block)
     {
-        var panel = new WrapPanel
+        var panel = new TextBlock
         {
-            Orientation = Orientation.Horizontal,
-            VerticalAlignment = VerticalAlignment.Center
+            TextWrapping = TextWrapping.Wrap,
+            VerticalAlignment = VerticalAlignment.Top
         };
 
-        if (block.InlineTokens.Count == 0)
+        if (block.InlineTokens.Count == 0
+            || block.InlineTokens.Count == 1 && block.InlineTokens[0].Kind == MarkdownInlineTokenKind.Text)
         {
-            panel.Children.Add(new TextBlock { Text = block.PreviewText, TextWrapping = TextWrapping.Wrap });
+            panel.Text = block.PreviewText;
             return panel;
         }
 
         var linkIndex = 0;
         foreach (var token in block.InlineTokens)
         {
-            panel.Children.Add(CreateInlineToken(block, token, linkIndex));
             if (token.Kind is MarkdownInlineTokenKind.Link or MarkdownInlineTokenKind.WikiLink)
             {
+                // Keep accessible controls in the same text flow: a newline in the
+                // preceding Run must finish the line before this link is arranged.
+                var content = CreateInlineToken(block, token, linkIndex);
+                panel.Inlines!.Add(new InlineUIContainer(content)
+                {
+                    BaselineAlignment = content is Grid ? BaselineAlignment.Center : BaselineAlignment.Baseline
+                });
                 linkIndex++;
+            }
+            else
+            {
+                var run = new Run(token.Text);
+                if (token.Kind == MarkdownInlineTokenKind.Emphasis)
+                    run.FontStyle = FontStyle.Italic;
+                if (token.Kind == MarkdownInlineTokenKind.Strong)
+                    run.FontWeight = FontWeight.SemiBold;
+                panel.Inlines!.Add(run);
             }
         }
 
@@ -283,7 +301,7 @@ public sealed class MarkdownBlockPreviewControl : ContentControl
             var target = token.Target;
             if (!token.IsSafeLink || string.IsNullOrWhiteSpace(target))
             {
-                var blocked = new TextBlock
+                var blocked = new InlineLabelTextBlock
                 {
                     Text = token.Text,
                     TextDecorations = CreateUnderlineDecoration(),
@@ -313,7 +331,7 @@ public sealed class MarkdownBlockPreviewControl : ContentControl
                 TextDecorations = CreateUnderlineDecoration(),
                 TextWrapping = TextWrapping.Wrap
             };
-            var button = new Button
+            var button = new InlineLinkButton
             {
                 Content = label,
                 Padding = new Thickness(0),
@@ -372,7 +390,7 @@ public sealed class MarkdownBlockPreviewControl : ContentControl
                 Source = reference
             });
 
-        var title = new Button
+        var title = new InlineLinkButton
         {
             Content = label,
             Padding = new Thickness(0),
@@ -480,4 +498,29 @@ public sealed class MarkdownBlockPreviewControl : ContentControl
         {
             new TextDecoration { Location = TextDecorationLocation.Underline }
         };
+
+    // Avalonia's embedded text run otherwise treats the control's bottom edge as
+    // its baseline, expanding the line and lifting neighboring text above links.
+    private sealed class InlineLinkButton : Button
+    {
+        protected override Type StyleKeyOverride => typeof(Button);
+
+        protected override Size MeasureOverride(Size availableSize)
+        {
+            var size = base.MeasureOverride(availableSize);
+            if (Content is TextBlock label)
+                TextBlock.SetBaselineOffset(this, label.TextLayout.Baseline + Padding.Top + BorderThickness.Top);
+            return size;
+        }
+    }
+
+    private sealed class InlineLabelTextBlock : TextBlock
+    {
+        protected override Size MeasureOverride(Size availableSize)
+        {
+            var size = base.MeasureOverride(availableSize);
+            BaselineOffset = TextLayout.Baseline;
+            return size;
+        }
+    }
 }
