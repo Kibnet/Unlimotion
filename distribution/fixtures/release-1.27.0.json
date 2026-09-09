@@ -1,0 +1,265 @@
+{
+  "schemaVersion": 1,
+  "product": "Unlimotion",
+  "release": {
+    "rawTag": "1.27.0",
+    "normalizedVersion": "1.27.0",
+    "sourceSha": "5aebebcb34eabe35fcdb7a47ff76ffdc2a7e16dd",
+    "publishedAt": "2026-07-14T21:47:00Z",
+    "assetCount": 22,
+    "releaseUrl": "https://github.com/Kibnet/Unlimotion/releases/tag/1.27.0"
+  },
+  "assets": [
+    {
+      "assetId": "windows-feed-legacy",
+      "role": "updaterFeed",
+      "name": "RELEASES",
+      "size": 81,
+      "sha256": "104262f93f718595e1d7b7845fd48497fca005e790bb3777031ffd6747dc19bc",
+      "createdAt": "2026-07-14T21:50:16Z",
+      "updatedAt": "2026-07-14T21:50:16Z",
+      "downloadUrl": "https://github.com/Kibnet/Unlimotion/releases/download/1.27.0/RELEASES"
+    },
+    {
+      "assetId": "linux-feed-json",
+      "role": "updaterFeed",
+      "name": "releases.linux.json",
+      "size": 262,
+      "sha256": "1ac4810e1de4d862febdade77b3a2b7b9053735767720be1888f96b86d37a5b4",
+      "createdAt": "2026-07-14T21:48:47Z",
+      "updatedAt": "2026-07-14T21:48:47Z",
+      "downloadUrl": "https://github.com/Kibnet/Unlimotion/releases/download/1.27.0/releases.linux.json"
+    },
+    {
+      "assetId": "macos-arm64-feed-json",
+      "role": "updaterFeed",
+      "name": "releases.osx-arm64.json",
+      "size": 266,
+      "sha256": "43540b3f6a10f4b04c147e03b1f9dd034906ff2f0fe36719d47b77cad87d2fe3",
+      "createdAt": "2026-07-14T21:48:43Z",
+      "updatedAt": "2026-07-14T21:48:43Z",
+      "downloadUrl": "https://github.com/Kibnet/Unlimotion/releases/download/1.27.0/releases.osx-arm64.json"
+    },
+    {
+      "assetId": "macos-x64-feed-json",
+      "role": "updaterFeed",
+      "name": "releases.osx.json",
+      "size": 260,
+      "sha256": "1c090e9bd47b1a5ad4e901777c71d43dbcce0b528ce50b77a81d19bb2bbf0a7a",
+      "createdAt": "2026-07-14T21:48:51Z",
+      "updatedAt": "2026-07-14T21:48:51Z",
+      "downloadUrl": "https://github.com/Kibnet/Unlimotion/releases/download/1.27.0/releases.osx.json"
+    },
+    {
+      "assetId": "windows-feed-json",
+      "role": "updaterFeed",
+      "name": "releases.win.json",
+      "size": 256,
+      "sha256": "4b43482a40b98d5acd87402efcc34d1a5fdcc9571eb7c022d5fa35f8dcfa320d",
+      "createdAt": "2026-07-14T21:50:16Z",
+      "updatedAt": "2026-07-14T21:50:16Z",
+      "downloadUrl": "https://github.com/Kibnet/Unlimotion/releases/download/1.27.0/releases.win.json"
+    },
+    {
+      "assetId": "android-arm64-apk",
+      "role": "userInstaller",
+      "name": "Unlimotion-1.27.0-android-arm64.apk",
+      "size": 57577028,
+      "sha256": "bc17ff84bc6f55bdeaeca428489459adeb06c441a72d3bca59f1d2bc5600f0ac",
+      "createdAt": "2026-07-14T21:53:04Z",
+      "updatedAt": "2026-07-14T21:53:06Z",
+      "downloadUrl": "https://github.com/Kibnet/Unlimotion/releases/download/1.27.0/Unlimotion-1.27.0-android-arm64.apk"
+    },
+    {
+      "assetId": "android-x64-apk",
+      "role": "userInstaller",
+      "name": "Unlimotion-1.27.0-android-x64.apk",
+      "size": 60668344,
+      "sha256": "9d8a245c6dc3a26ebb192ddbffb14a55670c04afdaca96052d30feb2b1b0b4f3",
+      "createdAt": "2026-07-14T21:53:04Z",
+      "updatedAt": "2026-07-14T21:53:06Z",
+      "downloadUrl": "https://github.com/Kibnet/Unlimotion/releases/download/1.27.0/Unlimotion-1.27.0-android-x64.apk"
+    },
+    {
+      "assetId": "windows-updater-package-x64",
+      "role": "updaterPackage",
+      "name": "Unlimotion-1.27.0-full.nupkg",
+      "size": 64474575,
+      "sha1": "3d218564c242ebc2237738b6c9d8445df16b5402",
+      "sha256": "42a3c68f5ad78464d71e4bfd010f39d4277ec54839728506a68f3ff952d1ab92",
+      "createdAt": "2026-07-14T21:50:11Z",
+      "updatedAt": "2026-07-14T21:50:13Z",
+      "downloadUrl": "https://github.com/Kibnet/Unlimotion/releases/download/1.27.0/Unlimotion-1.27.0-full.nupkg"
+    },
+    {
+      "assetId": "linux-updater-package-x64",
+      "role": "updaterPackage",
+      "name": "Unlimotion-1.27.0-linux-full.nupkg",
+      "size": 59424766,
+      "sha1": "9414098bd423804c58fcab2a001575eccf72f03b",
+      "sha256": "7f61d839bb80c7ba9556a3e9559d2d427fc5891de5bff52f91c2e1f2a5550220",
+      "createdAt": "2026-07-14T21:48:45Z",
+      "updatedAt": "2026-07-14T21:48:47Z",
+      "downloadUrl": "https://github.com/Kibnet/Unlimotion/releases/download/1.27.0/Unlimotion-1.27.0-linux-full.nupkg"
+    },
+    {
+      "assetId": "macos-arm64-updater-package",
+      "role": "updaterPackage",
+      "name": "Unlimotion-1.27.0-osx-arm64-full.nupkg",
+      "size": 64103986,
+      "sha1": "8cb66d8a546ffbbc1687ad666d3fad0ebecf9c45",
+      "sha256": "3d6be974a03ddf2702c32ed3df8b7c07429c36d80918ca611675ae261271b9ac",
+      "createdAt": "2026-07-14T21:48:34Z",
+      "updatedAt": "2026-07-14T21:48:36Z",
+      "downloadUrl": "https://github.com/Kibnet/Unlimotion/releases/download/1.27.0/Unlimotion-1.27.0-osx-arm64-full.nupkg"
+    },
+    {
+      "assetId": "macos-arm64-pkg-legacy",
+      "role": "legacyDuplicate",
+      "name": "Unlimotion-1.27.0-osx-arm64.pkg",
+      "size": 60396220,
+      "sha256": "fcb1de52fc37e29917e401a04c7bad99bbf478e0e1f13759d1852715a3273c7e",
+      "createdAt": "2026-07-14T21:48:51Z",
+      "updatedAt": "2026-07-14T21:48:54Z",
+      "downloadUrl": "https://github.com/Kibnet/Unlimotion/releases/download/1.27.0/Unlimotion-1.27.0-osx-arm64.pkg"
+    },
+    {
+      "assetId": "macos-x64-updater-package",
+      "role": "updaterPackage",
+      "name": "Unlimotion-1.27.0-osx-full.nupkg",
+      "size": 66150500,
+      "sha1": "56d3b8ac4c6ccceb97a1d7c5d6555b783c2e4142",
+      "sha256": "25401ea2f62dc893ba3fc5393aa216caf193783ee78b9d3838eb13559e69d77e",
+      "createdAt": "2026-07-14T21:48:45Z",
+      "updatedAt": "2026-07-14T21:48:48Z",
+      "downloadUrl": "https://github.com/Kibnet/Unlimotion/releases/download/1.27.0/Unlimotion-1.27.0-osx-full.nupkg"
+    },
+    {
+      "assetId": "macos-x64-pkg-legacy",
+      "role": "legacyDuplicate",
+      "name": "Unlimotion-1.27.0-osx-x64.pkg",
+      "size": 62280273,
+      "sha256": "4c1d55bfa8a1b96dffa0b12e18b162608e9499fd35b5d53bcf264c6a12505f52",
+      "createdAt": "2026-07-14T21:48:59Z",
+      "updatedAt": "2026-07-14T21:49:01Z",
+      "downloadUrl": "https://github.com/Kibnet/Unlimotion/releases/download/1.27.0/Unlimotion-1.27.0-osx-x64.pkg"
+    },
+    {
+      "assetId": "windows-portable-x64-legacy",
+      "role": "legacyDuplicate",
+      "name": "Unlimotion-1.27.0-win-x64-portable.zip",
+      "size": 89185624,
+      "sha256": "29d2ec61879a1f609f72446b320e1fb0fffd4b0dc50aebbe91d6a30725becf67",
+      "createdAt": "2026-07-14T21:50:17Z",
+      "updatedAt": "2026-07-14T21:50:20Z",
+      "downloadUrl": "https://github.com/Kibnet/Unlimotion/releases/download/1.27.0/Unlimotion-1.27.0-win-x64-portable.zip"
+    },
+    {
+      "assetId": "linux-deb-x64",
+      "role": "userInstaller",
+      "name": "Unlimotion-1.27.0.deb",
+      "size": 45446086,
+      "sha256": "a192642417ac375ce1230b5cd89f4a11d99de4dd2a638e259b545cfcc3995a13",
+      "createdAt": "2026-07-14T21:48:48Z",
+      "updatedAt": "2026-07-14T21:48:50Z",
+      "downloadUrl": "https://github.com/Kibnet/Unlimotion/releases/download/1.27.0/Unlimotion-1.27.0.deb"
+    },
+    {
+      "assetId": "macos-arm64-portable",
+      "role": "userPortable",
+      "name": "Unlimotion-osx-arm64-Portable.zip",
+      "size": 62645732,
+      "sha256": "547cb1c2a665d144d6d5a1a9a282cf731d9cea9e09ebcc25becadf8be6decba7",
+      "createdAt": "2026-07-14T21:48:40Z",
+      "updatedAt": "2026-07-14T21:48:42Z",
+      "downloadUrl": "https://github.com/Kibnet/Unlimotion/releases/download/1.27.0/Unlimotion-osx-arm64-Portable.zip"
+    },
+    {
+      "assetId": "macos-arm64-setup",
+      "role": "userInstaller",
+      "name": "Unlimotion-osx-arm64-Setup.pkg",
+      "size": 62648321,
+      "sha256": "27d3a621f5c5613652ecd67e4f3144369ddb78187f09774529fae5ada1fbed9f",
+      "createdAt": "2026-07-14T21:48:37Z",
+      "updatedAt": "2026-07-14T21:48:39Z",
+      "downloadUrl": "https://github.com/Kibnet/Unlimotion/releases/download/1.27.0/Unlimotion-osx-arm64-Setup.pkg"
+    },
+    {
+      "assetId": "macos-x64-portable",
+      "role": "userPortable",
+      "name": "Unlimotion-osx-Portable.zip",
+      "size": 64530061,
+      "sha256": "c0267cb2a7ee5cafcaaa71a51bef018d348d96e1b3fa385f8fa492a2c2ec8bc5",
+      "createdAt": "2026-07-14T21:48:42Z",
+      "updatedAt": "2026-07-14T21:48:44Z",
+      "downloadUrl": "https://github.com/Kibnet/Unlimotion/releases/download/1.27.0/Unlimotion-osx-Portable.zip"
+    },
+    {
+      "assetId": "macos-x64-setup",
+      "role": "userInstaller",
+      "name": "Unlimotion-osx-Setup.pkg",
+      "size": 64533311,
+      "sha256": "fd355e1463e0fe2651bf5440559ec438611272fb0be882bfe6a756ff12d31c9d",
+      "createdAt": "2026-07-14T21:48:48Z",
+      "updatedAt": "2026-07-14T21:48:51Z",
+      "downloadUrl": "https://github.com/Kibnet/Unlimotion/releases/download/1.27.0/Unlimotion-osx-Setup.pkg"
+    },
+    {
+      "assetId": "windows-portable-x64",
+      "role": "userPortable",
+      "name": "Unlimotion-win-Portable.zip",
+      "size": 64448107,
+      "sha256": "dba2f38957e1151c966c8b56cdf0b22900df82ae5f0972ea275cd1a2168accb4",
+      "createdAt": "2026-07-14T21:50:09Z",
+      "updatedAt": "2026-07-14T21:50:11Z",
+      "downloadUrl": "https://github.com/Kibnet/Unlimotion/releases/download/1.27.0/Unlimotion-win-Portable.zip"
+    },
+    {
+      "assetId": "windows-setup-x64",
+      "role": "userInstaller",
+      "name": "Unlimotion-win-Setup.exe",
+      "size": 67100623,
+      "sha256": "8d8c0077aec0e404102870c3a2ede5fa868b10a4670a331a46be38789be92bdc",
+      "createdAt": "2026-07-14T21:50:14Z",
+      "updatedAt": "2026-07-14T21:50:15Z",
+      "downloadUrl": "https://github.com/Kibnet/Unlimotion/releases/download/1.27.0/Unlimotion-win-Setup.exe"
+    },
+    {
+      "assetId": "linux-appimage-x64",
+      "role": "userPortable",
+      "name": "Unlimotion.AppImage",
+      "size": 59778240,
+      "sha256": "ae1033e0131e39dcdbdb75470b48fa1c01318838d59a1cdb51f2dd9f09a665c1",
+      "createdAt": "2026-07-14T21:48:43Z",
+      "updatedAt": "2026-07-14T21:48:45Z",
+      "downloadUrl": "https://github.com/Kibnet/Unlimotion/releases/download/1.27.0/Unlimotion.AppImage"
+    }
+  ],
+  "feeds": [
+    {
+      "assetId": "windows-feed-legacy",
+      "format": "squirrel-releases-v1",
+      "content": "\ufeff3D218564C242EBC2237738B6C9D8445DF16B5402 Unlimotion-1.27.0-full.nupkg 64474575"
+    },
+    {
+      "assetId": "windows-feed-json",
+      "format": "velopack-json-v1",
+      "content": "{\"Assets\":[{\"PackageId\":\"Unlimotion\",\"Version\":\"1.27.0\",\"Type\":\"Full\",\"FileName\":\"Unlimotion-1.27.0-full.nupkg\",\"SHA1\":\"3D218564C242EBC2237738B6C9D8445DF16B5402\",\"SHA256\":\"42A3C68F5AD78464D71E4BFD010F39D4277EC54839728506A68F3FF952D1AB92\",\"Size\":64474575}]}"
+    },
+    {
+      "assetId": "linux-feed-json",
+      "format": "velopack-json-v1",
+      "content": "{\"Assets\":[{\"PackageId\":\"Unlimotion\",\"Version\":\"1.27.0\",\"Type\":\"Full\",\"FileName\":\"Unlimotion-1.27.0-linux-full.nupkg\",\"SHA1\":\"9414098BD423804C58FCAB2A001575ECCF72F03B\",\"SHA256\":\"7F61D839BB80C7BA9556A3E9559D2D427FC5891DE5BFF52F91C2E1F2A5550220\",\"Size\":59424766}]}"
+    },
+    {
+      "assetId": "macos-x64-feed-json",
+      "format": "velopack-json-v1",
+      "content": "{\"Assets\":[{\"PackageId\":\"Unlimotion\",\"Version\":\"1.27.0\",\"Type\":\"Full\",\"FileName\":\"Unlimotion-1.27.0-osx-full.nupkg\",\"SHA1\":\"56D3B8AC4C6CCCEB97A1D7C5D6555B783C2E4142\",\"SHA256\":\"25401EA2F62DC893BA3FC5393AA216CAF193783EE78B9D3838EB13559E69D77E\",\"Size\":66150500}]}"
+    },
+    {
+      "assetId": "macos-arm64-feed-json",
+      "format": "velopack-json-v1",
+      "content": "{\"Assets\":[{\"PackageId\":\"Unlimotion\",\"Version\":\"1.27.0\",\"Type\":\"Full\",\"FileName\":\"Unlimotion-1.27.0-osx-arm64-full.nupkg\",\"SHA1\":\"8CB66D8A546FFBBC1687AD666D3FAD0EBECF9C45\",\"SHA256\":\"3D6BE974A03DDF2702C32ED3DF8B7C07429C36D80918CA611675AE261271B9AC\",\"Size\":64103986}]}"
+    }
+  ]
+}

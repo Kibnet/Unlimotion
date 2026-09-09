@@ -1,0 +1,523 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/Kibnet/Unlimotion/blob/main/distribution/evidence.schema.json",
+  "title": "Unlimotion Stage-3 distribution evidence contract",
+  "oneOf": [
+    { "$ref": "#/definitions/artifactEvidence" },
+    { "$ref": "#/definitions/transportReceipt" },
+    { "$ref": "#/definitions/genericTransportReceipt" },
+    { "$ref": "#/definitions/platformEvidence" },
+    { "$ref": "#/definitions/aggregateEvidence" }
+  ],
+  "definitions": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "gitSha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "semver": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$",
+      "not": { "const": "0.0.0" }
+    },
+    "platform": {
+      "enum": ["windows", "linux", "macos", "android"]
+    },
+    "architecture": {
+      "enum": ["x64", "arm64", "multi"]
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rawTag",
+        "normalizedVersion",
+        "sourceSha",
+        "workflowSha",
+        "tagBinding",
+        "manifestSha256",
+        "supportMatrixSha256",
+        "signatureProfile"
+      ],
+      "properties": {
+        "rawTag": {
+          "type": "string",
+          "pattern": "^v?(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+        },
+        "normalizedVersion": { "$ref": "#/definitions/semver" },
+        "sourceSha": { "$ref": "#/definitions/gitSha" },
+        "workflowSha": { "$ref": "#/definitions/gitSha" },
+        "tagBinding": { "enum": ["notApplicable", "required"] },
+        "manifestSha256": { "$ref": "#/definitions/sha256" },
+        "supportMatrixSha256": { "$ref": "#/definitions/sha256" },
+        "signatureProfile": { "enum": ["test", "production"] }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["assetId", "fileName", "size", "sha256"],
+      "properties": {
+        "assetId": { "type": "string", "minLength": 1, "pattern": "^[a-z0-9-]+$" },
+        "fileName": { "type": "string", "minLength": 1, "pattern": "^[^/\\\\\\u0000-\\u001f]+$" },
+        "size": { "type": "integer", "minimum": 1 },
+        "sha256": { "$ref": "#/definitions/sha256" }
+      }
+    },
+    "relation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "relationId",
+        "feedAssetId",
+        "packageAssetId",
+        "channel",
+        "format",
+        "packageSha1",
+        "packageSha256",
+        "packageSize",
+        "status"
+      ],
+      "properties": {
+        "relationId": { "type": "string", "minLength": 1 },
+        "feedAssetId": { "type": "string", "minLength": 1 },
+        "packageAssetId": { "type": "string", "minLength": 1 },
+        "channel": { "type": "string", "minLength": 1 },
+        "format": { "enum": ["velopack-json-v1", "squirrel-releases-v1"] },
+        "packageSha1": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "packageSha256": { "$ref": "#/definitions/sha256" },
+        "packageSize": { "type": "integer", "minimum": 1 },
+        "status": { "const": "pass" }
+      }
+    },
+    "artifactEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "kind",
+        "status",
+        "platform",
+        "architecture",
+        "rawTag",
+        "normalizedVersion",
+        "sourceSha",
+        "workflowSha",
+        "tagBinding",
+        "manifestSha256",
+        "supportMatrixSha256",
+        "identitySignatureProfile",
+        "signatureProfile",
+        "productionReady",
+        "artifacts",
+        "relations"
+      ],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "kind": { "const": "distribution-artifact-evidence" },
+        "status": { "const": "pass" },
+        "platform": { "$ref": "#/definitions/platform" },
+        "architecture": { "enum": ["x64", "arm64"] },
+        "rawTag": {
+          "type": "string",
+          "pattern": "^v?(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+        },
+        "normalizedVersion": { "$ref": "#/definitions/semver" },
+        "sourceSha": { "$ref": "#/definitions/gitSha" },
+        "workflowSha": { "$ref": "#/definitions/gitSha" },
+        "tagBinding": { "enum": ["notApplicable", "required"] },
+        "manifestSha256": { "$ref": "#/definitions/sha256" },
+        "supportMatrixSha256": { "$ref": "#/definitions/sha256" },
+        "identitySignatureProfile": { "enum": ["test", "production"] },
+        "signatureProfile": { "enum": ["unsigned", "test", "production", "notApplicable"] },
+        "productionReady": { "const": false },
+        "artifacts": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/definitions/artifact" }
+        },
+        "relations": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/definitions/relation" }
+        }
+      }
+    },
+    "preEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidenceId", "fileName", "sha256", "platform", "architecture"],
+      "properties": {
+        "evidenceId": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+        "fileName": { "type": "string", "minLength": 1 },
+        "sha256": { "$ref": "#/definitions/sha256" },
+        "platform": { "$ref": "#/definitions/platform" },
+        "architecture": { "enum": ["x64", "arm64"] }
+      }
+    },
+    "unixModeNotApplicable": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "applicability",
+        "assetId",
+        "archiveFileName",
+        "archiveSha256",
+        "archiveEntry",
+        "originalMode",
+        "tarStoredMode",
+        "restoredMode",
+        "originalSha256",
+        "restoredSha256"
+      ],
+      "properties": {
+        "applicability": { "const": "notApplicable" },
+        "assetId": { "type": "null" },
+        "archiveFileName": { "type": "null" },
+        "archiveSha256": { "type": "null" },
+        "archiveEntry": { "type": "null" },
+        "originalMode": { "type": "null" },
+        "tarStoredMode": { "type": "null" },
+        "restoredMode": { "type": "null" },
+        "originalSha256": { "type": "null" },
+        "restoredSha256": { "type": "null" }
+      }
+    },
+    "unixModeRequired": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "applicability",
+        "assetId",
+        "archiveFileName",
+        "archiveSha256",
+        "archiveEntry",
+        "originalMode",
+        "tarStoredMode",
+        "restoredMode",
+        "originalSha256",
+        "restoredSha256"
+      ],
+      "properties": {
+        "applicability": { "const": "required" },
+        "assetId": { "const": "linux-appimage-x64" },
+        "archiveFileName": { "type": "string", "minLength": 1 },
+        "archiveSha256": { "$ref": "#/definitions/sha256" },
+        "archiveEntry": { "type": "string", "minLength": 1 },
+        "originalMode": { "const": "0755" },
+        "tarStoredMode": { "const": "0755" },
+        "restoredMode": { "const": "0755" },
+        "originalSha256": { "$ref": "#/definitions/sha256" },
+        "restoredSha256": { "$ref": "#/definitions/sha256" }
+      }
+    },
+    "unixMode": {
+      "oneOf": [
+        { "$ref": "#/definitions/unixModeNotApplicable" },
+        { "$ref": "#/definitions/unixModeRequired" }
+      ]
+    },
+    "transportReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "kind",
+        "status",
+        "platform",
+        "architecture",
+        "identity",
+        "artifactName",
+        "artifactId",
+        "artifactDigest",
+        "retentionDays",
+        "ifNoFilesFound",
+        "overwrite",
+        "preEvidence",
+        "unixMode",
+        "productionReady"
+      ],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "kind": { "const": "distribution-transport-receipt" },
+        "status": { "const": "pass" },
+        "platform": { "$ref": "#/definitions/platform" },
+        "architecture": { "$ref": "#/definitions/architecture" },
+        "identity": { "$ref": "#/definitions/identity" },
+        "artifactName": { "type": "string", "minLength": 1, "pattern": "^[^/\\\\\\u0000-\\u001f]+$" },
+        "artifactId": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+        "artifactDigest": { "$ref": "#/definitions/sha256" },
+        "retentionDays": { "const": 7 },
+        "ifNoFilesFound": { "const": "error" },
+        "overwrite": { "const": false },
+        "preEvidence": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/definitions/preEvidence" }
+        },
+        "unixMode": { "$ref": "#/definitions/unixMode" },
+        "productionReady": { "const": false }
+      }
+    },
+    "artifactEvidenceReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidenceId", "fileName", "sha256", "platform", "architecture"],
+      "properties": {
+        "evidenceId": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+        "fileName": { "type": "string", "minLength": 1 },
+        "sha256": { "$ref": "#/definitions/sha256" },
+        "platform": { "$ref": "#/definitions/platform" },
+        "architecture": { "enum": ["x64", "arm64"] }
+      }
+    },
+    "nativeEvidenceReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fileName", "sha256", "kind", "mode"],
+      "properties": {
+        "fileName": { "type": "string", "minLength": 1, "pattern": "^[^/\\\\\\u0000-\\u001f]+$" },
+        "sha256": { "$ref": "#/definitions/sha256" },
+        "kind": { "type": "string", "minLength": 1, "pattern": "^[a-z0-9-]+$" },
+        "mode": { "type": "string", "minLength": 1, "pattern": "^[a-z0-9-]+$" }
+      }
+    },
+    "genericTransportReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "kind",
+        "identity",
+        "artifact",
+        "payloads",
+        "productionReady"
+      ],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "kind": { "const": "distribution-evidence-transport-receipt" },
+        "identity": { "$ref": "#/definitions/identity" },
+        "artifact": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "id", "digest", "retentionDays"],
+          "properties": {
+            "name": { "type": "string", "minLength": 1, "pattern": "^[^/\\\\\\u0000-\\u001f]+$" },
+            "id": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+            "digest": { "$ref": "#/definitions/sha256" },
+            "retentionDays": { "const": 7 }
+          }
+        },
+        "payloads": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["fileName", "sha256"],
+            "properties": {
+              "fileName": { "type": "string", "minLength": 1, "pattern": "^[^/\\\\\\u0000-\\u001f]+$" },
+              "sha256": { "$ref": "#/definitions/sha256" }
+            }
+          }
+        },
+        "productionReady": { "const": false }
+      }
+    },
+    "nativeCell": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "status",
+        "platform",
+        "architecture",
+        "osName",
+        "osVersion",
+        "mode",
+        "metadata",
+        "install",
+        "launch",
+        "signature",
+        "negativeControl",
+        "directFuse",
+        "evidenceFile",
+        "evidenceSha256",
+        "assetIds"
+      ],
+      "properties": {
+        "id": {
+          "enum": [
+            "windows-server-2022-x64",
+            "debian-12-x64-clean",
+            "debian-12-x64-upgrade",
+            "debian-12-x64-appimage",
+            "debian-12-x64-missing-runtime-negative",
+            "debian-13-x64-clean",
+            "debian-13-x64-upgrade",
+            "debian-13-x64-appimage",
+            "debian-13-x64-missing-runtime-negative",
+            "macos-15-x64",
+            "macos-15-arm64",
+            "android-arm64-apk-metadata",
+            "android-x64-apk-metadata",
+            "android-api-23-x64-emulator",
+            "android-api-36-x64-emulator"
+          ]
+        },
+        "status": { "const": "pass" },
+        "platform": { "$ref": "#/definitions/platform" },
+        "architecture": { "enum": ["x64", "arm64"] },
+        "osName": { "type": "string", "minLength": 1 },
+        "osVersion": { "type": "string", "minLength": 1 },
+        "mode": { "type": "string", "minLength": 1 },
+        "metadata": { "enum": ["pass", "notApplicable"] },
+        "install": { "enum": ["pass", "extractPassed", "notApplicable"] },
+        "launch": { "enum": ["pass", "expectedFailureObserved", "notApplicable"] },
+        "signature": { "enum": ["stateRecorded", "coveredByArtifactCell", "notApplicable"] },
+        "negativeControl": { "enum": ["pass", "notApplicable"] },
+        "directFuse": { "enum": ["notVerified", "notApplicable"] },
+        "evidenceFile": { "type": "string", "minLength": 1 },
+        "evidenceSha256": { "$ref": "#/definitions/sha256" },
+        "assetIds": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "platformEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "kind",
+        "status",
+        "platform",
+        "architecture",
+        "identity",
+        "artifactEvidence",
+        "nativeEvidence",
+        "transportReceiptFile",
+        "transportReceiptSha256",
+        "transport",
+        "artifacts",
+        "relations",
+        "nativeCells",
+        "releasePromotion",
+        "productionSignatureEligibility",
+        "productionReady"
+      ],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "kind": { "const": "distribution-platform-evidence" },
+        "status": { "const": "pass" },
+        "platform": { "$ref": "#/definitions/platform" },
+        "architecture": { "$ref": "#/definitions/architecture" },
+        "identity": { "$ref": "#/definitions/identity" },
+        "artifactEvidence": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/definitions/artifactEvidenceReference" }
+        },
+        "nativeEvidence": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/definitions/nativeEvidenceReference" }
+        },
+        "transportReceiptFile": { "type": "string", "minLength": 1 },
+        "transportReceiptSha256": { "$ref": "#/definitions/sha256" },
+        "transport": { "$ref": "#/definitions/transportReceipt" },
+        "artifacts": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/definitions/artifact" }
+        },
+        "relations": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/definitions/relation" }
+        },
+        "nativeCells": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/definitions/nativeCell" }
+        },
+        "releasePromotion": { "const": "notApplicable" },
+        "productionSignatureEligibility": { "const": "notApplicable" },
+        "productionReady": { "const": false }
+      }
+    },
+    "aggregateEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "kind",
+        "status",
+        "identity",
+        "platforms",
+        "artifacts",
+        "assetCount",
+        "relationIds",
+        "mandatoryCellIds",
+        "checksumsFile",
+        "checksumsSha256",
+        "releasePromotion",
+        "productionSignatureEligibility",
+        "productionReady"
+      ],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "kind": { "const": "distribution-aggregate-evidence" },
+        "status": { "const": "pass" },
+        "identity": { "$ref": "#/definitions/identity" },
+        "platforms": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 5,
+          "uniqueItems": true,
+          "items": { "$ref": "#/definitions/platformEvidence" }
+        },
+        "artifacts": {
+          "type": "array",
+          "minItems": 22,
+          "maxItems": 22,
+          "uniqueItems": true,
+          "items": { "$ref": "#/definitions/artifact" }
+        },
+        "assetCount": { "const": 22 },
+        "relationIds": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 5,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "mandatoryCellIds": {
+          "type": "array",
+          "minItems": 15,
+          "maxItems": 15,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "checksumsFile": { "type": "string", "minLength": 1 },
+        "checksumsSha256": { "$ref": "#/definitions/sha256" },
+        "releasePromotion": { "const": "notApplicable" },
+        "productionSignatureEligibility": { "const": "notApplicable" },
+        "productionReady": { "const": false }
+      }
+    }
+  }
+}

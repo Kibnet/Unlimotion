@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Unlimotion
+Comment=Visual task and project planning
+TryExec=/usr/bin/Unlimotion
+Exec=/usr/bin/Unlimotion
+Icon=unlimotion
+Terminal=false
+Categories=Office;ProjectManagement;
+StartupWMClass=Unlimotion

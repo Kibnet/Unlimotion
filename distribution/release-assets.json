@@ -1,0 +1,553 @@
+{
+  "$schema": "./release-assets.schema.json",
+  "schemaVersion": 1,
+  "product": "Unlimotion",
+  "tagPolicy": {
+    "acceptedRead": [
+      "MAJOR.MINOR.PATCH",
+      "vMAJOR.MINOR.PATCH"
+    ],
+    "publicationWrite": "deferred-to-stage-4",
+    "stableOnly": true,
+    "minimumVersion": "0.0.1"
+  },
+  "supportLevels": [
+    "present",
+    "metadataVerified",
+    "launchVerified",
+    "productionReady"
+  ],
+  "androidProductionCertificateSha256": "1cca6de2bb329c14f89cd0441998e00df601e440d2a9b30c29bdd2cf0a321011",
+  "retryPolicy": {
+    "deterministic": {
+      "maxAttempts": 1,
+      "cleanup": "none",
+      "retryableClassification": "never"
+    },
+    "aptNetwork": {
+      "maxAttempts": 3,
+      "cleanup": "new-container",
+      "retryableClassification": "infrastructure-only"
+    },
+    "emulatorBoot": {
+      "maxAttempts": 2,
+      "cleanup": "kill-emulator-delete-avd-data-use-new-port",
+      "retryableClassification": "infrastructure-only"
+    },
+    "artifactTransport": {
+      "maxAttempts": 2,
+      "cleanup": "clean-extraction-directory",
+      "retryableClassification": "infrastructure-only"
+    }
+  },
+  "linuxRuntimePrerequisites": {
+    "appImageExtractAndRun": {
+      "debian12": [
+        "ca-certificates",
+        "libc6",
+        "libgcc-s1",
+        "libgssapi-krb5-2",
+        "libstdc++6",
+        "tzdata",
+        "zlib1g",
+        "libx11-6",
+        "libice6",
+        "libsm6",
+        "libfontconfig1",
+        "libicu72",
+        "libssl3"
+      ],
+      "debian13": [
+        "ca-certificates",
+        "libc6",
+        "libgcc-s1",
+        "libgssapi-krb5-2",
+        "libstdc++6",
+        "tzdata",
+        "zlib1g",
+        "libx11-6",
+        "libice6",
+        "libsm6",
+        "libfontconfig1",
+        "libicu76",
+        "libssl3t64"
+      ]
+    },
+    "directFuseAdditional": {
+      "debian12": ["libfuse2"],
+      "debian13": ["libfuse2t64"]
+    }
+  },
+  "assets": [
+    {
+      "id": "windows-feed-legacy",
+      "platform": "windows",
+      "architecture": "x64",
+      "role": "updaterFeed",
+      "filenameTemplate": "RELEASES",
+      "producer": "windows-packaging",
+      "validatorProfile": "velopack-releases-legacy",
+      "requiredEvidence": [
+        "inventory",
+        "feedRelation"
+      ],
+      "signatureRequirement": "notApplicable",
+      "stage3MaximumSupport": "metadataVerified",
+      "releaseVisible": true,
+      "legacy": false
+    },
+    {
+      "id": "windows-feed-json",
+      "platform": "windows",
+      "architecture": "x64",
+      "role": "updaterFeed",
+      "filenameTemplate": "releases.win.json",
+      "producer": "windows-packaging",
+      "validatorProfile": "velopack-json",
+      "requiredEvidence": [
+        "inventory",
+        "feedRelation"
+      ],
+      "signatureRequirement": "notApplicable",
+      "stage3MaximumSupport": "metadataVerified",
+      "releaseVisible": true,
+      "legacy": false
+    },
+    {
+      "id": "linux-feed-json",
+      "platform": "linux",
+      "architecture": "x64",
+      "role": "updaterFeed",
+      "filenameTemplate": "releases.linux.json",
+      "producer": "linux-packaging",
+      "validatorProfile": "velopack-json",
+      "requiredEvidence": [
+        "inventory",
+        "feedRelation"
+      ],
+      "signatureRequirement": "notApplicable",
+      "stage3MaximumSupport": "metadataVerified",
+      "releaseVisible": true,
+      "legacy": false
+    },
+    {
+      "id": "macos-x64-feed-json",
+      "platform": "macos",
+      "architecture": "x64",
+      "role": "updaterFeed",
+      "filenameTemplate": "releases.osx.json",
+      "producer": "macos-packaging",
+      "validatorProfile": "velopack-json",
+      "requiredEvidence": [
+        "inventory",
+        "feedRelation"
+      ],
+      "signatureRequirement": "notApplicable",
+      "stage3MaximumSupport": "metadataVerified",
+      "releaseVisible": true,
+      "legacy": false
+    },
+    {
+      "id": "macos-arm64-feed-json",
+      "platform": "macos",
+      "architecture": "arm64",
+      "role": "updaterFeed",
+      "filenameTemplate": "releases.osx-arm64.json",
+      "producer": "macos-packaging",
+      "validatorProfile": "velopack-json",
+      "requiredEvidence": [
+        "inventory",
+        "feedRelation"
+      ],
+      "signatureRequirement": "notApplicable",
+      "stage3MaximumSupport": "metadataVerified",
+      "releaseVisible": true,
+      "legacy": false
+    },
+    {
+      "id": "windows-updater-package-x64",
+      "platform": "windows",
+      "architecture": "x64",
+      "role": "updaterPackage",
+      "filenameTemplate": "Unlimotion-{normalizedVersion}-full.nupkg",
+      "producer": "windows-packaging",
+      "validatorProfile": "velopack-package",
+      "requiredEvidence": [
+        "inventory",
+        "metadata",
+        "feedRelation"
+      ],
+      "signatureRequirement": "notApplicable",
+      "stage3MaximumSupport": "metadataVerified",
+      "releaseVisible": true,
+      "legacy": false
+    },
+    {
+      "id": "linux-updater-package-x64",
+      "platform": "linux",
+      "architecture": "x64",
+      "role": "updaterPackage",
+      "filenameTemplate": "Unlimotion-{normalizedVersion}-linux-full.nupkg",
+      "producer": "linux-packaging",
+      "validatorProfile": "velopack-package",
+      "requiredEvidence": [
+        "inventory",
+        "metadata",
+        "feedRelation"
+      ],
+      "signatureRequirement": "notApplicable",
+      "stage3MaximumSupport": "metadataVerified",
+      "releaseVisible": true,
+      "legacy": false
+    },
+    {
+      "id": "macos-x64-updater-package",
+      "platform": "macos",
+      "architecture": "x64",
+      "role": "updaterPackage",
+      "filenameTemplate": "Unlimotion-{normalizedVersion}-osx-full.nupkg",
+      "producer": "macos-packaging",
+      "validatorProfile": "velopack-package",
+      "requiredEvidence": [
+        "inventory",
+        "metadata",
+        "feedRelation"
+      ],
+      "signatureRequirement": "notApplicable",
+      "stage3MaximumSupport": "metadataVerified",
+      "releaseVisible": true,
+      "legacy": false
+    },
+    {
+      "id": "macos-arm64-updater-package",
+      "platform": "macos",
+      "architecture": "arm64",
+      "role": "updaterPackage",
+      "filenameTemplate": "Unlimotion-{normalizedVersion}-osx-arm64-full.nupkg",
+      "producer": "macos-packaging",
+      "validatorProfile": "velopack-package",
+      "requiredEvidence": [
+        "inventory",
+        "metadata",
+        "feedRelation"
+      ],
+      "signatureRequirement": "notApplicable",
+      "stage3MaximumSupport": "metadataVerified",
+      "releaseVisible": true,
+      "legacy": false
+    },
+    {
+      "id": "windows-setup-x64",
+      "platform": "windows",
+      "architecture": "x64",
+      "role": "userInstaller",
+      "filenameTemplate": "Unlimotion-win-Setup.exe",
+      "producer": "windows-packaging",
+      "validatorProfile": "windows-setup",
+      "requiredEvidence": [
+        "inventory",
+        "metadata",
+        "architecture",
+        "install",
+        "launch",
+        "signature"
+      ],
+      "signatureRequirement": "recordStatus",
+      "stage3MaximumSupport": "launchVerified",
+      "releaseVisible": true,
+      "legacy": false
+    },
+    {
+      "id": "windows-portable-x64",
+      "platform": "windows",
+      "architecture": "x64",
+      "role": "userPortable",
+      "filenameTemplate": "Unlimotion-win-Portable.zip",
+      "producer": "windows-packaging",
+      "validatorProfile": "windows-portable",
+      "requiredEvidence": [
+        "inventory",
+        "metadata",
+        "architecture",
+        "install",
+        "launch",
+        "signature"
+      ],
+      "signatureRequirement": "recordStatus",
+      "stage3MaximumSupport": "launchVerified",
+      "releaseVisible": true,
+      "legacy": false
+    },
+    {
+      "id": "windows-portable-x64-legacy",
+      "platform": "windows",
+      "architecture": "x64",
+      "role": "legacyDuplicate",
+      "filenameTemplate": "Unlimotion-{normalizedVersion}-win-x64-portable.zip",
+      "producer": "windows-packaging",
+      "validatorProfile": "legacy-windows-portable",
+      "requiredEvidence": [
+        "inventory",
+        "metadata"
+      ],
+      "signatureRequirement": "recordStatus",
+      "stage3MaximumSupport": "present",
+      "releaseVisible": true,
+      "legacy": true,
+      "legacyOwner": "release-engineering",
+      "migrationStage": 4
+    },
+    {
+      "id": "linux-deb-x64",
+      "platform": "linux",
+      "architecture": "x64",
+      "role": "userInstaller",
+      "filenameTemplate": "Unlimotion-{normalizedVersion}.deb",
+      "producer": "linux-packaging",
+      "validatorProfile": "debian-amd64",
+      "requiredEvidence": [
+        "inventory",
+        "metadata",
+        "architecture",
+        "install",
+        "launch"
+      ],
+      "signatureRequirement": "notApplicable",
+      "stage3MaximumSupport": "launchVerified",
+      "releaseVisible": true,
+      "legacy": false
+    },
+    {
+      "id": "linux-appimage-x64",
+      "platform": "linux",
+      "architecture": "x64",
+      "role": "userPortable",
+      "filenameTemplate": "Unlimotion.AppImage",
+      "producer": "linux-packaging",
+      "validatorProfile": "appimage-x64",
+      "requiredEvidence": [
+        "inventory",
+        "metadata",
+        "architecture",
+        "launch"
+      ],
+      "signatureRequirement": "notApplicable",
+      "stage3MaximumSupport": "launchVerified",
+      "releaseVisible": true,
+      "legacy": false
+    },
+    {
+      "id": "macos-x64-setup",
+      "platform": "macos",
+      "architecture": "x64",
+      "role": "userInstaller",
+      "filenameTemplate": "Unlimotion-osx-Setup.pkg",
+      "producer": "macos-packaging",
+      "validatorProfile": "macos-pkg",
+      "requiredEvidence": [
+        "inventory",
+        "metadata",
+        "architecture",
+        "install",
+        "launch",
+        "signature"
+      ],
+      "signatureRequirement": "recordStatus",
+      "stage3MaximumSupport": "launchVerified",
+      "releaseVisible": true,
+      "legacy": false
+    },
+    {
+      "id": "macos-x64-portable",
+      "platform": "macos",
+      "architecture": "x64",
+      "role": "userPortable",
+      "filenameTemplate": "Unlimotion-osx-Portable.zip",
+      "producer": "macos-packaging",
+      "validatorProfile": "macos-portable",
+      "requiredEvidence": [
+        "inventory",
+        "metadata",
+        "architecture",
+        "install",
+        "launch",
+        "signature"
+      ],
+      "signatureRequirement": "recordStatus",
+      "stage3MaximumSupport": "launchVerified",
+      "releaseVisible": true,
+      "legacy": false
+    },
+    {
+      "id": "macos-x64-pkg-legacy",
+      "platform": "macos",
+      "architecture": "x64",
+      "role": "legacyDuplicate",
+      "filenameTemplate": "Unlimotion-{normalizedVersion}-osx-x64.pkg",
+      "producer": "macos-packaging",
+      "validatorProfile": "legacy-macos-pkg",
+      "requiredEvidence": [
+        "inventory",
+        "metadata",
+        "architecture",
+        "signature"
+      ],
+      "signatureRequirement": "recordStatus",
+      "stage3MaximumSupport": "present",
+      "releaseVisible": true,
+      "legacy": true,
+      "legacyOwner": "release-engineering",
+      "migrationStage": 4
+    },
+    {
+      "id": "macos-arm64-setup",
+      "platform": "macos",
+      "architecture": "arm64",
+      "role": "userInstaller",
+      "filenameTemplate": "Unlimotion-osx-arm64-Setup.pkg",
+      "producer": "macos-packaging",
+      "validatorProfile": "macos-pkg",
+      "requiredEvidence": [
+        "inventory",
+        "metadata",
+        "architecture",
+        "install",
+        "launch",
+        "signature"
+      ],
+      "signatureRequirement": "recordStatus",
+      "stage3MaximumSupport": "launchVerified",
+      "releaseVisible": true,
+      "legacy": false
+    },
+    {
+      "id": "macos-arm64-portable",
+      "platform": "macos",
+      "architecture": "arm64",
+      "role": "userPortable",
+      "filenameTemplate": "Unlimotion-osx-arm64-Portable.zip",
+      "producer": "macos-packaging",
+      "validatorProfile": "macos-portable",
+      "requiredEvidence": [
+        "inventory",
+        "metadata",
+        "architecture",
+        "install",
+        "launch",
+        "signature"
+      ],
+      "signatureRequirement": "recordStatus",
+      "stage3MaximumSupport": "launchVerified",
+      "releaseVisible": true,
+      "legacy": false
+    },
+    {
+      "id": "macos-arm64-pkg-legacy",
+      "platform": "macos",
+      "architecture": "arm64",
+      "role": "legacyDuplicate",
+      "filenameTemplate": "Unlimotion-{normalizedVersion}-osx-arm64.pkg",
+      "producer": "macos-packaging",
+      "validatorProfile": "legacy-macos-pkg",
+      "requiredEvidence": [
+        "inventory",
+        "metadata",
+        "architecture",
+        "signature"
+      ],
+      "signatureRequirement": "recordStatus",
+      "stage3MaximumSupport": "present",
+      "releaseVisible": true,
+      "legacy": true,
+      "legacyOwner": "release-engineering",
+      "migrationStage": 4
+    },
+    {
+      "id": "android-arm64-apk",
+      "platform": "android",
+      "architecture": "arm64",
+      "role": "userInstaller",
+      "filenameTemplate": "Unlimotion-{normalizedVersion}-android-arm64.apk",
+      "producer": "android-packaging",
+      "validatorProfile": "android-apk",
+      "requiredEvidence": [
+        "inventory",
+        "metadata",
+        "architecture",
+        "signature"
+      ],
+      "signatureRequirement": "productionCertificate",
+      "stage3MaximumSupport": "metadataVerified",
+      "releaseVisible": true,
+      "legacy": false
+    },
+    {
+      "id": "android-x64-apk",
+      "platform": "android",
+      "architecture": "x64",
+      "role": "userInstaller",
+      "filenameTemplate": "Unlimotion-{normalizedVersion}-android-x64.apk",
+      "producer": "android-packaging",
+      "validatorProfile": "android-apk",
+      "requiredEvidence": [
+        "inventory",
+        "metadata",
+        "architecture",
+        "install",
+        "launch",
+        "signature"
+      ],
+      "signatureRequirement": "productionCertificate",
+      "stage3MaximumSupport": "launchVerified",
+      "releaseVisible": true,
+      "legacy": false
+    }
+  ],
+  "relations": [
+    {
+      "id": "windows-legacy-feed-to-package",
+      "feedAssetId": "windows-feed-legacy",
+      "packageAssetId": "windows-updater-package-x64",
+      "channel": "windows",
+      "format": "squirrel-releases-v1",
+      "hashAlgorithm": "sha1",
+      "packageId": "Unlimotion"
+    },
+    {
+      "id": "windows-json-feed-to-package",
+      "feedAssetId": "windows-feed-json",
+      "packageAssetId": "windows-updater-package-x64",
+      "channel": "windows",
+      "format": "velopack-json-v1",
+      "hashAlgorithm": "sha256",
+      "packageId": "Unlimotion"
+    },
+    {
+      "id": "linux-json-feed-to-package",
+      "feedAssetId": "linux-feed-json",
+      "packageAssetId": "linux-updater-package-x64",
+      "channel": "linux",
+      "format": "velopack-json-v1",
+      "hashAlgorithm": "sha256",
+      "packageId": "Unlimotion"
+    },
+    {
+      "id": "macos-x64-json-feed-to-package",
+      "feedAssetId": "macos-x64-feed-json",
+      "packageAssetId": "macos-x64-updater-package",
+      "channel": "macos-x64",
+      "format": "velopack-json-v1",
+      "hashAlgorithm": "sha256",
+      "packageId": "Unlimotion"
+    },
+    {
+      "id": "macos-arm64-json-feed-to-package",
+      "feedAssetId": "macos-arm64-feed-json",
+      "packageAssetId": "macos-arm64-updater-package",
+      "channel": "macos-arm64",
+      "format": "velopack-json-v1",
+      "hashAlgorithm": "sha256",
+      "packageId": "Unlimotion"
+    }
+  ]
+}

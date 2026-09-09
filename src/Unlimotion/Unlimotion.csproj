@@ -13,6 +13,22 @@
 		<UnlimotionGeneratedAppNameFile>$(MSBuildProjectDirectory)\obj\$(Configuration)\$(TargetFramework)\Unlimotion.AppName.Generated.cs</UnlimotionGeneratedAppNameFile>
 		<UnlimotionAppNameSuffix Condition="'$(GitHubRefName)' != ''">$(GitHubRefName)</UnlimotionAppNameSuffix>
 	</PropertyGroup>
+	<PropertyGroup Condition="'$(DistributionBuild)' == 'true'">
+		<UnlimotionAppNameSuffix>$(DistributionVersion)</UnlimotionAppNameSuffix>
+	</PropertyGroup>
+
+	<Target Name="ValidateUnlimotionDistributionIdentity"
+			BeforeTargets="GenerateUnlimotionAppNameDefinition"
+			Condition="'$(DistributionBuild)' == 'true'">
+		<Error Condition="!$([System.Text.RegularExpressions.Regex]::IsMatch('$(DistributionVersion)', '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'))"
+			   Text="DistributionVersion must be normalized MAJOR.MINOR.PATCH without a v prefix." />
+		<Error Condition="'$(DistributionVersion)' == '0.0.0'"
+			   Text="DistributionVersion must be 0.0.1 or greater." />
+		<Error Condition="!$([System.Text.RegularExpressions.Regex]::IsMatch('$(DistributionSourceSha)', '^[0-9a-f]{40}$'))"
+			   Text="DistributionSourceSha must be a 40-character lowercase hexadecimal commit SHA." />
+		<Error Condition="'$(GitHubRefName)' != '' and '$(GitHubRefName)' != '$(DistributionVersion)'"
+			   Text="Distribution builds must pass the normalized version as GitHubRefName; raw tags are not allowed in product metadata." />
+	</Target>
 
 	<Target Name="GenerateUnlimotionAppNameDefinition" BeforeTargets="CoreCompile">
 		<Exec Command='git -C "$(MSBuildProjectDirectory)" rev-parse --abbrev-ref HEAD' IgnoreExitCode="true" ConsoleToMSBuild="true" StandardOutputImportance="Low" Condition="'$(UnlimotionAppNameSuffix)' == ''">
@@ -50,6 +66,10 @@
 			</PropertyGroup>
 			<ItemGroup>
 				<AppNameGeneratedLines Include='[assembly: System.Reflection.AssemblyMetadata("UnlimotionAppNameSuffix", "$(AppNameSuffixEscaped)")]' />
+				<AppNameGeneratedLines Include='[assembly: System.Reflection.AssemblyMetadata("UnlimotionDistributionVersion", "$(DistributionVersion)")]'
+					Condition="'$(DistributionBuild)' == 'true'" />
+				<AppNameGeneratedLines Include='[assembly: System.Reflection.AssemblyMetadata("UnlimotionDistributionSourceSha", "$(DistributionSourceSha)")]'
+					Condition="'$(DistributionBuild)' == 'true'" />
 			</ItemGroup>
 			<WriteLinesToFile
 				File="$(UnlimotionGeneratedAppNameFile)"

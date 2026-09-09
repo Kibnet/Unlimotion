@@ -1,0 +1,245 @@
+{
+  "$schema": "./support-matrix.schema.json",
+  "schemaVersion": 1,
+  "product": "Unlimotion",
+  "release": {
+    "rawTag": "1.27.0",
+    "normalizedVersion": "1.27.0",
+    "sourceSha": "5aebebcb34eabe35fcdb7a47ff76ffdc2a7e16dd",
+    "publishedAt": "2026-07-14T21:47:00Z",
+    "releaseUrl": "https://github.com/Kibnet/Unlimotion/releases/tag/1.27.0"
+  },
+  "candidateEvidenceAccepted": false,
+  "productionReadyDerived": true,
+  "lastPublishedAndroidVersionCode": 353,
+  "claims": [
+    {
+      "id": "windows-x64",
+      "platform": "windows",
+      "architecture": "x64",
+      "distribution": "desktop",
+      "releaseTag": "1.27.0",
+      "sourceSha": "5aebebcb34eabe35fcdb7a47ff76ffdc2a7e16dd",
+      "publicStatus": "publishedWithCaveats",
+      "evidenceLevel": "present",
+      "assets": [
+        {
+          "assetId": "windows-setup-x64",
+          "name": "Unlimotion-win-Setup.exe",
+          "sha256": "8d8c0077aec0e404102870c3a2ede5fa868b10a4670a331a46be38789be92bdc"
+        },
+        {
+          "assetId": "windows-portable-x64",
+          "name": "Unlimotion-win-Portable.zip",
+          "sha256": "dba2f38957e1151c966c8b56cdf0b22900df82ae5f0972ea275cd1a2168accb4"
+        }
+      ],
+      "verifiedCells": [],
+      "caveats": [
+        "No exact-artifact Windows consumer matrix is recorded for release 1.27.0.",
+        "The project does not publish verified Authenticode evidence for these assets."
+      ],
+      "readmeCaveatIds": [
+        "windows-exact-consumer-matrix-not-verified",
+        "authenticode-not-verified"
+      ],
+      "durableEvidenceUrls": [
+        "https://github.com/Kibnet/Unlimotion/releases/tag/1.27.0",
+        "https://github.com/Kibnet/Unlimotion/releases/download/1.27.0/Unlimotion-win-Setup.exe",
+        "https://github.com/Kibnet/Unlimotion/releases/download/1.27.0/Unlimotion-win-Portable.zip"
+      ]
+    },
+    {
+      "id": "linux-appimage-x64",
+      "platform": "linux",
+      "architecture": "x64",
+      "distribution": "appimage",
+      "releaseTag": "1.27.0",
+      "sourceSha": "5aebebcb34eabe35fcdb7a47ff76ffdc2a7e16dd",
+      "publicStatus": "publishedWithCaveats",
+      "evidenceLevel": "present",
+      "assets": [
+        {
+          "assetId": "linux-appimage-x64",
+          "name": "Unlimotion.AppImage",
+          "sha256": "ae1033e0131e39dcdbdb75470b48fa1c01318838d59a1cdb51f2dd9f09a665c1"
+        }
+      ],
+      "verifiedCells": [],
+      "caveats": [
+        "Direct FUSE launch is not verified for release 1.27.0.",
+        "Distribution compatibility has not passed the Stage-3 exact-artifact matrix."
+      ],
+      "readmeCaveatIds": [
+        "direct-fuse-not-verified",
+        "distribution-compatibility-not-verified"
+      ],
+      "durableEvidenceUrls": [
+        "https://github.com/Kibnet/Unlimotion/releases/tag/1.27.0",
+        "https://github.com/Kibnet/Unlimotion/releases/download/1.27.0/Unlimotion.AppImage"
+      ]
+    },
+    {
+      "id": "linux-deb-x64",
+      "platform": "linux",
+      "architecture": "x64",
+      "distribution": "deb",
+      "releaseTag": "1.27.0",
+      "sourceSha": "5aebebcb34eabe35fcdb7a47ff76ffdc2a7e16dd",
+      "publicStatus": "preview",
+      "evidenceLevel": "present",
+      "assets": [
+        {
+          "assetId": "linux-deb-x64",
+          "name": "Unlimotion-1.27.0.deb",
+          "sha256": "a192642417ac375ce1230b5cd89f4a11d99de4dd2a638e259b545cfcc3995a13"
+        }
+      ],
+      "verifiedCells": [],
+      "caveats": [
+        "Release 1.27.0 has not passed clean Debian 12 and Debian 13 install and launch cells.",
+        "This exact asset remains Preview and is not promoted by a later candidate build."
+      ],
+      "readmeCaveatIds": [
+        "debian-12-13-launch-not-verified",
+        "candidate-cannot-promote-release"
+      ],
+      "durableEvidenceUrls": [
+        "https://github.com/Kibnet/Unlimotion/releases/tag/1.27.0",
+        "https://github.com/Kibnet/Unlimotion/releases/download/1.27.0/Unlimotion-1.27.0.deb"
+      ]
+    },
+    {
+      "id": "macos-x64",
+      "platform": "macos",
+      "architecture": "x64",
+      "distribution": "desktop",
+      "releaseTag": "1.27.0",
+      "sourceSha": "5aebebcb34eabe35fcdb7a47ff76ffdc2a7e16dd",
+      "publicStatus": "publishedWithCaveats",
+      "evidenceLevel": "present",
+      "assets": [
+        {
+          "assetId": "macos-x64-setup",
+          "name": "Unlimotion-osx-Setup.pkg",
+          "sha256": "fd355e1463e0fe2651bf5440559ec438611272fb0be882bfe6a756ff12d31c9d"
+        },
+        {
+          "assetId": "macos-x64-portable",
+          "name": "Unlimotion-osx-Portable.zip",
+          "sha256": "c0267cb2a7ee5cafcaaa71a51bef018d348d96e1b3fa385f8fa492a2c2ec8bc5"
+        }
+      ],
+      "verifiedCells": [],
+      "caveats": [
+        "Release 1.27.0 has not passed an exact-artifact macOS 15 Intel launch cell.",
+        "The project does not publish verified Developer ID signing or notarization evidence."
+      ],
+      "readmeCaveatIds": [
+        "macos15-x64-launch-not-verified",
+        "developer-id-notarization-not-verified"
+      ],
+      "durableEvidenceUrls": [
+        "https://github.com/Kibnet/Unlimotion/releases/tag/1.27.0",
+        "https://github.com/Kibnet/Unlimotion/releases/download/1.27.0/Unlimotion-osx-Setup.pkg",
+        "https://github.com/Kibnet/Unlimotion/releases/download/1.27.0/Unlimotion-osx-Portable.zip"
+      ]
+    },
+    {
+      "id": "macos-arm64",
+      "platform": "macos",
+      "architecture": "arm64",
+      "distribution": "desktop",
+      "releaseTag": "1.27.0",
+      "sourceSha": "5aebebcb34eabe35fcdb7a47ff76ffdc2a7e16dd",
+      "publicStatus": "publishedWithCaveats",
+      "evidenceLevel": "present",
+      "assets": [
+        {
+          "assetId": "macos-arm64-setup",
+          "name": "Unlimotion-osx-arm64-Setup.pkg",
+          "sha256": "27d3a621f5c5613652ecd67e4f3144369ddb78187f09774529fae5ada1fbed9f"
+        },
+        {
+          "assetId": "macos-arm64-portable",
+          "name": "Unlimotion-osx-arm64-Portable.zip",
+          "sha256": "547cb1c2a665d144d6d5a1a9a282cf731d9cea9e09ebcc25becadf8be6decba7"
+        }
+      ],
+      "verifiedCells": [],
+      "caveats": [
+        "Release 1.27.0 has not passed an exact-artifact macOS 15 arm64 launch cell.",
+        "The project does not publish verified Developer ID signing or notarization evidence."
+      ],
+      "readmeCaveatIds": [
+        "macos15-arm64-launch-not-verified",
+        "developer-id-notarization-not-verified"
+      ],
+      "durableEvidenceUrls": [
+        "https://github.com/Kibnet/Unlimotion/releases/tag/1.27.0",
+        "https://github.com/Kibnet/Unlimotion/releases/download/1.27.0/Unlimotion-osx-arm64-Setup.pkg",
+        "https://github.com/Kibnet/Unlimotion/releases/download/1.27.0/Unlimotion-osx-arm64-Portable.zip"
+      ]
+    },
+    {
+      "id": "android-arm64",
+      "platform": "android",
+      "architecture": "arm64",
+      "distribution": "apk",
+      "releaseTag": "1.27.0",
+      "sourceSha": "5aebebcb34eabe35fcdb7a47ff76ffdc2a7e16dd",
+      "publicStatus": "publishedWithCaveats",
+      "evidenceLevel": "present",
+      "assets": [
+        {
+          "assetId": "android-arm64-apk",
+          "name": "Unlimotion-1.27.0-android-arm64.apk",
+          "sha256": "bc17ff84bc6f55bdeaeca428489459adeb06c441a72d3bca59f1d2bc5600f0ac"
+        }
+      ],
+      "verifiedCells": [],
+      "caveats": [
+        "Android 6.0 / API 23 is declared but not proven by an exact-artifact arm64 runtime cell.",
+        "The APK is sideloaded and does not imply universal device compatibility."
+      ],
+      "readmeCaveatIds": [
+        "api23-arm64-runtime-not-verified",
+        "sideload-not-universal"
+      ],
+      "durableEvidenceUrls": [
+        "https://github.com/Kibnet/Unlimotion/releases/tag/1.27.0",
+        "https://github.com/Kibnet/Unlimotion/releases/download/1.27.0/Unlimotion-1.27.0-android-arm64.apk"
+      ]
+    },
+    {
+      "id": "android-x64",
+      "platform": "android",
+      "architecture": "x64",
+      "distribution": "apk",
+      "releaseTag": "1.27.0",
+      "sourceSha": "5aebebcb34eabe35fcdb7a47ff76ffdc2a7e16dd",
+      "publicStatus": "publishedWithCaveats",
+      "evidenceLevel": "present",
+      "assets": [
+        {
+          "assetId": "android-x64-apk",
+          "name": "Unlimotion-1.27.0-android-x64.apk",
+          "sha256": "9d8a245c6dc3a26ebb192ddbffb14a55670c04afdaca96052d30feb2b1b0b4f3"
+        }
+      ],
+      "verifiedCells": [],
+      "caveats": [
+        "Android 6.0 / API 23 is declared but not proven by an exact-artifact x64 runtime cell.",
+        "The APK is primarily for x86_64 devices and emulators and is not universal device evidence."
+      ],
+      "readmeCaveatIds": [
+        "api23-api36-x64-launch-not-verified",
+        "x64-not-universal"
+      ],
+      "durableEvidenceUrls": [
+        "https://github.com/Kibnet/Unlimotion/releases/tag/1.27.0",
+        "https://github.com/Kibnet/Unlimotion/releases/download/1.27.0/Unlimotion-1.27.0-android-x64.apk"
+      ]
+    }
+  ]
+}
