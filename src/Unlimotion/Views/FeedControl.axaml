@@ -178,7 +178,9 @@
 
                 </StackPanel>
 
-                <Grid Grid.Row="1" MinHeight="0">
+                <views:FeedDocumentHost Grid.Row="1">
+                  <views:FeedDocumentHost.Viewport>
+                  <Grid MinHeight="0">
                     <Grid IsVisible="{Binding IsChronologyVisible}"
                           RowDefinitions="*,Auto"
                           RowSpacing="6">
@@ -202,6 +204,7 @@
                                       IsVisible="{Binding HasVisibleDays}"
                                       HorizontalScrollBarVisibility="Disabled"
                                       VerticalScrollBarVisibility="Auto"
+                                      BringIntoViewOnFocusChange="False"
                                       AutomationProperties.ControlTypeOverride="List"
                                       AutomationProperties.Name="{Binding ChronologyAutomationName}"
                                       AutomationProperties.AutomationId="FeedChronologyList">
@@ -224,11 +227,13 @@
                                                 AutomationProperties.AutomationId="{Binding AutomationId}"
                                                 AutomationProperties.Name="{Binding AutomationName}">
                                             <StackPanel Spacing="6">
-                                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                                                  <WrapPanel Orientation="Horizontal">
+                                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                                                  <WrapPanel Grid.Column="1" Orientation="Horizontal">
                                                     <TextBlock FontSize="17"
                                                                Margin="0,0,10,0"
                                                                AutomationProperties.AutomationId="{Binding HeaderAutomationId}"
+                                                               ToolTip.Tip="{Binding FullPath}"
+                                                               ContextRequested="OnDateContextRequested"
                                                                FontWeight="SemiBold"
                                                                VerticalAlignment="Center"
                                                                Text="{Binding DisplayDate}" />
@@ -246,7 +251,7 @@
                                                         </StackPanel>
                                                     </ToggleButton>
                                                   </WrapPanel>
-                                                    <ToggleButton Grid.Column="1"
+                                                    <ToggleButton Grid.Column="0"
                                                                   Classes="FeedDayCollapseToggle"
                                                                   IsChecked="{Binding IsCollapsed, Mode=TwoWay}"
                                                                   ToolTip.Tip="{DynamicResource FeedDayCollapseToggle}"
@@ -369,6 +374,10 @@
                                     <TextBlock Opacity="0.68"
                                                Text="{Binding OpenedThematicFile.RelativePath}"
                                                TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{Binding OpenedThematicFile.ExternalChangeMessage}"
+                                               IsVisible="{Binding OpenedThematicFile.HasExternalChangeMessage}"
+                                               TextWrapping="Wrap" MaxWidth="800"
+                                               AutomationProperties.AutomationId="FeedDocumentExternalChangeStatus" />
                                     <ToggleButton Classes="ServiceDataToggle" HorizontalAlignment="Left"
                                                   IsVisible="{Binding OpenedThematicFile.MarkdownEditor.HasServiceFrontMatter}"
                                                   IsChecked="{Binding OpenedThematicFile.MarkdownEditor.IsServiceFrontMatterExpanded, Mode=OneWay}"
@@ -391,10 +400,15 @@
                                         AutomationProperties.Name="{DynamicResource Close}"
                                         AutomationProperties.AutomationId="FeedThematicFileCloseButton" />
                             </Grid>
-                            <views:MarkdownBlockLivePreviewEditor Grid.Row="1"
+                            <ScrollViewer x:Name="DocumentScroller" Grid.Row="1"
+                                          HorizontalScrollBarVisibility="Disabled"
+                                          VerticalScrollBarVisibility="Auto"
+                                          AutomationProperties.AutomationId="FeedDocumentScrollViewer">
+                            <views:MarkdownBlockLivePreviewEditor
                                                                   DataContext="{Binding OpenedThematicFile.MarkdownEditor}"
                                                                   LinkInvoked="OnMarkdownLinkInvoked"
                                                                   BrokenTaskReferenceActionInvoked="OnBrokenTaskReferenceActionInvoked" />
+                            </ScrollViewer>
                         </Grid>
                     </Border>
 
@@ -402,7 +416,9 @@
                                  IsIndeterminate="True"
                                  VerticalAlignment="Top"
                                  AutomationProperties.AutomationId="FeedBusyIndicator" />
-                </Grid>
+                  </Grid>
+                  </views:FeedDocumentHost.Viewport>
+                </views:FeedDocumentHost>
 
                 <views:FeedPendingRecovery Grid.Row="2"
                                            DataContext="{Binding}" />

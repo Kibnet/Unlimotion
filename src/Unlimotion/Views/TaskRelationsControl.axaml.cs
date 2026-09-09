@@ -13,6 +13,7 @@ using Avalonia.VisualTree;
 using DynamicData.Binding;
 using ReactiveUI;
 using Unlimotion.ViewModel;
+using Unlimotion.ViewModel.Feed;
 
 namespace Unlimotion.Views;
 
@@ -24,6 +25,11 @@ public partial class TaskRelationsControl : UserControl
     public const string FeedParentsTreeAutomationId = "FeedTaskParentsTree";
 
     private const int MaxFocusRetries = 5;
+    public static readonly StyledProperty<FeedTaskParentDraftViewModel?> DraftProperty =
+        AvaloniaProperty.Register<TaskRelationsControl, FeedTaskParentDraftViewModel?>(nameof(Draft));
+    public FeedTaskParentDraftViewModel? Draft { get => GetValue(DraftProperty); set => SetValue(DraftProperty, value); }
+    public TaskRelationEditorViewModel? ActiveEditor => Draft?.Editor ?? Owner?.CurrentRelationEditor;
+    public bool IsDraft => Draft is not null;
 
     public static readonly StyledProperty<MainWindowViewModel?> OwnerProperty =
         AvaloniaProperty.Register<TaskRelationsControl, MainWindowViewModel?>(nameof(Owner));
@@ -39,7 +45,7 @@ public partial class TaskRelationsControl : UserControl
     public static readonly StyledProperty<string> ParentsTreeAutomationIdProperty =
         AvaloniaProperty.Register<TaskRelationsControl, string>(
             nameof(ParentsTreeAutomationId),
-            CurrentTaskParentsTreeAutomationId);
+            string.Empty);
 
     public static readonly StyledProperty<bool> OpenParentTaskOnDoubleTapProperty =
         AvaloniaProperty.Register<TaskRelationsControl, bool>(nameof(OpenParentTaskOnDoubleTap));
@@ -116,6 +122,17 @@ public partial class TaskRelationsControl : UserControl
     {
         base.OnPropertyChanged(change);
 
+        if (change.Property == DraftProperty)
+        {
+            UnsubscribeFromEditor();
+            SubscribeToEditor();
+            RefreshEditorState();
+            // Reflection bindings listen for Avalonia properties, so use the effective editor on the named card directly.
+            ParentEditorCard.DataContext = ActiveEditor;
+            DraftParents.ItemsSource = Draft?.Parents;
+            DraftParents.IsVisible = IsDraft;
+            ParentsTree.IsVisible = !IsDraft;
+        }
         if (change.Property == OwnerProperty || change.Property == TargetTaskProperty)
         {
             UpdateTargetContext();
@@ -174,7 +191,7 @@ public partial class TaskRelationsControl : UserControl
 
     private void SubscribeToEditor()
     {
-        var editor = _activeOwner?.CurrentRelationEditor;
+        var editor = ActiveEditor;
         if (ReferenceEquals(editor, _subscribedEditor))
         {
             return;
@@ -208,13 +225,14 @@ public partial class TaskRelationsControl : UserControl
 
     private void RefreshEditorState()
     {
-        IsEditorOpen = _activeOwner?.CurrentRelationEditor.IsOpenFor(
+        IsEditorOpen = Draft is not null ? Draft.Editor.IsOpen : _activeOwner?.CurrentRelationEditor.IsOpenFor(
             TaskRelationKind.Parents,
             _activeTargetTask) == true;
     }
 
     private void CloseOwnedEditor()
     {
+        Draft?.Editor.Close();
         _activeOwner?.CurrentRelationEditor.CloseFor(TaskRelationKind.Parents, _activeTargetTask);
         RefreshEditorState();
     }
@@ -262,7 +280,7 @@ public partial class TaskRelationsControl : UserControl
             ? CurrentTaskAutomationIdPrefix
             : AutomationIdPrefix.Trim();
         var treeAutomationId = string.IsNullOrWhiteSpace(ParentsTreeAutomationId)
-            ? CurrentTaskParentsTreeAutomationId
+            ? prefix == CurrentTaskAutomationIdPrefix ? CurrentTaskParentsTreeAutomationId : $"{prefix}Tree"
             : ParentsTreeAutomationId.Trim();
 
         AutomationProperties.SetAutomationId(ParentAddButton, $"{prefix}AddButton");
@@ -275,12 +293,13 @@ public partial class TaskRelationsControl : UserControl
 
     private void ParentAddButton_OnClick(object? sender, RoutedEventArgs e)
     {
+        if (Draft is not null) { Draft.Open(); return; }
         _activeOwner?.CurrentRelationEditor.Open(TaskRelationKind.Parents, _activeTargetTask);
     }
 
     private void RelationEditorControl_OnKeyDown(object? sender, KeyEventArgs e)
     {
-        if (_activeOwner?.CurrentRelationEditor is not { } editor || !IsEditorOpen)
+        if (ActiveEditor is not { } editor || !IsEditorOpen)
         {
             return;
         }
@@ -299,7 +318,7 @@ public partial class TaskRelationsControl : UserControl
 
     private void RelationEditorSuggestions_OnDoubleTapped(object? sender, TappedEventArgs e)
     {
-        var editor = _activeOwner?.CurrentRelationEditor;
+        var editor = ActiveEditor;
         if (editor?.ConfirmCommand.CanExecute(null) == true && IsEditorOpen)
         {
             editor.ConfirmCommand.Execute(null);
@@ -332,7 +351,7 @@ public partial class TaskRelationsControl : UserControl
         if (!_isAttached ||
             !IsEffectivelyVisible ||
             !IsEditorOpen ||
-            _activeOwner?.CurrentRelationEditor.IsOpenFor(TaskRelationKind.Parents, _activeTargetTask) != true)
+            (Draft is null && _activeOwner?.CurrentRelationEditor.IsOpenFor(TaskRelationKind.Parents, _activeTargetTask) != true))
         {
             return;
         }

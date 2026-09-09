@@ -6,7 +6,9 @@ using Avalonia.Logging;
 using ServiceStack;
 using ReactiveUI.Avalonia;
 using Unlimotion.Desktop.Services;
+using Unlimotion.Desktop.Views;
 using Unlimotion.Services;
+using Unlimotion.Views;
 using Velopack;
 
 namespace Unlimotion.Desktop
@@ -72,6 +74,7 @@ namespace Unlimotion.Desktop
         // Avalonia configuration, don't remove; also used by visual designer.
         public static AppBuilder BuildAvaloniaApp()
         {
+            FeedDocumentHost.DesktopHostFactory = static (feed, viewport) => new EremexFeedDocumentHost(feed, viewport);
             var builder = AppBuilder.Configure<App>()
                 .UsePlatformDetect()
                 .WithCustomFont();

@@ -167,7 +167,10 @@ public class FeedControlUiTests
                 if (movedDaily)
                 {
                     await Assert.That(navigation!.RelativePath).IsEqualTo("Ежедневные/2026-09-03.md");
-                    await Assert.That(feed.SelectedDay!.Date).IsEqualTo(today.AddDays(-1));
+                    await Assert.That(feed.OpenedThematicFile!.RelativePath).IsEqualTo("Ежедневные/2026-09-03.md");
+                    await Assert.That(navigation.Day).IsNull();
+                    await Assert.That(feed.OpenedThematicFile.MarkdownEditor).IsSameReferenceAs(
+                        feed.Days.Single(day => day.Date == today.AddDays(-1)).MarkdownEditor);
                 }
                 else await Assert.That(feed.OpenedThematicFile!.MarkdownEditor.Snapshot!.Raw).Contains("Полезные сведения");
             }
@@ -524,7 +527,7 @@ public class FeedControlUiTests
                     await Assert.That(toolbarBorder.Padding).IsEqualTo(new Thickness(12, 8));
                     await Assert.That(dayBorder.Padding).IsEqualTo(new Thickness(10));
                     await Assert.That(dayBorder.Margin.Bottom).IsEqualTo(8);
-                    await Assert.That(handle.Width).IsEqualTo(24);
+                    await Assert.That(handle.Width).IsEqualTo(18);
                     await Assert.That(handle.MinHeight).IsGreaterThanOrEqualTo(24);
                 }
             }

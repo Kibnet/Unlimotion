@@ -161,9 +161,15 @@ public sealed class FeedReadingPolishFlaUiTests
         else throw new InvalidOperationException($"'{element.AutomationId}' does not expose an action pattern.");
     }
 
-    private static void Resize(AutomationElement window, int width, int height)
+    internal static void Resize(AutomationElement window, int width, int height)
     {
         var handle = new IntPtr(window.Properties.NativeWindowHandle.ValueOrDefault);
+        var dpi = GetDpiForWindow(handle);
+        if (dpi == 0) throw new InvalidOperationException("Window DPI is unavailable.");
+        var logicalWidth = width;
+        var logicalHeight = height;
+        width = (int)Math.Round(width * dpi / 96d);
+        height = (int)Math.Round(height * dpi / 96d);
         if (!MoveWindow(handle, 0, 0, width, height, true))
             throw new InvalidOperationException($"Could not resize the native window: {Marshal.GetLastWin32Error()}.");
         try
@@ -174,7 +180,7 @@ public sealed class FeedReadingPolishFlaUiTests
                 && Math.Abs(bounds.Bottom - bounds.Top - height) <= 2
                 && window.BoundingRectangle.Width > 0,
                 $"Window did not reach the requested outer size {width}x{height}.");
-            Console.WriteLine($"Reading polish window: outer={width}x{height}; client UIA={window.BoundingRectangle}.");
+            Console.WriteLine($"Reading polish window: requested DIP={logicalWidth}x{logicalHeight}; dpi={dpi}; outer pixels={width}x{height}; client UIA={window.BoundingRectangle}.");
         }
         catch (TimeoutException ex)
         {
@@ -237,6 +243,9 @@ public sealed class FeedReadingPolishFlaUiTests
 
     [DllImport("user32.dll")]
     private static extern IntPtr GetThreadDpiAwarenessContext();
+
+    [DllImport("user32.dll")]
+    private static extern uint GetDpiForWindow(IntPtr window);
 
     [DllImport("user32.dll")]
     private static extern int GetAwarenessFromDpiAwarenessContext(IntPtr context);

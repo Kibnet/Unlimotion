@@ -71,7 +71,12 @@ public partial class FeedControl
         else UpdateNavigationState();
     }
 
-    private void OnVisibleDaysChanged(object? sender, NotifyCollectionChangedEventArgs e) => UpdateNavigationState();
+    private void OnVisibleDaysChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        observedViewModel?.AttachPresentation();
+        observedViewModel?.BlockSelection.Clear();
+        UpdateNavigationState();
+    }
 
     private void UpdateNavigationState()
     {
