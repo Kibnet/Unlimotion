@@ -401,6 +401,26 @@
                     <TextBlock Classes="SectionHint" Text="{DynamicResource NoteVaultHint}" />
 
                     <StackPanel Classes="FieldGroup"
+                                AutomationProperties.AutomationId="FeedDisplayDateFormatSection">
+                        <TextBlock Classes="FieldLabel" Text="{DynamicResource FeedDisplayDateFormat}" />
+                        <TextBox AutomationProperties.AutomationId="FeedDisplayDateFormatTextBox"
+                                 AutomationProperties.Name="{DynamicResource FeedDisplayDateFormat}"
+                                 Text="{Binding DisplayDateFormatDraft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                 MaxLength="128" />
+                        <TextBlock AutomationProperties.AutomationId="FeedDisplayDateFormatPreview"
+                                   Text="{Binding DisplayDateFormatPreview}" TextWrapping="Wrap" />
+                        <TextBlock Classes="SectionHint" Text="{DynamicResource FeedDisplayDateFormatHint}" />
+                        <TextBlock AutomationProperties.AutomationId="FeedDisplayDateFormatValidation"
+                                   Text="{Binding DisplayDateFormatValidationMessage}"
+                                   IsVisible="{Binding IsDisplayDateFormatValidationVisible}"
+                                   Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+                                   TextWrapping="Wrap" />
+                        <Button Content="{DynamicResource FeedDisplayDateFormatReset}"
+                                Command="{Binding ResetDisplayDateFormatCommand}"
+                                AutomationProperties.AutomationId="ResetFeedDisplayDateFormatButton" />
+                    </StackPanel>
+
+                    <StackPanel Classes="FieldGroup"
                                 IsVisible="{Binding IsExternalNoteVaultSupported}">
                         <TextBlock Classes="FieldLabel" Text="{DynamicResource FeedMode}" />
                         <CheckBox AutomationProperties.AutomationId="FeedEnabledCheckBox"

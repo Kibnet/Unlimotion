@@ -31,6 +31,8 @@
 	</ItemGroup>
 	<ItemGroup>
 		<PackageReference Include="Avalonia.Desktop" />
+		<PackageReference Include="Eremex.Avalonia.Controls" />
+		<PackageReference Include="Eremex.Avalonia.Themes.DeltaDesign" />
 		<PackageReference Include="AvaloniaUI.DiagnosticsSupport" />
 		<PackageReference Include="Dotnet.Bundle" />
 		<PackageReference Include="Velopack" />

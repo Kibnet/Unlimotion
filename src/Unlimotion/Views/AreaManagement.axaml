@@ -3,6 +3,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:feed="clr-namespace:Unlimotion.ViewModel.Feed;assembly=Unlimotion.ViewModel"
+             xmlns:views="clr-namespace:Unlimotion.Views"
              x:Class="Unlimotion.Views.AreaManagement"
              x:Name="Root"
              x:DataType="feed:AreaManagementViewModel"
@@ -91,6 +92,7 @@
                         CornerRadius="8"
                         IsEnabled="{Binding HasSelectedArea}"
                         AutomationProperties.AutomationId="AreaManagementEditor">
+                    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
                     <StackPanel Spacing="10">
                         <TextBlock FontWeight="SemiBold"
                                    Text="{DynamicResource AreaPropertiesTitle}" />
@@ -113,6 +115,23 @@
                                  PlaceholderText="{DynamicResource AreaDefaultNoteFolderWatermark}"
                                  AutomationProperties.Name="{DynamicResource AreaDefaultNoteFolderWatermark}"
                                  AutomationProperties.AutomationId="AreaManagementDefaultFolderTextBox" />
+                        <StackPanel Spacing="6" IsVisible="{Binding SupportsRootTasks}"
+                                    AutomationProperties.AutomationId="AreaManagementRootTaskPanel">
+                            <TextBlock Text="{DynamicResource AreaRootTaskLabel}" FontWeight="SemiBold" />
+                            <TextBlock Text="{DynamicResource AreaRootTaskHint}" TextWrapping="Wrap" Opacity="0.7" />
+                            <Button IsVisible="{Binding HasRootTask}" Command="{Binding OpenRootTaskCommand}"
+                                    Content="{Binding DraftRootTask.Title}" HorizontalAlignment="Stretch"
+                                    HorizontalContentAlignment="Left" AutomationProperties.AutomationId="AreaManagementRootTaskLink" />
+                            <WrapPanel>
+                                <Button Command="{Binding PickRootTaskCommand}" Content="{DynamicResource AreaChooseRootTask}"
+                                        AutomationProperties.AutomationId="AreaManagementPickRootTaskButton" />
+                                <Button IsVisible="{Binding HasRootTask}" Command="{Binding ClearRootTaskCommand}"
+                                        Content="{DynamicResource AreaClearRootTask}" Margin="8,0,0,0"
+                                        AutomationProperties.AutomationId="AreaManagementClearRootTaskButton" />
+                            </WrapPanel>
+                            <views:TaskRelationsControl Draft="{Binding RootTaskPicker}"
+                                IsVisible="{Binding RootTaskPicker.Editor.IsOpen}" AutomationIdPrefix="AreaRootTaskPicker" />
+                        </StackPanel>
                         <WrapPanel HorizontalAlignment="Right">
                             <Button Margin="0,0,8,0"
                                     Command="{Binding ToggleArchiveCommand}"
@@ -123,10 +142,20 @@
                                     AutomationProperties.AutomationId="AreaManagementSaveButton" />
                         </WrapPanel>
                     </StackPanel>
+                    </ScrollViewer>
                 </Border>
             </Grid>
 
             <StackPanel Grid.Row="3" Spacing="6">
+                <StackPanel IsVisible="{Binding HasPendingAreaSwitch}" Spacing="6"
+                            AutomationProperties.AutomationId="AreaManagementUnsavedPrompt">
+                    <TextBlock Text="{DynamicResource FeedAreaUnsavedDraft}" TextWrapping="Wrap" />
+                    <WrapPanel>
+                        <Button Command="{Binding SaveAndSwitchAreaCommand}" Content="{DynamicResource Save}" />
+                        <Button Command="{Binding DiscardAndSwitchAreaCommand}" Content="{DynamicResource FeedDiscardAreaChanges}" Margin="8,0" />
+                        <Button Command="{Binding CancelAreaSwitchCommand}" Content="{DynamicResource Cancel}" />
+                    </WrapPanel>
+                </StackPanel>
                 <Border IsVisible="{Binding HasExternalConflict}"
                         Padding="10"
                         BorderBrush="{DynamicResource SystemControlErrorTextForegroundBrush}"

@@ -13,7 +13,9 @@ public sealed record FeedTaskCaptureRequest(
     AreaReference? Area,
     string? ExpectedSourceRevision,
     IReadOnlyList<string> AreaIds,
-    bool IsGoal = false);
+    bool IsGoal = false,
+    IReadOnlyList<string>? ParentTaskIds = null,
+    FeedTaskSourceIdentity? TaskSourceIdentity = null);
 
 public sealed record FeedTaskCaptureResult(
     string TaskId,
@@ -32,7 +34,8 @@ public sealed class FeedTaskCaptureService(
     MarkdownMutationService mutations,
     IFeedTaskCreationTarget taskTarget,
     IFeedTaskConversionJournal journal,
-    IRevisionStore? revisions = null)
+    IRevisionStore? revisions = null,
+    Func<FeedTaskSourceIdentity?>? taskSourceIdentityProvider = null)
 {
     public async Task<FeedTaskCaptureResult> CaptureAsync(
         FeedTaskCaptureRequest request,
@@ -41,11 +44,21 @@ public sealed class FeedTaskCaptureService(
         ArgumentException.ThrowIfNullOrWhiteSpace(request.VaultId);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.OperationId);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Capture);
+        FeedTaskSourceIdentity.RequireCurrent(request.TaskSourceIdentity, taskSourceIdentityProvider);
+        if (request.ParentTaskIds?.Count > 0 && request.TaskSourceIdentity is null)
+            throw new InvalidOperationException("FeedTaskSourceMismatch");
 
         FeedLinkSerializer.ValidateStableId(request.VaultId, nameof(request.VaultId));
         FeedLinkSerializer.ValidateStableId(request.OperationId, nameof(request.OperationId));
         var operation = await journal.LoadAsync(request.VaultId, request.OperationId, cancellationToken)
             .ConfigureAwait(false);
+        if (operation is not null)
+        {
+            FeedTaskSourceIdentity.RequireCurrent(operation.TaskSourceIdentity, taskSourceIdentityProvider);
+            if (operation.TaskSourceIdentity != request.TaskSourceIdentity
+                || !(operation.ParentTaskIds ?? []).SequenceEqual(request.ParentTaskIds ?? [], StringComparer.Ordinal))
+                throw new InvalidOperationException("FeedTaskSourceMismatch");
+        }
         if (operation is null)
         {
             var path = dailyNotes.Naming.GetRelativePath(request.Date);
@@ -71,7 +84,7 @@ public sealed class FeedTaskCaptureService(
             var (title, description) = FeedTaskConversionService.ParseTaskContent(selected);
             var hasBom = original?.HasUtf8Bom ?? false;
             var expectedRevision = VaultRevision.Compute(VaultRevision.Encode(plan.UpdatedText, hasBom));
-            operation = new FeedTaskConversionRecord(2, request.VaultId, request.OperationId,
+            operation = new FeedTaskConversionRecord(request.TaskSourceIdentity is null ? 2 : 3, request.VaultId, request.OperationId,
                 FeedTaskConversionState.Pending, path, expectedRevision, "feed-" + request.OperationId,
                 null, DateTimeOffset.UtcNow,
                 new FeedTaskConversionRecoveryDescriptor(request.OperationId, selection,
@@ -79,7 +92,9 @@ public sealed class FeedTaskCaptureService(
                     null, title, description, request.IsGoal, request.AreaIds.ToArray(),
                     InputLocators: FeedOperationLocatorFactory.ForSelection(path, document, selection)),
                 CaptureIntent: new FeedTaskCaptureIntent(request.Capture, request.Area, original?.Revision,
-                    FeedOperationHash.Compute(plan.UpdatedText), hasBom, plan.UpdatedText));
+                    FeedOperationHash.Compute(plan.UpdatedText), hasBom, plan.UpdatedText),
+                TaskSourceIdentity: request.TaskSourceIdentity,
+                ParentTaskIds: request.ParentTaskIds?.ToArray());
             await journal.SaveAsync(operation, cancellationToken).ConfigureAwait(false);
         }
         else if (operation.CaptureIntent is { } intent
@@ -97,7 +112,8 @@ public sealed class FeedTaskCaptureService(
             mutations,
             taskTarget,
             journal,
-            revisions);
+            revisions,
+            taskSourceIdentityProvider);
         var result = await conversion.ResumeAsync(operation, cancellationToken)
             .ConfigureAwait(false);
 

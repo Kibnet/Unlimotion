@@ -433,6 +433,10 @@
                                          Text="{Binding Feed.QuickCaptureText, Mode=TwoWay}"
                                          PlaceholderText="{DynamicResource FeedQuickCaptureWatermark}"
                                          AutomationProperties.AutomationId="GlobalQuickCaptureTextBox" />
+                                <views:TaskRelationsControl IsVisible="{Binding IsQuickCaptureTask}"
+                                    Draft="{Binding Feed.QuickCaptureParents}" AutomationIdPrefix="GlobalQuickCaptureDraftParents" />
+                                <Button IsVisible="{Binding IsQuickCaptureTask}" Command="{Binding Feed.ApplyQuickCaptureAreaParentsCommand}"
+                                        Content="{DynamicResource FeedApplyAreaParents}" />
                                 <TextBlock Text="{Binding #CaptureEditor.ClipboardError}"
                                            IsVisible="{Binding #CaptureEditor.HasClipboardError}" TextWrapping="Wrap"
                                            AutomationProperties.LiveSetting="Polite" />

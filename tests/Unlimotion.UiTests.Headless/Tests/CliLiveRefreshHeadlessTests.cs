@@ -34,6 +34,7 @@ public sealed class CliLiveRefreshHeadlessTests
                 UnlimotionAutomationScenario.CliLiveRefresh,
                 language: "en",
                 afterViewModelPrepared: viewModel => capturedViewModel = viewModel));
+        ShowHeadlessWindow(session.MainWindow);
 
         var viewModel = capturedViewModel
             ?? throw new InvalidOperationException("CLI live-refresh view model was not captured.");
@@ -174,6 +175,7 @@ public sealed class CliLiveRefreshHeadlessTests
                 UnlimotionAutomationScenario.CliLiveRefresh,
                 language: "en",
                 afterViewModelPrepared: viewModel => capturedViewModel = viewModel));
+        ShowHeadlessWindow(session.MainWindow);
 
         var viewModel = capturedViewModel
             ?? throw new InvalidOperationException("External graph view model was not captured.");
@@ -285,6 +287,14 @@ public sealed class CliLiveRefreshHeadlessTests
 
     private static TaskItemViewModel CurrentTask(MainWindowViewModel viewModel) =>
         viewModel.CurrentTaskItem ?? throw new InvalidOperationException("Current task disappeared during CLI refresh test.");
+
+    private static void ShowHeadlessWindow(Window window) => HeadlessRuntime.Dispatch(() =>
+    {
+        // Launch creates the native window but does not show it. Relation controls
+        // initialize their projections on AttachedToVisualTree, as they do in the app.
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+    });
 
     private static TControl GetNativeControl<TControl>(IUiControl wrappedControl)
         where TControl : Control

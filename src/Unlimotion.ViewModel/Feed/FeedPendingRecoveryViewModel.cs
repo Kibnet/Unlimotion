@@ -54,6 +54,28 @@ public sealed class FeedPendingRecoveryViewModel : IDisposable
     public string Message { get; set; }
 
     public bool CanKeepBoth { get; set; }
+    public bool CanVerifyLegacySource { get; private set; }
+    public bool IsOriginalSourceConfirmed { get; set; }
+    public string? LegacySourceLabel { get; private set; }
+    public ICommand? VerifyLegacySourceCommand { get; private set; }
+
+    public void ConfigureLegacySourceVerification(string sourceLabel, Func<Task> verify)
+    {
+        LegacySourceLabel = sourceLabel;
+        IsOriginalSourceConfirmed = false;
+        CanVerifyLegacySource = true;
+        var command = ReactiveCommand.CreateFromTask(verify,
+            this.WhenAnyValue(value => value.IsOriginalSourceConfirmed));
+        VerifyLegacySourceCommand = command;
+        disposables.Add(command);
+    }
+
+    public void CompleteLegacySourceVerification()
+    {
+        CanVerifyLegacySource = false;
+        IsOriginalSourceConfirmed = false;
+        Message = L10n.Get("FeedLegacySourceVerified");
+    }
 
     public string DisplayKind => Kind switch
     {

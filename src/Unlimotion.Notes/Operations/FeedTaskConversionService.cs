@@ -12,7 +12,9 @@ public sealed record FeedTaskDraft(
     string Title,
     string Description,
     bool IsGoal,
-    IReadOnlyList<string> AreaIds);
+    IReadOnlyList<string> AreaIds,
+    IReadOnlyList<string>? ParentTaskIds = null,
+    FeedTaskSourceIdentity? TaskSourceIdentity = null);
 
 public sealed record FeedCreatedTask(string TaskId, string Title);
 
@@ -52,7 +54,9 @@ public sealed record FeedTaskConversionRecord(
     bool ReviewApplied = false,
     FeedOperationRecoveryResolution RecoveryResolution = FeedOperationRecoveryResolution.None,
     FeedTaskCaptureIntent? CaptureIntent = null,
-    FeedRecoveredCaptureWrite? RecoveredCaptureWrite = null);
+    FeedRecoveredCaptureWrite? RecoveredCaptureWrite = null,
+    FeedTaskSourceIdentity? TaskSourceIdentity = null,
+    IReadOnlyList<string>? ParentTaskIds = null);
 
 public sealed record FeedRecoveredCaptureWrite(string RelativePath, string Text,
     string? ExpectedRevision, bool HasUtf8Bom, string CaptureText, AreaReference? Area);
@@ -88,6 +92,9 @@ public interface IFeedTaskConversionJournal
         CancellationToken cancellationToken = default);
 
     Task SaveAsync(FeedTaskConversionRecord record, CancellationToken cancellationToken = default);
+
+    Task SaveVerifiedSourceBindingAsync(FeedTaskConversionRecord legacy, FeedTaskConversionRecord bound,
+        CancellationToken cancellationToken = default) => SaveAsync(bound, cancellationToken);
 
     async Task ResolveKeepBothAsync(
         string vaultId,
@@ -163,7 +170,9 @@ public sealed class FileFeedTaskConversionJournal(string appLocalRoot) : IFeedTa
         string operationId,
         CancellationToken cancellationToken = default)
     {
-        var path = Resolve(vaultId, operationId);
+        var path = Resolve(vaultId, operationId, sourceBound: true);
+        if (!File.Exists(path)) path = Resolve(vaultId, operationId, sourceBound: false);
+        if (!File.Exists(path)) path = ResolveLegacyArchive(vaultId, operationId);
         if (!File.Exists(path))
         {
             return null;
@@ -177,7 +186,11 @@ public sealed class FileFeedTaskConversionJournal(string appLocalRoot) : IFeedTa
 
     public async Task SaveAsync(FeedTaskConversionRecord record, CancellationToken cancellationToken = default)
     {
-        var path = Resolve(record.VaultId, record.OperationId);
+        if (record.SchemaVersion >= 3 && record.TaskSourceIdentity is null)
+            throw new InvalidDataException("Source-bound task conversion requires a task source identity.");
+        if (record.SchemaVersion < 3 && (record.TaskSourceIdentity is not null || record.ParentTaskIds?.Count > 0))
+            throw new InvalidDataException("Task source and parent intents require journal schema 3.");
+        var path = Resolve(record.VaultId, record.OperationId, record.SchemaVersion >= 3);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var temporaryPath = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
@@ -206,6 +219,21 @@ public sealed class FileFeedTaskConversionJournal(string appLocalRoot) : IFeedTa
         }
     }
 
+    public async Task SaveVerifiedSourceBindingAsync(FeedTaskConversionRecord legacy, FeedTaskConversionRecord bound,
+        CancellationToken cancellationToken = default)
+    {
+        if (legacy.TaskSourceIdentity is not null || bound.SchemaVersion != 3 || bound.TaskSourceIdentity is null
+            || legacy.OperationId != bound.OperationId || legacy.VaultId != bound.VaultId)
+            throw new InvalidDataException("The legacy source binding is invalid.");
+        var oldPath = Resolve(legacy.VaultId, legacy.OperationId, sourceBound: false);
+        var archive = ResolveLegacyArchive(legacy.VaultId, legacy.OperationId);
+        Directory.CreateDirectory(Path.GetDirectoryName(archive)!);
+        // Remove the legacy replay surface first. A crash here preserves the original bytes and requires
+        // explicit verification again; neither a rollback nor a half-written adoption can auto-replay it.
+        if (File.Exists(oldPath)) File.Move(oldPath, archive, overwrite: false);
+        await SaveAsync(bound, cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task<IReadOnlyList<FeedTaskConversionRecord>> ListPendingAsync(
         string vaultId,
         CancellationToken cancellationToken = default)
@@ -218,7 +246,15 @@ public sealed class FileFeedTaskConversionJournal(string appLocalRoot) : IFeedTa
         }
 
         var records = new List<FeedTaskConversionRecord>();
-        foreach (var path in Directory.EnumerateFiles(directory, "*.task.json", SearchOption.TopDirectoryOnly)
+        var sourceBoundDirectory = Path.Combine(directory, "task-v3");
+        var legacyArchive = Path.Combine(sourceBoundDirectory, "legacy-original");
+        var paths = Directory.EnumerateFiles(directory, "*.task.json", SearchOption.TopDirectoryOnly)
+            .Concat(Directory.Exists(sourceBoundDirectory)
+                ? Directory.EnumerateFiles(sourceBoundDirectory, "*.task.json", SearchOption.TopDirectoryOnly)
+                : [])
+            .Concat(Directory.Exists(legacyArchive)
+                ? Directory.EnumerateFiles(legacyArchive, "*.task.json", SearchOption.TopDirectoryOnly) : []);
+        foreach (var path in paths
                      .OrderBy(static path => path, StringComparer.Ordinal))
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -231,6 +267,7 @@ public sealed class FileFeedTaskConversionJournal(string appLocalRoot) : IFeedTa
                 throw new InvalidDataException($"The task conversion journal '{Path.GetFileName(path)}' belongs to another vault.");
             }
 
+            if (record.SchemaVersion < 3 && File.Exists(Resolve(vaultId, record.OperationId, sourceBound: true))) continue;
             if (record.State != FeedTaskConversionState.Completed
                 || record.SchemaVersion >= 2 && !record.ReviewApplied)
             {
@@ -244,15 +281,19 @@ public sealed class FileFeedTaskConversionJournal(string appLocalRoot) : IFeedTa
             .ToArray();
     }
 
-    private string Resolve(string vaultId, string operationId)
+    private string Resolve(string vaultId, string operationId, bool sourceBound)
     {
         FeedLinkSerializer.ValidateStableId(vaultId, nameof(vaultId));
         FeedLinkSerializer.ValidateStableId(operationId, nameof(operationId));
-        return Path.Combine(ResolveTransactionsDirectory(vaultId), operationId + ".task.json");
+        var directory = ResolveTransactionsDirectory(vaultId);
+        return Path.Combine(sourceBound ? Path.Combine(directory, "task-v3") : directory, operationId + ".task.json");
     }
 
     private string ResolveTransactionsDirectory(string vaultId) =>
         Path.Combine(Path.GetFullPath(appLocalRoot), vaultId, "transactions");
+
+    private string ResolveLegacyArchive(string vaultId, string operationId) =>
+        Path.Combine(Path.GetDirectoryName(Resolve(vaultId, operationId, sourceBound: true))!, "legacy-original", operationId + ".task.json");
 }
 
 public sealed class InMemoryFeedTaskConversionJournal : IFeedTaskConversionJournal
@@ -300,7 +341,9 @@ public sealed record FeedTaskConversionRequest(
     MarkdownBlockSelection Selection,
     IReadOnlyList<string> AreaIds,
     bool IsGoal = false,
-    string? ReviewSessionId = null);
+    string? ReviewSessionId = null,
+    IReadOnlyList<string>? ParentTaskIds = null,
+    FeedTaskSourceIdentity? TaskSourceIdentity = null);
 
 public sealed record FeedTaskConversionResult(
     string TaskId,
@@ -314,8 +357,39 @@ public sealed partial class FeedTaskConversionService(
     MarkdownMutationService mutations,
     IFeedTaskCreationTarget taskTarget,
     IFeedTaskConversionJournal journal,
-    IRevisionStore? revisions = null)
+    IRevisionStore? revisions = null,
+    Func<FeedTaskSourceIdentity?>? taskSourceIdentityProvider = null)
 {
+    /// <summary>Only call after the user explicitly identifies the currently selected space as the original source.</summary>
+    public async Task<FeedTaskConversionRecord> BindLegacyToVerifiedSourceAsync(FeedTaskConversionRecord operation,
+        FeedTaskSourceIdentity confirmedSource, CancellationToken cancellationToken = default)
+    {
+        RequireSource(confirmedSource);
+        if (operation.SchemaVersion != 2 || operation.TaskSourceIdentity is not null
+            || operation.RecoveryDescriptor is not { } descriptor || !taskTarget.SupportsReadOnlyLookup)
+            throw new InvalidOperationException("FeedLegacySourceUnverifiable");
+        var persisted = await journal.LoadAsync(operation.VaultId, operation.OperationId, cancellationToken).ConfigureAwait(false);
+        if (persisted is null || JsonSerializer.Serialize(persisted) != JsonSerializer.Serialize(operation))
+            throw new InvalidOperationException("FeedLegacySourceUnverifiable");
+        FeedCreatedTask? owned;
+        try
+        {
+            owned = await taskTarget.FindOwnedAsync(new FeedTaskDraft(operation.TaskId, operation.OperationId,
+                descriptor.Title, descriptor.Description, descriptor.IsGoal, descriptor.AreaIds,
+                operation.ParentTaskIds, confirmedSource), cancellationToken).ConfigureAwait(false);
+        }
+        catch (InvalidDataException error)
+        {
+            throw new InvalidOperationException("FeedLegacySourceUnverifiable", error);
+        }
+        RequireSource(confirmedSource);
+        if (owned is null || owned.TaskId != operation.TaskId)
+            throw new InvalidOperationException("FeedLegacySourceUnverifiable");
+        var bound = operation with { SchemaVersion = 3, TaskSourceIdentity = confirmedSource, UpdatedAt = DateTimeOffset.UtcNow };
+        await journal.SaveVerifiedSourceBindingAsync(operation, bound, cancellationToken).ConfigureAwait(false);
+        return bound;
+    }
+
     [GeneratedRegex(@"^\s*(?:[-*+]\s+)?(?:\[[ xX]\]\s*)?")]
     private static partial Regex LeadingTaskMarkerRegex();
 
@@ -324,12 +398,14 @@ public sealed partial class FeedTaskConversionService(
         CancellationToken cancellationToken = default)
     {
         ValidateRequest(request);
+        RequireSource(request.TaskSourceIdentity);
         var taskId = "feed-" + request.OperationId;
         FeedLinkSerializer.ValidateStableId(taskId, nameof(taskId));
 
         var operation = await journal.LoadAsync(request.VaultId, request.OperationId, cancellationToken)
             .ConfigureAwait(false);
         ValidateExistingOperation(operation, request, taskId);
+        if (operation is not null) RequireSource(operation.TaskSourceIdentity);
         if (operation is { State: FeedTaskConversionState.Pending, CaptureIntent: not null })
         {
             await EnsureCapturedAsync(operation, cancellationToken).ConfigureAwait(false);
@@ -402,7 +478,7 @@ public sealed partial class FeedTaskConversionService(
         if (operation is null)
         {
             operation = new FeedTaskConversionRecord(
-                2,
+                request.TaskSourceIdentity is null ? 2 : 3,
                 request.VaultId,
                 request.OperationId,
                 FeedTaskConversionState.Pending,
@@ -421,7 +497,9 @@ public sealed partial class FeedTaskConversionService(
                     request.IsGoal,
                     request.AreaIds.ToArray(),
                     request.ReviewSessionId,
-                    inputLocators));
+                    inputLocators),
+                TaskSourceIdentity: request.TaskSourceIdentity,
+                ParentTaskIds: request.ParentTaskIds?.Distinct(StringComparer.Ordinal).ToArray());
         }
         else if (operation.RecoveryDescriptor is null)
         {
@@ -454,10 +532,13 @@ public sealed partial class FeedTaskConversionService(
 
         await journal.SaveAsync(operation, cancellationToken).ConfigureAwait(false);
 
+        RequireSource(operation.TaskSourceIdentity);
         var created = await taskTarget.CreateOrGetAsync(
-                new FeedTaskDraft(taskId, request.OperationId, title, description, request.IsGoal, request.AreaIds),
+                new FeedTaskDraft(taskId, request.OperationId, title, description, request.IsGoal, request.AreaIds,
+                    operation.ParentTaskIds, operation.TaskSourceIdentity),
                 cancellationToken)
             .ConfigureAwait(false);
+        RequireSource(operation.TaskSourceIdentity);
         if (!string.Equals(created.TaskId, taskId, StringComparison.Ordinal))
         {
             throw new InvalidDataException("Task persistence returned an ID different from the stable conversion task ID.");
@@ -551,6 +632,7 @@ public sealed partial class FeedTaskConversionService(
             await revisions.SaveAsync(request.VaultId, sourceAfterTaskPersistence, cancellationToken).ConfigureAwait(false);
         }
 
+        RequireSource(operation.TaskSourceIdentity);
         var sourceWrite = await vault.WriteAsync(
                 request.SourcePath,
                 updatedSource,
@@ -575,9 +657,10 @@ public sealed partial class FeedTaskConversionService(
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(operation);
+        RequireSource(operation.TaskSourceIdentity);
         var descriptor = operation.RecoveryDescriptor
             ?? throw new InvalidDataException("The task conversion journal does not contain a durable recovery descriptor.");
-        if (operation.SchemaVersion != 2
+        if (operation.SchemaVersion is not 2 and not 3
             || !string.Equals(descriptor.OriginalOperationId, operation.OperationId, StringComparison.Ordinal))
         {
             throw new InvalidDataException("The task conversion recovery descriptor is incompatible with this operation.");
@@ -592,7 +675,9 @@ public sealed partial class FeedTaskConversionService(
                 descriptor.Selection,
                 descriptor.AreaIds,
                 descriptor.IsGoal,
-                descriptor.ReviewSessionId),
+                descriptor.ReviewSessionId,
+                operation.ParentTaskIds,
+                operation.TaskSourceIdentity),
             cancellationToken);
     }
 
@@ -604,6 +689,7 @@ public sealed partial class FeedTaskConversionService(
 
     private async Task EnsureCapturedAsync(FeedTaskConversionRecord operation, CancellationToken cancellationToken)
     {
+        RequireSource(operation.TaskSourceIdentity);
         var intent = operation.CaptureIntent!;
         var source = await vault.ReadAsync(operation.SourcePath, cancellationToken).ConfigureAwait(false);
         if (source is not null
@@ -624,6 +710,7 @@ public sealed partial class FeedTaskConversionService(
             throw new InvalidDataException("The capture intent no longer matches its expected Markdown output.");
         }
 
+        RequireSource(operation.TaskSourceIdentity);
         if (source is null)
         {
             await vault.CreateAsync(operation.SourcePath, updated, intent.HasUtf8Bom, cancellationToken).ConfigureAwait(false);
@@ -685,6 +772,11 @@ public sealed partial class FeedTaskConversionService(
 
     private static void ValidateRequest(FeedTaskConversionRequest request)
     {
+        if (request.ParentTaskIds?.Count > 0 && request.TaskSourceIdentity is null)
+            throw new InvalidOperationException("FeedTaskSourceMismatch");
+        request.TaskSourceIdentity?.Validate();
+        foreach (var parentId in request.ParentTaskIds ?? [])
+            FeedLinkSerializer.ValidateStableId(parentId, nameof(request.ParentTaskIds));
         FeedLinkSerializer.ValidateStableId(request.VaultId, nameof(request.VaultId));
         FeedLinkSerializer.ValidateStableId(request.OperationId, nameof(request.OperationId));
         ArgumentException.ThrowIfNullOrWhiteSpace(request.SourcePath);
@@ -705,7 +797,10 @@ public sealed partial class FeedTaskConversionService(
             return;
         }
 
-        if (operation.SchemaVersion is not 1 and not 2
+        if (operation.SchemaVersion is not 1 and not 2 and not 3
+            || operation.TaskSourceIdentity != request.TaskSourceIdentity
+            || !(operation.ParentTaskIds ?? []).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)
+                .SequenceEqual((request.ParentTaskIds ?? []).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal), StringComparer.Ordinal)
             || !string.Equals(operation.VaultId, request.VaultId, StringComparison.Ordinal)
             || !string.Equals(operation.OperationId, request.OperationId, StringComparison.Ordinal)
             || !string.Equals(operation.SourcePath.Replace('\\', '/'), request.SourcePath.Replace('\\', '/'), StringComparison.Ordinal)
@@ -757,6 +852,9 @@ public sealed partial class FeedTaskConversionService(
 
     private static bool SourceReferencesTask(string source, string taskId) =>
         source.Contains($"(unlimotion://task/{taskId})", StringComparison.Ordinal);
+
+    private void RequireSource(FeedTaskSourceIdentity? identity) =>
+        FeedTaskSourceIdentity.RequireCurrent(identity, taskSourceIdentityProvider);
 
     private static bool ReviewDoesNotRequireDecision(string? reviewSessionId) =>
         string.IsNullOrWhiteSpace(reviewSessionId);

@@ -119,7 +119,8 @@ public enum MarkdownBlockListStyle
 {
     Bulleted,
     Numbered,
-    Checklist
+    Checklist,
+    Plain
 }
 
 public enum MarkdownSelectionSemanticAction
@@ -473,6 +474,21 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
 
     public int SelectedMoveBlockCount => moveSelectionIndices.Count;
 
+    public FeedBlockSelectionCoordinator? SelectionCoordinator { get; set; }
+
+    private bool HasSingleDocumentSelection => SelectionCoordinator?.SpansDocuments != true;
+
+    private bool HasContiguousSelection => !Blocks.Any(block => block.Block.IsContent
+        && block.Index > moveSelectionIndices.DefaultIfEmpty(-1).Min()
+        && block.Index < moveSelectionIndices.DefaultIfEmpty(-1).Max()
+        && !moveSelectionIndices.Contains(block.Index));
+
+    internal void RefreshSelectionAvailability() => RaiseMoveStateChanged();
+
+    public void ReportActionError(string message) => MoveErrorMessage = message;
+
+    public string SelectedBlockMarkdown => string.Concat(SelectedMoveBlocks().OrderBy(block => block.Index).Select(block => block.Block.Raw));
+
     public bool HasMoveSelection => SelectedMoveBlockCount > 0;
 
     public bool IsMoveInProgress
@@ -500,6 +516,7 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
     public bool HasMoveError => !string.IsNullOrWhiteSpace(MoveErrorMessage);
 
     public bool CanMoveSelection => HasMoveSelection
+        && HasSingleDocumentSelection
         && MoveBlocksAsync is not null
         && ActiveBlock is null
         && !IsMoveInProgress;
@@ -509,6 +526,7 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
     public bool CanMoveSelectionDown => CanMoveSelection && FindAdjacentMoveTarget(1) is not null;
 
     public bool CanTransformSelection => HasMoveSelection
+        && HasSingleDocumentSelection
         && ActiveBlock is null
         && !IsMoveInProgress
         && SelectedMoveBlocks().All(static block => block.Kind is MarkdownBlockKind.Paragraph
@@ -516,6 +534,7 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
             or MarkdownBlockKind.TaskListItem);
 
     public bool CanOpenSelectionActions => HasMoveSelection
+        && HasSingleDocumentSelection && HasContiguousSelection
         && ActiveBlock is null
         && !IsMoveInProgress
         && SelectionActionAsync is not null;
@@ -830,6 +849,9 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
             return false;
         }
 
+        if (SelectionCoordinator is { IsUpdating: false } coordinator)
+            return coordinator.Select(block, toggle, extendRange);
+
         MoveErrorMessage = null;
         if (extendRange && moveSelectionAnchorBlockIndex is { } anchor)
         {
@@ -893,6 +915,11 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
 
     public void ClearMoveSelection()
     {
+        if (SelectionCoordinator is { IsUpdating: false } coordinator)
+        {
+            coordinator.Clear();
+            return;
+        }
         moveSelectionIndices.Clear();
         moveSelectionAnchorBlockIndex = null;
         foreach (var block in Blocks)
@@ -1085,6 +1112,7 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
         var completed = block.Kind == MarkdownBlockKind.TaskListItem && block.IsTaskCompleted;
         var prefix = style switch
         {
+            MarkdownBlockListStyle.Plain => string.Empty,
             MarkdownBlockListStyle.Bulleted => "- ",
             MarkdownBlockListStyle.Numbered => $"{ordinal}. ",
             MarkdownBlockListStyle.Checklist => completed ? "- [x] " : "- [ ] ",
@@ -1282,6 +1310,7 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
             CommitAccepted?.Invoke(Snapshot);
         }
 
+        if (SelectionCoordinator is not null) ClearMoveSelection();
         ActiveBlock?.CancelEdit();
         RevealServiceFrontMatter(block);
         ActiveBlock = block;
@@ -1490,7 +1519,29 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
             && mergeService.CreatePlan(currentSnapshot.Raw, block.Index, block.EditorText) is not null;
     }
 
-    public async Task<bool> CommitActiveAsync(CancellationToken cancellationToken = default)
+    private Task<bool>? activeCommit;
+    public sealed record CaretPosition(string Revision, int BlockStart, int SelectionStart, int SelectionEnd);
+    public CaretPosition? LastCaretPosition { get; internal set; }
+
+    public bool RestoreCaretPosition()
+    {
+        if (LastCaretPosition is not { } caret || Snapshot?.ExpectedRevisionHash != caret.Revision) return false;
+        var block = Blocks.FirstOrDefault(candidate => candidate.Block.Start == caret.BlockStart && candidate.IsEditable);
+        if (block is null || !BeginEdit(block)) return false;
+        block.EditorSelectionStart = Math.Clamp(caret.SelectionStart, 0, block.EditorText.Length);
+        block.EditorSelectionEnd = Math.Clamp(caret.SelectionEnd, 0, block.EditorText.Length);
+        return true;
+    }
+
+    public Task<bool> CommitActiveAsync(CancellationToken cancellationToken = default)
+    {
+        // LostFocus and tab activation can request the same save in one input gesture.
+        // Both callers must observe that save's result, not treat its accepted reload as failure.
+        if (activeCommit is { IsCompleted: false }) return activeCommit.WaitAsync(cancellationToken);
+        return activeCommit = CommitActiveCoreAsync(cancellationToken);
+    }
+
+    private async Task<bool> CommitActiveCoreAsync(CancellationToken cancellationToken)
     {
         ObjectDisposedException.ThrowIf(isDisposed, this);
         CancelPendingAutosave();
@@ -1519,6 +1570,7 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
 
             if (!block.IsDirty)
             {
+                LastCaretPosition = new(currentSnapshot.ExpectedRevisionHash, block.Block.Start, block.EditorSelectionStart, block.EditorSelectionEnd);
                 var closedBlockIndex = block.Index;
                 var notifyCommitAccepted = hasDeferredCommitNotification;
                 hasDeferredCommitNotification = false;
@@ -1564,6 +1616,7 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
             }
 
             var committedBlockIndex = block.Index;
+            LastCaretPosition = new(acceptedSnapshot.ExpectedRevisionHash, block.Block.Start, block.EditorSelectionStart, block.EditorSelectionEnd);
             hasDeferredCommitNotification = false;
             Load(acceptedSnapshot);
             await QueueDeleteDraftAsync(currentSnapshot.RelativePath, committedBlockIndex).ConfigureAwait(true);
@@ -2056,6 +2109,18 @@ public sealed class MarkdownLiveBlockViewModel : ReactiveObject
     private readonly string sessionInsertionPrefix;
     private readonly string sessionInsertionSuffix;
     private string editorText;
+    private int editorSelectionStart;
+    private int editorSelectionEnd;
+    public int EditorSelectionStart
+    {
+        get => editorSelectionStart;
+        set => this.RaiseAndSetIfChanged(ref editorSelectionStart, value);
+    }
+    public int EditorSelectionEnd
+    {
+        get => editorSelectionEnd;
+        set => this.RaiseAndSetIfChanged(ref editorSelectionEnd, value);
+    }
     private bool isEditing;
     private bool isCommitInProgress;
     private bool isReviewHighlighted;
@@ -2328,7 +2393,11 @@ public sealed class MarkdownLiveBlockViewModel : ReactiveObject
     public bool IsCommitInProgress
     {
         get => isCommitInProgress;
-        internal set => this.RaiseAndSetIfChanged(ref isCommitInProgress, value);
+        internal set
+        {
+            this.RaiseAndSetIfChanged(ref isCommitInProgress, value);
+            this.RaisePropertyChanged(nameof(HasEditorStatus));
+        }
     }
 
     public string? ErrorMessage
@@ -2338,10 +2407,13 @@ public sealed class MarkdownLiveBlockViewModel : ReactiveObject
         {
             this.RaiseAndSetIfChanged(ref errorMessage, value);
             this.RaisePropertyChanged(nameof(HasError));
+            this.RaisePropertyChanged(nameof(HasEditorStatus));
         }
     }
 
     public bool HasError => !string.IsNullOrWhiteSpace(ErrorMessage);
+
+    public bool HasEditorStatus => HasError || IsCommitInProgress;
 
     public bool IsDirty => !string.Equals(EditorText, StripStructuralLineEnding(Block.Raw), StringComparison.Ordinal);
 
