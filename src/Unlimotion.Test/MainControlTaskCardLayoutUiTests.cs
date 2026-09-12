@@ -148,6 +148,91 @@ public class MainControlTaskCardLayoutUiTests
     }
 
     [Test]
+    public async Task CurrentTaskCard_ParentEmojiTrail_ShowsAncestorsBeforeTaskId()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            ResetTaskCardLayoutSharedState();
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+            var expectedTrail = string.Empty;
+
+            try
+            {
+                var (view, createdWindow) = await CreateArrangedMainControlAsync(
+                    fixture,
+                    1400,
+                    900,
+                    MainWindowViewModelFixture.SubTask22Id,
+                    task =>
+                    {
+                        var parents = task.ParentsTasks.OrderBy(parent => parent.Id).ToArray();
+                        parents[0].Title = "🧭 Alpha parent";
+                        parents[1].Title = "🛠 Beta parent";
+                        task.RefreshComputedFields();
+                        expectedTrail = string.Concat(task.GetAllParents().Select(parent => parent.Emoji));
+                    });
+                window = createdWindow;
+
+                var title = FindControlByAutomationId<Control>(view, "CurrentTaskTitleTextBox");
+                var id = FindControlByAutomationId<Control>(view, "CurrentTaskIdTextBlock");
+                var trail = FindControlByAutomationId<EmojiTextBlock>(view, "CurrentTaskParentEmojiTrail");
+                var actions = FindControlByAutomationId<Control>(view, "CurrentTaskActionsMenuButton");
+
+                await Assert.That(expectedTrail).IsEqualTo("🧭🛠");
+                await Assert.That(trail.EmojiText).IsEqualTo(expectedTrail);
+                await Assert.That(IsVisibleAndArranged(trail)).IsTrue();
+                await Assert.That(GetTopEdge(view, trail)).IsGreaterThanOrEqualTo(GetBottomEdge(view, title) - 1);
+                await Assert.That(GetRightEdge(view, trail)).IsLessThan(GetLeftEdge(view, id));
+                await Assert.That(GetLeftEdge(view, actions)).IsGreaterThan(GetRightEdge(view, id));
+            }
+            finally
+            {
+                CloseWindow(window);
+                await fixture.CleanTasksAsync();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task CurrentTaskCard_ParentEmojiTrail_HidesForRootTask()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            ResetTaskCardLayoutSharedState();
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var (view, createdWindow) = await CreateArrangedMainControlAsync(
+                    fixture,
+                    1400,
+                    900,
+                    MainWindowViewModelFixture.RootTask1Id,
+                    task =>
+                    {
+                        task.Title = "🧭 Root task";
+                        task.RefreshComputedFields();
+                    });
+                window = createdWindow;
+
+                var trail = FindControlByAutomationId<EmojiTextBlock>(view, "CurrentTaskParentEmojiTrail");
+
+                await Assert.That(trail.IsVisible).IsFalse();
+                await Assert.That(trail.EmojiText).IsEmpty();
+            }
+            finally
+            {
+                CloseWindow(window);
+                await fixture.CleanTasksAsync();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
     public async Task CurrentTaskCard_PlanningDatePickers_UseDurationFieldPadding()
     {
         using var phases = new TestScenarioPhases(nameof(CurrentTaskCard_PlanningDatePickers_UseDurationFieldPadding));
@@ -804,7 +889,18 @@ public class MainControlTaskCardLayoutUiTests
 
             try
             {
-                var (view, createdWindow) = await CreateArrangedMainControlAsync(fixture, width, 844);
+                var (view, createdWindow) = await CreateArrangedMainControlAsync(
+                    fixture,
+                    width,
+                    844,
+                    MainWindowViewModelFixture.SubTask22Id,
+                    task =>
+                    {
+                        var parents = task.ParentsTasks.OrderBy(parent => parent.Id).ToArray();
+                        parents[0].Title = "🧭 Alpha parent";
+                        parents[1].Title = "🛠 Beta parent";
+                        task.RefreshComputedFields();
+                    });
                 window = createdWindow;
 
                 var scrollViewer = FindControlByAutomationId<ScrollViewer>(view, "CurrentTaskDetailsScrollViewer");
@@ -812,12 +908,15 @@ public class MainControlTaskCardLayoutUiTests
                 var commandBar = FindControlByAutomationId<Control>(view, "CurrentTaskCommandBar");
                 var header = FindControlByAutomationId<Control>(card, "CurrentTaskHeader");
                 var title = FindControlByAutomationId<TextBox>(card, "CurrentTaskTitleTextBox");
+                var parentEmojiTrail = FindControlByAutomationId<EmojiTextBlock>(card, "CurrentTaskParentEmojiTrail");
                 var createMenuButton = FindControlByAutomationId<DropDownButton>(view, "GlobalTaskCreateMenuButton");
                 var actionsMenuButton = FindControlByAutomationId<DropDownButton>(view, "CurrentTaskActionsMenuButton");
 
                 AssertNoHorizontalOverflow(scrollViewer, card);
                 AssertFirstPhoneViewportShowsHeader(scrollViewer, commandBar, header, title);
                 AssertTaskHeaderAlignment(header);
+                await Assert.That(IsVisibleAndArranged(parentEmojiTrail)).IsTrue();
+                AssertHorizontallyContained(scrollViewer, parentEmojiTrail);
                 AssertHasClass(createMenuButton, "TaskCreateMenuButton");
                 AssertCreateMenuContainsTaskCommands(createMenuButton);
                 AssertHorizontallyContained(view, createMenuButton);

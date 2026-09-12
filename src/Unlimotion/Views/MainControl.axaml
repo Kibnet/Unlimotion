@@ -332,6 +332,12 @@
             <Setter Property="Margin" Value="0,0,8,4"/>
             <Setter Property="MinHeight" Value="22"/>
         </Style>
+        <Style Selector="unlimotion|EmojiTextBlock.TaskHeaderParentEmojiTrail">
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="FontSize" Value="{DynamicResource AppSmallFontSize}"/>
+            <Setter Property="Margin" Value="0,0,8,4"/>
+            <Setter Property="MinHeight" Value="22"/>
+        </Style>
         <Style Selector="WrapPanel.TaskHeaderDateMeta">
             <Setter Property="Margin" Value="0,0,8,4"/>
         </Style>
@@ -1835,6 +1841,12 @@
                                                            ToolTip.Tip="{DynamicResource Importance}"
                                                            PlaceholderText="{DynamicResource Importance}"
                                                            AutomationProperties.AutomationId="CurrentTaskImportanceInput"/>
+                                            <unlimotion:EmojiTextBlock Classes="TaskHeaderParentEmojiTrail"
+                                                                        EmojiText="{Binding ParentEmojiTrail, Mode=OneWay}"
+                                                                        IsVisible="{Binding HasParentEmojiTrail}"
+                                                                        ToolTip.Tip="{DynamicResource ParentsTasks}"
+                                                                        AutomationProperties.Name="{DynamicResource ParentsTasks}"
+                                                                        AutomationProperties.AutomationId="CurrentTaskParentEmojiTrail"/>
                                             <TextBlock Classes="TaskHeaderIdMeta"
                                                        Text="{Binding Id, Mode=OneWay}"
                                                        ToolTip.Tip="{Binding Id}"
