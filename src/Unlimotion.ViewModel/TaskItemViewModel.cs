@@ -152,9 +152,13 @@ namespace Unlimotion.ViewModel
             Disposable.Create(() => CompletionCriteria.CollectionChanged -= completionCriteriaChangedHandler).AddToDispose(this);
             RegisterCompletionCriteriaPropertyChangedSubscription();
 
-            // Пересчитываем вычисляемые поля при локальном изменении заголовка.
+            // Пересчитываем emoji текущей задачи и всех потомков при локальном изменении заголовка.
             this.WhenAnyValue(t => t.Title)
-                .Subscribe(_ => RecalculateEmoji())
+                .Subscribe(_ =>
+                {
+                    RecalculateEmoji();
+                    RefreshDescendantEmojiFields();
+                })
                 .AddToDispose(this);
 
             this.WhenAnyValue(m => m.Status)
@@ -430,6 +434,7 @@ namespace Unlimotion.ViewModel
         private void RecalculateEmoji()
         {
             var parents = GetAllParents().ToList();
+            ParentEmojiTrail = string.Concat(parents.Select(p => p.Emoji).Where(e => !string.IsNullOrEmpty(e)));
 
             if (!parents.Any())
             {
@@ -437,7 +442,15 @@ namespace Unlimotion.ViewModel
                 return;
             }
 
-            GetAllEmoji = string.Concat(parents.Select(p => p.Emoji).Where(e => !string.IsNullOrEmpty(e)));
+            GetAllEmoji = ParentEmojiTrail;
+        }
+
+        private void RefreshDescendantEmojiFields()
+        {
+            foreach (var descendant in GetChildrenTasks(static _ => true))
+            {
+                descendant.RefreshComputedFields();
+            }
         }
 
         private static void SynchronizeTaskCollection(
@@ -735,6 +748,11 @@ namespace Unlimotion.ViewModel
         }
 
         public string GetAllEmoji { get; set; } = "";
+
+        [AlsoNotifyFor(nameof(HasParentEmojiTrail))]
+        public string ParentEmojiTrail { get; set; } = "";
+
+        public bool HasParentEmojiTrail => !string.IsNullOrEmpty(ParentEmojiTrail);
 
         public string TitleWithoutEmoji => EmojiTextHelper.RemoveEmoji(Title, trimStart: true);
 
