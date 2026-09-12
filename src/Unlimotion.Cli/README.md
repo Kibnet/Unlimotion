@@ -26,6 +26,15 @@ unlimotion-cli satisfy-criterion --tasks <task-dir> --id <task-id> --criterion <
 ```
 
 ## Availability semantics
+`--tasks` is optional for every command. When it is omitted, the CLI reads
+`TaskStorage:Path` from `%USERPROFILE%\Documents\Unlimotion\Settings.json`,
+the desktop compatibility projection of the active task space. An explicit
+`--tasks` value always takes priority.
+
+The CLI remains file-storage only. Missing, malformed, or server-mode settings
+return an error without reading credentials, connecting to a server, writing
+settings, or creating a task directory.
+
 
 Read commands use the shared file storage and `TaskAvailabilityAnalyzer` to explain the current graph:
 

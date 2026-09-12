@@ -443,6 +443,7 @@ public static class Program
         writer ??= Console.Out;
         writer.WriteLine("Usage:");
         writer.WriteLine("  unlimotion-cli status --tasks <path> [--format text|json]");
+        writer.WriteLine("  --tasks <path> is optional; without it the active local desktop task-space path is used.");
         writer.WriteLine("  unlimotion-cli unlocked --tasks <path> [--format text|json]");
         writer.WriteLine("  unlimotion-cli task --tasks <path> --id <task-id> [--format text|json]");
         writer.WriteLine("  unlimotion-cli validate --tasks <path> [--format text|json]");
@@ -543,7 +544,7 @@ public sealed record CliOptions
         return new CliOptions
         {
             Command = command,
-            TasksPath = tasksPath,
+            TasksPath = tasksPath ?? TaskDirectoryResolver.Resolve(null),
             TaskId = taskId,
             CriterionId = criterionId,
             Status = status,
