@@ -298,11 +298,11 @@
             <Setter Property="Spacing" Value="6"/>
         </Style>
         <Style Selector="Grid.TaskCardHeader">
-            <Setter Property="ColumnSpacing" Value="6"/>
+            <Setter Property="ColumnSpacing" Value="0"/>
             <Setter Property="RowSpacing" Value="6"/>
         </Style>
         <Style Selector="StackPanel.TaskDetailsPanel.TaskDetailsCompact Grid.TaskCardHeader">
-            <Setter Property="ColumnSpacing" Value="6"/>
+            <Setter Property="ColumnSpacing" Value="0"/>
             <Setter Property="RowSpacing" Value="6"/>
         </Style>
         <Style Selector="CheckBox.TaskHeaderCompletionCheckBox">
@@ -342,6 +342,7 @@
         </Style>
         <Style Selector="TextBox.CurrentTaskTitleEditor">
             <Setter Property="MinHeight" Value="36"/>
+            <Setter Property="Padding" Value="0"/>
             <Setter Property="FontWeight" Value="Bold"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
         </Style>
