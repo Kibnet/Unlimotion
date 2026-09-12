@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
@@ -95,6 +96,7 @@ public class MainControlTaskCardLayoutUiTests
 
                 var detailsPanelFrame = FindControlByAutomationId<Border>(view, "CurrentTaskDetailsPanelFrame");
                 var card = FindControlByAutomationId<Border>(view, "CurrentTaskCard");
+                var header = FindControlByAutomationId<Control>(card, "CurrentTaskHeader");
                 var createMenuButton = FindControlByAutomationId<DropDownButton>(view, "GlobalTaskCreateMenuButton");
                 var actionsMenuButton = FindControlByAutomationId<DropDownButton>(view, "CurrentTaskActionsMenuButton");
                 var titleTextBox = FindControlByAutomationId<TextBox>(view, "CurrentTaskTitleTextBox");
@@ -114,6 +116,7 @@ public class MainControlTaskCardLayoutUiTests
                 AssertHasClass(titleTextBox, "CurrentTaskTitleEditor");
                 AssertHasClass(titleTextBox, BorderlessTextBoxChromeClass);
                 AssertBorderlessTextBoxChrome(titleTextBox, "Current task title");
+                AssertTaskHeaderAlignment(header);
                 AssertHasClass(descriptionTextBox, "TaskDescriptionEditor");
                 AssertHasClass(setBeginButton, "TaskPlanningQuickAction");
                 AssertHasClass(setDurationButton, "TaskPlanningQuickAction");
@@ -808,12 +811,13 @@ public class MainControlTaskCardLayoutUiTests
                 var card = FindControlByAutomationId<Control>(view, "CurrentTaskCard");
                 var commandBar = FindControlByAutomationId<Control>(view, "CurrentTaskCommandBar");
                 var header = FindControlByAutomationId<Control>(card, "CurrentTaskHeader");
-                var title = FindControlByAutomationId<Control>(card, "CurrentTaskTitleTextBox");
+                var title = FindControlByAutomationId<TextBox>(card, "CurrentTaskTitleTextBox");
                 var createMenuButton = FindControlByAutomationId<DropDownButton>(view, "GlobalTaskCreateMenuButton");
                 var actionsMenuButton = FindControlByAutomationId<DropDownButton>(view, "CurrentTaskActionsMenuButton");
 
                 AssertNoHorizontalOverflow(scrollViewer, card);
                 AssertFirstPhoneViewportShowsHeader(scrollViewer, commandBar, header, title);
+                AssertTaskHeaderAlignment(header);
                 AssertHasClass(createMenuButton, "TaskCreateMenuButton");
                 AssertCreateMenuContainsTaskCommands(createMenuButton);
                 AssertHorizontallyContained(view, createMenuButton);
@@ -1386,6 +1390,40 @@ public class MainControlTaskCardLayoutUiTests
 
         AssertTransparentBrush(templateBorder.BorderBrush, $"{source} template border");
         AssertTransparentBrush(templateBorder.Background, $"{source} template background");
+    }
+
+    private static void AssertTaskHeaderAlignment(Control header)
+    {
+        var statusPicker = FindControlByAutomationId<Control>(header, "CurrentTaskStatusButton");
+        var wantedCheckBox = FindControlByAutomationId<CheckBox>(header, "CurrentTaskWantedCheckBox");
+        var titleTextBox = FindControlByAutomationId<TextBox>(header, "CurrentTaskTitleTextBox");
+        var titlePresenter = titleTextBox.GetVisualDescendants()
+            .OfType<TextPresenter>()
+            .FirstOrDefault(IsVisibleAndArranged)
+            ?? throw new InvalidOperationException("Current task title text presenter was not found.");
+        var wantedText = wantedCheckBox.GetVisualDescendants()
+            .OfType<TextBlock>()
+            .FirstOrDefault(IsVisibleAndArranged)
+            ?? throw new InvalidOperationException("Current task wanted label was not found.");
+
+        AssertAligned(
+            "Current task status picker and wanted checkbox indicator",
+            GetLeftEdge(header, statusPicker),
+            GetLeftEdge(header, wantedCheckBox));
+        AssertAligned(
+            "Current task title content and wanted label",
+            GetLeftEdge(header, titlePresenter),
+            GetLeftEdge(header, wantedText));
+    }
+
+    private static void AssertAligned(string subject, double actual, double expected)
+    {
+        const double AlignmentTolerance = 1;
+        if (Math.Abs(actual - expected) > AlignmentTolerance)
+        {
+            throw new InvalidOperationException(
+                $"{subject} should share one vertical guide, got {actual:F1} and {expected:F1}.");
+        }
     }
 
     private static void AssertTransparentBrush(IBrush? brush, string source)
