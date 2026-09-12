@@ -2,11 +2,29 @@
 
 Command-line client for inspecting and updating Unlimotion task directories without starting the UI. It is intended for agents and automation that need the same task availability semantics as Unlimotion.
 
-## Install from a local package
+## Install from NuGet.org
+
+```powershell
+dotnet tool install --global Unlimotion.Cli
+unlimotion-cli status --format json
+```
+
+The package installs the `unlimotion-cli` command from the default NuGet.org
+source. It targets .NET 10; use a compatible .NET SDK/runtime. Update an
+existing global installation with:
+
+```powershell
+dotnet tool update --global Unlimotion.Cli
+```
+
+`--tasks` remains an explicit override. Without it, the CLI reads the active
+local desktop task-space path from `%USERPROFILE%\Documents\Unlimotion\Settings.json`.
+
+## Build and install a local package
 
 ```powershell
 dotnet pack src\Unlimotion.Cli\Unlimotion.Cli.csproj -c Release -o artifacts\tools
-dotnet tool install --tool-path C:\tmp\unlimotion-cli-tool --add-source artifacts\tools Unlimotion.Cli --version 0.3.0
+dotnet tool install --tool-path C:\tmp\unlimotion-cli-tool --add-source artifacts\tools Unlimotion.Cli --version 1.30.1
 C:\tmp\unlimotion-cli-tool\unlimotion-cli status --tasks C:\Projects\ТОС\Knowledge.TOC\Tasks --format json
 ```
 
@@ -26,6 +44,15 @@ unlimotion-cli satisfy-criterion --tasks <task-dir> --id <task-id> --criterion <
 ```
 
 ## Availability semantics
+`--tasks` is optional for every command. When it is omitted, the CLI reads
+`TaskStorage:Path` from `%USERPROFILE%\Documents\Unlimotion\Settings.json`,
+the desktop compatibility projection of the active task space. An explicit
+`--tasks` value always takes priority.
+
+The CLI remains file-storage only. Missing, malformed, or server-mode settings
+return an error without reading credentials, connecting to a server, writing
+settings, or creating a task directory.
+
 
 Read commands use the shared file storage and `TaskAvailabilityAnalyzer` to explain the current graph:
 
