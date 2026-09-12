@@ -1,0 +1,189 @@
+name: Publish Unlimotion CLI to NuGet
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nuget-cli-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+  NUGET_SOURCE: https://api.nuget.org/v3/index.json
+
+jobs:
+  publish:
+    if: ${{ !github.event.release.draft && !github.event.release.prerelease }}
+    name: Validate and publish CLI package
+    runs-on: windows-latest
+    timeout-minutes: 35
+
+    steps:
+    - name: Checkout release tag
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.release.tag_name }}
+        fetch-depth: 0
+        submodules: recursive
+
+    - name: Setup .NET 10 SDK
+      uses: actions/setup-dotnet@v4
+      with:
+        global-json-file: global.json
+
+    - name: Validate release source and package version
+      id: release
+      shell: pwsh
+      run: |
+        $tag = '${{ github.event.release.tag_name }}'
+        if ($tag -notmatch '^v(?<version>\d+\.\d+\.\d+)$') {
+          throw "CLI publishing requires a stable vMAJOR.MINOR.PATCH release tag; received '$tag'."
+        }
+
+        $version = $Matches.version
+        [xml]$project = Get-Content -Raw 'src/Unlimotion.Cli/Unlimotion.Cli.csproj'
+        $projectVersion = [string]$project.Project.PropertyGroup.Version
+        if ($projectVersion -ne $version) {
+          throw "Release tag version '$version' does not match Unlimotion.Cli version '$projectVersion'."
+        }
+
+        git fetch origin main:refs/remotes/origin/main
+        git merge-base --is-ancestor HEAD origin/main
+        if ($LASTEXITCODE -ne 0) {
+          throw "Release tag '$tag' is not reachable from origin/main; refusing to publish a feature or detached commit."
+        }
+
+        "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+    - name: Prepare local NuGet feed directory
+      shell: pwsh
+      run: New-Item -ItemType Directory -Force artifacts/nuget-local | Out-Null
+
+    - name: Run CLI regression tests
+      shell: pwsh
+      run: >-
+        dotnet run --project src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --
+        --treenode-filter "/*/*/TaskDirectoryResolverTests/*"
+        --maximum-parallel-tests 1 --output Detailed
+
+    - name: Run full regression suite
+      shell: pwsh
+      run: >-
+        dotnet run --project src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --
+        --maximum-parallel-tests 1 --output Detailed
+
+    - name: Build CLI
+      shell: pwsh
+      run: dotnet build src/Unlimotion.Cli/Unlimotion.Cli.csproj -c Release --no-restore
+
+    - name: Pack CLI
+      id: pack
+      shell: pwsh
+      run: |
+        $output = Join-Path $env:RUNNER_TEMP 'unlimotion-cli-package'
+        New-Item -ItemType Directory -Force $output | Out-Null
+        dotnet pack src/Unlimotion.Cli/Unlimotion.Cli.csproj -c Release --no-build -o $output
+        $package = Join-Path $output "Unlimotion.Cli.${{ steps.release.outputs.version }}.nupkg"
+        if (-not (Test-Path -LiteralPath $package)) {
+          throw "Expected CLI package was not created: $package"
+        }
+
+        "package=$package" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+    - name: Inspect package contract
+      shell: pwsh
+      run: |
+        $package = '${{ steps.pack.outputs.package }}'
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        $archive = [System.IO.Compression.ZipFile]::OpenRead($package)
+        try {
+          $names = @($archive.Entries | ForEach-Object FullName)
+          $expectedFiles = @(
+            'License.txt',
+            'README.md',
+            'tools/net10.0/any/DotnetToolSettings.xml',
+            'tools/net10.0/any/Unlimotion.Cli.dll',
+            'tools/net10.0/any/Unlimotion.Cli.runtimeconfig.json')
+          $missing = @($expectedFiles | Where-Object { $_ -notin $names })
+          if ($missing.Count -gt 0) {
+            throw "CLI package is missing required entries: $($missing -join ', ')"
+          }
+
+          $nuspec = $archive.Entries | Where-Object FullName -eq 'Unlimotion.Cli.nuspec'
+          if ($null -eq $nuspec) {
+            throw 'CLI package has no Unlimotion.Cli.nuspec.'
+          }
+
+          $reader = [System.IO.StreamReader]::new($nuspec.Open())
+          try {
+            [xml]$manifest = $reader.ReadToEnd()
+          }
+          finally {
+            $reader.Dispose()
+          }
+
+          $metadata = $manifest.package.metadata
+          if ($metadata.id -ne 'Unlimotion.Cli' -or $metadata.version -ne '${{ steps.release.outputs.version }}') {
+            throw "Unexpected package identity: $($metadata.id) $($metadata.version)"
+          }
+
+          if ($metadata.packageTypes.packageType.name -ne 'DotnetTool') {
+            throw 'CLI package is not marked as a DotnetTool.'
+          }
+        }
+        finally {
+          $archive.Dispose()
+        }
+
+    - name: Install and smoke local package
+      shell: pwsh
+      run: |
+        $toolPath = Join-Path $env:RUNNER_TEMP 'unlimotion-cli-local-tool'
+        $source = Split-Path -Parent '${{ steps.pack.outputs.package }}'
+        dotnet tool install --tool-path $toolPath --add-source $source Unlimotion.Cli --version '${{ steps.release.outputs.version }}'
+        & (Join-Path $toolPath 'unlimotion-cli.exe') --help
+
+    - name: Publish package to NuGet.org
+      shell: pwsh
+      env:
+        NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+      run: |
+        if ([string]::IsNullOrWhiteSpace($env:NUGET_API_KEY)) {
+          throw 'NUGET_API_KEY is not configured; refusing to publish without a protected repository secret.'
+        }
+
+        dotnet nuget push '${{ steps.pack.outputs.package }}' --api-key $env:NUGET_API_KEY --source $env:NUGET_SOURCE --skip-duplicate
+
+    - name: Verify public package and smoke install
+      shell: pwsh
+      run: |
+        $version = '${{ steps.release.outputs.version }}'
+        $index = 'https://api.nuget.org/v3-flatcontainer/unlimotion.cli/index.json'
+        $found = $false
+        for ($attempt = 1; $attempt -le 12; $attempt++) {
+          try {
+            $versions = (Invoke-RestMethod -Uri $index -ErrorAction Stop).versions
+            if ($versions -contains $version) {
+              $found = $true
+              break
+            }
+          }
+          catch {
+            Write-Host "NuGet index is not available yet (attempt $attempt): $($_.Exception.Message)"
+          }
+
+          Start-Sleep -Seconds 10
+        }
+
+        if (-not $found) {
+          throw "NuGet.org did not expose Unlimotion.Cli $version within the verification window."
+        }
+
+        $toolPath = Join-Path $env:RUNNER_TEMP 'unlimotion-cli-public-tool'
+        dotnet tool install --tool-path $toolPath Unlimotion.Cli --version $version
+        & (Join-Path $toolPath 'unlimotion-cli.exe') --help
