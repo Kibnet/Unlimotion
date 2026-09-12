@@ -144,10 +144,10 @@
 
 - Fixed before final report: corrected accidental test-fixture placement before green run.
 - Checks rerun: full affected UI class after correction; then, after the user-requested placement amendment and rebase, one focused order test and a fresh real-window UX capture.
-- Validation evidence: 22/22 affected class in 1m03.497s; `CurrentTaskCard_ParentEmojiTrail_ShowsAncestorsBeforeTaskId` 1/1; timestamped desktop and phone PNGs under `artifacts/ux-review/20260913-parent-emojis-before-id`.
+- Validation evidence: 23/23 affected class in 1m22.226s after review fixes; explicit long-chain responsive test 3/3 at 360/390/430; timestamped desktop and phone PNGs under `artifacts/ux-review/20260913-parent-emojis-review-fixes`.
 - Unrelated changes: none; artifacts are generated inspection output and not staged/committed.
 - Needs human: none.
-- Residual risks / follow-ups: extremely long ancestor chains can wrap in the existing metadata row; no truncation policy is introduced without observed need. Full solution suite was not run by the explicit narrow UI validation scope.
+- Residual risks / follow-ups: extremely long ancestor chains are visually capped at 120 px with ellipsis; the complete relationship remains available in the existing relation section. Full solution suite was not run by the explicit narrow UI validation scope.
 
 ## Approval
 
@@ -167,3 +167,4 @@
 | EXEC: review | 0.98 — завершение допустимо | Post-EXEC PASS; video fallback и long-chain wrap отмечены как LOW/residual | Записать результат в task description, `complete` через CLI | Закрытие task authorised initial workflow |
 | EXEC: amendment | 1.00 — пользователь явно выбрал новый порядок `trail → ID` | Placement перед ID заменяет только визуальный порядок; `origin/main` обновлён до `e657843e` | Разрешить test conflict, применить order, повторить UI evidence | Новая инструкция пользователя является авторизацией изменения |
 | EXEC: amendment validation | 1.00 — amended UI contract подтверждён | Rebase на `e657843e` завершён; конфликт UI-теста разрешён с сохранением проверки выравнивания title; 22/22 affected class, 1/1 explicit order и новые PNG inspected | Обновить описание и завершить `3-A` через CLI | Решение не требуется |
+| EXEC: PR review fixes | 1.00 — оба P2 закрыты в scope существующего outcome | Переименование предка обновляет all descendants через cycle-safe обход; trail ограничен 120 px и `CharacterEllipsis`; UI test строит восемь уникальных связанных предков | Перебазировать на `0b6e897d`, обновить PR и пометить discussions resolved | Решение не требуется |

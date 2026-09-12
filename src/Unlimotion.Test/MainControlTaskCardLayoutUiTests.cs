@@ -170,7 +170,6 @@ public class MainControlTaskCardLayoutUiTests
                         var parents = task.ParentsTasks.OrderBy(parent => parent.Id).ToArray();
                         parents[0].Title = "🧭 Alpha parent";
                         parents[1].Title = "🛠 Beta parent";
-                        task.RefreshComputedFields();
                         expectedTrail = string.Concat(task.GetAllParents().Select(parent => parent.Emoji));
                     });
                 window = createdWindow;
@@ -186,6 +185,44 @@ public class MainControlTaskCardLayoutUiTests
                 await Assert.That(GetTopEdge(view, trail)).IsGreaterThanOrEqualTo(GetBottomEdge(view, title) - 1);
                 await Assert.That(GetRightEdge(view, trail)).IsLessThan(GetLeftEdge(view, id));
                 await Assert.That(GetLeftEdge(view, actions)).IsGreaterThan(GetRightEdge(view, id));
+            }
+            finally
+            {
+                CloseWindow(window);
+                await fixture.CleanTasksAsync();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task CurrentTaskCard_ParentEmojiTrail_RefreshesWhenAncestorTitleChangesBeforeSave()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            ResetTaskCardLayoutSharedState();
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var (view, createdWindow) = await CreateArrangedMainControlAsync(
+                    fixture,
+                    1400,
+                    900,
+                    MainWindowViewModelFixture.SubTask22Id);
+                window = createdWindow;
+
+                var task = fixture.MainWindowViewModelTest.CurrentTaskItem!;
+                var ancestor = task.ParentsTasks.OrderBy(parent => parent.Id).First();
+                var trail = FindControlByAutomationId<EmojiTextBlock>(view, "CurrentTaskParentEmojiTrail");
+
+                ancestor.Title = "🧭 Renamed ancestor";
+                RunLayoutJobs();
+
+                var expectedTrail = string.Concat(task.GetAllParents().Select(parent => parent.Emoji));
+                await Assert.That(trail.EmojiText).IsEqualTo(expectedTrail);
+                await Assert.That(trail.EmojiText).Contains("🧭");
             }
             finally
             {
@@ -893,22 +930,22 @@ public class MainControlTaskCardLayoutUiTests
                     fixture,
                     width,
                     844,
-                    MainWindowViewModelFixture.SubTask22Id,
-                    task =>
-                    {
-                        var parents = task.ParentsTasks.OrderBy(parent => parent.Id).ToArray();
-                        parents[0].Title = "🧭 Alpha parent";
-                        parents[1].Title = "🛠 Beta parent";
-                        task.RefreshComputedFields();
-                    });
+                    MainWindowViewModelFixture.SubTask22Id);
                 window = createdWindow;
 
                 var scrollViewer = FindControlByAutomationId<ScrollViewer>(view, "CurrentTaskDetailsScrollViewer");
                 var card = FindControlByAutomationId<Control>(view, "CurrentTaskCard");
+                var parentEmojiTrail = FindControlByAutomationId<EmojiTextBlock>(card, "CurrentTaskParentEmojiTrail");
+                var expectedTrail = ConfigureLongEmojiAncestorChain(
+                    fixture,
+                    parentEmojiTrail.DataContext as TaskItemViewModel
+                    ?? throw new InvalidOperationException("Parent emoji trail has no task data context."));
+                ArrangeMainControlForTest(window, view, width, 844);
+                EnsureDetailsPaneArranged(window, view, width, 844);
+
                 var commandBar = FindControlByAutomationId<Control>(view, "CurrentTaskCommandBar");
                 var header = FindControlByAutomationId<Control>(card, "CurrentTaskHeader");
                 var title = FindControlByAutomationId<TextBox>(card, "CurrentTaskTitleTextBox");
-                var parentEmojiTrail = FindControlByAutomationId<EmojiTextBlock>(card, "CurrentTaskParentEmojiTrail");
                 var createMenuButton = FindControlByAutomationId<DropDownButton>(view, "GlobalTaskCreateMenuButton");
                 var actionsMenuButton = FindControlByAutomationId<DropDownButton>(view, "CurrentTaskActionsMenuButton");
 
@@ -916,6 +953,7 @@ public class MainControlTaskCardLayoutUiTests
                 AssertFirstPhoneViewportShowsHeader(scrollViewer, commandBar, header, title);
                 AssertTaskHeaderAlignment(header);
                 await Assert.That(IsVisibleAndArranged(parentEmojiTrail)).IsTrue();
+                await Assert.That(parentEmojiTrail.EmojiText).IsEqualTo(expectedTrail);
                 AssertHorizontallyContained(scrollViewer, parentEmojiTrail);
                 AssertHasClass(createMenuButton, "TaskCreateMenuButton");
                 AssertCreateMenuContainsTaskCommands(createMenuButton);
@@ -1048,6 +1086,44 @@ public class MainControlTaskCardLayoutUiTests
         }
 
         return (view, window);
+    }
+
+    private const int LongEmojiAncestorCount = 8;
+    private static readonly string LongEmojiAncestorTrail = string.Concat(Enumerable.Repeat("🧭", LongEmojiAncestorCount));
+
+    private static string ConfigureLongEmojiAncestorChain(MainWindowViewModelFixture fixture, TaskItemViewModel task)
+    {
+        var taskRepository = fixture.MainWindowViewModelTest.taskRepository
+            ?? throw new InvalidOperationException("Task repository is not initialized.");
+        var ancestors = Enumerable.Range(0, LongEmojiAncestorCount)
+            .Select(index => new TaskItemViewModel(
+                new TaskItem
+                {
+                    Id = $"long-ancestor-{index:D2}-{Guid.NewGuid():N}",
+                    Title = $"🧭 Ancestor {index:D2}"
+                },
+                taskRepository))
+            .ToArray();
+
+        for (var index = 0; index < ancestors.Length; index++)
+        {
+            ancestors[index].ApplyRelations(
+                index == ancestors.Length - 1 ? [task] : [ancestors[index + 1]],
+                index == 0 ? [] : [ancestors[index - 1]],
+                [],
+                []);
+        }
+
+        task.ApplyRelations([], [ancestors[^1]], [], []);
+
+        var actualTrail = string.Concat(task.GetAllParents().Select(ancestor => ancestor.Emoji));
+        if (actualTrail != LongEmojiAncestorTrail)
+        {
+            throw new InvalidOperationException(
+                $"Long ancestor chain was not configured: expected '{LongEmojiAncestorTrail}', got '{actualTrail}'.");
+        }
+
+        return actualTrail;
     }
 
     private static void ResetTaskCardLayoutSharedState()

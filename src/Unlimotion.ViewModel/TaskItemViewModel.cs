@@ -152,9 +152,13 @@ namespace Unlimotion.ViewModel
             Disposable.Create(() => CompletionCriteria.CollectionChanged -= completionCriteriaChangedHandler).AddToDispose(this);
             RegisterCompletionCriteriaPropertyChangedSubscription();
 
-            // Пересчитываем вычисляемые поля при локальном изменении заголовка.
+            // Пересчитываем emoji текущей задачи и всех потомков при локальном изменении заголовка.
             this.WhenAnyValue(t => t.Title)
-                .Subscribe(_ => RecalculateEmoji())
+                .Subscribe(_ =>
+                {
+                    RecalculateEmoji();
+                    RefreshDescendantEmojiFields();
+                })
                 .AddToDispose(this);
 
             this.WhenAnyValue(m => m.Status)
@@ -439,6 +443,14 @@ namespace Unlimotion.ViewModel
             }
 
             GetAllEmoji = ParentEmojiTrail;
+        }
+
+        private void RefreshDescendantEmojiFields()
+        {
+            foreach (var descendant in GetChildrenTasks(static _ => true))
+            {
+                descendant.RefreshComputedFields();
+            }
         }
 
         private static void SynchronizeTaskCollection(

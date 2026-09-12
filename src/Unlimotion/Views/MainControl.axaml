@@ -337,6 +337,9 @@
             <Setter Property="FontSize" Value="{DynamicResource AppSmallFontSize}"/>
             <Setter Property="Margin" Value="0,0,8,4"/>
             <Setter Property="MinHeight" Value="22"/>
+            <Setter Property="MaxWidth" Value="120"/>
+            <Setter Property="TextWrapping" Value="NoWrap"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
         </Style>
         <Style Selector="WrapPanel.TaskHeaderDateMeta">
             <Setter Property="Margin" Value="0,0,8,4"/>
