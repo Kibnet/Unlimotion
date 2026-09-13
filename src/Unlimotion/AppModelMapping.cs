@@ -25,12 +25,14 @@ namespace Unlimotion
             cfg.CreateMap<AttachmentHubMold, AttachmentMold>();
             cfg.CreateMap<AttachmentMold, AttachmentHubMold>();
             cfg.CreateMap<TaskItemMold, TaskItem>()
+                .ForMember(task => task.AgentExecution, options => options.Ignore())
                 .IgnoreComputedStatusMembers()
                 .ReverseMap();
             cfg.CreateMap<RepeaterPattern, RepeaterPatternMold>().ReverseMap();
             cfg.CreateMap<RepeaterPattern, RepeaterPatternHubMold>().ReverseMap();
             cfg.CreateMap<RepeaterTypeMold, RepeaterType>().ReverseMap();
             cfg.CreateMap<ReceiveTaskItem, TaskItem>()
+                .ForMember(task => task.AgentExecution, options => options.Ignore())
                 .IgnoreComputedStatusMembers();
             cfg.CreateMap<TaskItem, TaskItemHubMold>();
             cfg.CreateMap<RepeaterType, RepeaterTypeHubMold>();

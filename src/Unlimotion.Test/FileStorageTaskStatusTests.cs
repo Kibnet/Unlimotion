@@ -614,7 +614,7 @@ public class FileStorageTaskStatusTests
     }
 
     [Test]
-    public async Task PartialRepeaterFailure_ReconcilesEveryAttemptedTaskFromLiveGraph()
+    public async Task PartialRepeaterFailure_RollsBackEveryAttemptedTaskFromLiveGraph()
     {
         var tempDir = CreateTempDirectory();
         try
@@ -638,17 +638,17 @@ public class FileStorageTaskStatusTests
 
             var result = await unified.TrySetStatusAsync(source.Id, DomainTaskStatus.Completed, "tester");
             var graph = await storage.ReadGraphAsync();
-            var clone = graph.Tasks.Single(task => task.Id != source.Id && task.Title == source.Title);
 
             using (Assert.Multiple())
             {
                 await Assert.That(result.DeniedReason?.Kind).IsEqualTo(TaskOperationDeniedKind.OutcomeUnknown);
-                await Assert.That(result.StorageRevision).IsGreaterThan(0);
                 await Assert.That(result.StorageRevision).IsEqualTo(graph.Revision);
-                await Assert.That(storage.DirectoryEnumerationCount).IsEqualTo(enumerationsAfterInit);
-                await Assert.That(result.ChangedTasks.Select(static task => task.Id)).Contains(clone.Id);
-                await Assert.That(unified.Tasks.Lookup(clone.Id).HasValue).IsTrue();
-                await Assert.That(unified.Tasks.Lookup(source.Id).Value.Status).IsEqualTo(DomainTaskStatus.Completed);
+                await Assert.That(storage.DirectoryEnumerationCount).IsGreaterThan(enumerationsAfterInit);
+                await Assert.That(graph.Tasks.Where(task => task.Id != source.Id && task.Title == source.Title)).IsEmpty();
+                await Assert.That(result.ChangedTasks.Select(static task => task.Id)).Contains(source.Id);
+                await Assert.That(result.AuthoritativeTask?.Status).IsEqualTo(DomainTaskStatus.Prepared);
+                await Assert.That(unified.Tasks.Items.Where(task => task.Id != source.Id && task.Title == source.Title)).IsEmpty();
+                await Assert.That(unified.Tasks.Lookup(source.Id).Value.Status).IsEqualTo(DomainTaskStatus.Prepared);
             }
         }
         finally

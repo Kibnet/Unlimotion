@@ -11,6 +11,7 @@ using CliProgram = global::Unlimotion.Cli.Program;
 using DomainTaskStatus = Unlimotion.Domain.TaskStatus;
 using FileTaskStorage = global::Unlimotion.Storage.FileTaskStorage;
 using FileTaskStorageOptions = global::Unlimotion.Storage.FileTaskStorageOptions;
+using IRecoverableTaskGraphWriteScope = global::Unlimotion.TaskTree.IRecoverableTaskGraphWriteScope;
 
 namespace Unlimotion.Test;
 
@@ -278,6 +279,11 @@ public sealed class UnlimotionCliIntegrationTests
 
         await Assert.That(result.ExitCode).IsEqualTo(0);
         await Assert.That(result.StdOut.Contains("unlimotion-cli task --tasks", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(result.StdOut.Contains("--status <status>", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(result.StdOut.Contains("--startable true|false", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(result.StdOut.Contains("execution question", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(result.StdOut.Contains("--question-id <question-id>", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(result.StdOut.Contains("--link <absolute-uri>", StringComparison.Ordinal)).IsTrue();
         await Assert.That(result.StdOut.Contains("--explain", StringComparison.Ordinal)).IsFalse();
     }
 
@@ -362,6 +368,579 @@ public sealed class UnlimotionCliIntegrationTests
         await AssertJsonError(irrelevant.StdOut, "invalidArguments");
         await Assert.That(hiddenExplain.ExitCode).IsEqualTo(2);
         await AssertJsonError(hiddenExplain.StdOut, "invalidArguments");
+    }
+
+    [Test]
+    public async Task Candidates_ReturnsPreparedStartableTasksInDeterministicOrder()
+    {
+        using var temp = TempTaskDirectory.Create();
+        var lowPriority = CreateTask("low", DomainTaskStatus.Prepared, isCanBeCompleted: true, title: "Low");
+        lowPriority.Importance = 1;
+        var highPriority = CreateTask("high", DomainTaskStatus.Prepared, isCanBeCompleted: true, title: "High");
+        highPriority.Importance = 10;
+        var inProgress = CreateTask("in-progress", DomainTaskStatus.InProgress, isCanBeCompleted: true);
+        var blocked = CreateTask("blocked", DomainTaskStatus.Prepared, isCanBeCompleted: false);
+        await SaveTasks(temp.DirectoryPath, lowPriority, highPriority, inProgress, blocked);
+
+        var result = await RunCli(
+            "candidates",
+            "--tasks",
+            temp.DirectoryPath,
+            "--limit",
+            "2",
+            "--format",
+            "json");
+
+        await Assert.That(result.ExitCode).IsEqualTo(0);
+        var root = ParseJson(result.StdOut);
+        await Assert.That(root.ValueKind).IsEqualTo(JsonValueKind.Array);
+        var candidates = root.EnumerateArray().ToArray();
+        await Assert.That(candidates).Count().IsEqualTo(2);
+        await Assert.That(candidates[0].GetProperty("id").GetString()).IsEqualTo(highPriority.Id);
+        await Assert.That(candidates[1].GetProperty("id").GetString()).IsEqualTo(lowPriority.Id);
+        await Assert.That(candidates.All(item => item.GetProperty("status").GetString() == "Prepared"))
+            .IsTrue();
+    }
+
+    [Test]
+    public async Task Claim_ConcurrentAgentsProduceOneLeaseAndOneStatusTransition()
+    {
+        using var temp = TempTaskDirectory.Create();
+        var task = CreateTask("claimable", DomainTaskStatus.Prepared, isCanBeCompleted: true);
+        await SaveTasks(temp.DirectoryPath, task);
+
+        var firstClaim = RunCli(
+            "claim",
+            "--tasks",
+            temp.DirectoryPath,
+            "--id",
+            task.Id,
+            "--agent",
+            "agent-a",
+            "--expected-status",
+            "Prepared",
+            "--format",
+            "json");
+        var secondClaim = RunCli(
+            "claim",
+            "--tasks",
+            temp.DirectoryPath,
+            "--id",
+            task.Id,
+            "--agent",
+            "agent-b",
+            "--expected-status",
+            "Prepared",
+            "--format",
+            "json");
+
+        var results = await Task.WhenAll(firstClaim, secondClaim);
+        await Assert.That(results.Count(result => result.ExitCode == 0)).IsEqualTo(1);
+        await Assert.That(results.Count(result => result.ExitCode == 1)).IsEqualTo(1);
+        var claimedJson = ParseJson(results.Single(result => result.ExitCode == 0).StdOut);
+        await Assert.That(claimedJson.GetProperty("success").GetBoolean()).IsTrue();
+        var execution = claimedJson.GetProperty("execution");
+        var winningAgent = execution.GetProperty("agentId").GetString();
+        var leaseId = execution.GetProperty("leaseId").GetString();
+        await Assert.That(Guid.TryParse(leaseId, out _)).IsTrue();
+        await AssertJsonError(results.Single(result => result.ExitCode == 1).StdOut, "claimConflict");
+
+        var persisted = await LoadTask(temp.DirectoryPath, task.Id);
+        await Assert.That(persisted.Status).IsEqualTo(DomainTaskStatus.InProgress);
+        var json = JObject.Parse(await File.ReadAllTextAsync(Path.Combine(temp.DirectoryPath, task.Id)));
+        await Assert.That((string?)json["AgentExecution"]?["AgentId"]).IsEqualTo(winningAgent);
+        await Assert.That((string?)json["AgentExecution"]?["LeaseId"]).IsEqualTo(leaseId);
+        await Assert.That(((JArray)json["StatusHistory"]!).Count).IsEqualTo(2);
+        await Assert.That(((string?)json["Description"])?.Split("<!-- unlimotion-agent-execution:v1:start -->").Length - 1)
+            .IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task ExecutionLifecycle_QuestionAnswerResultAndCompleteAreLeaseBound()
+    {
+        using var temp = TempTaskDirectory.Create();
+        var task = CreateTask("lifecycle", DomainTaskStatus.Prepared, isCanBeCompleted: true);
+        task.Description = "Пользовательское начало\nПользовательский конец";
+        await SaveTasks(temp.DirectoryPath, task);
+
+        var claim = await RunCli(
+            "claim", "--tasks", temp.DirectoryPath, "--id", task.Id,
+            "--agent", "agent-a", "--expected-status", "Prepared", "--format", "json");
+        var lease = ParseJson(claim.StdOut).GetProperty("execution").GetProperty("leaseId").GetString()!;
+
+        var wrongLease = await RunCli(
+            "execution", "question", "--tasks", temp.DirectoryPath, "--id", task.Id,
+            "--agent", "agent-a", "--lease", Guid.NewGuid().ToString("D"),
+            "--text", "Нужна деталь?", "--format", "json");
+        await Assert.That(wrongLease.ExitCode).IsEqualTo(1);
+        await AssertJsonError(wrongLease.StdOut, "leaseMismatch");
+        await Assert.That(wrongLease.StdOut.Contains(lease, StringComparison.Ordinal)).IsFalse();
+
+        var question = await RunCli(
+            "execution", "question", "--tasks", temp.DirectoryPath, "--id", task.Id,
+            "--agent", "agent-a", "--lease", lease,
+            "--text", "Нужна деталь?", "--format", "json");
+        await Assert.That(question.ExitCode).IsEqualTo(0);
+        var questionJson = ParseJson(question.StdOut);
+        await Assert.That(questionJson.GetProperty("execution").GetProperty("state").GetString())
+            .IsEqualTo("AwaitingInput");
+        var questionId = questionJson.GetProperty("execution").GetProperty("questions")[0]
+            .GetProperty("id").GetString()!;
+
+        var secondQuestion = await RunCli(
+            "execution", "question", "--tasks", temp.DirectoryPath, "--id", task.Id,
+            "--agent", "agent-a", "--lease", lease,
+            "--text", "Ещё вопрос?", "--format", "json");
+        await Assert.That(secondQuestion.ExitCode).IsEqualTo(1);
+        await AssertJsonError(secondQuestion.StdOut, "executionStateDenied");
+
+        var answer = await RunCli(
+            "execution", "answer", "--tasks", temp.DirectoryPath, "--id", task.Id,
+            "--agent", "agent-a", "--lease", lease, "--question-id", questionId,
+            "--text", "Да, вот деталь", "--format", "json");
+        await Assert.That(answer.ExitCode).IsEqualTo(0);
+        await Assert.That(ParseJson(answer.StdOut).GetProperty("execution").GetProperty("state").GetString())
+            .IsEqualTo("Active");
+
+        var result = await RunCli(
+            "execution", "result", "--tasks", temp.DirectoryPath, "--id", task.Id,
+            "--agent", "agent-a", "--lease", lease, "--summary", "Черновой итог",
+            "--link", "https://example.com/result", "--format", "json");
+        await Assert.That(result.ExitCode).IsEqualTo(0);
+
+        var oldComplete = await RunCli(
+            "complete", "--tasks", temp.DirectoryPath, "--id", task.Id, "--format", "json");
+        await Assert.That(oldComplete.ExitCode).IsEqualTo(1);
+        await AssertJsonError(oldComplete.StdOut, "executionStateDenied");
+
+        var complete = await RunCli(
+            "execution", "complete", "--tasks", temp.DirectoryPath, "--id", task.Id,
+            "--agent", "agent-a", "--lease", lease, "--summary", "Готовый итог",
+            "--link", "file:///C:/result.txt", "--format", "json");
+        await Assert.That(complete.ExitCode).IsEqualTo(0);
+        var persisted = await LoadTask(temp.DirectoryPath, task.Id);
+        await Assert.That(persisted.Status).IsEqualTo(DomainTaskStatus.Completed);
+        await Assert.That(persisted.AgentExecution?.State).IsEqualTo(AgentExecutionState.Completed);
+        await Assert.That(persisted.AgentExecution?.Result?.Summary).IsEqualTo("Готовый итог");
+        await Assert.That(persisted.Description.StartsWith("Пользовательское начало", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(persisted.Description.Contains("Пользовательский конец", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(persisted.Description.Split("<!-- unlimotion-agent-execution:v1:start -->").Length - 1)
+            .IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task ReleaseThenClaim_PreservesAttemptAndTaskIncludeReturnsRequestedSections()
+    {
+        using var temp = TempTaskDirectory.Create();
+        var task = CreateTask("reclaim", DomainTaskStatus.Prepared, isCanBeCompleted: true);
+        task.CompletionCriteria.Add(new TaskCompletionCriterion { Id = "criterion", Text = "Проверить", IsSatisfied = false });
+        await SaveTasks(temp.DirectoryPath, task);
+
+        var firstClaim = await RunCli(
+            "claim", "--tasks", temp.DirectoryPath, "--id", task.Id,
+            "--agent", "agent-a", "--expected-status", "Prepared", "--format", "json");
+        var firstLease = ParseJson(firstClaim.StdOut).GetProperty("execution").GetProperty("leaseId").GetString()!;
+        var release = await RunCli(
+            "release", "--tasks", temp.DirectoryPath, "--id", task.Id,
+            "--agent", "agent-a", "--lease", firstLease,
+            "--reason", "Нужен другой исполнитель", "--format", "json");
+        await Assert.That(release.ExitCode).IsEqualTo(0);
+
+        var secondClaim = await RunCli(
+            "claim", "--tasks", temp.DirectoryPath, "--id", task.Id,
+            "--agent", "agent-b", "--expected-status", "Prepared", "--format", "json");
+        await Assert.That(secondClaim.ExitCode).IsEqualTo(0);
+        var secondExecution = ParseJson(secondClaim.StdOut).GetProperty("execution");
+        await Assert.That(secondExecution.GetProperty("leaseId").GetString()).IsNotEqualTo(firstLease);
+
+        var snapshot = await RunCli(
+            "task", "--tasks", temp.DirectoryPath, "--id", task.Id,
+            "--include", "details,criteria", "--include", "history,execution",
+            "--format", "json");
+        await Assert.That(snapshot.ExitCode).IsEqualTo(0);
+        var root = ParseJson(snapshot.StdOut);
+        await Assert.That(root.TryGetProperty("details", out _)).IsTrue();
+        await Assert.That(root.TryGetProperty("criteria", out _)).IsTrue();
+        await Assert.That(root.TryGetProperty("history", out _)).IsTrue();
+        await Assert.That(root.TryGetProperty("execution", out var execution)).IsTrue();
+        await Assert.That(root.TryGetProperty("relations", out _)).IsFalse();
+        await Assert.That(execution.GetProperty("previousAttempts").GetArrayLength()).IsEqualTo(1);
+        await Assert.That(execution.GetProperty("previousAttempts")[0].GetProperty("leaseId").GetString())
+            .IsEqualTo(firstLease);
+
+        var beforeOldLease = await File.ReadAllBytesAsync(Path.Combine(temp.DirectoryPath, task.Id));
+        var oldLeaseResult = await RunCli(
+            "execution", "result", "--tasks", temp.DirectoryPath, "--id", task.Id,
+            "--agent", "agent-a", "--lease", firstLease,
+            "--summary", "Не должен сохраниться", "--format", "json");
+        await Assert.That(oldLeaseResult.ExitCode).IsEqualTo(1);
+        await AssertJsonError(oldLeaseResult.StdOut, "leaseMismatch");
+        await Assert.That(oldLeaseResult.StdOut.Contains(secondExecution.GetProperty("leaseId").GetString()!, StringComparison.Ordinal))
+            .IsFalse();
+        await Assert.That(await File.ReadAllBytesAsync(Path.Combine(temp.DirectoryPath, task.Id)))
+            .IsEquivalentTo(beforeOldLease);
+    }
+
+    [Test]
+    public async Task TaskInclude_RelationsAreOneStepSortedAndLegacyResponseIsUnchanged()
+    {
+        using var temp = TempTaskDirectory.Create();
+        var root = CreateTask("root", DomainTaskStatus.Prepared, true, "Корень");
+        var child = CreateTask("z-child", DomainTaskStatus.Completed, true, "Дочерняя");
+        var parent = CreateTask("a-parent", DomainTaskStatus.Prepared, true, "Родитель");
+        var blocker = CreateTask("b-blocker", DomainTaskStatus.Completed, true, "Блокер");
+        var blocked = CreateTask("c-blocked", DomainTaskStatus.Prepared, false, "Заблокированная");
+        root.ContainsTasks.Add(child.Id);
+        child.ParentTasks.Add(root.Id);
+        root.ParentTasks.Add(parent.Id);
+        parent.ContainsTasks.Add(root.Id);
+        root.BlockedByTasks.Add(blocker.Id);
+        blocker.BlocksTasks.Add(root.Id);
+        root.BlocksTasks.Add(blocked.Id);
+        blocked.BlockedByTasks.Add(root.Id);
+        await SaveTasks(temp.DirectoryPath, root, child, parent, blocker, blocked);
+
+        var legacy = await RunCli("task", "--tasks", temp.DirectoryPath, "--id", root.Id, "--format", "json");
+        var legacyJson = ParseJson(legacy.StdOut);
+        await Assert.That(legacyJson.GetProperty("taskId").GetString()).IsEqualTo(root.Id);
+        await Assert.That(legacyJson.TryGetProperty("task", out _)).IsFalse();
+        await Assert.That(legacyJson.TryGetProperty("relations", out _)).IsFalse();
+
+        var snapshot = await RunCli(
+            "task", "--tasks", temp.DirectoryPath, "--id", root.Id,
+            "--include", "relations", "--format", "json");
+        var repeat = await RunCli(
+            "task", "--tasks", temp.DirectoryPath, "--id", root.Id,
+            "--include", "relations", "--format", "json");
+        await Assert.That(snapshot.StdOut).IsEqualTo(repeat.StdOut);
+        var relations = ParseJson(snapshot.StdOut).GetProperty("relations").EnumerateArray().ToArray();
+        await Assert.That(string.Join("|", relations.Select(item =>
+                $"{item.GetProperty("type").GetString()}:{item.GetProperty("id").GetString()}")))
+            .IsEqualTo("BlockedByTasks:b-blocker|BlocksTasks:c-blocked|ContainsTasks:z-child|ParentTasks:a-parent");
+        await Assert.That(relations.All(item => !item.TryGetProperty("relations", out _))).IsTrue();
+    }
+
+    [Test]
+    public async Task ExecutionComplete_UnsatisfiedCriterionFailsWithoutWriting()
+    {
+        using var temp = TempTaskDirectory.Create();
+        var task = CreateTask("criteria-denied", DomainTaskStatus.Prepared, true);
+        task.CompletionCriteria.Add(new TaskCompletionCriterion
+        {
+            Id = "criterion",
+            Text = "Проверить результат",
+            IsSatisfied = false
+        });
+        await SaveTasks(temp.DirectoryPath, task);
+        var claim = await RunCli(
+            "claim", "--tasks", temp.DirectoryPath, "--id", task.Id,
+            "--agent", "agent", "--expected-status", "Prepared", "--format", "json");
+        var lease = ParseJson(claim.StdOut).GetProperty("execution").GetProperty("leaseId").GetString()!;
+        var taskPath = Path.Combine(temp.DirectoryPath, task.Id);
+        var before = await File.ReadAllBytesAsync(taskPath);
+
+        var complete = await RunCli(
+            "execution", "complete", "--tasks", temp.DirectoryPath, "--id", task.Id,
+            "--agent", "agent", "--lease", lease,
+            "--summary", "Преждевременный итог", "--format", "json");
+
+        await Assert.That(complete.ExitCode).IsEqualTo(1);
+        await AssertJsonError(complete.StdOut, "businessRuleDenied");
+        await Assert.That(await File.ReadAllBytesAsync(taskPath)).IsEquivalentTo(before);
+        var persisted = await LoadTask(temp.DirectoryPath, task.Id);
+        await Assert.That(persisted.Status).IsEqualTo(DomainTaskStatus.InProgress);
+        await Assert.That(persisted.AgentExecution?.State).IsEqualTo(AgentExecutionState.Active);
+        await Assert.That(persisted.AgentExecution?.Result).IsNull();
+    }
+
+    [Test]
+    public async Task ExecutionBoundaryAndMarkerInputsFailWithoutWriting()
+    {
+        using var temp = TempTaskDirectory.Create();
+        var task = CreateTask("input-boundaries", DomainTaskStatus.Prepared, true);
+        await SaveTasks(temp.DirectoryPath, task);
+        var claim = await RunCli(
+            "claim", "--tasks", temp.DirectoryPath, "--id", task.Id,
+            "--agent", "agent", "--expected-status", "Prepared", "--format", "json");
+        var lease = ParseJson(claim.StdOut).GetProperty("execution").GetProperty("leaseId").GetString()!;
+        var taskPath = Path.Combine(temp.DirectoryPath, task.Id);
+        var before = await File.ReadAllBytesAsync(taskPath);
+
+        var cases = new List<string[]>
+        {
+            new[] { "execution", "question", "--tasks", temp.DirectoryPath, "--id", task.Id,
+                "--agent", new string('a', 201), "--lease", lease, "--text", "Вопрос", "--format", "json" },
+            new[] { "execution", "question", "--tasks", temp.DirectoryPath, "--id", task.Id,
+                "--agent", "agent", "--lease", lease, "--text", new string('q', 4001), "--format", "json" },
+            new[] { "execution", "question", "--tasks", temp.DirectoryPath, "--id", task.Id,
+                "--agent", "agent", "--lease", lease,
+                "--text", "<!-- unlimotion-agent-execution:v1:start -->", "--format", "json" },
+            new[] { "execution", "result", "--tasks", temp.DirectoryPath, "--id", task.Id,
+                "--agent", "agent", "--lease", lease, "--summary", new string('s', 16001), "--format", "json" },
+            new[] { "release", "--tasks", temp.DirectoryPath, "--id", task.Id,
+                "--agent", "agent", "--lease", lease, "--reason", new string('r', 4001), "--format", "json" }
+        };
+        var tooManyLinks = new List<string>
+        {
+            "execution", "result", "--tasks", temp.DirectoryPath, "--id", task.Id,
+            "--agent", "agent", "--lease", lease, "--summary", "Итог"
+        };
+        for (var index = 0; index < 21; index++)
+        {
+            tooManyLinks.Add("--link");
+            tooManyLinks.Add($"https://example.com/{index}");
+        }
+        tooManyLinks.Add("--format");
+        tooManyLinks.Add("json");
+        cases.Add(tooManyLinks.ToArray());
+
+        foreach (var arguments in cases)
+        {
+            var result = await RunCli(arguments);
+            await Assert.That(result.ExitCode).IsEqualTo(1);
+            await AssertJsonError(result.StdOut, "invalidArguments");
+            await Assert.That(await File.ReadAllBytesAsync(taskPath)).IsEquivalentTo(before);
+        }
+    }
+
+    [Test]
+    public async Task Create_WithParentsPersistsSymmetricValidGraph()
+    {
+        using var temp = TempTaskDirectory.Create();
+        var firstParent = CreateTask(Guid.NewGuid().ToString("D"), DomainTaskStatus.Prepared, true, "Первый");
+        var secondParent = CreateTask(Guid.NewGuid().ToString("D"), DomainTaskStatus.Prepared, true, "Второй");
+        await SaveTasks(temp.DirectoryPath, firstParent, secondParent);
+
+        var result = await RunCli(
+            "create", "--tasks", temp.DirectoryPath, "--title", "Дочерняя задача",
+            "--description", "Контекст", "--parent", firstParent.Id, "--parent", secondParent.Id,
+            "--format", "json");
+
+        await Assert.That(result.ExitCode).IsEqualTo(0);
+        var childId = ParseJson(result.StdOut).GetProperty("task").GetProperty("id").GetString()!;
+        var child = await LoadTask(temp.DirectoryPath, childId);
+        var firstAfter = await LoadTask(temp.DirectoryPath, firstParent.Id);
+        var secondAfter = await LoadTask(temp.DirectoryPath, secondParent.Id);
+        await Assert.That(child.Status).IsEqualTo(DomainTaskStatus.Prepared);
+        await Assert.That(child.ParentTasks).IsEquivalentTo([firstParent.Id, secondParent.Id]);
+        await Assert.That(firstAfter.ContainsTasks).Contains(childId);
+        await Assert.That(secondAfter.ContainsTasks).Contains(childId);
+
+        var validation = await RunCli("validate", "--tasks", temp.DirectoryPath, "--format", "json");
+        await Assert.That(validation.ExitCode).IsEqualTo(0);
+        await Assert.That(ParseJson(validation.StdOut).GetProperty("isValid").GetBoolean()).IsTrue();
+    }
+
+    [Test]
+    public async Task ExecutionComplete_RepeatingTaskCreatesOccurrenceWithoutLeaseOrMarker()
+    {
+        using var temp = TempTaskDirectory.Create();
+        var task = CreateTask("execution-repeater", DomainTaskStatus.Prepared, isCanBeCompleted: true, title: "Повтор");
+        task.Description = "Постоянный контекст";
+        task.PlannedBeginDateTime = DateTimeOffset.UtcNow.AddDays(-1);
+        task.Repeater = new RepeaterPattern { Type = RepeaterType.Daily, Period = 1 };
+        await SaveTasks(temp.DirectoryPath, task);
+
+        var claim = await RunCli(
+            "claim", "--tasks", temp.DirectoryPath, "--id", task.Id,
+            "--agent", "agent-a", "--expected-status", "Prepared", "--format", "json");
+        var lease = ParseJson(claim.StdOut).GetProperty("execution").GetProperty("leaseId").GetString()!;
+        var complete = await RunCli(
+            "execution", "complete", "--tasks", temp.DirectoryPath, "--id", task.Id,
+            "--agent", "agent-a", "--lease", lease,
+            "--summary", "Готово", "--format", "json");
+
+        await Assert.That(complete.ExitCode).IsEqualTo(0);
+        var tasks = await LoadAllTasks(temp.DirectoryPath);
+        var occurrence = tasks.Single(item => item.Id != task.Id && item.Title == task.Title);
+        await Assert.That(occurrence.AgentExecution).IsNull();
+        await Assert.That(occurrence.Description).IsEqualTo("Постоянный контекст\n");
+        await Assert.That(occurrence.Description.Contains("unlimotion-agent-execution", StringComparison.Ordinal)).IsFalse();
+    }
+
+    [Test]
+    public async Task ExecutionDeniedInputs_DoNotChangePersistedTask()
+    {
+        using var temp = TempTaskDirectory.Create();
+        var task = CreateTask("denied-execution", DomainTaskStatus.Prepared, isCanBeCompleted: true);
+        await SaveTasks(temp.DirectoryPath, task);
+        var claim = await RunCli(
+            "claim", "--tasks", temp.DirectoryPath, "--id", task.Id,
+            "--agent", "agent", "--expected-status", "Prepared", "--format", "json");
+        var lease = ParseJson(claim.StdOut).GetProperty("execution").GetProperty("leaseId").GetString()!;
+        var question = await RunCli(
+            "execution", "question", "--tasks", temp.DirectoryPath, "--id", task.Id,
+            "--agent", "agent", "--lease", lease, "--text", "Вопрос", "--format", "json");
+        await Assert.That(question.ExitCode).IsEqualTo(0);
+        var taskPath = Path.Combine(temp.DirectoryPath, task.Id);
+        var before = await File.ReadAllTextAsync(taskPath);
+
+        var unknownQuestion = await RunCli(
+            "execution", "answer", "--tasks", temp.DirectoryPath, "--id", task.Id,
+            "--agent", "agent", "--lease", lease, "--question-id", Guid.NewGuid().ToString("D"),
+            "--text", "Ответ", "--format", "json");
+        await Assert.That(unknownQuestion.ExitCode).IsEqualTo(1);
+        await AssertJsonError(unknownQuestion.StdOut, "questionNotFound");
+
+        var pendingComplete = await RunCli(
+            "execution", "complete", "--tasks", temp.DirectoryPath, "--id", task.Id,
+            "--agent", "agent", "--lease", lease, "--summary", "Итог", "--format", "json");
+        await Assert.That(pendingComplete.ExitCode).IsEqualTo(1);
+        await AssertJsonError(pendingComplete.StdOut, "executionStateDenied");
+
+        var invalidLink = await RunCli(
+            "execution", "result", "--tasks", temp.DirectoryPath, "--id", task.Id,
+            "--agent", "agent", "--lease", lease, "--summary", "Итог",
+            "--link", "relative/path", "--format", "json");
+        await Assert.That(invalidLink.ExitCode).IsEqualTo(1);
+        await AssertJsonError(invalidLink.StdOut, "invalidArguments");
+        await Assert.That(await File.ReadAllTextAsync(taskPath)).IsEqualTo(before);
+    }
+
+    [Test]
+    public async Task Create_MissingParentDoesNotCreateTaskFile()
+    {
+        using var temp = TempTaskDirectory.Create();
+        var result = await RunCli(
+            "create", "--tasks", temp.DirectoryPath, "--title", "Дочерняя",
+            "--parent", "missing", "--format", "json");
+
+        await Assert.That(result.ExitCode).IsEqualTo(1);
+        await AssertJsonError(result.StdOut, "notFound");
+        await Assert.That(Directory.EnumerateFiles(temp.DirectoryPath)
+            .Where(static path => !Path.GetFileName(path).StartsWith(".", StringComparison.Ordinal)))
+            .IsEmpty();
+    }
+
+    [Test]
+    public async Task Create_ControlCharacterInDescriptionDoesNotWrite()
+    {
+        using var temp = TempTaskDirectory.Create();
+        var result = await RunCli(
+            "create", "--tasks", temp.DirectoryPath, "--title", "Дочерняя",
+            "--description", "Недопустимый\u0001контекст", "--format", "json");
+
+        await Assert.That(result.ExitCode).IsEqualTo(1);
+        await AssertJsonError(result.StdOut, "invalidArguments");
+        await Assert.That(Directory.EnumerateFiles(temp.DirectoryPath)
+            .Where(static path => !Path.GetFileName(path).StartsWith(".", StringComparison.Ordinal)))
+            .IsEmpty();
+    }
+
+    [Test]
+    public async Task Claim_WhenAuditIsTruncatedExposesSignalInJson()
+    {
+        using var temp = TempTaskDirectory.Create();
+        var task = CreateTask("audit-truncated", DomainTaskStatus.Prepared, isCanBeCompleted: true);
+        var now = DateTimeOffset.UtcNow.AddMinutes(-1);
+        task.AgentExecution = new AgentExecutionRecord
+        {
+            AgentId = "released-agent",
+            LeaseId = Guid.NewGuid().ToString("D"),
+            State = AgentExecutionState.Released,
+            ClaimedAt = now,
+            UpdatedAt = now,
+            ReleasedAt = now,
+            ReleaseReason = "Освобождена",
+            PreviousAttempts = Enumerable.Range(0, 20)
+                .Select(index => new AgentExecutionAttempt
+                {
+                    AgentId = $"agent-{index}",
+                    LeaseId = Guid.NewGuid().ToString("D"),
+                    State = AgentExecutionState.Released,
+                    ClaimedAt = now.AddMinutes(-index - 1),
+                    UpdatedAt = now.AddMinutes(-index - 1),
+                    ReleasedAt = now.AddMinutes(-index - 1),
+                    ReleaseReason = "Освобождена"
+                })
+                .ToList()
+        };
+        task.Description = "<!-- unlimotion-agent-execution:v1:start -->\nОсвобождена\n<!-- unlimotion-agent-execution:v1:end -->";
+        await SaveTasks(temp.DirectoryPath, task);
+
+        var claim = await RunCli(
+            "claim", "--tasks", temp.DirectoryPath, "--id", task.Id,
+            "--agent", "new-agent", "--expected-status", "Prepared", "--format", "json");
+
+        await Assert.That(claim.ExitCode).IsEqualTo(0);
+        var root = ParseJson(claim.StdOut);
+        await Assert.That(root.GetProperty("auditTruncated").GetBoolean()).IsTrue();
+        var snapshot = await RunCli(
+            "task", "--tasks", temp.DirectoryPath, "--id", task.Id,
+            "--include", "execution", "--format", "json");
+        var execution = ParseJson(snapshot.StdOut).GetProperty("execution");
+        await Assert.That(execution.GetProperty("auditTruncated").GetBoolean()).IsTrue();
+        await Assert.That(execution.GetProperty("previousAttempts").GetArrayLength()).IsEqualTo(20);
+    }
+
+    [Test]
+    public async Task Validate_RecoversAbandonedJournalBeforeReadingDirectory()
+    {
+        using var temp = TempTaskDirectory.Create();
+        var storage = CreateStorage(temp.DirectoryPath);
+        var task = CreateTask("partial-create", DomainTaskStatus.Prepared, isCanBeCompleted: true);
+        var scope = (IRecoverableTaskGraphWriteScope)storage.BeginWriteScope();
+        await storage.WithWriteLockAsync(async () =>
+        {
+            await storage.Save(task);
+            return true;
+        });
+        scope.Dispose();
+
+        var result = await RunCli("validate", "--tasks", temp.DirectoryPath, "--format", "json");
+
+        await Assert.That(result.ExitCode).IsEqualTo(0);
+        var root = ParseJson(result.StdOut);
+        await Assert.That(root.GetProperty("taskCount").GetInt32()).IsEqualTo(0);
+        await Assert.That(root.GetProperty("isValid").GetBoolean()).IsTrue();
+        await Assert.That(Directory.GetFiles(Path.Combine(temp.DirectoryPath, ".unlimotion.transactions"), "*.json"))
+            .IsEmpty();
+    }
+
+    [Test]
+    public async Task Complete_RepeatingSubtreeWithMalformedMarkerFailsWithoutWriting()
+    {
+        using var temp = TempTaskDirectory.Create();
+        var root = CreateTask("repeater-root", DomainTaskStatus.Prepared, true, "Повтор");
+        root.Repeater = new RepeaterPattern { Type = RepeaterType.Daily, Period = 1 };
+        root.PlannedBeginDateTime = DateTimeOffset.UtcNow.AddDays(-1);
+        root.ContainsTasks.Add("repeater-child");
+        var child = CreateTask("repeater-child", DomainTaskStatus.Completed, true, "Дочерняя");
+        child.ParentTasks.Add(root.Id);
+        child.Description = "<!-- unlimotion-agent-execution:v1:end -->";
+        await SaveTasks(temp.DirectoryPath, root, child);
+        var rootPath = Path.Combine(temp.DirectoryPath, root.Id);
+        var childPath = Path.Combine(temp.DirectoryPath, child.Id);
+        var rootBefore = await File.ReadAllBytesAsync(rootPath);
+        var childBefore = await File.ReadAllBytesAsync(childPath);
+
+        var result = await RunCli(
+            "complete", "--tasks", temp.DirectoryPath, "--id", root.Id, "--format", "json");
+
+        await Assert.That(result.ExitCode).IsEqualTo(1);
+        await AssertJsonError(result.StdOut, "descriptionMarkerConflict");
+        await Assert.That(await File.ReadAllBytesAsync(rootPath)).IsEquivalentTo(rootBefore);
+        await Assert.That(await File.ReadAllBytesAsync(childPath)).IsEquivalentTo(childBefore);
+        await Assert.That((await LoadAllTasks(temp.DirectoryPath)).Count).IsEqualTo(2);
+    }
+
+    [Test]
+    public async Task Candidates_AcceptsExplicitStatusStartableAndDefaultSort()
+    {
+        using var temp = TempTaskDirectory.Create();
+        var active = CreateTask("active", DomainTaskStatus.InProgress, isCanBeCompleted: true);
+        var prepared = CreateTask("prepared", DomainTaskStatus.Prepared, isCanBeCompleted: true);
+        await SaveTasks(temp.DirectoryPath, active, prepared);
+
+        var result = await RunCli(
+            "candidates", "--tasks", temp.DirectoryPath, "--limit", "10",
+            "--status", "InProgress", "--startable", "true", "--sort", "default",
+            "--format", "json");
+
+        await Assert.That(result.ExitCode).IsEqualTo(0);
+        var candidates = ParseJson(result.StdOut);
+        await Assert.That(candidates.GetArrayLength()).IsEqualTo(1);
+        await Assert.That(candidates[0].GetProperty("id").GetString()).IsEqualTo(active.Id);
     }
 
     [Test]

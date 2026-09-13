@@ -31,6 +31,7 @@ namespace Unlimotion.Domain
         public int Importance { get; set; }
         public bool Wanted { get; set; }
         public int Version { get; set; } = 0;
+        public AgentExecutionRecord? AgentExecution { get; set; }
 
         [JsonExtensionData]
         public IDictionary<string, JToken>? ExtensionData { get; set; }

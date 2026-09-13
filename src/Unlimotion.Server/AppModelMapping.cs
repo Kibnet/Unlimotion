@@ -36,12 +36,14 @@ namespace Unlimotion.Server
                 .ForMember(m => m.SortOrder, e => e.Ignore());
             cfg.CreateMap<TaskItemMold, TaskItem>()
                 .ForMember(m => m.ExtensionData, e => e.Ignore())
+                .ForMember(m => m.AgentExecution, e => e.Ignore())
                 .IgnoreComputedStatusMembers();
             cfg.CreateMap<TaskItem, ReceiveTaskItem>();
             cfg.CreateMap<TaskItemHubMold, TaskItem>()
                 .ForMember(m => m.UserId, e => e.Ignore())
                 .ForMember(m => m.CreatedDateTime, e => e.Ignore())
                 .ForMember(m => m.ExtensionData, e => e.Ignore())
+                .ForMember(m => m.AgentExecution, e => e.Ignore())
                 .IgnoreComputedStatusMembers();
 
             cfg.CreateMap<User, UserProfileMold>();
