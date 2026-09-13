@@ -34,6 +34,29 @@ public sealed class TaskDirectoryResolverTests
     }
 
     [Test]
+    public async Task Resolve_UsesSettingsDirectoryForRelativeConfiguredPath()
+    {
+        using var temp = TemporarySettingsDirectory.Create();
+        var settingsDirectory = Path.Combine(temp.Path, "DesktopSettings");
+        Directory.CreateDirectory(settingsDirectory);
+        var settingsPath = Path.Combine(settingsDirectory, "Settings.json");
+        await File.WriteAllTextAsync(
+            settingsPath,
+            JsonSerializer.Serialize(new
+            {
+                TaskStorage = new
+                {
+                    Path = "Tasks",
+                    IsServerMode = false
+                }
+            }));
+
+        var configured = global::Unlimotion.Cli.TaskDirectoryResolver.Resolve(null, settingsPath);
+
+        await Assert.That(configured).IsEqualTo(Path.Combine(settingsDirectory, "Tasks"));
+    }
+
+    [Test]
     public async Task Resolve_RejectsMissingMalformedPathlessAndServerSettings()
     {
         using var temp = TemporarySettingsDirectory.Create();

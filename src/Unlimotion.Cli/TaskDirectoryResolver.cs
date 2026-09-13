@@ -49,7 +49,11 @@ public static class TaskDirectoryResolver
                 throw SettingsError("settingsPathMissing", "Unlimotion desktop settings do not define TaskStorage.Path. Specify --tasks <path> explicitly.");
             }
 
-            return path.GetString()!;
+            var configuredPath = path.GetString()!;
+            var settingsDirectory = Path.GetDirectoryName(Path.GetFullPath(settingsPath))!;
+            return Path.IsPathFullyQualified(configuredPath)
+                ? configuredPath
+                : Path.GetFullPath(configuredPath, settingsDirectory);
         }
         catch (CliException)
         {
