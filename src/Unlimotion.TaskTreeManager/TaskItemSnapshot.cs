@@ -68,6 +68,36 @@ public static class TaskItemSnapshot
                 LeaseId = execution.LeaseId,
                 State = execution.State,
                 ClaimedAt = execution.ClaimedAt,
-                UpdatedAt = execution.UpdatedAt
+                UpdatedAt = execution.UpdatedAt,
+                Questions = execution.Questions?.Select(static question => new AgentExecutionQuestion
+                {
+                    Id = question.Id,
+                    Text = question.Text,
+                    AskedAt = question.AskedAt,
+                    Answer = question.Answer,
+                    AnsweredAt = question.AnsweredAt
+                }).ToList() ?? [],
+                Result = execution.Result == null
+                    ? null
+                    : new AgentExecutionResult
+                    {
+                        Summary = execution.Result.Summary,
+                        Links = execution.Result.Links?.ToList() ?? [],
+                        RecordedAt = execution.Result.RecordedAt
+                    },
+                ReleasedAt = execution.ReleasedAt,
+                ReleaseReason = execution.ReleaseReason,
+                PreviousAttempts = execution.PreviousAttempts?.Select(static attempt => new AgentExecutionAttempt
+                {
+                    AgentId = attempt.AgentId,
+                    LeaseId = attempt.LeaseId,
+                    State = attempt.State,
+                    ClaimedAt = attempt.ClaimedAt,
+                    UpdatedAt = attempt.UpdatedAt,
+                    ReleasedAt = attempt.ReleasedAt,
+                    ReleaseReason = attempt.ReleaseReason,
+                    CompletedAt = attempt.CompletedAt
+                }).ToList() ?? [],
+                AuditTruncated = execution.AuditTruncated
             };
 }

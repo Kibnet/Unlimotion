@@ -45,6 +45,9 @@ public static class Program
                 "unlocked" => await RunReadCommand(options, storage, RunUnlocked),
                 "candidates" => await RunReadCommand(options, storage, RunCandidates),
                 "claim" => await RunClaim(options, storage),
+                "execution" => await RunExecution(options, storage),
+                "release" => await RunRelease(options, storage),
+                "create" => await RunCreate(options, storage),
                 "task" => await RunReadCommand(options, storage, RunTask),
                 "validate" => await RunReadCommand(options, storage, RunValidate),
                 "set-status" => await RunSetStatus(options, storage),
@@ -159,8 +162,10 @@ public static class Program
         }
 
         var limit = options.Limit ?? throw new CliException("Command 'candidates' requires --limit <1..100>.");
+        var requestedStatus = options.Status ?? DomainTaskStatus.Prepared;
+        var requestedStartable = options.Startable ?? true;
         var candidates = analyzer.AnalyzeAll()
-            .Where(static analysis => analysis.Status == DomainTaskStatus.Prepared && analysis.CanStart)
+            .Where(analysis => analysis.Status == requestedStatus && analysis.CanStart == requestedStartable)
             .Select(analysis =>
             {
                 analyzer.TryGetTask(analysis.TaskId, out var task);
@@ -207,7 +212,7 @@ public static class Program
         }
 
         var taskId = RequireTaskId(options, "task");
-        if (!analyzer.TryGetTask(taskId, out _))
+        if (!analyzer.TryGetTask(taskId, out var task))
         {
             throw new CliException($"Task '{taskId}' was not found.", exitCode: 1, kind: "notFound");
         }
@@ -215,7 +220,9 @@ public static class Program
         var analysis = analyzer.Analyze(taskId);
         if (options.Format == OutputFormat.Json)
         {
-            WriteJson(analysis);
+            WriteJson(options.IncludeSections.Count == 0
+                ? analysis
+                : TaskSnapshotOutput.Create(task!, analysis, analyzer, options.IncludeSections));
             return 0;
         }
 
@@ -293,7 +300,8 @@ public static class Program
             Execution = ExecutionOutput.From(task.AgentExecution!),
             ChangedTaskIds = ChangedIds(result.ChangedTasks),
             StorageRevision = result.StorageRevision,
-            DidMutate = true
+            DidMutate = true,
+            AuditTruncated = task.AgentExecution?.AuditTruncated == true
         };
         if (options.Format == OutputFormat.Json)
         {
@@ -302,6 +310,122 @@ public static class Program
         else
         {
             Console.WriteLine($"Claimed: {task.Id} by {task.AgentExecution!.AgentId} ({task.AgentExecution.LeaseId})");
+        }
+
+        return 0;
+    }
+
+    private static async Task<int> RunExecution(CliOptions options, FileTaskStorage storage)
+    {
+        var action = options.ExecutionCommand ??
+            throw new CliException("Command 'execution' requires question, answer, result, or complete.");
+        var taskId = RequireTaskId(options, $"execution {action}");
+        var agentId = RequireAgentId(options, $"execution {action}");
+        var leaseId = RequireLeaseId(options, $"execution {action}");
+        var service = CreateCommandService(storage, options);
+        var result = action switch
+        {
+            "question" => await service.TryAddExecutionQuestionAsync(
+                taskId, agentId, leaseId, RequireText(options, "execution question")),
+            "answer" => await service.TryAnswerExecutionQuestionAsync(
+                taskId, agentId, leaseId, RequireQuestionId(options), RequireText(options, "execution answer")),
+            "result" => await service.TrySetExecutionResultAsync(
+                taskId, agentId, leaseId, RequireSummary(options, "execution result"), options.Links),
+            "complete" => await service.TryCompleteExecutionAsync(
+                taskId, agentId, leaseId, RequireSummary(options, "execution complete"), options.Links),
+            _ => throw new CliException($"Unknown execution command '{action}'.")
+        };
+
+        return RenderExecutionResult(options, result, taskId, $"execution {action}");
+    }
+
+    private static async Task<int> RunRelease(CliOptions options, FileTaskStorage storage)
+    {
+        var taskId = RequireTaskId(options, "release");
+        var result = await CreateCommandService(storage, options).TryReleaseExecutionAsync(
+            taskId,
+            RequireAgentId(options, "release"),
+            RequireLeaseId(options, "release"),
+            string.IsNullOrWhiteSpace(options.Reason)
+                ? throw new CliException("Command 'release' requires --reason <text>.")
+                : options.Reason);
+        return RenderExecutionResult(options, result, taskId, "release");
+    }
+
+    private static async Task<int> RunCreate(CliOptions options, FileTaskStorage storage)
+    {
+        var title = string.IsNullOrWhiteSpace(options.Title)
+            ? throw new CliException("Command 'create' requires --title <text>.")
+            : options.Title;
+        var result = await CreateCommandService(storage, options).TryCreateTaskAsync(
+            title,
+            options.Description,
+            options.ParentIds,
+            options.Author);
+        if (!result.Success)
+        {
+            WriteJsonOrTextDenied(options, result, result.DeniedReason?.TaskId ?? string.Empty, "create");
+            return 1;
+        }
+
+        var task = result.AuthoritativeTask ?? throw new InvalidOperationException("Create succeeded without a task.");
+        if (options.Format == OutputFormat.Json)
+        {
+            WriteJson(new CreateTaskOutput
+            {
+                Success = true,
+                Task = TaskSummary.FromAnalysis(result.After!),
+                ChangedTaskIds = ChangedIds(result.ChangedTasks),
+                StorageRevision = result.StorageRevision,
+                DidMutate = true
+            });
+        }
+        else
+        {
+            Console.WriteLine($"Created: {task.Id} {task.Title}");
+        }
+
+        return 0;
+    }
+
+    private static int RenderExecutionResult(
+        CliOptions options,
+        TaskOperationResult result,
+        string taskId,
+        string action)
+    {
+        if (!result.Success)
+        {
+            if (options.Format == OutputFormat.Json)
+            {
+                WriteJson(ExecutionErrorOutput.Create(result));
+            }
+            else
+            {
+                Console.Error.WriteLine(result.DeniedReason?.Message ?? $"Command '{action}' was denied for '{taskId}'.");
+            }
+
+            return 1;
+        }
+
+        var task = result.AuthoritativeTask ?? throw new InvalidOperationException("Execution write succeeded without a task.");
+        var output = new ExecutionMutationOutput
+        {
+            Success = true,
+            Task = TaskSummary.FromAnalysis(result.After ?? result.Before!),
+            Execution = ExecutionDetailsOutput.From(task.AgentExecution!),
+            ChangedTaskIds = ChangedIds(result.ChangedTasks),
+            StorageRevision = result.StorageRevision,
+            DidMutate = true,
+            AuditTruncated = task.AgentExecution?.AuditTruncated == true
+        };
+        if (options.Format == OutputFormat.Json)
+        {
+            WriteJson(output);
+        }
+        else
+        {
+            Console.WriteLine($"OK: {action} for {task.Id}; execution={task.AgentExecution!.State}");
         }
 
         return 0;
@@ -375,6 +499,26 @@ public static class Program
             ? throw new CliException($"Command '{command}' requires --agent <agent-id>.")
             : options.AgentId;
 
+    private static string RequireLeaseId(CliOptions options, string command) =>
+        string.IsNullOrWhiteSpace(options.LeaseId)
+            ? throw new CliException($"Command '{command}' requires --lease <lease-id>.")
+            : options.LeaseId;
+
+    private static string RequireQuestionId(CliOptions options) =>
+        string.IsNullOrWhiteSpace(options.QuestionId)
+            ? throw new CliException("Command 'execution answer' requires --question-id <question-id>.")
+            : options.QuestionId;
+
+    private static string RequireText(CliOptions options, string command) =>
+        string.IsNullOrWhiteSpace(options.Text)
+            ? throw new CliException($"Command '{command}' requires --text <text>.")
+            : options.Text;
+
+    private static string RequireSummary(CliOptions options, string command) =>
+        string.IsNullOrWhiteSpace(options.Summary)
+            ? throw new CliException($"Command '{command}' requires --summary <text>.")
+            : options.Summary;
+
     private static void WriteJsonOrTextDenied(
         CliOptions options,
         TaskOperationResult result,
@@ -384,7 +528,7 @@ public static class Program
         if (options.Format == OutputFormat.Json)
         {
             WriteJson(ErrorOutput.Create(
-                MapDeniedKind(result.DeniedReason?.Kind ?? TaskOperationDeniedKind.StorageFailed),
+                MapDeniedKindForOutput(result.DeniedReason?.Kind ?? TaskOperationDeniedKind.StorageFailed),
                 result.DeniedReason?.Message ?? $"Command '{action}' was denied."));
             return;
         }
@@ -425,7 +569,7 @@ public static class Program
             if (!output.Success)
             {
                 WriteJson(ErrorOutput.Create(
-                    MapDeniedKind(output.DeniedKind ?? TaskOperationDeniedKind.StorageFailed),
+                    MapDeniedKindForOutput(output.DeniedKind ?? TaskOperationDeniedKind.StorageFailed),
                     output.Error ?? "Command was denied."));
                 return;
             }
@@ -450,7 +594,7 @@ public static class Program
         }
     }
 
-    private static string MapDeniedKind(TaskOperationDeniedKind deniedKind) => deniedKind switch
+    internal static string MapDeniedKindForOutput(TaskOperationDeniedKind deniedKind) => deniedKind switch
     {
         TaskOperationDeniedKind.ValidationFailed => "validationFailed",
         TaskOperationDeniedKind.TaskNotFound => "notFound",
@@ -458,9 +602,13 @@ public static class Program
         TaskOperationDeniedKind.StatusTransitionDenied => "businessRuleDenied",
         TaskOperationDeniedKind.CompletedCriteriaImmutable => "businessRuleDenied",
         TaskOperationDeniedKind.StorageFailed => "operationFailed",
-        TaskOperationDeniedKind.OutcomeUnknown => "operationFailed",
         TaskOperationDeniedKind.ClaimConflict => "claimConflict",
         TaskOperationDeniedKind.ExecutionStateDenied => "executionStateDenied",
+        TaskOperationDeniedKind.LeaseMismatch => "leaseMismatch",
+        TaskOperationDeniedKind.QuestionNotFound => "questionNotFound",
+        TaskOperationDeniedKind.DescriptionMarkerConflict => "descriptionMarkerConflict",
+        TaskOperationDeniedKind.InvalidArguments => "invalidArguments",
+        TaskOperationDeniedKind.OutcomeUnknown => "outcomeUnknown",
         _ => "operationFailed"
     };
 
@@ -555,9 +703,14 @@ public static class Program
         writer.WriteLine("  unlimotion-cli status --tasks <path> [--format text|json]");
         writer.WriteLine("  --tasks <path> is optional; without it the active local desktop task-space path is used.");
         writer.WriteLine("  unlimotion-cli unlocked --tasks <path> [--format text|json]");
-        writer.WriteLine("  unlimotion-cli candidates --tasks <path> --limit <1..100> [--format text|json]");
+        writer.WriteLine("  unlimotion-cli candidates --tasks <path> --limit <1..100> [--status <status>] [--startable true|false] [--sort default] [--format text|json]");
         writer.WriteLine("  unlimotion-cli claim --tasks <path> --id <task-id> --agent <agent-id> --expected-status Prepared [--format text|json]");
-        writer.WriteLine("  unlimotion-cli task --tasks <path> --id <task-id> [--format text|json]");
+        writer.WriteLine("  unlimotion-cli execution question --tasks <path> --id <task-id> --agent <agent-id> --lease <lease-id> --text <text> [--format text|json]");
+        writer.WriteLine("  unlimotion-cli execution answer --tasks <path> --id <task-id> --agent <agent-id> --lease <lease-id> --question-id <question-id> --text <text> [--format text|json]");
+        writer.WriteLine("  unlimotion-cli execution result|complete --tasks <path> --id <task-id> --agent <agent-id> --lease <lease-id> --summary <text> [--link <absolute-uri>] [--format text|json]");
+        writer.WriteLine("  unlimotion-cli release --tasks <path> --id <task-id> --agent <agent-id> --lease <lease-id> --reason <text> [--format text|json]");
+        writer.WriteLine("  unlimotion-cli create --tasks <path> --title <text> [--description <text>] [--parent <task-id>] [--format text|json]");
+        writer.WriteLine("  unlimotion-cli task --tasks <path> --id <task-id> [--include details,relations,criteria,history,execution] [--format text|json]");
         writer.WriteLine("  unlimotion-cli validate --tasks <path> [--format text|json]");
         writer.WriteLine("  unlimotion-cli set-status --tasks <path> --id <task-id> --status <status> [--author <name>] [--format text|json]");
         writer.WriteLine("  unlimotion-cli complete --tasks <path> --id <task-id> [--author <name>] [--format text|json]");
@@ -574,6 +727,9 @@ public sealed record CliOptions
         "unlocked",
         "candidates",
         "claim",
+        "execution",
+        "release",
+        "create",
         "task",
         "validate",
         "set-status",
@@ -583,12 +739,25 @@ public sealed record CliOptions
     ];
 
     public string Command { get; init; } = string.Empty;
+    public string? ExecutionCommand { get; init; }
     public string? TasksPath { get; init; }
     public string? TaskId { get; init; }
     public string? CriterionId { get; init; }
     public string? AgentId { get; init; }
+    public string? LeaseId { get; init; }
+    public string? QuestionId { get; init; }
+    public string? Text { get; init; }
+    public string? Summary { get; init; }
+    public string? Reason { get; init; }
+    public string? Title { get; init; }
+    public string? Description { get; init; }
+    public IReadOnlyList<string> Links { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> ParentIds { get; init; } = Array.Empty<string>();
+    public IReadOnlySet<string> IncludeSections { get; init; } = new HashSet<string>(StringComparer.Ordinal);
     public DomainTaskStatus? ExpectedStatus { get; init; }
     public int? Limit { get; init; }
+    public bool? Startable { get; init; }
+    public string? Sort { get; init; }
     public DomainTaskStatus? Status { get; init; }
     public bool? Satisfied { get; init; }
     public string? Author { get; init; }
@@ -608,19 +777,49 @@ public sealed record CliOptions
             throw new CliException($"Unknown command '{command}'.");
         }
 
+        string? executionCommand = null;
+        var firstOptionIndex = 1;
+        if (command == "execution")
+        {
+            if (args.Length < 2 || args[1].StartsWith("-", StringComparison.Ordinal))
+            {
+                throw new CliException("Command 'execution' requires question, answer, result, or complete.");
+            }
+
+            executionCommand = args[1].ToLowerInvariant();
+            if (executionCommand is not ("question" or "answer" or "result" or "complete"))
+            {
+                throw new CliException($"Unknown execution command '{executionCommand}'.");
+            }
+
+            firstOptionIndex = 2;
+        }
+
         string? tasksPath = null;
         string? taskId = null;
         string? criterionId = null;
         string? agentId = null;
+        string? leaseId = null;
+        string? questionId = null;
+        string? text = null;
+        string? summary = null;
+        string? reason = null;
+        string? title = null;
+        string? description = null;
+        var links = new List<string>();
+        var parentIds = new List<string>();
+        var includeSections = new HashSet<string>(StringComparer.Ordinal);
         DomainTaskStatus? expectedStatus = null;
         int? limit = null;
+        bool? startable = null;
+        string? sort = null;
         DomainTaskStatus? status = null;
         bool? satisfied = null;
         string? author = null;
         var format = OutputFormat.Text;
         var suppliedOptions = new HashSet<string>(StringComparer.Ordinal);
 
-        for (var i = 1; i < args.Length; i++)
+        for (var i = firstOptionIndex; i < args.Length; i++)
         {
             var arg = args[i];
             switch (arg)
@@ -646,6 +845,46 @@ public sealed record CliOptions
                     suppliedOptions.Add(arg);
                     agentId = RequireValue(args, ref i, arg);
                     break;
+                case "--lease":
+                    suppliedOptions.Add(arg);
+                    leaseId = RequireValue(args, ref i, arg);
+                    break;
+                case "--question-id":
+                    suppliedOptions.Add(arg);
+                    questionId = RequireValue(args, ref i, arg);
+                    break;
+                case "--text":
+                    suppliedOptions.Add(arg);
+                    text = RequireValue(args, ref i, arg);
+                    break;
+                case "--summary":
+                    suppliedOptions.Add(arg);
+                    summary = RequireValue(args, ref i, arg);
+                    break;
+                case "--reason":
+                    suppliedOptions.Add(arg);
+                    reason = RequireValue(args, ref i, arg);
+                    break;
+                case "--title":
+                    suppliedOptions.Add(arg);
+                    title = RequireValue(args, ref i, arg);
+                    break;
+                case "--description":
+                    suppliedOptions.Add(arg);
+                    description = RequireValue(args, ref i, arg);
+                    break;
+                case "--link":
+                    suppliedOptions.Add(arg);
+                    links.Add(RequireValue(args, ref i, arg));
+                    break;
+                case "--parent":
+                    suppliedOptions.Add(arg);
+                    parentIds.Add(RequireValue(args, ref i, arg));
+                    break;
+                case "--include":
+                    suppliedOptions.Add(arg);
+                    AddIncludeSections(includeSections, RequireValue(args, ref i, arg));
+                    break;
                 case "--expected-status":
                     suppliedOptions.Add(arg);
                     expectedStatus = ParseStatus(RequireValue(args, ref i, arg));
@@ -653,6 +892,19 @@ public sealed record CliOptions
                 case "--status":
                     suppliedOptions.Add(arg);
                     status = ParseStatus(RequireValue(args, ref i, arg));
+                    break;
+                case "--startable":
+                    suppliedOptions.Add(arg);
+                    startable = ParseBoolean(RequireValue(args, ref i, arg), arg);
+                    break;
+                case "--sort":
+                    suppliedOptions.Add(arg);
+                    sort = RequireValue(args, ref i, arg);
+                    if (!string.Equals(sort, "default", StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw new CliException("--sort currently supports only 'default'.");
+                    }
+                    sort = "default";
                     break;
                 case "--satisfied":
                     suppliedOptions.Add(arg);
@@ -671,17 +923,35 @@ public sealed record CliOptions
             }
         }
 
-        ValidateOptions(command, suppliedOptions);
+        ValidateOptions(command, executionCommand, suppliedOptions);
+
+        if (parentIds.Count != parentIds.Distinct(StringComparer.Ordinal).Count())
+        {
+            throw new CliException("--parent values must be unique.");
+        }
 
         return new CliOptions
         {
             Command = command,
+            ExecutionCommand = executionCommand,
             TasksPath = tasksPath ?? TaskDirectoryResolver.Resolve(null),
             TaskId = taskId,
             CriterionId = criterionId,
             AgentId = agentId,
+            LeaseId = leaseId,
+            QuestionId = questionId,
+            Text = text,
+            Summary = summary,
+            Reason = reason,
+            Title = title,
+            Description = description,
+            Links = links,
+            ParentIds = parentIds,
+            IncludeSections = includeSections,
             ExpectedStatus = expectedStatus,
             Limit = limit,
+            Startable = startable,
+            Sort = sort,
             Status = status,
             Satisfied = satisfied,
             Author = author,
@@ -726,18 +996,40 @@ public sealed record CliOptions
             : throw new CliException("--status must be one of NotReady, Prepared, InProgress, Completed, Archived.");
     }
 
-    private static void ValidateOptions(string command, IReadOnlySet<string> suppliedOptions)
+    private static void AddIncludeSections(ISet<string> target, string value)
     {
-        var allowedOptions = command switch
+        foreach (var rawSection in value.Split(','))
         {
-            "status" or "unlocked" or "validate" => new[] { "--tasks", "--format" },
-            "candidates" => new[] { "--tasks", "--limit", "--format" },
-            "claim" => new[] { "--tasks", "--id", "--agent", "--expected-status", "--format" },
-            "task" => new[] { "--tasks", "--id", "--format" },
-            "set-status" => new[] { "--tasks", "--id", "--status", "--author", "--format" },
-            "complete" => new[] { "--tasks", "--id", "--author", "--format" },
-            "set-criterion" => new[] { "--tasks", "--id", "--criterion", "--satisfied", "--format" },
-            "satisfy-criterion" => new[] { "--tasks", "--id", "--criterion", "--format" },
+            var section = rawSection.Trim().ToLowerInvariant();
+            if (section is not ("details" or "relations" or "criteria" or "history" or "execution"))
+            {
+                throw new CliException($"Unknown task include section '{rawSection}'.");
+            }
+
+            target.Add(section);
+        }
+    }
+
+    private static void ValidateOptions(
+        string command,
+        string? executionCommand,
+        IReadOnlySet<string> suppliedOptions)
+    {
+        var allowedOptions = (command, executionCommand) switch
+        {
+            ("status" or "unlocked" or "validate", _) => new[] { "--tasks", "--format" },
+            ("candidates", _) => new[] { "--tasks", "--limit", "--status", "--startable", "--sort", "--format" },
+            ("claim", _) => new[] { "--tasks", "--id", "--agent", "--expected-status", "--format" },
+            ("task", _) => new[] { "--tasks", "--id", "--include", "--format" },
+            ("execution", "question") => new[] { "--tasks", "--id", "--agent", "--lease", "--text", "--format" },
+            ("execution", "answer") => new[] { "--tasks", "--id", "--agent", "--lease", "--question-id", "--text", "--format" },
+            ("execution", "result" or "complete") => new[] { "--tasks", "--id", "--agent", "--lease", "--summary", "--link", "--format" },
+            ("release", _) => new[] { "--tasks", "--id", "--agent", "--lease", "--reason", "--format" },
+            ("create", _) => new[] { "--tasks", "--title", "--description", "--parent", "--author", "--format" },
+            ("set-status", _) => new[] { "--tasks", "--id", "--status", "--author", "--format" },
+            ("complete", _) => new[] { "--tasks", "--id", "--author", "--format" },
+            ("set-criterion", _) => new[] { "--tasks", "--id", "--criterion", "--satisfied", "--format" },
+            ("satisfy-criterion", _) => new[] { "--tasks", "--id", "--criterion", "--format" },
             _ => Array.Empty<string>()
         };
         var allowed = allowedOptions.ToHashSet(StringComparer.Ordinal);
@@ -867,6 +1159,298 @@ public sealed record ClaimOutput
     public IReadOnlyList<string> ChangedTaskIds { get; init; } = Array.Empty<string>();
     public long StorageRevision { get; init; }
     public bool DidMutate { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool AuditTruncated { get; init; }
+}
+
+public sealed record ExecutionDetailsOutput
+{
+    public string AgentId { get; init; } = string.Empty;
+    public string LeaseId { get; init; } = string.Empty;
+    public AgentExecutionState State { get; init; }
+    public DateTimeOffset ClaimedAt { get; init; }
+    public DateTimeOffset UpdatedAt { get; init; }
+    public IReadOnlyList<ExecutionQuestionOutput> Questions { get; init; } = Array.Empty<ExecutionQuestionOutput>();
+    public ExecutionResultOutput? Result { get; init; }
+    public DateTimeOffset? ReleasedAt { get; init; }
+    public string? ReleaseReason { get; init; }
+    public IReadOnlyList<ExecutionAttemptOutput> PreviousAttempts { get; init; } = Array.Empty<ExecutionAttemptOutput>();
+    public bool AuditTruncated { get; init; }
+
+    public static ExecutionDetailsOutput From(AgentExecutionRecord execution) => new()
+    {
+        AgentId = execution.AgentId,
+        LeaseId = execution.LeaseId,
+        State = execution.State,
+        ClaimedAt = execution.ClaimedAt,
+        UpdatedAt = execution.UpdatedAt,
+        Questions = (execution.Questions ?? [])
+            .Select(static question => new ExecutionQuestionOutput
+            {
+                Id = question.Id,
+                Text = question.Text,
+                AskedAt = question.AskedAt,
+                Answer = question.Answer,
+                AnsweredAt = question.AnsweredAt
+            })
+            .OrderBy(static question => question.AskedAt)
+            .ThenBy(static question => question.Id, StringComparer.Ordinal)
+            .ToArray(),
+        Result = execution.Result == null
+            ? null
+            : new ExecutionResultOutput
+            {
+                Summary = execution.Result.Summary,
+                Links = (execution.Result.Links ?? []).ToArray(),
+                RecordedAt = execution.Result.RecordedAt
+            },
+        ReleasedAt = execution.ReleasedAt,
+        ReleaseReason = execution.ReleaseReason,
+        PreviousAttempts = (execution.PreviousAttempts ?? [])
+            .Select(static attempt => new ExecutionAttemptOutput
+            {
+                AgentId = attempt.AgentId,
+                LeaseId = attempt.LeaseId,
+                State = attempt.State,
+                ClaimedAt = attempt.ClaimedAt,
+                UpdatedAt = attempt.UpdatedAt,
+                ReleasedAt = attempt.ReleasedAt,
+                ReleaseReason = attempt.ReleaseReason,
+                CompletedAt = attempt.CompletedAt
+            })
+            .ToArray(),
+        AuditTruncated = execution.AuditTruncated
+    };
+}
+
+public sealed record ExecutionQuestionOutput
+{
+    public string Id { get; init; } = string.Empty;
+    public string Text { get; init; } = string.Empty;
+    public DateTimeOffset AskedAt { get; init; }
+    public string? Answer { get; init; }
+    public DateTimeOffset? AnsweredAt { get; init; }
+}
+
+public sealed record ExecutionResultOutput
+{
+    public string Summary { get; init; } = string.Empty;
+    public IReadOnlyList<string> Links { get; init; } = Array.Empty<string>();
+    public DateTimeOffset RecordedAt { get; init; }
+}
+
+public sealed record ExecutionAttemptOutput
+{
+    public string AgentId { get; init; } = string.Empty;
+    public string LeaseId { get; init; } = string.Empty;
+    public AgentExecutionState State { get; init; }
+    public DateTimeOffset ClaimedAt { get; init; }
+    public DateTimeOffset UpdatedAt { get; init; }
+    public DateTimeOffset? ReleasedAt { get; init; }
+    public string? ReleaseReason { get; init; }
+    public DateTimeOffset? CompletedAt { get; init; }
+}
+
+public sealed record ExecutionMutationOutput
+{
+    public bool Success { get; init; }
+    public TaskSummary Task { get; init; } = new();
+    public ExecutionDetailsOutput Execution { get; init; } = new();
+    public IReadOnlyList<string> ChangedTaskIds { get; init; } = Array.Empty<string>();
+    public long StorageRevision { get; init; }
+    public bool DidMutate { get; init; }
+    public bool AuditTruncated { get; init; }
+}
+
+public sealed record CreateTaskOutput
+{
+    public bool Success { get; init; }
+    public TaskSummary Task { get; init; } = new();
+    public IReadOnlyList<string> ChangedTaskIds { get; init; } = Array.Empty<string>();
+    public long StorageRevision { get; init; }
+    public bool DidMutate { get; init; }
+}
+
+public sealed record ExecutionErrorOutput
+{
+    public bool Success { get; init; }
+    public ErrorDetails Error { get; init; } = new();
+    public AuthoritativeTaskOutput? AuthoritativeTask { get; init; }
+
+    public static ExecutionErrorOutput Create(TaskOperationResult result) => new()
+    {
+        Success = false,
+        Error = new ErrorDetails
+        {
+            Kind = Program.MapDeniedKindForOutput(result.DeniedReason?.Kind ?? TaskOperationDeniedKind.StorageFailed),
+            Message = result.DeniedReason?.Message ?? "Execution command was denied."
+        },
+        AuthoritativeTask = result.AuthoritativeTask == null
+            ? result.Before == null ? null : AuthoritativeTaskOutput.From(result.Before)
+            : AuthoritativeTaskOutput.From(result.AuthoritativeTask)
+    };
+}
+
+public sealed record AuthoritativeTaskOutput
+{
+    public string Id { get; init; } = string.Empty;
+    public string? Title { get; init; }
+    public DomainTaskStatus Status { get; init; }
+    public string? ExecutionAgentId { get; init; }
+    public AgentExecutionState? ExecutionState { get; init; }
+
+    public static AuthoritativeTaskOutput From(TaskItem task) => new()
+    {
+        Id = task.Id,
+        Title = task.Title,
+        Status = task.Status,
+        ExecutionAgentId = task.AgentExecution?.AgentId,
+        ExecutionState = task.AgentExecution?.State
+    };
+
+    public static AuthoritativeTaskOutput From(TaskAvailabilityAnalysis analysis) => new()
+    {
+        Id = analysis.TaskId,
+        Title = analysis.Title,
+        Status = analysis.Status
+    };
+}
+
+public sealed record TaskSnapshotOutput
+{
+    public TaskSummary Task { get; init; } = new();
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public TaskDetailsOutput? Details { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<TaskRelationOutput>? Relations { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<TaskCriterionOutput>? Criteria { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<TaskHistoryOutput>? History { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ExecutionDetailsOutput? Execution { get; init; }
+
+    public static TaskSnapshotOutput Create(
+        TaskItem task,
+        TaskAvailabilityAnalysis analysis,
+        TaskAvailabilityAnalyzer analyzer,
+        IReadOnlySet<string> include)
+    {
+        return new TaskSnapshotOutput
+        {
+            Task = TaskSummary.FromAnalysis(analysis),
+            Details = include.Contains("details") ? TaskDetailsOutput.From(task) : null,
+            Relations = include.Contains("relations") ? BuildRelations(task, analyzer) : null,
+            Criteria = include.Contains("criteria")
+                ? (task.CompletionCriteria ?? [])
+                    .Where(static criterion => criterion != null)
+                    .OrderBy(static criterion => criterion.Id, StringComparer.Ordinal)
+                    .Select(static criterion => new TaskCriterionOutput
+                    {
+                        Id = criterion.Id,
+                        Text = criterion.Text,
+                        IsSatisfied = criterion.IsSatisfied
+                    }).ToArray()
+                : null,
+            History = include.Contains("history")
+                ? (task.StatusHistory ?? [])
+                    .Where(static entry => entry != null)
+                    .OrderBy(static entry => entry.ChangedAt)
+                    .ThenBy(static entry => entry.Status)
+                    .Select(static entry => new TaskHistoryOutput
+                    {
+                        Status = entry.Status,
+                        ChangedAt = entry.ChangedAt,
+                        Author = entry.Author
+                    }).ToArray()
+                : null,
+            Execution = include.Contains("execution") && task.AgentExecution != null
+                ? ExecutionDetailsOutput.From(task.AgentExecution)
+                : null
+        };
+    }
+
+    private static IReadOnlyList<TaskRelationOutput> BuildRelations(
+        TaskItem task,
+        TaskAvailabilityAnalyzer analyzer)
+    {
+        var relations = new List<TaskRelationOutput>();
+        AddRelations(relations, task.ContainsTasks, nameof(TaskItem.ContainsTasks), analyzer);
+        AddRelations(relations, task.ParentTasks, nameof(TaskItem.ParentTasks), analyzer);
+        AddRelations(relations, task.BlocksTasks, nameof(TaskItem.BlocksTasks), analyzer);
+        AddRelations(relations, task.BlockedByTasks, nameof(TaskItem.BlockedByTasks), analyzer);
+        return relations
+            .OrderBy(static relation => relation.Type, StringComparer.Ordinal)
+            .ThenBy(static relation => relation.Id, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static void AddRelations(
+        ICollection<TaskRelationOutput> target,
+        IEnumerable<string>? ids,
+        string type,
+        TaskAvailabilityAnalyzer analyzer)
+    {
+        foreach (var id in (ids ?? []).Distinct(StringComparer.Ordinal))
+        {
+            analyzer.TryGetTask(id, out var related);
+            target.Add(new TaskRelationOutput
+            {
+                Type = type,
+                Id = id,
+                Title = related?.Title,
+                Status = related?.Status,
+                Exists = related != null
+            });
+        }
+    }
+}
+
+public sealed record TaskDetailsOutput
+{
+    public string Description { get; init; } = string.Empty;
+    public int Importance { get; init; }
+    public bool Wanted { get; init; }
+    public DateTimeOffset CreatedDateTime { get; init; }
+    public DateTimeOffset? UpdatedDateTime { get; init; }
+    public DateTimeOffset? PlannedBeginDateTime { get; init; }
+    public DateTimeOffset? PlannedEndDateTime { get; init; }
+    public TimeSpan? PlannedDuration { get; init; }
+
+    public static TaskDetailsOutput From(TaskItem task) => new()
+    {
+        Description = task.Description,
+        Importance = task.Importance,
+        Wanted = task.Wanted,
+        CreatedDateTime = task.CreatedDateTime,
+        UpdatedDateTime = task.UpdatedDateTime,
+        PlannedBeginDateTime = task.PlannedBeginDateTime,
+        PlannedEndDateTime = task.PlannedEndDateTime,
+        PlannedDuration = task.PlannedDuration
+    };
+}
+
+public sealed record TaskRelationOutput
+{
+    public string Type { get; init; } = string.Empty;
+    public string Id { get; init; } = string.Empty;
+    public string? Title { get; init; }
+    public DomainTaskStatus? Status { get; init; }
+    public bool Exists { get; init; }
+}
+
+public sealed record TaskCriterionOutput
+{
+    public string Id { get; init; } = string.Empty;
+    public string Text { get; init; } = string.Empty;
+    public bool IsSatisfied { get; init; }
+}
+
+public sealed record TaskHistoryOutput
+{
+    public DomainTaskStatus Status { get; init; }
+    public DateTimeOffset ChangedAt { get; init; }
+    public string Author { get; init; } = string.Empty;
 }
 
 public sealed record ValidationOutput

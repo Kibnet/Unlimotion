@@ -464,6 +464,23 @@ public class TaskTreeManager
         }
     }
 
+    internal async Task<List<TaskItem>> UpdateExecutionWithinExistingMutationLockAsync(TaskItem change)
+    {
+        _mutationLockDepth.Value++;
+        try
+        {
+            change.EnsureStatusHistory(ResolveStatusAuthor(change));
+            change.UpdatedDateTime = GetNextUpdatedDateTime(change);
+            await Storage.Save(change);
+
+            return [change];
+        }
+        finally
+        {
+            _mutationLockDepth.Value--;
+        }
+    }
+
     public async Task<List<TaskItem>> CloneTask(TaskItem change, List<TaskItem> stepParents)
     {
         if (ShouldAcquireMutationLock)
@@ -1108,6 +1125,11 @@ public class TaskTreeManager
             return;
         }
 
+        if (task.AgentExecution?.State is AgentExecutionState.Active or AgentExecutionState.AwaitingInput)
+        {
+            return;
+        }
+
         if (!task.IsCanBeCompleted || HasFuturePlannedBegin(task))
         {
             task.SetStatus(DomainTaskStatus.Prepared, DateTimeOffset.UtcNow, "System");
@@ -1214,12 +1236,21 @@ public class TaskTreeManager
         DateTimeOffset now)
     {
         var snapshot = TaskItemSnapshot.Clone(source);
+        if (!AgentExecutionDescriptionRenderer.TryRemove(
+                snapshot.Description,
+                out var cleanDescription,
+                out var markerError))
+        {
+            throw new InvalidOperationException(
+                $"Cannot clone repeating task '{source.Id}': {markerError}");
+        }
+
         var clone = new TaskItem
         {
             Id = Guid.NewGuid().ToString(),
             UserId = snapshot.UserId,
             Title = snapshot.Title,
-            Description = snapshot.Description,
+            Description = cleanDescription,
             Status = isRoot ? DomainTaskStatus.Prepared : DomainTaskStatus.NotReady,
             StatusHistory = [],
             CompletionCriteria = snapshot.CompletionCriteria
@@ -1249,6 +1280,7 @@ public class TaskTreeManager
             Importance = snapshot.Importance,
             Wanted = snapshot.Wanted,
             Version = 1,
+            AgentExecution = null,
             ExtensionData = snapshot.ExtensionData
         };
         clone.EnsureStatusHistory("System");

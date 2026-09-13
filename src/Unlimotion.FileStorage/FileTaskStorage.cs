@@ -183,6 +183,16 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
 
     public async Task<FileTaskStorageDirectoryReadResult> ReadDirectoryAsync()
     {
+        if (_options.UseDirectoryLock && !IsDirectoryLockHeld())
+        {
+            return await WithDirectoryLockAsync(ReadDirectoryCoreAsync);
+        }
+
+        return await ReadDirectoryCoreAsync();
+    }
+
+    private async Task<FileTaskStorageDirectoryReadResult> ReadDirectoryCoreAsync()
+    {
         var tasks = new List<TaskItem>();
         var taskFiles = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         var loadErrors = new List<FileTaskStorageLoadError>();
@@ -236,12 +246,22 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
 
     public virtual async Task<TaskGraphReadResult> ReadGraphAsync()
     {
+        if (_options.UseDirectoryLock && !IsDirectoryLockHeld())
+        {
+            return await WithDirectoryLockAsync(ReadGraphCoreAsync);
+        }
+
+        return await ReadGraphCoreAsync();
+    }
+
+    private async Task<TaskGraphReadResult> ReadGraphCoreAsync()
+    {
         if (TryGetLiveGraph(out var liveGraph))
         {
             return CloneGraph(liveGraph);
         }
 
-        var result = await ReadDirectoryAsync();
+        var result = await ReadDirectoryCoreAsync();
         return ToGraphResult(result);
     }
 
@@ -251,7 +271,7 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
         {
             _tasks.Clear();
             _taskFilePaths.Clear();
-            var result = await ReadDirectoryAsync();
+            var result = await ReadDirectoryCoreAsync();
             PublishLiveGraph(ToGraphResult(result));
             _liveGraphNeedsReload = false;
         });
@@ -270,7 +290,7 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
 
         _tasks.Clear();
         _taskFilePaths.Clear();
-        var result = await ReadDirectoryAsync();
+        var result = await ReadDirectoryCoreAsync();
         PublishLiveGraph(ToGraphResult(result));
         _liveGraphNeedsReload = false;
     }
@@ -351,6 +371,8 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
             currentLocks.Add(lockPath);
             HeldDirectoryLocks.Value = currentLocks;
 
+            await RecoverPendingTransactionsAsync();
+
             return await operation();
         }
         finally
@@ -388,9 +410,15 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
         _activeWriteScope.Value?.Record(item.Id);
 
         var filePath = ResolveTaskFilePath(item.Id);
-        OnBeforeWrite(item.Id, filePath);
         var json = JsonConvert.SerializeObject(item, Formatting.Indented, CreateSerializerSettings());
-        await AtomicWriteAllTextAsync(filePath, json + Environment.NewLine);
+        var content = json + Environment.NewLine;
+        if (_activeWriteScope.Value != null)
+        {
+            await _activeWriteScope.Value.PrepareWriteAsync(item.Id, filePath, content);
+        }
+
+        OnBeforeWrite(item.Id, filePath);
+        await AtomicWriteAllTextAsync(filePath, content);
         OnAfterWritePersisted(item.Id, filePath);
 
         taskItem.Id = item.Id;
@@ -406,6 +434,7 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
         ValidateTaskId(itemId);
         _activeWriteScope.Value?.Record(itemId);
         var filePath = ResolveTaskFilePath(itemId);
+        _activeWriteScope.Value?.PrepareRemove(itemId, filePath);
         OnBeforeRemove(itemId, filePath);
         _tasks.TryRemove(itemId, out _);
         _taskFilePaths.TryRemove(itemId, out _);
@@ -498,6 +527,34 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
         }
     }
 
+    private async Task AtomicWriteAllBytesAsync(string filePath, byte[] content)
+    {
+        var tempPath = filePath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        var backupPath = filePath + "." + Guid.NewGuid().ToString("N") + ".bak";
+        try
+        {
+            await using (var stream = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            {
+                await stream.WriteAsync(content);
+                await stream.FlushAsync();
+            }
+
+            if (File.Exists(filePath))
+            {
+                File.Replace(tempPath, filePath, backupPath, ignoreMetadataErrors: true);
+                TryDelete(backupPath);
+            }
+            else
+            {
+                File.Move(tempPath, filePath);
+            }
+        }
+        finally
+        {
+            TryDelete(tempPath);
+        }
+    }
+
     protected virtual void OnBeforeWrite(string taskId, string filePath)
     {
     }
@@ -508,6 +565,36 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
 
     protected virtual void OnAfterWritePersisted(string taskId, string filePath)
     {
+    }
+
+    protected virtual void OnAfterTransactionCommitted(string journalPath)
+    {
+    }
+
+    protected virtual void OnBeforeTransactionJournalPersist(string journalPath)
+    {
+    }
+
+    protected virtual void OnAfterTransactionJournalPersist(string journalPath)
+    {
+    }
+
+    protected virtual void OnBeforeTransactionTargetDelete(string filePath)
+    {
+    }
+
+    protected virtual void OnBeforeTransactionJournalDelete(string journalPath)
+    {
+    }
+
+    private void DeleteTransactionJournal(string journalPath)
+    {
+        OnBeforeTransactionJournalDelete(journalPath);
+        File.Delete(journalPath);
+        if (File.Exists(journalPath))
+        {
+            throw new IOException($"Transaction journal '{journalPath}' could not be deleted.");
+        }
     }
 
     protected bool TryGetTaskIdBySourceFileName(string fileName, out string taskId)
@@ -660,12 +747,112 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
         Revision = graph.Revision
     };
 
-    private sealed class FileTaskGraphWriteScope : ITaskGraphWriteScope
+    private bool IsDirectoryLockHeld()
+    {
+        var lockPath = System.IO.Path.Combine(Path, ".unlimotion.lock");
+        return HeldDirectoryLocks.Value?.Contains(lockPath) == true;
+    }
+
+    private string TransactionDirectoryPath => System.IO.Path.Combine(Path, ".unlimotion.transactions");
+
+    private async Task RecoverPendingTransactionsAsync()
+    {
+        if (!Directory.Exists(TransactionDirectoryPath))
+        {
+            return;
+        }
+
+        var recoveredAny = false;
+        foreach (var journalPath in Directory
+                     .EnumerateFiles(TransactionDirectoryPath, "*.json", SearchOption.TopDirectoryOnly)
+                     .OrderBy(static path => path, StringComparer.OrdinalIgnoreCase))
+        {
+            RecoverableMutationJournal journal;
+            try
+            {
+                var json = await File.ReadAllTextAsync(journalPath);
+                journal = JsonConvert.DeserializeObject<RecoverableMutationJournal>(json) ??
+                          throw new InvalidDataException($"Transaction journal '{journalPath}' is empty.");
+            }
+            catch (Exception ex) when (ex is IOException or JsonException or InvalidDataException)
+            {
+                throw new InvalidDataException($"Cannot recover task transaction journal '{journalPath}'.", ex);
+            }
+
+            await ApplyJournalImagesAsync(journal, useAfterImages: journal.Committed);
+            DeleteTransactionJournal(journalPath);
+            recoveredAny = true;
+        }
+
+        if (recoveredAny)
+        {
+            InvalidateCachesAfterRecovery();
+        }
+    }
+
+    private async Task ApplyJournalImagesAsync(RecoverableMutationJournal journal, bool useAfterImages)
+    {
+        foreach (var entry in journal.Entries.OrderBy(static entry => entry.FilePath, StringComparer.OrdinalIgnoreCase))
+        {
+            var filePath = ValidateJournalFilePath(entry.FilePath);
+            var image = useAfterImages ? entry.AfterBase64 : entry.BeforeBase64;
+            var exists = useAfterImages ? entry.AfterExists : entry.BeforeExists;
+            if (!exists)
+            {
+                OnBeforeTransactionTargetDelete(filePath);
+                File.Delete(filePath);
+                if (File.Exists(filePath))
+                {
+                    throw new IOException($"Transaction recovery could not delete task file '{filePath}'.");
+                }
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(image))
+            {
+                throw new InvalidDataException($"Transaction image for '{filePath}' is missing.");
+            }
+
+            var bytes = Convert.FromBase64String(image);
+            await AtomicWriteAllBytesAsync(filePath, bytes);
+        }
+    }
+
+    private string ValidateJournalFilePath(string candidate)
+    {
+        var fullPath = System.IO.Path.GetFullPath(candidate);
+        var directoryPrefix = Path.TrimEnd(System.IO.Path.DirectorySeparatorChar) + System.IO.Path.DirectorySeparatorChar;
+        if (!fullPath.StartsWith(directoryPrefix, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(System.IO.Path.GetDirectoryName(fullPath), Path, StringComparison.OrdinalIgnoreCase) ||
+            !IsTaskFile(System.IO.Path.GetFileName(fullPath)))
+        {
+            throw new InvalidDataException($"Transaction journal contains an invalid task path '{candidate}'.");
+        }
+
+        return fullPath;
+    }
+
+    private void InvalidateCachesAfterRecovery()
+    {
+        _tasks.Clear();
+        _taskFilePaths.Clear();
+        lock (_liveGraphSync)
+        {
+            _liveGraphNeedsReload = true;
+            _liveGraph = null;
+            Interlocked.Increment(ref _liveGraphRevision);
+        }
+    }
+
+    private sealed class FileTaskGraphWriteScope : IRecoverableTaskGraphWriteScope
     {
         private readonly FileTaskStorage _owner;
         private readonly FileTaskGraphWriteScope? _previous;
         private readonly HashSet<string> _attemptedTaskIds = new(StringComparer.Ordinal);
+        private readonly RecoverableMutationJournal _journal = new();
+        private string? _journalPath;
         private bool _disposed;
+        private bool _completed;
 
         public FileTaskGraphWriteScope(FileTaskStorage owner, FileTaskGraphWriteScope? previous)
         {
@@ -692,6 +879,86 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
             }
         }
 
+        public async Task PrepareWriteAsync(string taskId, string filePath, string content)
+        {
+            Record(taskId);
+            var entry = GetOrCreateEntry(taskId, filePath);
+            entry.AfterExists = true;
+            entry.AfterBase64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(content));
+            await PersistJournalAsync();
+        }
+
+        public void PrepareRemove(string taskId, string filePath)
+        {
+            Record(taskId);
+            var entry = GetOrCreateEntry(taskId, filePath);
+            entry.AfterExists = false;
+            entry.AfterBase64 = null;
+            PersistJournalAsync().GetAwaiter().GetResult();
+        }
+
+        public async Task CommitAsync()
+        {
+            if (_completed || _journalPath == null)
+            {
+                _completed = true;
+                return;
+            }
+
+            _journal.Committed = true;
+            await PersistJournalAsync();
+            _owner.OnAfterTransactionCommitted(_journalPath);
+            _owner.DeleteTransactionJournal(_journalPath);
+            _completed = true;
+        }
+
+        public async Task RollbackAsync()
+        {
+            if (_completed || _journalPath == null)
+            {
+                _completed = true;
+                return;
+            }
+
+            await _owner.ApplyJournalImagesAsync(_journal, useAfterImages: _journal.Committed);
+            _owner.DeleteTransactionJournal(_journalPath);
+            _owner.InvalidateCachesAfterRecovery();
+            _completed = true;
+        }
+
+        private RecoverableMutationEntry GetOrCreateEntry(string taskId, string filePath)
+        {
+            var existing = _journal.Entries.FirstOrDefault(entry =>
+                string.Equals(entry.FilePath, filePath, StringComparison.OrdinalIgnoreCase));
+            if (existing != null)
+            {
+                return existing;
+            }
+
+            var beforeExists = File.Exists(filePath);
+            var entry = new RecoverableMutationEntry
+            {
+                TaskId = taskId,
+                FilePath = filePath,
+                BeforeExists = beforeExists,
+                BeforeBase64 = beforeExists ? Convert.ToBase64String(File.ReadAllBytes(filePath)) : null
+            };
+            _journal.Entries.Add(entry);
+            return entry;
+        }
+
+        private async Task PersistJournalAsync()
+        {
+            Directory.CreateDirectory(_owner.TransactionDirectoryPath);
+            _journalPath ??= System.IO.Path.Combine(
+                _owner.TransactionDirectoryPath,
+                $"{_journal.Id}.json");
+            var json = JsonConvert.SerializeObject(_journal, Formatting.Indented) + Environment.NewLine;
+            _owner.OnBeforeTransactionJournalPersist(_journalPath);
+            await _owner.AtomicWriteAllTextAsync(_journalPath, json);
+            _owner.OnAfterTransactionJournalPersist(_journalPath);
+        }
+
         public void Dispose()
         {
             if (_disposed)
@@ -705,6 +972,23 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
                 _owner._activeWriteScope.Value = _previous;
             }
         }
+    }
+
+    private sealed class RecoverableMutationJournal
+    {
+        public string Id { get; set; } = Guid.NewGuid().ToString("N");
+        public bool Committed { get; set; }
+        public List<RecoverableMutationEntry> Entries { get; set; } = new();
+    }
+
+    private sealed class RecoverableMutationEntry
+    {
+        public string TaskId { get; set; } = string.Empty;
+        public string FilePath { get; set; } = string.Empty;
+        public bool BeforeExists { get; set; }
+        public string? BeforeBase64 { get; set; }
+        public bool AfterExists { get; set; }
+        public string? AfterBase64 { get; set; }
     }
 
     private async Task<FileStream> AcquireDirectoryLockAsync(

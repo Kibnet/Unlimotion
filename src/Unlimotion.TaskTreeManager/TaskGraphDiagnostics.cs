@@ -23,6 +23,12 @@ public interface ITaskGraphWriteScope : IDisposable
     IReadOnlyList<string> AttemptedTaskIds { get; }
 }
 
+public interface IRecoverableTaskGraphWriteScope : ITaskGraphWriteScope
+{
+    Task CommitAsync();
+    Task RollbackAsync();
+}
+
 public sealed record TaskGraphReadResult(
     IReadOnlyList<TaskItem> Tasks,
     IReadOnlyDictionary<string, string> FilesByTaskId,

@@ -1,88 +1,104 @@
 # Unlimotion CLI
 
-Command-line client for inspecting and updating Unlimotion task directories without starting the UI. It is intended for agents and automation that need the same task availability semantics as Unlimotion.
+Консольный клиент для чтения и изменения локального каталога задач Unlimotion без запуска UI. Он предназначен в том числе для агентов, которым нужны те же правила доступности и завершения, что использует desktop-приложение.
 
-## Install from NuGet.org
+## Установка с NuGet.org
 
 ```powershell
 dotnet tool install --global Unlimotion.Cli
 unlimotion-cli status --format json
 ```
 
-The package installs the `unlimotion-cli` command from the default NuGet.org
-source. It targets .NET 10; use a compatible .NET SDK/runtime. Update an
-existing global installation with:
+Обновление установленного инструмента:
 
 ```powershell
 dotnet tool update --global Unlimotion.Cli
 ```
 
-`--tasks` remains an explicit override. Without it, the CLI reads the active
-local desktop task-space path from `%USERPROFILE%\Documents\Unlimotion\Settings.json`.
+CLI требует совместимый .NET 10 SDK/runtime. Явный `--tasks` всегда имеет приоритет. Без него CLI читает путь активного локального пространства задач из `%USERPROFILE%\Documents\Unlimotion\Settings.json`.
 
-## Build and install a local package
+Для локальной сборки рекомендуется отдельный каталог инструмента, чтобы агент не изменял глобальную установку пользователя:
 
 ```powershell
 dotnet pack src\Unlimotion.Cli\Unlimotion.Cli.csproj -c Release -o artifacts\tools
 dotnet tool install --tool-path C:\tmp\unlimotion-cli-tool --add-source artifacts\tools Unlimotion.Cli --version 1.30.1
-C:\tmp\unlimotion-cli-tool\unlimotion-cli status --tasks C:\Projects\ТОС\Knowledge.TOC\Tasks --format json
 ```
 
-Use a dedicated `--tool-path` for automation so agent runs do not mutate the user's global .NET tool state.
-
-## Commands
+## Команды
 
 ```powershell
-unlimotion-cli status --tasks <task-dir> [--format text|json]
-unlimotion-cli unlocked --tasks <task-dir> [--format text|json]
-unlimotion-cli task --tasks <task-dir> --id <task-id> [--format text|json]
-unlimotion-cli validate --tasks <task-dir> [--format text|json]
-unlimotion-cli set-status --tasks <task-dir> --id <task-id> --status <status> [--author <name>] [--format text|json]
-unlimotion-cli complete --tasks <task-dir> --id <task-id> [--author <name>] [--format text|json]
-unlimotion-cli set-criterion --tasks <task-dir> --id <task-id> --criterion <criterion-id> --satisfied true|false [--format text|json]
-unlimotion-cli satisfy-criterion --tasks <task-dir> --id <task-id> --criterion <criterion-id> [--format text|json]
+unlimotion-cli status [--tasks <task-dir>] [--format text|json]
+unlimotion-cli unlocked [--tasks <task-dir>] [--format text|json]
+unlimotion-cli candidates --limit <1..100> [--status Prepared] [--startable true] [--sort default] [--tasks <task-dir>] [--format text|json]
+unlimotion-cli task --id <task-id> [--include details,relations,criteria,history,execution] [--tasks <task-dir>] [--format text|json]
+unlimotion-cli claim --id <task-id> --agent <agent-id> --expected-status Prepared [--tasks <task-dir>] [--format text|json]
+unlimotion-cli execution question --id <task-id> --agent <agent-id> --lease <lease-id> --text <text> [--tasks <task-dir>] [--format text|json]
+unlimotion-cli execution answer --id <task-id> --agent <agent-id> --lease <lease-id> --question-id <question-id> --text <text> [--tasks <task-dir>] [--format text|json]
+unlimotion-cli execution result --id <task-id> --agent <agent-id> --lease <lease-id> --summary <text> [--link <uri>] [--tasks <task-dir>] [--format text|json]
+unlimotion-cli execution complete --id <task-id> --agent <agent-id> --lease <lease-id> --summary <text> [--link <uri>] [--tasks <task-dir>] [--format text|json]
+unlimotion-cli release --id <task-id> --agent <agent-id> --lease <lease-id> --reason <text> [--tasks <task-dir>] [--format text|json]
+unlimotion-cli create --title <text> [--description <text>] [--parent <task-id>] [--author <name>] [--tasks <task-dir>] [--format text|json]
+unlimotion-cli validate [--tasks <task-dir>] [--format text|json]
+unlimotion-cli set-status --id <task-id> --status <status> [--author <name>] [--tasks <task-dir>] [--format text|json]
+unlimotion-cli complete --id <task-id> [--author <name>] [--tasks <task-dir>] [--format text|json]
+unlimotion-cli set-criterion --id <task-id> --criterion <criterion-id> --satisfied true|false [--tasks <task-dir>] [--format text|json]
+unlimotion-cli satisfy-criterion --id <task-id> --criterion <criterion-id> [--tasks <task-dir>] [--format text|json]
 ```
 
-## Availability semantics
-`--tasks` is optional for every command. When it is omitted, the CLI reads
-`TaskStorage:Path` from `%USERPROFILE%\Documents\Unlimotion\Settings.json`,
-the desktop compatibility projection of the active task space. An explicit
-`--tasks` value always takes priority.
+`--include`, `--link` и `--parent` можно указывать несколько раз. В `--include` также принимается список через запятую. `task` без `--include` сохраняет прежний JSON-контракт анализа доступности.
 
-The CLI remains file-storage only. Missing, malformed, or server-mode settings
-return an error without reading credentials, connecting to a server, writing
-settings, or creating a task directory.
+## Жизненный цикл агента
 
+1. Агент получает ограниченный список через `candidates` и полный необходимый контекст через `task --include ...`.
+2. `claim` атомарно переводит Prepared-задачу в InProgress и возвращает `leaseId`.
+3. Все дальнейшие execution-команды требуют точного совпадения `agentId + leaseId`.
+4. `question` переводит execution в `AwaitingInput`; `answer` возвращает его в `Active`, когда отвечены все вопросы.
+5. `result` сохраняет черновой итог без завершения задачи. `execution complete` проверяет критерии, сохраняет итог и завершает задачу в одной командной границе.
+6. `release` возвращает задачу в Prepared. Следующий `claim` создаёт новый lease, а предыдущая попытка остаётся в ограниченном журнале.
 
-Read commands use the shared file storage and `TaskAvailabilityAnalyzer` to explain the current graph:
+Старая команда `complete` работает как раньше только для задач без активного execution. Активную lease-bound задачу может завершить только `execution complete`.
 
-- incomplete `ContainsTasks` block the containing task;
-- incomplete direct `BlockedByTasks` block the task;
-- incomplete blockers from `ParentTasks` ancestors are inherited by child tasks;
-- unsatisfied `CompletionCriteria` block completion, not startability;
-- future `PlannedBeginDateTime` blocks startability, not completion availability;
-- missing references are validation issues, but they are not treated as runtime blockers.
+Структурированное `AgentExecution` является источником истины. CLI поддерживает одну читаемую проекцию между служебными маркерами в Description. Непарный или повторный marker приводит к `descriptionMarkerConflict` без записи. Вводимые тексты считаются данными, а ссылки сохраняются, но не открываются.
 
-## Write behavior
+## Записи и восстановление
 
-Write commands are a thin wrapper over the shared Unlimotion engine. The CLI loads tasks through `Unlimotion.Storage.FileTaskStorage`, applies the requested change to a detached task model, and calls `TaskTreeManager.UpdateTask(...)`. Status transitions, affected-task recalculation, repeating-task cloning, reverse-link updates, status history, and `--author` handling are owned by `TaskTreeManager`.
+Перед записью CLI проверяет загрузку, дубликаты идентификаторов и связи графа. Записи сериализуются блокировкой каталога и выполняются через атомарную замену файлов.
 
-Before any write command, the CLI validates the loaded graph and fails fast on load errors, duplicate task ids, or relation/reference issues. Availability mismatches remain diagnostic validation output; normal write commands do not silently repair them. Writes use a directory-level lock and atomic file replacement in the task directory.
+Командная операция дополнительно ведёт журнал исходных и новых образов. До записи отметки commit следующий доступ под блокировкой откатывает исходные файлы; после отметки докатывает новые. Поэтому `create --parent` не оставляет частичную дочернюю задачу или одностороннюю связь после аварийного завершения процесса. Гарантия относится к восстановлению процесса; устойчивость к внезапной потере питания отдельно не заявляется.
 
-In JSON mode, command errors use a stable envelope:
+При `outcomeUnknown` нельзя автоматически повторять мутацию: сначала нужно перечитать авторитетный снимок задачи. Ошибки execution содержат доступный `authoritativeTask`, но не раскрывают чужой lease.
+
+Пример JSON-ошибки:
 
 ```json
 {
   "success": false,
   "error": {
-    "kind": "validationFailed",
-    "message": "Task graph is not safe for write commands: ..."
+    "kind": "leaseMismatch",
+    "message": "Task is not owned by the supplied agent and lease."
+  },
+  "authoritativeTask": {
+    "id": "...",
+    "status": "InProgress",
+    "executionAgentId": "agent-a",
+    "executionState": "Active"
   }
 }
 ```
 
-## Exit codes
+## Семантика доступности
 
-- `0`: command completed successfully;
-- `1`: validation/load issues, business-rule denied, unknown task id, or operation failure;
-- `2`: invalid arguments.
+- незавершённые `ContainsTasks` блокируют содержащую задачу;
+- незавершённые прямые `BlockedByTasks` блокируют задачу;
+- блокеры предков через `ParentTasks` наследуются дочерними задачами;
+- невыполненные `CompletionCriteria` блокируют завершение, но не старт;
+- будущий `PlannedBeginDateTime` блокирует старт, но не доступность завершения;
+- отсутствующие ссылки являются ошибкой валидации, но не runtime-блокером.
+
+CLI работает только с файловым хранилищем. Отсутствующие, повреждённые или server-mode настройки дают ошибку без чтения учётных данных, соединения с сервером, записи настроек или создания каталога задач.
+
+## Коды завершения
+
+- `0` — команда успешно завершена;
+- `1` — ошибка загрузки/валидации, отказ бизнес-правила, неизвестная задача или неподтверждённый результат операции;
+- `2` — неверные аргументы.
