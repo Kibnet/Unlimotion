@@ -16,6 +16,12 @@ public sealed class TaskGraphCommandService
 
     public Func<TaskItem, string>? StatusAuthorProvider { get; set; }
 
+    public Task<TaskOperationResult> TryClaimAsync(
+        string taskId,
+        string agentId,
+        DomainTaskStatus expectedStatus) =>
+        ExecuteWriteAsync(() => TryClaimCoreAsync(taskId, agentId, expectedStatus));
+
     public Task<TaskOperationResult> TrySetStatusAsync(
         string taskId,
         DomainTaskStatus requestedStatus,
@@ -25,6 +31,122 @@ public sealed class TaskGraphCommandService
             requestedStatus,
             isUnarchive: false,
             author));
+
+    private async Task<TaskOperationResult> TryClaimCoreAsync(
+        string taskId,
+        string agentId,
+        DomainTaskStatus expectedStatus)
+    {
+        var normalizedAgentId = agentId.Trim();
+        if (normalizedAgentId.Length is 0 or > 200 || normalizedAgentId.Any(char.IsControl) ||
+            ContainsExecutionMarker(normalizedAgentId))
+        {
+            return TaskOperationResult.Denied(TaskOperationDeniedReason.Create(
+                TaskOperationDeniedKind.ExecutionStateDenied,
+                "Agent id is invalid for agent execution.",
+                taskId));
+        }
+
+        var readResult = await ReadGraphForWriteAsync();
+        if (readResult.Result != null)
+        {
+            return readResult.Result;
+        }
+
+        var graph = readResult.Graph!;
+        var validation = TaskGraphValidationReport.From(graph);
+        if (!validation.IsWriteSafe)
+        {
+            return TaskOperationResult.Denied(TaskOperationDeniedReason.Create(
+                TaskOperationDeniedKind.ValidationFailed,
+                validation.BuildWriteSafetyMessage(),
+                taskId,
+                expectedStatus), validation: validation);
+        }
+
+        if (!graph.TasksById.TryGetValue(taskId, out var task))
+        {
+            return TaskOperationResult.Denied(TaskOperationDeniedReason.Create(
+                TaskOperationDeniedKind.TaskNotFound,
+                $"Task '{taskId}' was not found.",
+                taskId,
+                expectedStatus), validation: validation);
+        }
+
+        var rules = new TaskAvailabilityService(graph.Tasks);
+        var before = rules.Analyze(task);
+        if (task.Status != expectedStatus || expectedStatus != DomainTaskStatus.Prepared || !before.CanStart ||
+            task.AgentExecution?.State is AgentExecutionState.Active)
+        {
+            return TaskOperationResult.DeniedWithAuthoritativeTask(
+                TaskOperationDeniedReason.Create(
+                    TaskOperationDeniedKind.ClaimConflict,
+                    $"Task '{task.Id}' cannot be claimed from its authoritative state.",
+                    task.Id,
+                    expectedStatus),
+                CloneForUpdate(task),
+                before,
+                validation: validation);
+        }
+
+        if (HasExecutionMarkerConflict(task.Description))
+        {
+            return TaskOperationResult.DeniedWithAuthoritativeTask(
+                TaskOperationDeniedReason.Create(
+                    TaskOperationDeniedKind.ExecutionStateDenied,
+                    $"Task '{task.Id}' has a conflicting agent execution marker in Description.",
+                    task.Id),
+                CloneForUpdate(task),
+                before,
+                validation: validation);
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var change = CloneForUpdate(task);
+        change.SetStatus(DomainTaskStatus.InProgress, now, normalizedAgentId);
+        change.AgentExecution = new AgentExecutionRecord
+        {
+            AgentId = normalizedAgentId,
+            LeaseId = Guid.NewGuid().ToString("D"),
+            State = AgentExecutionState.Active,
+            ClaimedAt = now,
+            UpdatedAt = now
+        };
+        change.Description = RenderExecutionMarker(change.Description, change.AgentExecution);
+
+        IReadOnlyList<TaskItem> changedTasks;
+        TaskOperationReadResult afterRead;
+        try
+        {
+            var manager = CreateManager(agentId);
+            changedTasks = await UpdateTaskWithinCommandBoundaryAsync(manager, change);
+            afterRead = await ReadGraphForWriteAsync();
+        }
+        catch (Exception ex)
+        {
+            return await CreateOutcomeUnknownResultAsync(ex, task.Id, DomainTaskStatus.InProgress, null, before, validation);
+        }
+
+        if (afterRead.Result != null || !afterRead.Graph!.TasksById.TryGetValue(task.Id, out var afterTask) ||
+            afterTask.Status != DomainTaskStatus.InProgress || afterTask.AgentExecution?.LeaseId != change.AgentExecution.LeaseId)
+        {
+            return await CreateOutcomeUnknownResultAsync(
+                new InvalidOperationException("Claim write could not be authoritatively verified."),
+                task.Id,
+                DomainTaskStatus.InProgress,
+                null,
+                before,
+                validation);
+        }
+
+        var after = new TaskAvailabilityService(afterRead.Graph.Tasks).Analyze(afterTask);
+        return TaskOperationResult.Succeeded(
+            BuildConfirmedChanges(changedTasks, afterRead.Graph),
+            before,
+            after,
+            validation,
+            CloneForUpdate(afterTask));
+    }
 
     public Task<TaskOperationResult> TryUnarchiveAsync(
         string taskId,
@@ -471,6 +593,32 @@ public sealed class TaskGraphCommandService
         .Where(static task => task != null)
         .Select(static task => TaskItemSnapshot.Clone(task!))
         .ToArray();
+
+    private const string ExecutionMarkerStart = "<!-- unlimotion-agent-execution:v1:start -->";
+    private const string ExecutionMarkerEnd = "<!-- unlimotion-agent-execution:v1:end -->";
+
+    private static bool ContainsExecutionMarker(string value) =>
+        value.Contains(ExecutionMarkerStart, StringComparison.Ordinal) ||
+        value.Contains(ExecutionMarkerEnd, StringComparison.Ordinal);
+
+    private static bool HasExecutionMarkerConflict(string? description)
+    {
+        var text = description ?? string.Empty;
+        return text.Contains(ExecutionMarkerStart, StringComparison.Ordinal) ||
+               text.Contains(ExecutionMarkerEnd, StringComparison.Ordinal);
+    }
+
+    private static string RenderExecutionMarker(string? description, AgentExecutionRecord execution)
+    {
+        var prefix = string.IsNullOrEmpty(description)
+            ? string.Empty
+            : description!.EndsWith("\n", StringComparison.Ordinal) ? description : description + "\n";
+        return prefix +
+               ExecutionMarkerStart + "\n" +
+               $"Исполнитель: {execution.AgentId}\n" +
+               $"Состояние: {execution.State}\n" +
+               ExecutionMarkerEnd;
+    }
 
     private sealed record TaskOperationReadResult(TaskGraphReadResult? Graph, TaskOperationResult? Result);
 }

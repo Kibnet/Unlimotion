@@ -13,6 +13,7 @@ public static class TaskItemSnapshot
         BlocksTasks = task.BlocksTasks?.ToList() ?? [],
         BlockedByTasks = task.BlockedByTasks?.ToList() ?? [],
         Repeater = CloneRepeater(task.Repeater),
+        AgentExecution = CloneAgentExecution(task.AgentExecution),
         ExtensionData = task.ExtensionData?.ToDictionary(
             static pair => pair.Key,
             static pair => pair.Value == null ? null! : pair.Value.DeepClone())
@@ -56,5 +57,17 @@ public static class TaskItemSnapshot
                 ExtensionData = repeater.ExtensionData?.ToDictionary(
                     static pair => pair.Key,
                     static pair => pair.Value == null ? null! : pair.Value.DeepClone())
+            };
+
+    private static AgentExecutionRecord? CloneAgentExecution(AgentExecutionRecord? execution) =>
+        execution == null
+            ? null
+            : new AgentExecutionRecord
+            {
+                AgentId = execution.AgentId,
+                LeaseId = execution.LeaseId,
+                State = execution.State,
+                ClaimedAt = execution.ClaimedAt,
+                UpdatedAt = execution.UpdatedAt
             };
 }

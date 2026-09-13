@@ -365,6 +365,91 @@ public sealed class UnlimotionCliIntegrationTests
     }
 
     [Test]
+    public async Task Candidates_ReturnsPreparedStartableTasksInDeterministicOrder()
+    {
+        using var temp = TempTaskDirectory.Create();
+        var lowPriority = CreateTask("low", DomainTaskStatus.Prepared, isCanBeCompleted: true, title: "Low");
+        lowPriority.Importance = 1;
+        var highPriority = CreateTask("high", DomainTaskStatus.Prepared, isCanBeCompleted: true, title: "High");
+        highPriority.Importance = 10;
+        var inProgress = CreateTask("in-progress", DomainTaskStatus.InProgress, isCanBeCompleted: true);
+        var blocked = CreateTask("blocked", DomainTaskStatus.Prepared, isCanBeCompleted: false);
+        await SaveTasks(temp.DirectoryPath, lowPriority, highPriority, inProgress, blocked);
+
+        var result = await RunCli(
+            "candidates",
+            "--tasks",
+            temp.DirectoryPath,
+            "--limit",
+            "2",
+            "--format",
+            "json");
+
+        await Assert.That(result.ExitCode).IsEqualTo(0);
+        var root = ParseJson(result.StdOut);
+        await Assert.That(root.ValueKind).IsEqualTo(JsonValueKind.Array);
+        var candidates = root.EnumerateArray().ToArray();
+        await Assert.That(candidates).Count().IsEqualTo(2);
+        await Assert.That(candidates[0].GetProperty("id").GetString()).IsEqualTo(highPriority.Id);
+        await Assert.That(candidates[1].GetProperty("id").GetString()).IsEqualTo(lowPriority.Id);
+        await Assert.That(candidates.All(item => item.GetProperty("status").GetString() == "Prepared"))
+            .IsTrue();
+    }
+
+    [Test]
+    public async Task Claim_ConcurrentAgentsProduceOneLeaseAndOneStatusTransition()
+    {
+        using var temp = TempTaskDirectory.Create();
+        var task = CreateTask("claimable", DomainTaskStatus.Prepared, isCanBeCompleted: true);
+        await SaveTasks(temp.DirectoryPath, task);
+
+        var firstClaim = RunCli(
+            "claim",
+            "--tasks",
+            temp.DirectoryPath,
+            "--id",
+            task.Id,
+            "--agent",
+            "agent-a",
+            "--expected-status",
+            "Prepared",
+            "--format",
+            "json");
+        var secondClaim = RunCli(
+            "claim",
+            "--tasks",
+            temp.DirectoryPath,
+            "--id",
+            task.Id,
+            "--agent",
+            "agent-b",
+            "--expected-status",
+            "Prepared",
+            "--format",
+            "json");
+
+        var results = await Task.WhenAll(firstClaim, secondClaim);
+        await Assert.That(results.Count(result => result.ExitCode == 0)).IsEqualTo(1);
+        await Assert.That(results.Count(result => result.ExitCode == 1)).IsEqualTo(1);
+        var claimedJson = ParseJson(results.Single(result => result.ExitCode == 0).StdOut);
+        await Assert.That(claimedJson.GetProperty("success").GetBoolean()).IsTrue();
+        var execution = claimedJson.GetProperty("execution");
+        var winningAgent = execution.GetProperty("agentId").GetString();
+        var leaseId = execution.GetProperty("leaseId").GetString();
+        await Assert.That(Guid.TryParse(leaseId, out _)).IsTrue();
+        await AssertJsonError(results.Single(result => result.ExitCode == 1).StdOut, "claimConflict");
+
+        var persisted = await LoadTask(temp.DirectoryPath, task.Id);
+        await Assert.That(persisted.Status).IsEqualTo(DomainTaskStatus.InProgress);
+        var json = JObject.Parse(await File.ReadAllTextAsync(Path.Combine(temp.DirectoryPath, task.Id)));
+        await Assert.That((string?)json["AgentExecution"]?["AgentId"]).IsEqualTo(winningAgent);
+        await Assert.That((string?)json["AgentExecution"]?["LeaseId"]).IsEqualTo(leaseId);
+        await Assert.That(((JArray)json["StatusHistory"]!).Count).IsEqualTo(2);
+        await Assert.That(((string?)json["Description"])?.Split("<!-- unlimotion-agent-execution:v1:start -->").Length - 1)
+            .IsEqualTo(1);
+    }
+
+    [Test]
     public async Task UnknownCommand_IsReportedBeforeMissingTasksPath()
     {
         var result = await RunCli("unknown-command", "--format", "json");

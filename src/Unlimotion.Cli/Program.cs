@@ -43,6 +43,8 @@ public static class Program
             {
                 "status" => await RunReadCommand(options, storage, RunStatus),
                 "unlocked" => await RunReadCommand(options, storage, RunUnlocked),
+                "candidates" => await RunReadCommand(options, storage, RunCandidates),
+                "claim" => await RunClaim(options, storage),
                 "task" => await RunReadCommand(options, storage, RunTask),
                 "validate" => await RunReadCommand(options, storage, RunValidate),
                 "set-status" => await RunSetStatus(options, storage),
@@ -148,6 +150,54 @@ public static class Program
         return 0;
     }
 
+    private static int RunCandidates(CliOptions options, FileTaskStorageDirectoryReadResult loadResult, TaskAvailabilityAnalyzer analyzer)
+    {
+        if (loadResult.LoadErrors.Count > 0)
+        {
+            WriteLoadErrors(options, loadResult.LoadErrors);
+            return 1;
+        }
+
+        var limit = options.Limit ?? throw new CliException("Command 'candidates' requires --limit <1..100>.");
+        var candidates = analyzer.AnalyzeAll()
+            .Where(static analysis => analysis.Status == DomainTaskStatus.Prepared && analysis.CanStart)
+            .Select(analysis =>
+            {
+                analyzer.TryGetTask(analysis.TaskId, out var task);
+                return new CandidateOutput
+                {
+                    Id = analysis.TaskId,
+                    Title = analysis.Title,
+                    Status = analysis.Status,
+                    Importance = task?.Importance ?? 0,
+                    PlannedBeginDateTime = task?.PlannedBeginDateTime,
+                    CreatedDateTime = task?.CreatedDateTime ?? DateTimeOffset.MinValue,
+                    CanStart = analysis.CanStart,
+                    ReasonCount = analysis.Reasons.Count
+                };
+            })
+            .OrderByDescending(static task => task.Importance)
+            .ThenBy(static task => task.PlannedBeginDateTime.HasValue ? 0 : 1)
+            .ThenBy(static task => task.PlannedBeginDateTime)
+            .ThenBy(static task => task.CreatedDateTime)
+            .ThenBy(static task => task.Id, StringComparer.Ordinal)
+            .Take(limit)
+            .ToArray();
+
+        if (options.Format == OutputFormat.Json)
+        {
+            WriteJson(candidates);
+            return 0;
+        }
+
+        foreach (var candidate in candidates)
+        {
+            Console.WriteLine($"{candidate.Id}\t{candidate.Importance}\t{candidate.Title}");
+        }
+
+        return 0;
+    }
+
     private static int RunTask(CliOptions options, FileTaskStorageDirectoryReadResult loadResult, TaskAvailabilityAnalyzer analyzer)
     {
         if (loadResult.LoadErrors.Count > 0)
@@ -221,6 +271,42 @@ public static class Program
     private static Task<int> RunComplete(CliOptions options, FileTaskStorage storage) =>
         ChangeStatus(options, storage, RequireTaskId(options, "complete"), DomainTaskStatus.Completed);
 
+    private static async Task<int> RunClaim(CliOptions options, FileTaskStorage storage)
+    {
+        var taskId = RequireTaskId(options, "claim");
+        var agentId = RequireAgentId(options, "claim");
+        var expectedStatus = options.ExpectedStatus ??
+            throw new CliException("Command 'claim' requires --expected-status Prepared.");
+        var service = CreateCommandService(storage, options);
+        var result = await service.TryClaimAsync(taskId, agentId, expectedStatus);
+        if (!result.Success)
+        {
+            WriteJsonOrTextDenied(options, result, taskId, "claim");
+            return 1;
+        }
+
+        var task = result.AuthoritativeTask ?? throw new InvalidOperationException("Claim succeeded without an authoritative task.");
+        var output = new ClaimOutput
+        {
+            Success = true,
+            Task = TaskSummary.FromAnalysis(result.After ?? result.Before!),
+            Execution = ExecutionOutput.From(task.AgentExecution!),
+            ChangedTaskIds = ChangedIds(result.ChangedTasks),
+            StorageRevision = result.StorageRevision,
+            DidMutate = true
+        };
+        if (options.Format == OutputFormat.Json)
+        {
+            WriteJson(output);
+        }
+        else
+        {
+            Console.WriteLine($"Claimed: {task.Id} by {task.AgentExecution!.AgentId} ({task.AgentExecution.LeaseId})");
+        }
+
+        return 0;
+    }
+
     private static Task<int> RunSetCriterion(CliOptions options, FileTaskStorage storage)
     {
         var taskId = RequireTaskId(options, "set-criterion");
@@ -283,6 +369,28 @@ public static class Program
         string.IsNullOrWhiteSpace(options.CriterionId)
             ? throw new CliException($"Command '{command}' requires --criterion <criterion-id>.")
             : options.CriterionId;
+
+    private static string RequireAgentId(CliOptions options, string command) =>
+        string.IsNullOrWhiteSpace(options.AgentId)
+            ? throw new CliException($"Command '{command}' requires --agent <agent-id>.")
+            : options.AgentId;
+
+    private static void WriteJsonOrTextDenied(
+        CliOptions options,
+        TaskOperationResult result,
+        string taskId,
+        string action)
+    {
+        if (options.Format == OutputFormat.Json)
+        {
+            WriteJson(ErrorOutput.Create(
+                MapDeniedKind(result.DeniedReason?.Kind ?? TaskOperationDeniedKind.StorageFailed),
+                result.DeniedReason?.Message ?? $"Command '{action}' was denied."));
+            return;
+        }
+
+        Console.Error.WriteLine(result.DeniedReason?.Message ?? $"Command '{action}' was denied for '{taskId}'.");
+    }
 
     private static void WriteCommandResult(
         CliOptions options,
@@ -351,6 +459,8 @@ public static class Program
         TaskOperationDeniedKind.CompletedCriteriaImmutable => "businessRuleDenied",
         TaskOperationDeniedKind.StorageFailed => "operationFailed",
         TaskOperationDeniedKind.OutcomeUnknown => "operationFailed",
+        TaskOperationDeniedKind.ClaimConflict => "claimConflict",
+        TaskOperationDeniedKind.ExecutionStateDenied => "executionStateDenied",
         _ => "operationFailed"
     };
 
@@ -445,6 +555,8 @@ public static class Program
         writer.WriteLine("  unlimotion-cli status --tasks <path> [--format text|json]");
         writer.WriteLine("  --tasks <path> is optional; without it the active local desktop task-space path is used.");
         writer.WriteLine("  unlimotion-cli unlocked --tasks <path> [--format text|json]");
+        writer.WriteLine("  unlimotion-cli candidates --tasks <path> --limit <1..100> [--format text|json]");
+        writer.WriteLine("  unlimotion-cli claim --tasks <path> --id <task-id> --agent <agent-id> --expected-status Prepared [--format text|json]");
         writer.WriteLine("  unlimotion-cli task --tasks <path> --id <task-id> [--format text|json]");
         writer.WriteLine("  unlimotion-cli validate --tasks <path> [--format text|json]");
         writer.WriteLine("  unlimotion-cli set-status --tasks <path> --id <task-id> --status <status> [--author <name>] [--format text|json]");
@@ -460,6 +572,8 @@ public sealed record CliOptions
     [
         "status",
         "unlocked",
+        "candidates",
+        "claim",
         "task",
         "validate",
         "set-status",
@@ -472,6 +586,9 @@ public sealed record CliOptions
     public string? TasksPath { get; init; }
     public string? TaskId { get; init; }
     public string? CriterionId { get; init; }
+    public string? AgentId { get; init; }
+    public DomainTaskStatus? ExpectedStatus { get; init; }
+    public int? Limit { get; init; }
     public DomainTaskStatus? Status { get; init; }
     public bool? Satisfied { get; init; }
     public string? Author { get; init; }
@@ -494,6 +611,9 @@ public sealed record CliOptions
         string? tasksPath = null;
         string? taskId = null;
         string? criterionId = null;
+        string? agentId = null;
+        DomainTaskStatus? expectedStatus = null;
+        int? limit = null;
         DomainTaskStatus? status = null;
         bool? satisfied = null;
         string? author = null;
@@ -517,6 +637,18 @@ public sealed record CliOptions
                 case "--criterion":
                     suppliedOptions.Add(arg);
                     criterionId = RequireValue(args, ref i, arg);
+                    break;
+                case "--limit":
+                    suppliedOptions.Add(arg);
+                    limit = ParseLimit(RequireValue(args, ref i, arg));
+                    break;
+                case "--agent":
+                    suppliedOptions.Add(arg);
+                    agentId = RequireValue(args, ref i, arg);
+                    break;
+                case "--expected-status":
+                    suppliedOptions.Add(arg);
+                    expectedStatus = ParseStatus(RequireValue(args, ref i, arg));
                     break;
                 case "--status":
                     suppliedOptions.Add(arg);
@@ -547,6 +679,9 @@ public sealed record CliOptions
             TasksPath = tasksPath ?? TaskDirectoryResolver.Resolve(null),
             TaskId = taskId,
             CriterionId = criterionId,
+            AgentId = agentId,
+            ExpectedStatus = expectedStatus,
+            Limit = limit,
             Status = status,
             Satisfied = satisfied,
             Author = author,
@@ -572,6 +707,16 @@ public sealed record CliOptions
         _ => throw new CliException("--format must be 'text' or 'json'.")
     };
 
+    private static int ParseLimit(string value)
+    {
+        if (!int.TryParse(value, out var limit) || limit is < 1 or > 100)
+        {
+            throw new CliException("--limit must be an integer from 1 to 100.");
+        }
+
+        return limit;
+    }
+
     private static DomainTaskStatus ParseStatus(string value)
     {
         var statusName = Enum.GetNames<DomainTaskStatus>()
@@ -586,6 +731,8 @@ public sealed record CliOptions
         var allowedOptions = command switch
         {
             "status" or "unlocked" or "validate" => new[] { "--tasks", "--format" },
+            "candidates" => new[] { "--tasks", "--limit", "--format" },
+            "claim" => new[] { "--tasks", "--id", "--agent", "--expected-status", "--format" },
             "task" => new[] { "--tasks", "--id", "--format" },
             "set-status" => new[] { "--tasks", "--id", "--status", "--author", "--format" },
             "complete" => new[] { "--tasks", "--id", "--author", "--format" },
@@ -680,6 +827,46 @@ public sealed record TaskSummary
         CanComplete = analysis.CanComplete,
         ReasonCount = analysis.Reasons.Count
     };
+}
+
+public sealed record CandidateOutput
+{
+    public string Id { get; init; } = string.Empty;
+    public string? Title { get; init; }
+    public DomainTaskStatus Status { get; init; }
+    public int Importance { get; init; }
+    public DateTimeOffset? PlannedBeginDateTime { get; init; }
+    public DateTimeOffset CreatedDateTime { get; init; }
+    public bool CanStart { get; init; }
+    public int ReasonCount { get; init; }
+}
+
+public sealed record ExecutionOutput
+{
+    public string AgentId { get; init; } = string.Empty;
+    public string LeaseId { get; init; } = string.Empty;
+    public AgentExecutionState State { get; init; }
+    public DateTimeOffset ClaimedAt { get; init; }
+    public DateTimeOffset UpdatedAt { get; init; }
+
+    public static ExecutionOutput From(AgentExecutionRecord execution) => new()
+    {
+        AgentId = execution.AgentId,
+        LeaseId = execution.LeaseId,
+        State = execution.State,
+        ClaimedAt = execution.ClaimedAt,
+        UpdatedAt = execution.UpdatedAt
+    };
+}
+
+public sealed record ClaimOutput
+{
+    public bool Success { get; init; }
+    public TaskSummary Task { get; init; } = new();
+    public ExecutionOutput Execution { get; init; } = new();
+    public IReadOnlyList<string> ChangedTaskIds { get; init; } = Array.Empty<string>();
+    public long StorageRevision { get; init; }
+    public bool DidMutate { get; init; }
 }
 
 public sealed record ValidationOutput

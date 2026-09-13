@@ -114,5 +114,7 @@ public enum TaskOperationDeniedKind
     CompletedCriteriaImmutable = 4,
     StorageFailed = 5,
     OutcomeUnknown = 6,
-    StatusPreconditionFailed = 7
+    StatusPreconditionFailed = 7,
+    ClaimConflict = 8,
+    ExecutionStateDenied = 9
 }
