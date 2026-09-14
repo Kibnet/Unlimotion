@@ -1,0 +1,11 @@
+Package: unlimotion.desktop
+Version: @VERSION@
+Section: utils
+Priority: optional
+Architecture: amd64
+Installed-Size: @INSTALLED_SIZE@
+Depends: ca-certificates, libc6, libgcc-s1, libgssapi-krb5-2, libicu76 | libicu72, libssl3t64 | libssl3, libstdc++6, tzdata, zlib1g, libx11-6, libice6, libsm6, libfontconfig1
+Maintainer: Kibnet Philosoff <kibnet@hotmail.com>
+Homepage: https://github.com/Kibnet/Unlimotion
+Description: Visual task and project planning application
+ Unlimotion helps organize tasks, dependencies, roadmaps, and project progress.

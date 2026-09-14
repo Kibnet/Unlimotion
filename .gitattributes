@@ -1,1 +1,3 @@
 *.sh text eol=lf
+distribution/*.json text eol=lf
+distribution/fixtures/*.json text eol=lf
