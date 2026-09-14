@@ -1,13 +1,15 @@
 ﻿using System;
 using System.Windows.Input;
+using System.Reactive.Disposables;
 using PropertyChanged;
 using ReactiveUI;
 
 namespace Unlimotion.ViewModel;
 
 [AddINotifyPropertyChangedInterface]
-public class SetDurationCommands
+public class SetDurationCommands : IDisposable
 {
+    private readonly CompositeDisposable lifetime = new();
     TaskItemViewModel taskItemViewModel;
 
     public SetDurationCommands(TaskItemViewModel item)
@@ -29,7 +31,14 @@ public class SetDurationCommands
         FourDaysCommand = ReactiveCommand.Create(() => taskItemViewModel.PlannedDuration = TimeSpan.FromDays(4), any);
         EightDaysCommand = ReactiveCommand.Create(() => taskItemViewModel.PlannedDuration = TimeSpan.FromDays(8), any);
         NoneCommand = ReactiveCommand.Create(() => taskItemViewModel.PlannedDuration = null, hasDuration);
+
+        foreach (var command in new[] { OneMinCommand, FiveMinutesCommand, TenMinutesCommand,
+                     TwentyMinutesCommand, FortyMinutesCommand, OneHourCommand, TwoHoursCommand,
+                     FourHoursCommand, OneDayCommand, TwoDaysCommand, FourDaysCommand, EightDaysCommand, NoneCommand })
+            lifetime.Add((IDisposable)command);
     }
+
+    public void Dispose() => lifetime.Dispose();
     
     public ICommand OneMinCommand { get; set; }
     public ICommand FiveMinutesCommand { get; set; }

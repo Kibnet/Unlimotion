@@ -86,7 +86,15 @@ namespace Unlimotion.ViewModel
         public bool IsHighlighted { get; set; }
         private TimeSpan? plannedPeriod;
         private DateCommands? commands;
-        public SetDurationCommands SetDurationCommands { get; set; } = null!;
+        private SetDurationCommands? setDurationCommands;
+        private readonly object commandInitializationLock = new();
+        private readonly CompositeDisposable deferredCommandLifetime = new();
+        // Only the open task card needs the duration menu and its reactive subscriptions.
+        public SetDurationCommands SetDurationCommands
+        {
+            get => GetOrCreateCommand(ref setDurationCommands, () => new SetDurationCommands(this));
+            set { lock (commandInitializationLock) setDurationCommands = value; }
+        }
         public static TimeSpan DefaultThrottleTime = TimeSpan.FromSeconds(10);
         public static TimeSpan InProgressElapsedRefreshInterval { get; set; } = TimeSpan.FromMinutes(1);
         public static IScheduler? InProgressElapsedRefreshScheduler { get; set; }
@@ -114,7 +122,7 @@ namespace Unlimotion.ViewModel
             _repeaterPropertyChangedSubscription.AddToDispose(this);
             _completionCriteriaPropertyChangedSubscription.AddToDispose(this);
             _writeProducerLifetime.AddToDispose(this);
-            SetDurationCommands = new SetDurationCommands(this);
+            deferredCommandLifetime.AddToDispose(this);
             SaveItemCommand = ReactiveCommand.CreateFromTask(async () =>
             {
                 var pendingEditor = CapturePendingEditorState();
@@ -127,25 +135,6 @@ namespace Unlimotion.ViewModel
             });
             var saveExceptionSubscription = SaveItemCommand.ThrownExceptions
                 .Subscribe(new ObservableExceptionHandler(NotificationManager));
-
-            var canEditCompletionCriteria = this.WhenAnyValue(
-                t => t.Status,
-                status => status != DomainTaskStatus.Completed);
-
-            AddCompletionCriterionCommand = ReactiveCommand.Create(() =>
-            {
-                var criterion = new TaskCompletionCriterion();
-                CompletionCriteria.Add(criterion);
-                RequestCompletionCriterionFocus(criterion);
-            }, canEditCompletionCriteria, RxSchedulers.MainThreadScheduler).AddToDisposeAndReturn(this);
-
-            RemoveCompletionCriterionCommand = ReactiveCommand.Create<TaskCompletionCriterion>(criterion =>
-            {
-                if (criterion != null)
-                {
-                    CompletionCriteria.Remove(criterion);
-                }
-            }, canEditCompletionCriteria, RxSchedulers.MainThreadScheduler).AddToDisposeAndReturn(this);
 
             NotifyCollectionChangedEventHandler completionCriteriaChangedHandler = (_, __) => OnCompletionCriteriaChanged();
             CompletionCriteria.CollectionChanged += completionCriteriaChangedHandler;
@@ -197,10 +186,6 @@ namespace Unlimotion.ViewModel
                 .Subscribe(_ => RefreshStatusOptions())
                 .AddToDispose(this);
 
-            ArchiveCommand = ReactiveCommand.CreateFromTask(
-                ExecuteTrackedArchiveCommandAsync,
-                this.WhenAnyValue(m => m.Status, status => status != DomainTaskStatus.Completed));
-
             RemoveFunc = async parent =>
             {
                 if (parent != null && Parents.Count > 1)
@@ -214,19 +199,6 @@ namespace Unlimotion.ViewModel
                 return clone;
             };
 
-            UnblockCommand = ReactiveCommand.Create<TaskItemViewModel, Unit>(
-                m =>
-                {
-                    taskStorage.Unblock(this, m);
-                    return Unit.Default;
-                });
-
-            DeleteParentChildRelationCommand = ReactiveCommand.Create<TaskItemViewModel, Unit> (
-                m =>
-                {
-                    taskStorage.RemoveParentChildConnection(this, m);
-                    return Unit.Default;
-                });            
 
             //Subscribe to Save when property changed
             if (this is INotifyPropertyChanged inpc)
@@ -544,9 +516,51 @@ namespace Unlimotion.ViewModel
             }
         }
 
-        public ICommand ArchiveCommand { get; set; } = null!;
-        public ICommand AddCompletionCriterionCommand { get; set; } = null!;
-        public ICommand RemoveCompletionCriterionCommand { get; set; } = null!;
+        private ICommand? archiveCommand;
+        private ICommand? addCompletionCriterionCommand;
+        private ICommand? removeCompletionCriterionCommand;
+
+        private T GetOrCreateCommand<T>(ref T? command, Func<T> create) where T : class
+        {
+            lock (commandInitializationLock)
+            {
+                if (command is not null) return command;
+                command = create();
+                // CompositeDisposable safely disposes commands first accessed after VM teardown.
+                if (command is IDisposable disposable) deferredCommandLifetime.Add(disposable);
+                return command;
+            }
+        }
+
+        public ICommand ArchiveCommand
+        {
+            get => GetOrCreateCommand(ref archiveCommand, () => ReactiveCommand.CreateFromTask(
+                ExecuteTrackedArchiveCommandAsync,
+                this.WhenAnyValue(m => m.Status, status => status != DomainTaskStatus.Completed)));
+            set { lock (commandInitializationLock) archiveCommand = value; }
+        }
+
+        public ICommand AddCompletionCriterionCommand
+        {
+            get => GetOrCreateCommand(ref addCompletionCriterionCommand, () => ReactiveCommand.Create(() =>
+            {
+                var criterion = new TaskCompletionCriterion();
+                CompletionCriteria.Add(criterion);
+                RequestCompletionCriterionFocus(criterion);
+            }, this.WhenAnyValue(t => t.Status, status => status != DomainTaskStatus.Completed),
+                RxSchedulers.MainThreadScheduler));
+            set { lock (commandInitializationLock) addCompletionCriterionCommand = value; }
+        }
+
+        public ICommand RemoveCompletionCriterionCommand
+        {
+            get => GetOrCreateCommand(ref removeCompletionCriterionCommand, () => ReactiveCommand.Create<TaskCompletionCriterion>(criterion =>
+            {
+                if (criterion != null) CompletionCriteria.Remove(criterion);
+            }, this.WhenAnyValue(t => t.Status, status => status != DomainTaskStatus.Completed),
+                RxSchedulers.MainThreadScheduler));
+            set { lock (commandInitializationLock) removeCompletionCriterionCommand = value; }
+        }
         public Func<TaskItemViewModel?, Task<bool>> RemoveFunc { get; set; } = null!;
         public Func<TaskItemViewModel, Task<TaskItemViewModel>> CloneFunc { get; set; } = null!;
 
@@ -708,8 +722,28 @@ namespace Unlimotion.ViewModel
         public ObservableCollection<string> Blocks { get; set; } = new();
         public ObservableCollection<string> BlockedBy { get; set; } = new();
 
-        public ICommand UnblockCommand { get; set; } = null!;        
-        public ICommand DeleteParentChildRelationCommand { get; set; } = null!;
+        private ICommand? unblockCommand;
+        private ICommand? deleteParentChildRelationCommand;
+
+        public ICommand UnblockCommand
+        {
+            get => GetOrCreateCommand(ref unblockCommand, () => ReactiveCommand.Create<TaskItemViewModel, Unit>(task =>
+            {
+                _taskStorage.Unblock(this, task);
+                return Unit.Default;
+            }));
+            set { lock (commandInitializationLock) unblockCommand = value; }
+        }
+
+        public ICommand DeleteParentChildRelationCommand
+        {
+            get => GetOrCreateCommand(ref deleteParentChildRelationCommand, () => ReactiveCommand.Create<TaskItemViewModel, Unit>(task =>
+            {
+                _taskStorage.RemoveParentChildConnection(this, task);
+                return Unit.Default;
+            }));
+            set { lock (commandInitializationLock) deleteParentChildRelationCommand = value; }
+        }
         
         public async Task CopyInto(TaskItemViewModel destination)
         {
