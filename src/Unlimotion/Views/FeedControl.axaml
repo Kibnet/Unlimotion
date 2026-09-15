@@ -219,6 +219,8 @@
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate x:DataType="feed:FeedDayViewModel">
                                         <Border Margin="0,0,0,8"
+                                                MaxWidth="960"
+                                                HorizontalAlignment="Center"
                                                 Padding="10"
                                                 CornerRadius="8"
                                                 BorderBrush="{DynamicResource ThemeBorderMidBrush}"

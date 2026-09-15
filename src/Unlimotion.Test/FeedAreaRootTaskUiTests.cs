@@ -113,6 +113,28 @@ public sealed class FeedAreaRootTaskUiTests
     }
 
     [Test]
+    public async Task AreaDraft_AutosavesWithoutTheRemovedSaveButton()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            using var directory = new TempNotesDirectory();
+            var store = new AreaCatalogStore(new FileNoteVault(directory.Path));
+            using var model = new AreaManagementViewModel(store) { IsOpen = true };
+            await model.LoadAsync();
+            var area = await model.CreateRootAsync("Исходная");
+            model.DraftName = "Сохранено автоматически";
+
+            await Task.Delay(650);
+            Dispatcher.UIThread.RunJobs();
+            var saved = await store.LoadAsync();
+            await Assert.That(saved.Catalog.Areas.Single(item => item.Id == area.Id).Name)
+                .IsEqualTo("Сохранено автоматически");
+            await Assert.That(model.IsDraftDirty).IsFalse();
+        }, CancellationToken.None);
+    }
+
+    [Test]
     public async Task ReusedParentPickerEditsOnlyDraftAndKeepsManualOverride()
     {
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));

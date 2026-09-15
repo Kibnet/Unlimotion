@@ -26,6 +26,7 @@ public partial class MarkdownBlockLivePreviewEditor : UserControl
     private bool dragTargetAfter;
     private bool isDraggingSelection;
     private bool clearSelectionOnRelease;
+    private bool isStartingBlockEdit;
     private MarkdownLiveBlockViewModel? pointerOverBlock;
     private MarkdownLiveBlockViewModel? toolbarFlyoutBlock;
     private double? preferredCaretX;
@@ -35,17 +36,12 @@ public partial class MarkdownBlockLivePreviewEditor : UserControl
     public MarkdownBlockLivePreviewEditor()
     {
         InitializeComponent();
-        AddHandler(PointerPressedEvent, OnEditingContextPointerPressed, RoutingStrategies.Tunnel);
+        AddHandler(ContextRequestedEvent, OnAnyBlockContextRequested, RoutingStrategies.Tunnel, handledEventsToo: true);
         SizeChanged += (_, _) => UpdateReadingColumn();
         AttachedToVisualTree += (_, _) => UpdateReadingColumn();
         AddHandler(
             InputElement.KeyDownEvent,
             OnEditorKeyDown,
-            RoutingStrategies.Tunnel,
-            handledEventsToo: true);
-        AddHandler(
-            InputElement.PointerPressedEvent,
-            OnEditorPointerPressed,
             RoutingStrategies.Tunnel,
             handledEventsToo: true);
         AttachedToVisualTree += OnEditorAttachedToVisualTree;
@@ -71,6 +67,11 @@ public partial class MarkdownBlockLivePreviewEditor : UserControl
         InitializeBlockEditorTypography();
         pointerEventHost = TopLevel.GetTopLevel(this);
         pointerEventHost?.AddHandler(
+            InputElement.PointerPressedEvent,
+            OnEditorPointerPressed,
+            RoutingStrategies.Tunnel,
+            handledEventsToo: true);
+        pointerEventHost?.AddHandler(
             InputElement.PointerMovedEvent,
             OnEditorPointerMoved,
             RoutingStrategies.Tunnel,
@@ -85,6 +86,7 @@ public partial class MarkdownBlockLivePreviewEditor : UserControl
     private void OnEditorDetachedFromVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
     {
         ClearToolbarFlyoutState();
+        pointerEventHost?.RemoveHandler(InputElement.PointerPressedEvent, OnEditorPointerPressed);
         pointerEventHost?.RemoveHandler(InputElement.PointerMovedEvent, OnEditorPointerMoved);
         pointerEventHost?.RemoveHandler(InputElement.PointerReleasedEvent, OnEditorPointerReleased);
         pointerEventHost = null;
@@ -92,6 +94,23 @@ public partial class MarkdownBlockLivePreviewEditor : UserControl
 
     private void OnEditorPointerPressed(object? sender, PointerPressedEventArgs e)
     {
+        if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed
+            && e.Source is not Button
+            && (e.Source as Visual)?.GetVisualAncestors().OfType<Button>().Any() != true
+            && (e.Source as MarkdownBlockPreviewControl ?? (e.Source as Visual)?.GetVisualAncestors().OfType<MarkdownBlockPreviewControl>().FirstOrDefault())
+                is MarkdownBlockPreviewControl { DataContext: MarkdownLiveBlockViewModel requestedBlock } preview
+            && DataContext is MarkdownLivePreviewEditorViewModel previewEditor
+            && requestedBlock.IsEditable)
+        {
+            e.Handled = true;
+            ResetPreferredCaretColumn();
+            var relative = e.GetPosition(preview);
+            var ratio = preview.Bounds.Width <= 1 ? 1 : Math.Clamp(relative.X / preview.Bounds.Width, 0, 1);
+            var caretIndex = (int)Math.Round(requestedBlock.PreviewText.Length * ratio);
+            _ = BeginRequestedBlockFromPointerAsync(previewEditor, requestedBlock, caretIndex);
+            return;
+        }
+
         if (e.Source is TextBox
             || (e.Source as Visual)?.GetVisualAncestors().OfType<TextBox>().Any() == true)
         {
@@ -438,6 +457,7 @@ public partial class MarkdownBlockLivePreviewEditor : UserControl
 
     private async void OnPreviewPointerPressed(object? sender, PointerPressedEventArgs e)
     {
+        if (e.Handled) return;
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
         if (e.Source is Control source
             && (source is Button || source.GetVisualAncestors().OfType<Button>().Any()))
@@ -459,7 +479,18 @@ public partial class MarkdownBlockLivePreviewEditor : UserControl
             ? 1
             : Math.Clamp(relative.X / preview.Bounds.Width, 0, 1);
         var preferredCaretIndex = (int)Math.Round(requestedBlock.PreviewText.Length * caretRatio);
-        await BeginRequestedBlockAsync(editor, requestedBlock, preferredCaretIndex);
+        await BeginRequestedBlockFromPointerAsync(editor, requestedBlock, preferredCaretIndex);
+    }
+
+    private async Task BeginRequestedBlockFromPointerAsync(
+        MarkdownLivePreviewEditorViewModel editor,
+        MarkdownLiveBlockViewModel requestedBlock,
+        int? preferredCaretIndex)
+    {
+        if (isStartingBlockEdit) return;
+        isStartingBlockEdit = true;
+        try { await BeginRequestedBlockAsync(editor, requestedBlock, preferredCaretIndex); }
+        finally { isStartingBlockEdit = false; }
     }
 
     private async void OnPreviewKeyDown(object? sender, KeyEventArgs e)
