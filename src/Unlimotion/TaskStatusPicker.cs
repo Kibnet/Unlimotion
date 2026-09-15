@@ -30,6 +30,9 @@ public class TaskStatusPicker : Button
     public static readonly StyledProperty<TaskItemViewModel?> TaskProperty =
         AvaloniaProperty.Register<TaskStatusPicker, TaskItemViewModel?>(nameof(Task));
 
+    public static readonly StyledProperty<double> IconSizeProperty =
+        AvaloniaProperty.Register<TaskStatusPicker, double>(nameof(IconSize), 20d);
+
     public TaskStatusPicker()
     {
         Classes.Add("TaskStatusPicker");
@@ -53,6 +56,12 @@ public class TaskStatusPicker : Button
         set => SetValue(TaskProperty, value);
     }
 
+    public double IconSize
+    {
+        get => GetValue(IconSizeProperty);
+        set => SetValue(IconSizeProperty, value);
+    }
+
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
@@ -60,6 +69,16 @@ public class TaskStatusPicker : Button
         if (change.Property == TaskProperty || change.Property == DataContextProperty)
         {
             SyncTaskSubscription();
+        }
+        else if (change.Property == IconSizeProperty)
+        {
+            var size = Math.Max(1, IconSize);
+            _icon.Width = size;
+            _icon.Height = size;
+            Width = size;
+            Height = size;
+            MinWidth = size;
+            MinHeight = size;
         }
     }
 

@@ -148,7 +148,6 @@
                       Classes.ToolbarVisible="{Binding IsContextToolbarVisible}"
                       PointerEntered="OnBlockPointerEntered"
                       PointerExited="OnBlockPointerExited"
-                      ContextRequested="OnBlockContextRequested"
                       AutomationProperties.AutomationId="{Binding BlockAutomationId}"
                       AutomationProperties.Name="{Binding AutomationName}">
                     <Border Grid.ColumnSpan="2"

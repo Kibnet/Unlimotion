@@ -22,6 +22,8 @@ public partial class FeedControl : UserControl
     private bool wasSearchActive;
     private bool suppressNextChronologyRestore;
     private bool loadOlderDaysWhenIdle;
+    private bool userReachedChronologyEnd;
+    private bool isRestoringChronologyAnchor;
     private FeedThematicDocumentViewModel? displayedDocument;
 
     public FeedControl()
@@ -86,6 +88,11 @@ public partial class FeedControl : UserControl
     private async void OnChronologyScrollChanged(object? sender, ScrollChangedEventArgs e)
     {
         UpdateNavigationState();
+        // A collapse/expand or a virtualized page changes extent without an
+        // intentional scroll.  It must never be interpreted as a request for
+        // another page at the bottom of the chronology.
+        if (isRestoringChronologyAnchor || e.ExtentDelta.Y != 0 || e.OffsetDelta.Y <= 0) return;
+        userReachedChronologyEnd = true;
         await TryLoadOlderDaysFromCurrentPositionAsync();
     }
 
@@ -93,7 +100,8 @@ public partial class FeedControl : UserControl
     {
         if (DataContext is not FeedViewModel viewModel
             || !viewModel.HasMoreDays
-            || viewModel.IsLoadingOlderDays)
+            || viewModel.IsLoadingOlderDays
+            || !userReachedChronologyEnd)
         {
             return;
         }
@@ -113,7 +121,19 @@ public partial class FeedControl : UserControl
         }
 
         loadOlderDaysWhenIdle = false;
+        var anchor = scrollViewer.Offset;
         await viewModel.LoadOlderDaysAsync();
+        Dispatcher.UIThread.Post(
+            () => RestoreChronologyAnchor(scrollViewer, anchor),
+            DispatcherPriority.Render);
+    }
+
+    private void RestoreChronologyAnchor(ScrollViewer scrollViewer, Vector anchor)
+    {
+        if (!ReferenceEquals(scrollViewer, FindChronologyScrollViewer())) return;
+        isRestoringChronologyAnchor = true;
+        try { scrollViewer.Offset = anchor; }
+        finally { isRestoringChronologyAnchor = false; }
     }
 
     private async void OnMarkdownLinkInvoked(object? sender, MarkdownLinkInvokedEventArgs e)

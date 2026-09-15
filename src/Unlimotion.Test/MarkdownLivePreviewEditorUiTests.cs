@@ -598,6 +598,42 @@ public class MarkdownLivePreviewEditorUiTests
     }
 
     [Test]
+    public async Task ClickingAnotherPreview_SwitchesTheActiveEditorInOneClick()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var source = new MarkdownLiveDocumentSnapshot("Первый\n\nВторой\n", "revision-1", false, "note.md");
+            using var viewModel = new MarkdownLivePreviewEditorViewModel();
+            viewModel.CommitBlockAsync = (patch, _) => Task.FromResult(MarkdownBlockCommitResult.Accepted(source with
+            {
+                Raw = patch.PatchedDocumentRaw,
+                ExpectedRevisionHash = "revision-2"
+            }));
+            viewModel.Load(source);
+            var first = viewModel.Blocks.First(static block => block.PreviewText == "Первый");
+            var second = viewModel.Blocks.First(static block => block.PreviewText == "Второй");
+            var view = new MarkdownBlockLivePreviewEditor { DataContext = viewModel };
+            var window = new Window { Width = 620, Height = 320, Content = view };
+            try
+            {
+                window.Show();
+                RunLayoutJobs();
+                var firstPreview = FindControlByAutomationId<MarkdownBlockPreviewControl>(view, first.PreviewAutomationId);
+                var secondPreview = FindControlByAutomationId<MarkdownBlockPreviewControl>(view, second.PreviewAutomationId);
+                Click(window, firstPreview);
+                await Assert.That(WaitFor(() => ReferenceEquals(viewModel.ActiveBlock, first))).IsTrue();
+
+                Click(window, secondPreview);
+                await Assert.That(WaitFor(() => viewModel.ActiveBlock?.PreviewText == "Второй")).IsTrue();
+                var editor = FindControlByAutomationId<TextBox>(view, viewModel.ActiveBlock!.EditorAutomationId);
+                await Assert.That(editor.IsFocused).IsTrue();
+            }
+            finally { window.Close(); }
+        }, CancellationToken.None);
+    }
+
+    [Test]
     public async Task EnteringEditMode_KeepsExactBlockHeightWithoutFocusChrome()
     {
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
@@ -1657,6 +1693,16 @@ public class MarkdownLivePreviewEditorUiTests
     {
         window.KeyPress(key, modifiers, physicalKey, null);
         window.KeyRelease(key, modifiers, physicalKey, null);
+        RunLayoutJobs();
+    }
+
+    private static void Click(Window window, Control control)
+    {
+        var point = control.TranslatePoint(
+            new Point(control.Bounds.Width / 2, control.Bounds.Height / 2),
+            window)!.Value;
+        window.MouseDown(point, MouseButton.Left);
+        window.MouseUp(point, MouseButton.Left);
         RunLayoutJobs();
     }
 

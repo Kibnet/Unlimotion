@@ -32,7 +32,7 @@ public partial class MarkdownBlockLivePreviewEditor
         editor.Margin = new Thickness(left, 0, 0, 0);
         if (block.RenderKind == MarkdownLiveBlockRenderKind.Heading)
         {
-            editor.FontSize = block.HeadingLevel switch { <= 1 => 22, 2 => 18, 3 => 16, _ => 14 };
+            editor.FontSize = block.HeadingLevel switch { <= 1 => 24, 2 => 21, 3 => 19, 4 => 17, 5 => 16, _ => 15 };
             editor.FontWeight = block.HeadingLevel <= 2 ? FontWeight.SemiBold : FontWeight.Medium;
             editor.Margin = new Thickness(left, block.HeadingLevel <= 2 ? 8 : 4, 0, 2);
         }
