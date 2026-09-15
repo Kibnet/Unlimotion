@@ -3031,6 +3031,34 @@ namespace Unlimotion.ViewModel
         public string SearchText => $"{Emoji} {DisplayTitle} {Title} {SortText}".Trim();
         public TaskItemViewModel Source { get; set; } = null!;
 
+        // Runtime-only presentation state used by the emoji filter tree. Selection
+        // remains keyed by Emoji; these properties never enter task JSON.
+        [AlsoNotifyFor(nameof(HierarchyIndent), nameof(HierarchyToggleGlyph))]
+        public int HierarchyDepth { get; set; }
+        [AlsoNotifyFor(nameof(HierarchyToggleGlyph))]
+        public bool HasHierarchyChildren { get; set; }
+        [AlsoNotifyFor(nameof(HierarchyToggleGlyph))]
+        public bool IsHierarchyExpanded { get; set; } = true;
+        public string HierarchyIndent => $"{HierarchyDepth * 16},0,0,0";
+        public string HierarchyToggleGlyph => IsHierarchyExpanded ? "▾" : "▸";
+        public EmojiFilter? HierarchyParent { get; set; }
+        public string HierarchyPath
+        {
+            get
+            {
+                var parts = new Stack<string>();
+                var visited = new HashSet<EmojiFilter>();
+                EmojiFilter? current = this;
+                while (current != null && visited.Add(current))
+                {
+                    parts.Push(current.Source?.Id ?? current.Emoji);
+                    current = current.HierarchyParent;
+                }
+
+                return string.Join("/", parts);
+            }
+        }
+
         public override string ToString() => SearchText;
     }
 }

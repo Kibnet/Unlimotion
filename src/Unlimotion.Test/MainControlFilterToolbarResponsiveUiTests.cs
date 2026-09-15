@@ -1376,7 +1376,8 @@ public class MainControlFilterToolbarResponsiveUiTests
             (MainWindowViewModelFixture.RootTask4Id, "\ud83e\uddea Delta assay target"),
             (MainWindowViewModelFixture.RootTask5Id, "\ud83d\udcda Epsilon library target"),
             (MainWindowViewModelFixture.RootTask6Id, "\u274C Gamma blocked target"),
-            (MainWindowViewModelFixture.RootTask7Id, "\u2705 Zeta done target")
+            (MainWindowViewModelFixture.RootTask7Id, "\u2705 Zeta done target"),
+            (MainWindowViewModelFixture.SubTask41Id, "\ud83d\udd27 Nested repair target")
         };
 
         foreach (var (taskId, title) in titlesById)
@@ -1681,6 +1682,13 @@ public class MainControlFilterToolbarResponsiveUiTests
                     await Assert.That(includeListItems.Count).IsEqualTo(vm.EmojiFilters.Count);
                     await Assert.That(includeListItems[0].Title).IsEqualTo("All");
                     await Assert.That(includeListItems[0].Emoji).IsEqualTo(string.Empty);
+                    await Assert.That(includeListItems.Any(static item => item.HierarchyDepth > 0)).IsTrue();
+                    await Assert.That(includeListItems.First(static item => item.HierarchyDepth > 0).DisplayTitle)
+                        .IsEqualTo("Nested repair target");
+                    await Assert.That(includeListItems.Skip(1).All(static item =>
+                        item.HierarchyDepth >= 0 &&
+                        item.HierarchyIndent.EndsWith(",0,0", StringComparison.Ordinal) &&
+                        item.HierarchyToggleGlyph is "▾" or "▸")).IsTrue();
                     await AssertEmojiRowsMeasureContentAndCenterVertically(includeList);
 
                     var inputBounds = GetBoundsRelativeTo(window, includeInput);

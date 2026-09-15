@@ -76,6 +76,15 @@
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="Padding" Value="0"/>
         </Style>
+        <Style Selector="Button.EmojiFilterHierarchyToggle">
+            <Setter Property="Width" Value="18"/>
+            <Setter Property="MinWidth" Value="18"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
         <Style Selector="TextBlock.EmojiFilterItemEmoji">
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="FontFamily" Value="Segoe UI Emoji"/>
@@ -119,15 +128,23 @@
                              SelectionMode="Single">
                         <ListBox.ItemTemplate>
                             <DataTemplate DataType="viewModel:EmojiFilter">
-                                <Grid ColumnDefinitions="Auto,Auto,*"
+                        <Grid ColumnDefinitions="Auto,Auto,Auto,*"
                                       MinWidth="0"
-                                      VerticalAlignment="Center">
+                                      VerticalAlignment="Center"
+                                      Margin="{Binding HierarchyIndent}">
+                                    <Button Grid.Column="0"
+                                            Classes="EmojiFilterHierarchyToggle"
+                                            Content="{Binding HierarchyToggleGlyph}"
+                                            IsVisible="{Binding HasHierarchyChildren}"
+                                            Click="HierarchyToggle_OnClick"
+                                            AutomationProperties.AutomationId="EmojiFilterHierarchyToggle"/>
                                     <CheckBox Classes="EmojiFilterItemCheckBox"
+                                              Grid.Column="1"
                                               IsChecked="{Binding ShowTasks, Mode=TwoWay}"/>
-                                    <TextBlock Grid.Column="1"
+                                    <TextBlock Grid.Column="2"
                                                Classes="EmojiFilterItemEmoji"
                                                Text="{Binding Emoji}"/>
-                                    <TextBlock Grid.Column="2"
+                                    <TextBlock Grid.Column="3"
                                                Classes="EmojiFilterItemTitle"
                                                Text="{Binding DisplayTitle}"/>
                                 </Grid>
