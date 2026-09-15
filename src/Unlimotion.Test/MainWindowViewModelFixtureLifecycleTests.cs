@@ -12,6 +12,7 @@ using DomainTaskStatus = Unlimotion.Domain.TaskStatus;
 
 namespace Unlimotion.Test;
 
+[ParallelLimiter<SharedUiStateParallelLimit>]
 public sealed class MainWindowViewModelFixtureLifecycleTests
 {
     private static readonly TimeSpan TestTimeout = TimeSpan.FromSeconds(15);

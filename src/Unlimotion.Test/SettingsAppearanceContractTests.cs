@@ -8,6 +8,7 @@ using WritableJsonConfiguration;
 
 namespace Unlimotion.Test;
 
+[ParallelLimiter<SharedUiStateParallelLimit>]
 public sealed class SettingsAppearanceContractTests : IDisposable
 {
     private readonly string _configPath;
