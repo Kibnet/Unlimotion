@@ -136,10 +136,12 @@ public sealed class MarkdownBlockPreviewControl : ContentControl
         panel.FontWeight = block.HeadingLevel <= 2 ? FontWeight.SemiBold : FontWeight.Medium;
         panel.FontSize = block.HeadingLevel switch
         {
-            <= 1 => 22,
-            2 => 18,
-            3 => 16,
-            _ => 14
+            <= 1 => 24,
+            2 => 21,
+            3 => 19,
+            4 => 17,
+            5 => 16,
+            _ => 15
         };
 
         return panel;
@@ -161,6 +163,10 @@ public sealed class MarkdownBlockPreviewControl : ContentControl
                 IsChecked = block.IsTaskCompleted,
                 IsHitTestVisible = true,
                 Focusable = true,
+                Width = 16,
+                Height = 16,
+                MinWidth = 16,
+                MinHeight = 16,
                 VerticalAlignment = VerticalAlignment.Top
             };
             checkBox.Click += async (_, args) =>
@@ -373,6 +379,7 @@ public sealed class MarkdownBlockPreviewControl : ContentControl
         var status = new global::Unlimotion.TaskStatusPicker
         {
             Task = reference.Task,
+            IconSize = 16,
             VerticalAlignment = VerticalAlignment.Center
         };
         AutomationProperties.SetAutomationId(status, reference.StatusAutomationId);
