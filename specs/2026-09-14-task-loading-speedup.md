@@ -647,3 +647,27 @@ HOME → повторный start вернул Status=ok; PID сохранилс
 | EXEC | Интеграция A/E2, эксперименты C/F/G и review | 0.99 для локального diff | Полные suites, paired audit, Android | Завершить последовательную validation | Да только для физического телефона и будущей публикации | Телефон запрошен асинхронно; разрешение на product EXEC уже есть | Оставлены A/E2; C/F/G откатили по E2E; public API и lifecycle сохранены | §20–21; ignored TestResults/loading-e2e |
 | EXEC | Финальная локальная validation | 0.99 для измеренных desktop результатов | Полный startup ×10, AC4, физический Android, post-Init UI latency | Профиль оставшейся startup фазы и отдельная Android acceptance | Да для физического устройства; публикация отдельно | Дополнительное разрешение на уже одобренный EXEC не запрашивалось | 5 пар/30 records audited; Main964/964, Headless38/38; diagnostic6/6; advisory post-EXEC PASS; Android build и empty same-PID smoke | §21; source-manifest.json; ignored raw evidence |
 | Delivery | Оформить draft PR с A+E2 | 0.99 для проверенного source | Интеграция с актуальным main и оставшиеся AC | Коммиты, push, draft PR | Нет | Пользователь: «Оформи pr» — разрешены необходимые commit/push/PR, merge/release не запрошены | Source manifest повторно совпал; результаты опубликованы с границами доказательства | Эта SPEC; PR validation; локальные raw evidence не публикуются |
+
+## 22. Исправление проверок PR #297 после rebase — 2026-09-15
+
+Продолжение утверждённого EXEC по прямому поручению пользователя «Посмотри PR ... давай исправим это». Scope: исправить CI-совместимость теста, добавленного этим PR, и настройку bootstrap Android SDK. Продуктовый контракт чтения/записи дат и оптимизации A+E2 не изменяются; прошлые незакоммиченные исследования и UI/characterization tests не включаются в исправление.
+
+Evidence: PR head f907719225f8ec921e05ed0680fa6e9aa616a429 совпадает с локальным HEAD. Run34959061037: Main1019/1021, две ошибки в FileTaskStorageReadContractTests — ожидается offset+03, на UTC runner получен0. Run34959061060: setup-android падает до компиляции с Failed to find package tools. CodeQL успешен.
+
+Решения и наблюдаемые контракты:
+- Десериализация до и после shared resolver использует тот же IsoDateTimeConverter и настройки JsonTextReader. Проверить локальную нормализацию offset при сохранении момента времени, а не навязывать новое production-поведение.
+- Расширить fixture разными исходными смещениями и проверять UTC instant, ожидаемое локальное представление и roundtrip. Не менять timezone ОС и не подгонять CI к Москве.
+- У setup-android@v3 явно задать packages: platform-tools; последующий шаг продолжает устанавливать pinned build-tools/platform/NDK. Источник: официальный action.yml v3, default tools platform-tools; эта настройка не нужна компилятору приложения.
+- AC: воспроизведён неверный offset-contract вне исходной зоны; targeted tests и полный Main green; Android workflow YAML валиден, package argument проверен. Результаты локальной сборки, проверки sdkmanager и CI не смешивать.
+- Риски: случайное ослабление date assertions; покрыть точный момент времени и offset отдельно. Bootstrap Android локально не воспроизводит Ubuntu runner; окончательная проверка — CI. UI/API/storage не меняются, visual artifact не применим.
+- Post-SPEC self-review: Scope/Evidence и Contract проверены по diff resolver и исходникам конвертера/action; adversarial — разные offsets, roundtrip и сохранность unknown JSON; tester/dev/operations роли покрыты, UX не применим. Решение: продолжить локальное исправление существующего PR; повторное продуктовое согласование не требуется.
+
+### Журнал действий агента — CI follow-up
+| Фаза | Намерение | Evidence / решение | Следующий шаг | Передача человеку |
+|---|---|---|---|---|
+| EXEC | Выяснить обе ошибки CI | Два неверных timezone assertion и отсутствующий Android tools; не ошибки компиляции приложения | Воспроизвести и исправить в узком scope | Не требуется: исправление запрошено |
+| EXEC | Воспроизвести зависимость теста от зоны | Fixture с +03:00/-05:30/+00:00 и обеими JSON-политиками: старое ожидание дало4 failures, включая +00 на Moscow host | Проверять сохранение UTC instant и legacy local offset | Не требуется |
+| EXEC | Исправить и проверить targeted scope | Read-contract9/9 green; workflow разобран PyYAML, sdkmanager --list exit0 подтверждает platform-tools; source приложения не менялся | Полный Main по CI script и новые удалённые checks | Не требуется |
+| EXEC | Post-EXEC review перед обновлением PR | Advisory reviewer + self Scope/Contract/Adversarial/Role passes: находок нет; full Main запущен, его итог ещё не заявляется | Передать проверенные узкие исправления в тот же PR | Поручение пользователя исправить PR; прежнее поручение оформить PR сохраняется |
+
+Review evidence: `TestResults/pr297-ci-fix/red.log`, `green.log`, `sdk-packages.log`, исходные CI logs; post-EXEC проверены production diff, offset counterexamples, политики JSON, SDK bootstrap и сохранение pinned Android dependencies. Reviewer работал без изменений файлов в danger-full-access; технически изолированным read-only audit это не называется. Общий полный прогон и удалённый CI отражаются отдельными результатами PR, не подменяются targeted green. UI-поведение не изменено; прежний Headless CI step уже был success.

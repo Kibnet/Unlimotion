@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -34,20 +35,28 @@ public sealed class FileTaskStorageReadContractTests
     }
 
     [Test]
-    [Arguments(true)]
-    [Arguments(false)]
-    public async Task ReadAndSave_PreserveKnownFieldsAndRespectUnknownJsonPolicy(bool preserveUnknown)
+    [Arguments(true, "+03:00")]
+    [Arguments(false, "+03:00")]
+    [Arguments(true, "-05:30")]
+    [Arguments(false, "-05:30")]
+    [Arguments(true, "+00:00")]
+    [Arguments(false, "+00:00")]
+    public async Task ReadAndSave_PreserveKnownFieldsAndRespectUnknownJsonPolicy(bool preserveUnknown, string offset)
     {
         using var fixture = new Fixture();
         var path = Path.Combine(fixture.Path, "task.json");
-        var json = RichJson("task");
+        var json = RichJson("task", offset);
+        var expectedBegin = DateTimeOffset.Parse("2026-02-01T12:00:00.000" + offset, CultureInfo.InvariantCulture);
         await File.WriteAllTextAsync(path, json);
         var storage = fixture.CreateStorage(preserveUnknown);
         var loaded = (await storage.ReadDirectoryAsync()).Tasks.Single();
 
         await Assert.That(loaded.Title).IsEqualTo("Задача 🧭");
         await Assert.That(loaded.Status).IsEqualTo(Domain.TaskStatus.Prepared);
-        await Assert.That(loaded.PlannedBeginDateTime!.Value.Offset).IsEqualTo(TimeSpan.FromHours(3));
+        // The existing JsonTextReader/IsoDateTimeConverter path normalizes explicit offsets
+        // to the host zone. Preserve the instant, not the fixture's original offset.
+        await Assert.That(loaded.PlannedBeginDateTime!.Value.UtcDateTime).IsEqualTo(expectedBegin.UtcDateTime);
+        await Assert.That(loaded.PlannedBeginDateTime.Value.Offset).IsEqualTo(expectedBegin.ToLocalTime().Offset);
         await Assert.That(loaded.PlannedDuration).IsEqualTo(TimeSpan.FromMinutes(90));
         await Assert.That(loaded.CompletionCriteria.Single().Text).IsEqualTo("Готово");
         await Assert.That(loaded.StatusHistory.Single().Author).IsEqualTo("author");
@@ -61,6 +70,8 @@ public sealed class FileTaskStorageReadContractTests
 
         await storage.Save(loaded);
         var reloaded = (await fixture.CreateStorage(preserveUnknown).ReadDirectoryAsync()).Tasks.Single();
+        await Assert.That(reloaded.PlannedBeginDateTime!.Value.UtcDateTime).IsEqualTo(expectedBegin.UtcDateTime);
+        await Assert.That(reloaded.PlannedBeginDateTime.Value.Offset).IsEqualTo(expectedBegin.ToLocalTime().Offset);
         await Assert.That(JToken.DeepEquals(JToken.FromObject(loaded), JToken.FromObject(reloaded))).IsTrue();
         await Assert.That(File.Exists(Path.Combine(fixture.Path, "task"))).IsFalse();
     }
@@ -110,13 +121,13 @@ public sealed class FileTaskStorageReadContractTests
         await Assert.That(Directory.GetFiles(fixture.Path, "*.repaired.json")).IsEmpty();
     }
 
-    private static string RichJson(string id) => $$$"""
+    private static string RichJson(string id, string offset = "+03:00") => $$$"""
         {
           "Id":"{{{id}}}", "UserId":"owner", "Title":"Задача 🧭", "Description":"Строка\nс деталями",
-          "Status":"Prepared", "CreatedDateTime":"2026-01-01T12:00:00.000+03:00",
-          "PlannedBeginDateTime":"2026-02-01T12:00:00.000+03:00", "PlannedDuration":"01:30:00",
+          "Status":"Prepared", "CreatedDateTime":"2026-01-01T12:00:00.000{{{offset}}}",
+          "PlannedBeginDateTime":"2026-02-01T12:00:00.000{{{offset}}}", "PlannedDuration":"01:30:00",
           "ContainsTasks":["child-b","child-a"], "ParentTasks":["parent"], "BlocksTasks":[], "BlockedByTasks":[],
-          "StatusHistory":[{"Status":"Prepared","ChangedAt":"2026-01-01T12:00:00.000+03:00","Author":"author","FutureHistory":7}],
+          "StatusHistory":[{"Status":"Prepared","ChangedAt":"2026-01-01T12:00:00.000{{{offset}}}","Author":"author","FutureHistory":7}],
           "CompletionCriteria":[{"Id":"criterion","Text":"Готово","IsSatisfied":true,"FutureCriterion":{"x":1}}],
           "Repeater":{"Type":"Weekly","Period":2,"Pattern":[1,3],"AfterComplete":false,"FutureRepeater":[1,2]},
           "FutureTask":{"value":"kept"}
