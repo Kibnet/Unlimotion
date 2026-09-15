@@ -213,7 +213,7 @@ public class TaskStatusPicker : Button
             {
                 if (option.IsEnabled)
                 {
-                    await task.TryTransitionToStatusAsync(option.Status);
+                    await task.TrySelectStatusOptionAsync(option.Status);
                 }
             };
 

@@ -99,6 +99,92 @@ public sealed class TaskItemViewModelStatusCommandTests
     }
 
     [Test]
+    public async Task StatusOptionSetter_ArchiveConfirmationCascadesOnlyActiveContainedTasks()
+    {
+        using var storage = new ScriptedTaskStorage();
+        var parentTask = CreateTask("status-option-archive-parent", DomainTaskStatus.Prepared);
+        var notReadyChildTask = CreateTask("status-option-archive-not-ready", DomainTaskStatus.NotReady);
+        var preparedChildTask = CreateTask("status-option-archive-prepared", DomainTaskStatus.Prepared);
+        var inProgressChildTask = CreateTask("status-option-archive-in-progress", DomainTaskStatus.InProgress);
+        var completedChildTask = CreateTask("status-option-archive-completed", DomainTaskStatus.Completed);
+        var archivedChildTask = CreateArchivedTask(
+            "status-option-archive-archived",
+            DomainTaskStatus.Prepared,
+            DateTimeOffset.UtcNow.AddMinutes(-2));
+        storage.Seed(
+            parentTask,
+            notReadyChildTask,
+            preparedChildTask,
+            inProgressChildTask,
+            completedChildTask,
+            archivedChildTask);
+
+        var notifications = new NotificationManagerWrapperMock { AskResult = true };
+        using var parent = new TaskItemViewModel(parentTask, storage, () => false)
+        {
+            NotificationManager = notifications
+        };
+        using var notReadyChild = new TaskItemViewModel(notReadyChildTask, storage, () => false);
+        using var preparedChild = new TaskItemViewModel(preparedChildTask, storage, () => false);
+        using var inProgressChild = new TaskItemViewModel(inProgressChildTask, storage, () => false);
+        using var completedChild = new TaskItemViewModel(completedChildTask, storage, () => false);
+        using var archivedChild = new TaskItemViewModel(archivedChildTask, storage, () => false);
+        parent.ApplyRelations(
+            [notReadyChild, preparedChild, inProgressChild, completedChild, archivedChild],
+            [],
+            [],
+            []);
+
+        parent.StatusOption = parent.StatusOptions.Single(option => option.Status == DomainTaskStatus.Archived);
+        await parent.WaitForPendingSavesAsync().WaitAsync(TimeSpan.FromSeconds(5));
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(notifications.ConfirmationCount).IsEqualTo(1);
+            await Assert.That(notifications.LastAskHeader).IsEqualTo(L10n.Get("ArchiveContainedTasksHeader"));
+            await Assert.That(notifications.LastAskMessage)
+                .IsEqualTo(L10n.Format("ArchiveContainedTasksMessage", 3, parent.Title));
+            await Assert.That(storage.StatusCalls.Select(static call => call.TaskId))
+                .IsEquivalentTo([parent.Id, notReadyChild.Id, preparedChild.Id, inProgressChild.Id]);
+            await Assert.That(parent.Status).IsEqualTo(DomainTaskStatus.Archived);
+            await Assert.That(notReadyChild.Status).IsEqualTo(DomainTaskStatus.Archived);
+            await Assert.That(preparedChild.Status).IsEqualTo(DomainTaskStatus.Archived);
+            await Assert.That(inProgressChild.Status).IsEqualTo(DomainTaskStatus.Archived);
+            await Assert.That(completedChild.Status).IsEqualTo(DomainTaskStatus.Completed);
+            await Assert.That(archivedChild.Status).IsEqualTo(DomainTaskStatus.Archived);
+        }
+    }
+
+    [Test]
+    public async Task StatusOptionSetter_ArchiveDeclinedLeavesContainedTasksUnchanged()
+    {
+        using var storage = new ScriptedTaskStorage();
+        var parentTask = CreateTask("status-option-archive-decline-parent", DomainTaskStatus.Prepared);
+        var childTask = CreateTask("status-option-archive-decline-child", DomainTaskStatus.InProgress);
+        storage.Seed(parentTask, childTask);
+
+        var notifications = new NotificationManagerWrapperMock { AskResult = false };
+        using var parent = new TaskItemViewModel(parentTask, storage, () => false)
+        {
+            NotificationManager = notifications
+        };
+        using var child = new TaskItemViewModel(childTask, storage, () => false);
+        parent.ApplyRelations([child], [], [], []);
+
+        parent.StatusOption = parent.StatusOptions.Single(option => option.Status == DomainTaskStatus.Archived);
+        await parent.WaitForPendingSavesAsync().WaitAsync(TimeSpan.FromSeconds(5));
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(notifications.ConfirmationCount).IsEqualTo(1);
+            await Assert.That(storage.StatusCalls.Select(static call => call.TaskId))
+                .IsEquivalentTo([parent.Id]);
+            await Assert.That(parent.Status).IsEqualTo(DomainTaskStatus.Archived);
+            await Assert.That(child.Status).IsEqualTo(DomainTaskStatus.InProgress);
+        }
+    }
+
+    [Test]
     public async Task DelayedStatusResult_DoesNotOverwriteNewerStorageGeneration()
     {
         using var storage = new ScriptedTaskStorage();
