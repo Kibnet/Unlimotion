@@ -42,6 +42,8 @@ public sealed class AreaManagementViewModel : ReactiveObject, IDisposable
     private Func<Task<AreaRootTaskReference?>>? pickRootTask;
     private Action<string>? openRootTask;
     private string? pendingAreaId;
+    private CancellationTokenSource? draftAutosaveCancellation;
+    private int draftAutosaveVersion;
 
     public AreaManagementViewModel(AreaCatalogStore store)
     {
@@ -404,6 +406,8 @@ public sealed class AreaManagementViewModel : ReactiveObject, IDisposable
         }
 
         lifetime.Cancel();
+        draftAutosaveCancellation?.Cancel();
+        draftAutosaveCancellation?.Dispose();
         lifetime.Dispose();
         RefreshCommand.Dispose();
         CreateRootCommand.Dispose();
@@ -655,6 +659,52 @@ public sealed class AreaManagementViewModel : ReactiveObject, IDisposable
                 || !string.Equals(DraftDefaultNoteFolder, loadedDraftDefaultNoteFolder, StringComparison.Ordinal)
                 || !string.Equals(DraftRootTask?.Id, loadedRootTaskId, StringComparison.Ordinal)
                 || !string.Equals(SelectedParent?.Id, loadedParentId, StringComparison.Ordinal));
+
+        ScheduleDraftAutosave();
+    }
+
+    private void ScheduleDraftAutosave()
+    {
+        draftAutosaveCancellation?.Cancel();
+        draftAutosaveCancellation?.Dispose();
+        draftAutosaveCancellation = null;
+
+        // A transient empty title is a normal state while the user replaces it.
+        // Do not surface a validation error until the next meaningful value.
+        if (!IsDraftDirty
+            || SelectedArea is null
+            || HasExternalConflict
+            || string.IsNullOrWhiteSpace(DraftName)
+            || Volatile.Read(ref disposed) != 0)
+        {
+            return;
+        }
+
+        var areaId = SelectedArea.Id;
+        var version = ++draftAutosaveVersion;
+        var cancellation = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
+        draftAutosaveCancellation = cancellation;
+        _ = PersistDraftAfterDelayAsync(areaId, version, cancellation.Token);
+    }
+
+    private async Task PersistDraftAfterDelayAsync(string areaId, int version, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(400), cancellationToken).ConfigureAwait(true);
+            if (cancellationToken.IsCancellationRequested
+                || version != draftAutosaveVersion
+                || !string.Equals(SelectedArea?.Id, areaId, StringComparison.Ordinal)
+                || !IsDraftDirty)
+            {
+                return;
+            }
+
+            await ExecuteSafelyAsync(SaveSelectedAsync).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
     }
 
     private void RebuildParentOptions(AreaManagementAreaViewModel? selected)

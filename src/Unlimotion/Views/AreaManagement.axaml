@@ -137,9 +137,6 @@
                                     Command="{Binding ToggleArchiveCommand}"
                                     Content="{Binding ArchiveActionTitle}"
                                     AutomationProperties.AutomationId="AreaManagementArchiveRestoreButton" />
-                            <Button Command="{Binding SaveSelectedCommand}"
-                                    Content="{DynamicResource Save}"
-                                    AutomationProperties.AutomationId="AreaManagementSaveButton" />
                         </WrapPanel>
                     </StackPanel>
                     </ScrollViewer>

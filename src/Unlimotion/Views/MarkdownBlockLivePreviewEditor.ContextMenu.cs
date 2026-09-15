@@ -13,21 +13,14 @@ namespace Unlimotion.Views;
 public partial class MarkdownBlockLivePreviewEditor
 {
     private bool isBlockContextMenuOpen;
-    private void OnEditingContextPointerPressed(object? sender, PointerPressedEventArgs e)
-    {
-        if (!e.GetCurrentPoint(this).Properties.IsRightButtonPressed) return;
-        var text = e.Source as TextBox ?? (e.Source as Avalonia.Visual)?.GetVisualAncestors().OfType<TextBox>().FirstOrDefault();
-        if (text?.DataContext is not MarkdownLiveBlockViewModel block) return;
-        var row = text.GetVisualAncestors().OfType<Control>().FirstOrDefault(control =>
-            Avalonia.Automation.AutomationProperties.GetAutomationId(control) == block.BlockAutomationId);
-        if (row is null) return;
-        e.Handled = true;
-        OpenBlockContextMenu(row, block, text);
-    }
-    private void OnBlockContextRequested(object? sender, ContextRequestedEventArgs e)
+    private void OnAnyBlockContextRequested(object? sender, ContextRequestedEventArgs e)
     {
         if (isBlockContextMenuOpen) { e.Handled = true; return; }
-        if (sender is not Control { DataContext: MarkdownLiveBlockViewModel block } row) return;
+        var source = e.Source as Control ?? (e.Source as Avalonia.Visual)?.GetVisualAncestors().OfType<Control>().FirstOrDefault();
+        var row = source is null ? null : source.GetVisualAncestors().OfType<Control>().Prepend(source).FirstOrDefault(control =>
+            control.DataContext is MarkdownLiveBlockViewModel block
+            && Avalonia.Automation.AutomationProperties.GetAutomationId(control) == block.BlockAutomationId);
+        if (row?.DataContext is not MarkdownLiveBlockViewModel block) return;
         var text = e.Source as TextBox ?? (e.Source as Avalonia.Visual)?.GetVisualAncestors().OfType<TextBox>().FirstOrDefault();
         OpenBlockContextMenu(row, block, text);
         e.Handled = true;
