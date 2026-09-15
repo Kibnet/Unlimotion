@@ -185,6 +185,28 @@ public sealed class TaskItemViewModelStatusCommandTests
     }
 
     [Test]
+    public async Task SelectStatusOption_CurrentArchivedStatusDoesNotUnarchive()
+    {
+        using var storage = new ScriptedTaskStorage();
+        var task = CreateArchivedTask(
+            "status-option-current-archived",
+            DomainTaskStatus.Prepared,
+            DateTimeOffset.UtcNow.AddMinutes(-1));
+        storage.Seed(task);
+        using var viewModel = new TaskItemViewModel(task, storage, () => false);
+
+        await viewModel.TrySelectStatusOptionAsync(DomainTaskStatus.Archived);
+        await viewModel.WaitForPendingSavesAsync().WaitAsync(TimeSpan.FromSeconds(5));
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(viewModel.Status).IsEqualTo(DomainTaskStatus.Archived);
+            await Assert.That(storage.StatusCalls).IsEmpty();
+            await Assert.That(storage.UnarchiveCalls).IsEmpty();
+        }
+    }
+
+    [Test]
     public async Task DelayedStatusResult_DoesNotOverwriteNewerStorageGeneration()
     {
         using var storage = new ScriptedTaskStorage();

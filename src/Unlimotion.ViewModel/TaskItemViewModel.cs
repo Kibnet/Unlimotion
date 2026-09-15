@@ -1453,10 +1453,17 @@ namespace Unlimotion.ViewModel
                 () => _taskStorage.TrySetStatusAsync(Id, targetStatus, author),
                 targetStatus);
 
-        public Task TrySelectStatusOptionAsync(DomainTaskStatus targetStatus) =>
-            targetStatus == DomainTaskStatus.Archived
+        public Task TrySelectStatusOptionAsync(DomainTaskStatus targetStatus)
+        {
+            if (targetStatus == Status)
+            {
+                return Task.CompletedTask;
+            }
+
+            return targetStatus == DomainTaskStatus.Archived
                 ? ExecuteTrackedArchiveCommandAsync()
                 : TryTransitionToStatusAsync(targetStatus);
+        }
 
         private Task<TaskOperationResult> TryUnarchiveAsync(string? author = null) =>
             StartStatusOperationAsync(

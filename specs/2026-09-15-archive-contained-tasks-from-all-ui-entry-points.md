@@ -114,6 +114,7 @@ Visual planning artifact — компактный storyboard состояний 
 - Validation: `TaskItemViewModelStatusCommandTests` — 26/26 PASS; `MainControlTaskStatusIconUiTests` — 22/22 PASS; полный `Unlimotion.Test` — 1013/1013 PASS; `dotnet build src\\Unlimotion.sln --no-restore -p:UseSharedCompilation=false` — PASS. Сборка содержит существующие Android warnings `XA0141`/`XA4301` для `LibGit2Sharp.NativeBinaries`, ошибок нет.
 - Visual evidence fallback: Avalonia.Headless harness не предоставляет recorder и использует mock notification boundary, поэтому видео/скриншот нативного modal не были получены — такой скриншот не был бы доказательством реального диалога. Вместо этого приложен автоматизированный UI trace через реальный picker и HTML test report. Следующее необязательное evidence для ручного product-demo: записать окно desktop приложения в изолированном task space с активным вложенным child.
 - Adversarial re-review: PASS. Архивирование родителя не меняет порядок post-parent prompt, отказ оставляет children без изменений, terminal descendants не касаются, прямые non-UI status mutations не получают prompt.
+- Follow-up PR review: закрыто замечание P2 об устаревшем пункте `Archived` в уже открытом picker. `TrySelectStatusOptionAsync` теперь идемпотентен для текущего target status; regression проверяет отсутствие storage transition и разархивации для `Archived -> Archived`.
 
 ## Approval
 
@@ -131,3 +132,4 @@ Approved: пользователь написал «Спеку подтверж�
 | EXEC / UI-path audit | Исправить фактический `TaskStatusPicker`, а не только setter / 1.00 | Headless click показал, что picker напрямую вызывал `TryTransitionToStatusAsync`; это объяснило отсутствие prompt | Добавить awaitable ViewModel entry point, направить picker в него и повторить tests | Не требуется |
 | EXEC / validation | Подтвердить общий UI workflow и отсутствие регрессий / 0.99 | Unit 26/26, UI 22/22 и полный TUnit 1013/1013 прошли; solution build PASS с известными Android package warnings | Провести final diff review | Не требуется |
 | EXEC / final review | Изменение готово локально, без delivery side effects / 0.98 | Route scan не оставил direct picker transition; `git diff --check` PASS. Headless harness не может дать нативное visual recording | Передать результат пользователю без commit/push | Не требуется |
+| EXEC / PR review follow-up | Сделать выбор текущего статуса идемпотентным / 1.00 | PR reviewer указал реальный сценарий stale open picker; unit 27/27 и UI 22/22 PASS после исправления | Полный регресс, commit и push в текущий PR | Не требуется |
