@@ -612,6 +612,8 @@ public sealed class TaskSpaceTransactionTests : IDisposable
     }
 
     [Test]
+    // MainWindowViewModel creates SettingsViewModel, which changes global localization.
+    [ParallelLimiter<SharedUiStateParallelLimit>]
     public async Task BindInitializedStorage_ClearsOldSelectionAndShowsOnlyCandidateWithSameTaskId()
     {
         var configuration = CreateConfiguration(out _);
@@ -646,6 +648,7 @@ public sealed class TaskSpaceTransactionTests : IDisposable
     }
 
     [Test]
+    [ParallelLimiter<SharedUiStateParallelLimit>]
     public async Task BindInitializedStorage_RebindsBackgroundStorageUpdatesToUiContext()
     {
         var configuration = CreateConfiguration(out _);

@@ -11,6 +11,9 @@ namespace Unlimotion.Storage;
 
 public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraphWriteLock, ITaskGraphWriteScopeStorage
 {
+    // Contract metadata is reusable; serializers and converters remain local to each read.
+    private static readonly IContractResolver PreservingReadContractResolver = new DefaultContractResolver();
+    private static readonly IContractResolver IgnoringReadContractResolver = new IgnoreExtensionDataContractResolver();
     private static readonly AsyncLocal<HashSet<string>?> HeldDirectoryLocks = new();
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> DirectorySemaphores =
         new(StringComparer.OrdinalIgnoreCase);
@@ -451,7 +454,13 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
 
     private TaskItem? DeserializeTask(string fullPath)
     {
-        var serializer = JsonSerializer.Create(CreateSerializerSettings());
+        var serializer = JsonSerializer.Create(new JsonSerializerSettings
+        {
+            ContractResolver = _options.PreserveUnknownJson
+                ? PreservingReadContractResolver
+                : IgnoringReadContractResolver,
+            Converters = CreateConverters()
+        });
 
         return JsonRepairingReader.DeserializeWithRepair<TaskItem>(fullPath, serializer, saveRepairedSidecar: false);
     }

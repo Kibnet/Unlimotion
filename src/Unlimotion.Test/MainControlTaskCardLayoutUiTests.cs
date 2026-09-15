@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
@@ -17,6 +18,8 @@ using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Unlimotion.Domain;
 using Unlimotion.ViewModel;
 using Unlimotion.ViewModel.Localization;
@@ -926,6 +929,7 @@ public class MainControlTaskCardLayoutUiTests
 
             try
             {
+                ConfigureLongEmojiAncestorChain(fixture);
                 var (view, createdWindow) = await CreateArrangedMainControlAsync(
                     fixture,
                     width,
@@ -936,10 +940,10 @@ public class MainControlTaskCardLayoutUiTests
                 var scrollViewer = FindControlByAutomationId<ScrollViewer>(view, "CurrentTaskDetailsScrollViewer");
                 var card = FindControlByAutomationId<Control>(view, "CurrentTaskCard");
                 var parentEmojiTrail = FindControlByAutomationId<EmojiTextBlock>(card, "CurrentTaskParentEmojiTrail");
-                var expectedTrail = ConfigureLongEmojiAncestorChain(
-                    fixture,
-                    parentEmojiTrail.DataContext as TaskItemViewModel
-                    ?? throw new InvalidOperationException("Parent emoji trail has no task data context."));
+                // Exercise the storage echo that can arrive from the fixture's autosave.
+                // The ancestor chain must survive it before we check the layout.
+                await fixture.MainWindowViewModelTest.taskRepository!.Update(
+                    (TaskItemViewModel)parentEmojiTrail.DataContext!);
                 ArrangeMainControlForTest(window, view, width, 844);
                 EnsureDetailsPaneArranged(window, view, width, 844);
 
@@ -953,7 +957,7 @@ public class MainControlTaskCardLayoutUiTests
                 AssertFirstPhoneViewportShowsHeader(scrollViewer, commandBar, header, title);
                 AssertTaskHeaderAlignment(header);
                 await Assert.That(IsVisibleAndArranged(parentEmojiTrail)).IsTrue();
-                await Assert.That(parentEmojiTrail.EmojiText).IsEqualTo(expectedTrail);
+                await Assert.That(parentEmojiTrail.EmojiText).IsEqualTo(LongEmojiAncestorTrail);
                 AssertHorizontallyContained(scrollViewer, parentEmojiTrail);
                 AssertHasClass(createMenuButton, "TaskCreateMenuButton");
                 AssertCreateMenuContainsTaskCommands(createMenuButton);
@@ -1091,39 +1095,46 @@ public class MainControlTaskCardLayoutUiTests
     private const int LongEmojiAncestorCount = 8;
     private static readonly string LongEmojiAncestorTrail = string.Concat(Enumerable.Repeat("🧭", LongEmojiAncestorCount));
 
-    private static string ConfigureLongEmojiAncestorChain(MainWindowViewModelFixture fixture, TaskItemViewModel task)
+    private static void ConfigureLongEmojiAncestorChain(MainWindowViewModelFixture fixture)
     {
-        var taskRepository = fixture.MainWindowViewModelTest.taskRepository
-            ?? throw new InvalidOperationException("Task repository is not initialized.");
+        // Set up the actual storage input before Connect. VM-only relations disappear
+        // when an autosave reapplies the authoritative graph from the task files.
+        var taskPath = Path.Combine(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.SubTask22Id);
+        var task = JObject.Parse(File.ReadAllText(taskPath));
+        foreach (var parentId in task[nameof(TaskItem.ParentTasks)]!.Values<string>())
+        {
+            var parentPath = Path.Combine(fixture.DefaultTasksFolderPath, parentId!);
+            var parent = JObject.Parse(File.ReadAllText(parentPath));
+            var children = (JArray)parent[nameof(TaskItem.ContainsTasks)]!;
+            foreach (var child in children.Where(child => child.Value<string>() == MainWindowViewModelFixture.SubTask22Id).ToArray())
+            {
+                child.Remove();
+            }
+            File.WriteAllText(parentPath, parent.ToString());
+        }
+
         var ancestors = Enumerable.Range(0, LongEmojiAncestorCount)
-            .Select(index => new TaskItemViewModel(
-                new TaskItem
-                {
-                    Id = $"long-ancestor-{index:D2}-{Guid.NewGuid():N}",
-                    Title = $"🧭 Ancestor {index:D2}"
-                },
-                taskRepository))
+            .Select(index => new TaskItem
+            {
+                Id = $"long-ancestor-{index:D2}-{Guid.NewGuid():N}",
+                Title = $"🧭 Ancestor {index:D2}"
+            })
             .ToArray();
 
         for (var index = 0; index < ancestors.Length; index++)
         {
-            ancestors[index].ApplyRelations(
-                index == ancestors.Length - 1 ? [task] : [ancestors[index + 1]],
-                index == 0 ? [] : [ancestors[index - 1]],
-                [],
-                []);
+            var ancestor = ancestors[index];
+            ancestor.ContainsTasks = [index == ancestors.Length - 1
+                ? MainWindowViewModelFixture.SubTask22Id
+                : ancestors[index + 1].Id];
+            ancestor.ParentTasks = index == 0 ? [] : [ancestors[index - 1].Id];
+            File.WriteAllText(
+                Path.Combine(fixture.DefaultTasksFolderPath, ancestor.Id),
+                JsonConvert.SerializeObject(ancestor));
         }
 
-        task.ApplyRelations([], [ancestors[^1]], [], []);
-
-        var actualTrail = string.Concat(task.GetAllParents().Select(ancestor => ancestor.Emoji));
-        if (actualTrail != LongEmojiAncestorTrail)
-        {
-            throw new InvalidOperationException(
-                $"Long ancestor chain was not configured: expected '{LongEmojiAncestorTrail}', got '{actualTrail}'.");
-        }
-
-        return actualTrail;
+        task[nameof(TaskItem.ParentTasks)] = new JArray(ancestors[^1].Id);
+        File.WriteAllText(taskPath, task.ToString());
     }
 
     private static void ResetTaskCardLayoutSharedState()
