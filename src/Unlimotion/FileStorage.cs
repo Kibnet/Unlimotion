@@ -23,7 +23,7 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
         new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, PendingWatcherUpdate> _pendingWatcherUpdates =
         new(StringComparer.OrdinalIgnoreCase);
-    private readonly ConcurrentDictionary<string, byte[]> _confirmedOwnWrites =
+    private readonly ConcurrentDictionary<string, ConfirmedOwnWrite> _confirmedOwnWrites =
         new(StringComparer.OrdinalIgnoreCase);
     private readonly SemaphoreSlim _watcherUpdateGate = new(1, 1);
     private long _nextPendingGeneration;
@@ -116,8 +116,9 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
 
     protected override void OnWritePrepared(string taskId, string filePath, string content)
     {
-        _confirmedOwnWrites[System.IO.Path.GetFileName(filePath)] =
-            SHA256.HashData(Encoding.UTF8.GetBytes(content));
+        _confirmedOwnWrites[System.IO.Path.GetFileName(filePath)] = new ConfirmedOwnWrite(
+            SHA256.HashData(Encoding.UTF8.GetBytes(content)),
+            DateTimeOffset.UtcNow.AddSeconds(5));
     }
 
     protected override void OnBeforeRemove(string taskId, string filePath) =>
@@ -315,8 +316,14 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
 
     private bool IsConfirmedOwnWrite(string fileName)
     {
-        if (!_confirmedOwnWrites.TryGetValue(fileName, out var expectedHash))
+        if (!_confirmedOwnWrites.TryGetValue(fileName, out var confirmation))
         {
+            return false;
+        }
+
+        if (confirmation.ExpiresAt <= DateTimeOffset.UtcNow)
+        {
+            RemoveConfirmedOwnWrite(fileName, confirmation);
             return false;
         }
 
@@ -330,7 +337,13 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
                     FileMode.Open,
                     FileAccess.Read,
                     FileShare.ReadWrite | FileShare.Delete);
-                return SHA256.HashData(stream).AsSpan().SequenceEqual(expectedHash);
+                var matches = SHA256.HashData(stream).AsSpan().SequenceEqual(confirmation.Hash);
+                if (!matches)
+                {
+                    RemoveConfirmedOwnWrite(fileName, confirmation);
+                }
+
+                return matches;
             }
             catch (IOException) when (attempt < 2)
             {
@@ -338,16 +351,22 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
             }
             catch (IOException)
             {
+                RemoveConfirmedOwnWrite(fileName, confirmation);
                 return false;
             }
             catch (UnauthorizedAccessException)
             {
+                RemoveConfirmedOwnWrite(fileName, confirmation);
                 return false;
             }
         }
 
         return false;
     }
+
+    private bool RemoveConfirmedOwnWrite(string fileName, ConfirmedOwnWrite confirmation) =>
+        ((ICollection<KeyValuePair<string, ConfirmedOwnWrite>>)_confirmedOwnWrites).Remove(
+            new KeyValuePair<string, ConfirmedOwnWrite>(fileName, confirmation));
 
     public void Dispose()
     {
@@ -366,6 +385,8 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
     private sealed record PendingFileChange(long Generation, UpdateType Type);
 
     private sealed record PendingWatcherUpdate(long Generation, string TaskId);
+
+    private sealed record ConfirmedOwnWrite(byte[] Hash, DateTimeOffset ExpiresAt);
 
     private sealed record FileRefreshResult(
         TaskItem? Task,

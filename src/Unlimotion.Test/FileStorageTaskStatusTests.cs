@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Unlimotion.Domain;
+using Unlimotion.Storage;
 using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
 using DomainTaskStatus = Unlimotion.Domain.TaskStatus;
@@ -1109,6 +1110,43 @@ public class FileStorageTaskStatusTests
 
             storage.EnsureLiveGraphGenerationCurrent(guard.Generation);
             await Assert.That((await storage.Load("task", forced: true))?.Title).IsEqualTo("After");
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
+    [Test]
+    public async Task ExternalChange_ExpiresConfirmedWriteBeforeContentReturnsToSameBytes()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var watcher = new RecordingDatabaseWatcher();
+            var storage = new TestFileStorage(tempDir, watcher);
+            await storage.Save(new TaskItem { Id = "task", Title = "Own content" });
+            var taskPath = Path.Combine(tempDir, "task");
+            var ownContent = await File.ReadAllTextAsync(taskPath);
+            await storage.EnableLiveGraphAsync();
+
+            await File.WriteAllTextAsync(
+                taskPath,
+                JsonConvert.SerializeObject(new TaskItem { Id = "task", Title = "External content" }));
+            watcher.EmitRaw("task", UpdateType.Saved);
+            await storage.SynchronizePendingFileChangesAsync();
+            await Assert.That((await storage.Load("task"))?.Title).IsEqualTo("External content");
+
+            var generation = storage.CaptureLiveGraphGeneration();
+            using var guard = storage.GuardLiveGraphGeneration(generation);
+            await File.WriteAllTextAsync(taskPath, ownContent);
+            watcher.EmitRaw("task", UpdateType.Saved);
+
+            await Assert.That(async () =>
+            {
+                storage.EnsureLiveGraphGenerationCurrent(guard.Generation);
+                await Task.CompletedTask;
+            }).Throws<LiveGraphInvalidatedException>();
         }
         finally
         {
