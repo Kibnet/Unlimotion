@@ -1051,6 +1051,43 @@ public class FileStorageTaskStatusTests
     }
 
     [Test]
+    public async Task RawAliasIdChange_PublishesRemovalAndReplacementFromSourceFile()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var sourcePath = Path.Combine(tempDir, "alias.json");
+            await File.WriteAllTextAsync(
+                sourcePath,
+                JsonConvert.SerializeObject(new TaskItem { Id = "old", Title = "Original" }));
+            var watcher = new RecordingDatabaseWatcher();
+            var storage = new TestFileStorage(tempDir, watcher);
+            await storage.EnableLiveGraphAsync();
+            var observed = new List<(string Id, UpdateType Type, string? Title)>();
+            storage.Updating += (_, args) => observed.Add((
+                args.Id,
+                args.Type,
+                (args as FileStorageUpdateEventArgs)?.Snapshot?.Title));
+
+            await File.WriteAllTextAsync(
+                sourcePath,
+                JsonConvert.SerializeObject(new TaskItem { Id = "new", Title = "Replacement" }));
+            watcher.EmitRaw("alias.json", UpdateType.Saved);
+            await storage.TriggerUpdatingAsync("alias.json", UpdateType.Saved);
+
+            await Assert.That(observed).Count().IsEqualTo(2);
+            await Assert.That(observed[0]).IsEqualTo(("old", UpdateType.Removed, (string?)null));
+            await Assert.That(observed[1]).IsEqualTo(("new", UpdateType.Saved, "Replacement"));
+            await Assert.That(await storage.Load("old")).IsNull();
+            await Assert.That((await storage.Load("new"))?.Title).IsEqualTo("Replacement");
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
+    [Test]
     public async Task DelayedWatcherUpdate_DoesNotHidePendingChangeFromQueuedCommand()
     {
         var tempDir = CreateTempDirectory();

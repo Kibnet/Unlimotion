@@ -55,11 +55,17 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
             // command queued ahead of this delayed callback can observe an empty queue,
             // mark the invalidated graph current, and consume stale task content.
             await RefreshPendingFileChangesWithinWriteLockAsync();
-            var loadedTask = await Load(taskId, forced: true);
+            // A precise refresh can replace the source-file mapping when an external edit
+            // changes the task Id. Resolve the mapping again before the forced load so an
+            // aliased file is still loaded by its actual source path.
+            var refreshedTaskId = TryGetTaskIdBySourceFileName(e.Id, out var refreshedMappedTaskId)
+                ? refreshedMappedTaskId
+                : taskId;
+            var loadedTask = await Load(refreshedTaskId, forced: true);
             var graph = await ReadGraphAsync();
             var sourcePath = System.IO.Path.Combine(Path, e.Id);
             var physicallyAbsent = !File.Exists(sourcePath) || new FileInfo(sourcePath).Length == 0;
-            var refreshedTaskId = loadedTask?.Id ?? taskId;
+            refreshedTaskId = loadedTask?.Id ?? taskId;
             return new FileRefreshResult(
                 graph.TasksById.GetValueOrDefault(refreshedTaskId),
                 physicallyAbsent,
@@ -71,6 +77,18 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
             // Keep the existing projection for corrupt or temporarily unreadable content.
             // The live graph records the diagnostic and blocks writes until the file is repaired.
             return;
+        }
+
+        if (refresh.Task != null && !string.Equals(taskId, refresh.Task.Id, StringComparison.Ordinal))
+        {
+            // A source file can legally change its domain Id. Remove the previous projection
+            // before publishing the replacement so the UI cannot retain both identities.
+            RaiseUpdating(new FileStorageUpdateEventArgs
+            {
+                Id = taskId,
+                Type = UpdateType.Removed,
+                StorageRevision = refresh.RevisionAfter
+            });
         }
 
         RaiseUpdating(new FileStorageUpdateEventArgs
