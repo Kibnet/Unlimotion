@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Globalization;
+using System.Security.Cryptography;
 using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
@@ -514,22 +515,47 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
         OnWritePrepared(item.Id, filePath, content);
         OnBeforeWrite(item.Id, filePath);
         EnsureActiveLiveGraphGenerationCurrent();
-        await AtomicWriteAllTextAsync(filePath, content);
-        EnsureActiveLiveGraphGenerationCurrent();
-        OnAfterWritePersisted(item.Id, filePath);
+        AtomicWriteLease? guardedWrite = null;
+        try
+        {
+            if (_activeLiveGraphGenerationGuard.Value != null)
+            {
+                guardedWrite = await AtomicWriteAllTextRetainingBackupAsync(filePath, content);
+            }
+            else
+            {
+                await AtomicWriteAllTextAsync(filePath, content);
+            }
 
-        taskItem.Id = item.Id;
-        var stored = TaskItemSnapshot.Clone(item);
-        _tasks.AddOrUpdate(taskItem.Id, stored, (_, _) => stored);
-        _taskFilePaths.AddOrUpdate(taskItem.Id, filePath, (_, _) => filePath);
-        var generationBeforePublication = CaptureLiveGraphInvalidationGeneration();
-        OnBeforeLiveFileChangePublication(item.Id, filePath);
-        var ownInvalidationGeneration = PublishLiveFileChange(filePath, stored, error: null);
-        _activeLiveGraphGenerationGuard.Value?.AdvanceAfterOwnPublication(
-            generationBeforePublication,
-            ownInvalidationGeneration);
-        EnsureActiveLiveGraphGenerationCurrent();
-        return TaskItemSnapshot.Clone(stored);
+            EnsureActiveLiveGraphGenerationCurrent();
+            OnAfterWritePersisted(item.Id, filePath);
+
+            taskItem.Id = item.Id;
+            var stored = TaskItemSnapshot.Clone(item);
+            _tasks.AddOrUpdate(taskItem.Id, stored, (_, _) => stored);
+            _taskFilePaths.AddOrUpdate(taskItem.Id, filePath, (_, _) => filePath);
+            var generationBeforePublication = CaptureLiveGraphInvalidationGeneration();
+            OnBeforeLiveFileChangePublication(item.Id, filePath);
+            var ownInvalidationGeneration = PublishLiveFileChange(filePath, stored, error: null);
+            _activeLiveGraphGenerationGuard.Value?.AdvanceAfterOwnPublication(
+                generationBeforePublication,
+                ownInvalidationGeneration);
+            EnsureActiveLiveGraphGenerationCurrent();
+            guardedWrite?.Commit();
+            return TaskItemSnapshot.Clone(stored);
+        }
+        catch (LiveGraphInvalidatedException ex)
+        {
+            if (guardedWrite != null && !guardedWrite.RollbackIfOwnContent())
+            {
+                throw new IOException(
+                    $"Task '{item.Id}' changed while its migration write was being committed, " +
+                    "and the displaced content could not be restored safely.",
+                    ex);
+            }
+
+            throw;
+        }
     }
 
     private void EnsureActiveLiveGraphGenerationCurrent()
@@ -676,6 +702,44 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
     {
     }
 
+    private async Task<AtomicWriteLease> AtomicWriteAllTextRetainingBackupAsync(
+        string filePath,
+        string content)
+    {
+        var tempPath = filePath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        var backupPath = filePath + "." + Guid.NewGuid().ToString("N") + ".bak";
+        try
+        {
+            await using (var stream = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            await using (var writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false)))
+            {
+                await writer.WriteAsync(content);
+                await writer.FlushAsync();
+            }
+
+            OnBeforeGuardedAtomicReplace(filePath);
+            string? displacedPath = null;
+            if (File.Exists(filePath))
+            {
+                File.Replace(tempPath, filePath, backupPath, ignoreMetadataErrors: true);
+                displacedPath = backupPath;
+            }
+            else
+            {
+                File.Move(tempPath, filePath);
+            }
+
+            return new AtomicWriteLease(
+                filePath,
+                displacedPath,
+                SHA256.HashData(Encoding.UTF8.GetBytes(content)));
+        }
+        finally
+        {
+            TryDelete(tempPath);
+        }
+    }
+
     protected virtual void OnWritePrepared(string taskId, string filePath, string content)
     {
     }
@@ -689,6 +753,10 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
     }
 
     protected virtual void OnBeforeLiveFileChangePublication(string taskId, string filePath)
+    {
+    }
+
+    protected virtual void OnBeforeGuardedAtomicReplace(string filePath)
     {
     }
 
@@ -1149,6 +1217,105 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
             if (ReferenceEquals(owner._activeLiveGraphGenerationGuard.Value, this))
             {
                 owner._activeLiveGraphGenerationGuard.Value = previous;
+            }
+        }
+    }
+
+    private sealed class AtomicWriteLease(
+        string filePath,
+        string? displacedPath,
+        byte[] ownContentHash)
+    {
+        private bool _completed;
+
+        public void Commit()
+        {
+            if (_completed)
+            {
+                return;
+            }
+
+            if (displacedPath != null)
+            {
+                TryDelete(displacedPath);
+            }
+
+            _completed = true;
+        }
+
+        public bool RollbackIfOwnContent()
+        {
+            if (_completed)
+            {
+                return true;
+            }
+
+            var quarantinePath = filePath + "." + Guid.NewGuid().ToString("N") + ".bak";
+            try
+            {
+                if (!File.Exists(filePath))
+                {
+                    // A later external deletion wins. Keep the displaced backup as recovery evidence.
+                    return true;
+                }
+
+                try
+                {
+                    File.Move(filePath, quarantinePath);
+                }
+                catch (IOException)
+                {
+                    return false;
+                }
+
+                byte[] currentHash;
+                try
+                {
+                    currentHash = SHA256.HashData(File.ReadAllBytes(quarantinePath));
+                }
+                catch (IOException)
+                {
+                    return TryMoveWithoutOverwrite(quarantinePath, filePath) || File.Exists(filePath);
+                }
+
+                if (!CryptographicOperations.FixedTimeEquals(currentHash, ownContentHash))
+                {
+                    // The target was edited after our replacement. Restore that newer content.
+                    var restored = TryMoveWithoutOverwrite(quarantinePath, filePath) || File.Exists(filePath);
+                    if (restored && displacedPath != null && !File.Exists(quarantinePath))
+                    {
+                        TryDelete(displacedPath);
+                    }
+
+                    return restored;
+                }
+
+                if (displacedPath != null)
+                {
+                    // Restore the exact bytes displaced by File.Replace. A concurrently recreated
+                    // target wins because this move never overwrites it.
+                    TryMoveWithoutOverwrite(displacedPath, filePath);
+                }
+
+                TryDelete(quarantinePath);
+                return displacedPath == null || File.Exists(filePath);
+            }
+            finally
+            {
+                _completed = true;
+            }
+        }
+
+        private static bool TryMoveWithoutOverwrite(string sourcePath, string targetPath)
+        {
+            try
+            {
+                File.Move(sourcePath, targetPath);
+                return true;
+            }
+            catch (IOException) when (File.Exists(targetPath))
+            {
+                return false;
             }
         }
     }

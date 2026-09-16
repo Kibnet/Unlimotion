@@ -1152,6 +1152,40 @@ public class FileStorageTaskStatusTests
     }
 
     [Test]
+    public async Task GuardedSave_RestoresExternalEditDisplacedDuringAtomicReplace()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var watcher = new RecordingDatabaseWatcher();
+            var storage = new AtomicReplaceRaceFileStorage(tempDir, watcher);
+            await storage.Save(new TaskItem { Id = "task", Title = "Before" });
+            await storage.EnableLiveGraphAsync();
+            var task = await storage.Load("task", forced: true);
+            task!.Title = "Migration write";
+            storage.ArmExternalEdit(filePath =>
+            {
+                File.WriteAllText(
+                    filePath,
+                    JsonConvert.SerializeObject(new TaskItem { Id = "task", Title = "External edit" }));
+                watcher.EmitRaw(Path.GetFileName(filePath), UpdateType.Saved);
+            });
+
+            var generation = storage.CaptureLiveGraphGeneration();
+            using var guard = storage.GuardLiveGraphGeneration(generation);
+            await Assert.That(() => storage.Save(task)).Throws<LiveGraphInvalidatedException>();
+
+            await storage.SynchronizePendingFileChangesAsync();
+            await Assert.That((await storage.Load("task", forced: true))?.Title).IsEqualTo("External edit");
+            await Assert.That(Directory.EnumerateFiles(tempDir, "*.bak")).IsEmpty();
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
+    [Test]
     public async Task ExternalChange_ExpiresConfirmedWriteBeforeContentReturnsToSameBytes()
     {
         var tempDir = CreateTempDirectory();
@@ -1535,6 +1569,21 @@ public class FileStorageTaskStatusTests
         protected override void OnBeforeLiveFileChangePublication(string taskId, string filePath)
         {
             base.OnBeforeLiveFileChangePublication(taskId, filePath);
+            Interlocked.Exchange(ref _externalEdit, null)?.Invoke(filePath);
+        }
+    }
+
+    private sealed class AtomicReplaceRaceFileStorage(
+        string path,
+        RecordingDatabaseWatcher watcher) : FileStorage(path, watcher)
+    {
+        private Action<string>? _externalEdit;
+
+        public void ArmExternalEdit(Action<string> externalEdit) => _externalEdit = externalEdit;
+
+        protected override void OnBeforeGuardedAtomicReplace(string filePath)
+        {
+            base.OnBeforeGuardedAtomicReplace(filePath);
             Interlocked.Exchange(ref _externalEdit, null)?.Invoke(filePath);
         }
     }
