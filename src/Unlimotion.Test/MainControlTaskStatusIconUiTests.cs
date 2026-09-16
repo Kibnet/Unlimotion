@@ -924,6 +924,100 @@ public class MainControlTaskStatusIconUiTests
     }
 
     [Test]
+    public async Task TaskStatusPicker_SelectingArchivedOptionOffersAndArchivesContainedTasks()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var storage = new InMemoryStorage();
+            var repository = new UnifiedTaskStorage(new TaskTreeManager(storage));
+            var parentTask = new TaskItem
+            {
+                Id = "status-picker-archive-parent",
+                Title = "Status picker archive parent",
+                Status = DomainTaskStatus.Prepared,
+                IsCanBeCompleted = true,
+                ContainsTasks = ["status-picker-archive-child"],
+                CreatedDateTime = DateTimeOffset.UtcNow.AddMinutes(-10)
+            };
+            var childTask = new TaskItem
+            {
+                Id = "status-picker-archive-child",
+                Title = "Status picker archive child",
+                Status = DomainTaskStatus.InProgress,
+                IsCanBeCompleted = true,
+                ParentTasks = [parentTask.Id],
+                CreatedDateTime = DateTimeOffset.UtcNow.AddMinutes(-9)
+            };
+            parentTask.EnsureStatusHistory("owner");
+            childTask.EnsureStatusHistory("owner");
+            await storage.Save(parentTask);
+            await storage.Save(childTask);
+            await repository.Init();
+
+            Window? window = null;
+            try
+            {
+                var parentLookup = repository.Tasks.Lookup(parentTask.Id);
+                var childLookup = repository.Tasks.Lookup(childTask.Id);
+                await Assert.That(parentLookup.HasValue).IsTrue();
+                await Assert.That(childLookup.HasValue).IsTrue();
+                var parent = parentLookup.Value;
+                var child = childLookup.Value;
+                parent.ApplyRelations([child], [], [], []);
+                parent.IsInitializedProvider = () => true;
+                parent.NotificationManager = new NotificationManagerWrapperMock { AskResult = true };
+                var statusPicker = new TaskStatusPicker
+                {
+                    Task = parent,
+                    Width = 28,
+                    Height = 24
+                };
+
+                window = CreateWindow(statusPicker);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+
+                var flyout = await OpenStatusFlyoutAsync(window, statusPicker);
+                var archiveItem = flyout.Items
+                    .OfType<MenuItem>()
+                    .Single(item => string.Equals(
+                        AutomationProperties.GetAutomationId(item),
+                        "TaskStatusOptionArchived",
+                        StringComparison.Ordinal));
+                await Assert.That(archiveItem.IsEnabled).IsTrue();
+                InvokeMenuItemClick(archiveItem);
+
+                var archived = await TestHelpers.WaitUntilAsync(() =>
+                {
+                    Dispatcher.UIThread.RunJobs();
+                    return parent.Status == DomainTaskStatus.Archived &&
+                           child.Status == DomainTaskStatus.Archived;
+                }, TimeSpan.FromSeconds(2));
+                var persistedParent = await storage.Load(parent.Id);
+                var persistedChild = await storage.Load(child.Id);
+
+                await Assert.That(archived).IsTrue();
+                await Assert.That(parent.Status).IsEqualTo(DomainTaskStatus.Archived);
+                await Assert.That(child.Status).IsEqualTo(DomainTaskStatus.Archived);
+                await Assert.That(persistedParent?.Status).IsEqualTo(DomainTaskStatus.Archived);
+                await Assert.That(persistedChild?.Status).IsEqualTo(DomainTaskStatus.Archived);
+                await Assert.That(parent.NotificationManager)
+                    .IsTypeOf<NotificationManagerWrapperMock>();
+                var notifications = (NotificationManagerWrapperMock)parent.NotificationManager!;
+                await Assert.That(notifications.ConfirmationCount).IsEqualTo(1);
+                await Assert.That(notifications.LastAskHeader)
+                    .IsEqualTo(Unlimotion.ViewModel.Localization.Localization.Get("ArchiveContainedTasksHeader"));
+            }
+            finally
+            {
+                window?.Close();
+                repository.Dispose();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
     public async Task TaskStatusPicker_ImmediateRepeatingCompletion_PreservesEditorFieldsAndCreatesNextTask()
     {
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
