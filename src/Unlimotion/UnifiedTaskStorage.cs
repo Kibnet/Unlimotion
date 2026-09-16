@@ -119,6 +119,16 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
                 StatusModelMigrationWasApplied = await MigrateTaskStatusModel(fileStorage);
                 if (fileStorage.Watcher is IRawDatabaseWatcher)
                 {
+                    if (StatusModelMigrationWasApplied)
+                    {
+                        // FileSystemWatcher can deliver the raw echoes from the atomic status
+                        // migration after the writes themselves have completed. Let that owned
+                        // burst settle before choosing the source generation for the live graph;
+                        // the following authoritative read still includes any concurrent external
+                        // edits and later events continue to invalidate the new generation.
+                        await fileStorage.WaitForRawWatcherQuiescenceAsync();
+                    }
+
                     // Build the typed snapshot once after the raw JSON status migration. The
                     // following migrations read defensive clones and successful saves update the
                     // live graph, avoiding two more complete directory deserializations.
