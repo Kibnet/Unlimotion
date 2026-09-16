@@ -291,7 +291,6 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
             Interlocked.Increment(ref _liveGraphInvalidationGeneration);
             _liveGraphNeedsReload = true;
             _tasks.Clear();
-            _taskFilePaths.Clear();
         }
     }
 

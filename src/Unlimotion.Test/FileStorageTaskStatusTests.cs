@@ -958,6 +958,35 @@ public class FileStorageTaskStatusTests
         }
     }
 
+    [Test]
+    public async Task RawAliasDeletion_PreservesDomainIdForDelayedUpdate()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var sourcePath = Path.Combine(tempDir, "alias.json");
+            await File.WriteAllTextAsync(
+                sourcePath,
+                JsonConvert.SerializeObject(new TaskItem { Id = "alias", Title = "Aliased" }));
+            var watcher = new RecordingDatabaseWatcher();
+            var storage = new TestFileStorage(tempDir, watcher);
+            await storage.EnableLiveGraphAsync();
+            string? observedId = null;
+            storage.Updating += (_, args) => observedId = args.Id;
+
+            File.Delete(sourcePath);
+            watcher.EmitRaw("alias.json", UpdateType.Removed);
+            await storage.TriggerUpdatingAsync("alias.json", UpdateType.Removed);
+
+            await Assert.That(observedId).IsEqualTo("alias");
+            await Assert.That(await storage.Load("alias")).IsNull();
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
     private static string CreateTempDirectory()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "file-storage-status-" + Guid.NewGuid().ToString("N"));
