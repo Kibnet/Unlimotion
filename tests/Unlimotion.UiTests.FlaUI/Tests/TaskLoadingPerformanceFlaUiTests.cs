@@ -85,8 +85,8 @@ public sealed class TaskLoadingPerformanceFlaUiTests
             session = DesktopAppSession.Launch(options);
             var windowAvailableMs = watch.Elapsed.TotalMilliseconds;
             session.MainWindow.Focus();
-            var readyMs = ReadyAndAct(session, UnlimotionAutomationScenarioData.TaskSpacesSpaceATitle, watch);
-            WriteMeasurement(session, "startup", readyMs, watch.Elapsed.TotalMilliseconds, windowAvailableMs, copied);
+            var measurement = ReadyAndAct(session, UnlimotionAutomationScenarioData.TaskSpacesSpaceATitle, watch);
+            WriteMeasurement(session, "startup", measurement, windowAvailableMs, copied);
             MeasureSwitch(session, "Space B", UnlimotionAutomationScenarioData.TaskSpacesSpaceBTitle, copied);
             MeasureSwitch(session, "Space A", UnlimotionAutomationScenarioData.TaskSpacesSpaceATitle, copied);
         }
@@ -115,11 +115,11 @@ public sealed class TaskLoadingPerformanceFlaUiTests
             target.Patterns.ScrollItem.PatternOrDefault?.ScrollIntoView();
             target.Click();
         }
-        var readyMs = ReadyAndAct(session, title, watch);
-        WriteMeasurement(session, space, readyMs, watch.Elapsed.TotalMilliseconds, null, copied);
+        var measurement = ReadyAndAct(session, title, watch);
+        WriteMeasurement(session, space, measurement, null, copied);
     }
 
-    private static double ReadyAndAct(DesktopAppSession session, string title, Stopwatch watch)
+    private static ReadyActionMeasurement ReadyAndAct(DesktopAppSession session, string title, Stopwatch watch)
     {
         Wait(() =>
         {
@@ -172,14 +172,20 @@ public sealed class TaskLoadingPerformanceFlaUiTests
                 return false;
             }, "The selected task card did not open.", TimeSpan.FromSeconds(15));
         }
+        var cardOpenedMs = watch.Elapsed.TotalMilliseconds;
         Find(session, "CurrentTaskParentsRelationAddButton")!.AsButton().Invoke();
         Wait(() => Visible(Find(session, "CurrentTaskParentsRelationAddInput")),
             "The task relation editor did not respond.", TimeSpan.FromSeconds(15));
+        var relationEditorOpenedMs = watch.Elapsed.TotalMilliseconds;
         Find(session, "CurrentTaskParentsRelationAddCancelButton")!.AsButton().Invoke();
         Wait(() => !Visible(Find(session, "CurrentTaskParentsRelationAddInput")),
             "The task relation editor did not close.", TimeSpan.FromSeconds(15));
         CheckErrors(session);
-        return readyMs;
+        return new ReadyActionMeasurement(
+            readyMs,
+            cardOpenedMs,
+            relationEditorOpenedMs,
+            watch.Elapsed.TotalMilliseconds);
     }
 
     private static AutomationElement? Find(DesktopAppSession session, string id) =>
@@ -213,14 +219,24 @@ public sealed class TaskLoadingPerformanceFlaUiTests
         throw new TimeoutException(failure);
     }
 
-    private static void WriteMeasurement(DesktopAppSession session, string scenario, double readyMs, double readyAndActionMs, double? windowAvailableMs, int copiedFiles)
+    private static void WriteMeasurement(
+        DesktopAppSession session,
+        string scenario,
+        ReadyActionMeasurement measurement,
+        double? windowAvailableMs,
+        int copiedFiles)
     {
         using var process = Process.GetProcessById(session.MainWindow.Properties.ProcessId.ValueOrDefault);
         var peakPrivateMemoryBytes = GetPeakPrivateMemoryBytes(process);
         var json = JsonSerializer.Serialize(new
         {
             label = Environment.GetEnvironmentVariable("UNLIMOTION_LOADING_LABEL") ?? "smoke", scenario,
-            readyMs, readyAndActionMs, windowAvailableMs, copiedFiles,
+            readyMs = measurement.ReadyMs,
+            readyAndActionMs = measurement.RelationEditorOpenedMs,
+            cardOpenedMs = measurement.CardOpenedMs,
+            relationEditorOpenedMs = measurement.RelationEditorOpenedMs,
+            actionCleanupCompleteMs = measurement.ActionCleanupCompleteMs,
+            windowAvailableMs, copiedFiles,
             privateMemoryBytes = process.PrivateMemorySize64,
             peakPrivateMemoryBytes,
             peakWorkingSetBytes = process.PeakWorkingSet64,
@@ -252,6 +268,12 @@ public sealed class TaskLoadingPerformanceFlaUiTests
         IntPtr process,
         ref ProcessMemoryCounters counters,
         uint size);
+
+    private sealed record ReadyActionMeasurement(
+        double ReadyMs,
+        double CardOpenedMs,
+        double RelationEditorOpenedMs,
+        double ActionCleanupCompleteMs);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct ProcessMemoryCounters
