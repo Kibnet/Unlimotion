@@ -15,7 +15,7 @@ $candidatePath = (Resolve-Path -LiteralPath $CandidateExe).Path
 $outputPath = [IO.Path]::GetFullPath($OutputDirectory)
 if (Test-Path -LiteralPath $outputPath) { throw 'Use a new output directory to keep measurement series separate.' }
 New-Item -ItemType Directory -Path $outputPath | Out-Null
-$envNames = @('UNLIMOTION_LOADING_DATASET', 'UNLIMOTION_LOADING_EXE', 'UNLIMOTION_LOADING_LABEL', 'UNLIMOTION_LOADING_REPORT', 'DOTNET_TieredCompilation')
+$envNames = @('UNLIMOTION_LOADING_DATASET', 'UNLIMOTION_LOADING_EXE', 'UNLIMOTION_LOADING_LABEL', 'UNLIMOTION_LOADING_REPORT', 'UNLIMOTION_LOADING_DOTNET_TIERED_COMPILATION')
 $previous = @{}
 foreach ($name in $envNames) { $previous[$name] = [Environment]::GetEnvironmentVariable($name, 'Process') }
 Push-Location $repo
@@ -28,7 +28,7 @@ try {
         foreach ($variant in $variants) {
             $label = if ($iteration -eq 0) { "$variant-warmup" } else { "$variant-$iteration" }
             $env:UNLIMOTION_LOADING_EXE = if ($variant -eq 'baseline') { $baselinePath } else { $candidatePath }
-            $env:DOTNET_TieredCompilation = if ($DisableCandidateTieredCompilation -and $variant -eq 'candidate') { '0' } else { $previous['DOTNET_TieredCompilation'] }
+            $env:UNLIMOTION_LOADING_DOTNET_TIERED_COMPILATION = if ($DisableCandidateTieredCompilation -and $variant -eq 'candidate') { '0' } else { $null }
             $env:UNLIMOTION_LOADING_LABEL = $label
             $env:UNLIMOTION_LOADING_REPORT = Join-Path $outputPath $(if ($iteration -eq 0) { 'warmup.jsonl' } else { 'measurements.jsonl' })
             $log = Join-Path $outputPath "$label.log"

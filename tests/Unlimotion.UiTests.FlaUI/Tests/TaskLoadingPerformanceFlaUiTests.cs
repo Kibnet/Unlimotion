@@ -52,14 +52,26 @@ public sealed class TaskLoadingPerformanceFlaUiTests
             }
 
             var executable = Environment.GetEnvironmentVariable("UNLIMOTION_LOADING_EXE");
-            if (!string.IsNullOrWhiteSpace(executable))
+            var tieredCompilation = Environment.GetEnvironmentVariable(
+                "UNLIMOTION_LOADING_DOTNET_TIERED_COMPILATION");
+            if (!string.IsNullOrWhiteSpace(executable) || !string.IsNullOrWhiteSpace(tieredCompilation))
+            {
+                var environmentVariables = new Dictionary<string, string?>(
+                    options.EnvironmentVariables, StringComparer.OrdinalIgnoreCase);
+                if (!string.IsNullOrWhiteSpace(tieredCompilation))
+                    environmentVariables["DOTNET_TieredCompilation"] = tieredCompilation;
+
                 options = new DesktopAppLaunchOptions
                 {
-                    ExecutablePath = executable, WorkingDirectory = Path.GetDirectoryName(executable)!,
-                    Arguments = options.Arguments, EnvironmentVariables = options.EnvironmentVariables,
+                    ExecutablePath = string.IsNullOrWhiteSpace(executable) ? options.ExecutablePath : executable,
+                    WorkingDirectory = string.IsNullOrWhiteSpace(executable)
+                        ? options.WorkingDirectory
+                        : Path.GetDirectoryName(executable)!,
+                    Arguments = options.Arguments, EnvironmentVariables = environmentVariables,
                     MainWindowTimeout = options.MainWindowTimeout, PollInterval = options.PollInterval,
                     WindowPlacement = options.WindowPlacement, DisposeCallback = options.DisposeCallback
                 };
+            }
 
             Console.WriteLine(JsonSerializer.Serialize(new
             {
