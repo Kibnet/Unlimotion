@@ -1186,6 +1186,32 @@ public class FileStorageTaskStatusTests
     }
 
     [Test]
+    public async Task GuardedSave_RollsBackWhenPostWritePublicationFails()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var storage = new FailingWriteFileStorage(tempDir, new RecordingDatabaseWatcher());
+            await storage.Save(new TaskItem { Id = "task", Title = "Before" });
+            await storage.EnableLiveGraphAsync();
+            var task = await storage.Load("task", forced: true);
+            task!.Title = "Migration write";
+            storage.FailWhenWriting(task.Id);
+
+            var generation = storage.CaptureLiveGraphGeneration();
+            using var guard = storage.GuardLiveGraphGeneration(generation);
+            await Assert.That(() => storage.Save(task)).Throws<IOException>();
+
+            await Assert.That((await storage.Load("task", forced: true))?.Title).IsEqualTo("Before");
+            await Assert.That(Directory.EnumerateFiles(tempDir, "*.bak")).IsEmpty();
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
+    [Test]
     public async Task ExternalChange_ExpiresConfirmedWriteBeforeContentReturnsToSameBytes()
     {
         var tempDir = CreateTempDirectory();

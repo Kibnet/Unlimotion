@@ -544,12 +544,12 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
             guardedWrite?.Commit();
             return TaskItemSnapshot.Clone(stored);
         }
-        catch (LiveGraphInvalidatedException ex)
+        catch (Exception ex) when (guardedWrite != null)
         {
-            if (guardedWrite != null && !guardedWrite.RollbackIfOwnContent())
+            if (!guardedWrite.RollbackIfOwnContent())
             {
                 throw new IOException(
-                    $"Task '{item.Id}' changed while its migration write was being committed, " +
+                    $"Task '{item.Id}' failed while its guarded migration write was being committed, " +
                     "and the displaced content could not be restored safely.",
                     ex);
             }
