@@ -119,6 +119,13 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
                 }
                 var forceReverseLinksRecheck = ShouldForceReverseLinkRecheck(fileStorage);
                 var reverseLinksResult = await MigrateReverseLinks(TaskTreeManager, forceReverseLinksRecheck);
+                if (fileStorage.Watcher is IRawDatabaseWatcher)
+                {
+                    // A save cannot update a duplicate-bearing live graph incrementally because
+                    // the canonical source depends on the complete per-file ordering. Refresh an
+                    // invalidated graph before the availability migration consumes reverse links.
+                    await fileStorage.RefreshPendingFileChangesAsync();
+                }
                 await MigrateIsCanBeCompleted(TaskTreeManager, forceRecheck: reverseLinksResult.AnyChanges);
                 if (fileStorage.Watcher is IRawDatabaseWatcher)
                 {

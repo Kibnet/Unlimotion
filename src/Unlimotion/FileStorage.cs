@@ -101,6 +101,13 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
             return await ReadGraphAsync();
         });
 
+    public Task RefreshPendingFileChangesAsync() =>
+        WithDirectoryLockAsync(async () =>
+        {
+            await EnsureLiveGraphReadyWithinWriteLockAsync();
+            await DrainPendingFileChangesAsync();
+        });
+
     private void SubscribeToWatcher(IDatabaseWatcher watcher)
     {
         if (watcher is IRawDatabaseWatcher rawWatcher)

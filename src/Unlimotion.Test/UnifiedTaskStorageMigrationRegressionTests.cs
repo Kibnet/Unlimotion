@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Unlimotion.Domain;
 using Unlimotion.TaskTree;
+using Unlimotion.ViewModel;
 
 namespace Unlimotion.Test;
 
@@ -101,6 +102,57 @@ public class UnifiedTaskStorageMigrationRegressionTests
             await Assert.That(storedBlocked.BlockedByTasks).Contains("blocker");
             await Assert.That(storedBlocked.IsCanBeCompleted).IsFalse();
             await Assert.That(storedBlocked.UnlockedDateTime).IsNull();
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
+    [Test]
+    public async Task UnifiedTaskStorage_Init_ShouldRefreshDuplicateGraph_BetweenDependentMigrations()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var watcher = new RawDatabaseWatcher();
+            var fileStorage = new TestFileStorage(tempDir, watcher);
+            var manager = new TaskTreeManager(fileStorage);
+            var unified = new UnifiedTaskStorage(manager);
+
+            await fileStorage.Save(new TaskItem
+            {
+                Id = "blocker", Version = 1, IsCompleted = false,
+                BlocksTasks = new List<string> { "parent" }
+            });
+            await fileStorage.Save(new TaskItem
+            {
+                Id = "parent", Version = 1, IsCompleted = false,
+                ContainsTasks = new List<string> { "child" },
+                IsCanBeCompleted = true
+            });
+            await fileStorage.Save(new TaskItem
+            {
+                Id = "child", Version = 1, IsCompleted = false,
+                IsCanBeCompleted = true,
+                UnlockedDateTime = DateTimeOffset.UtcNow
+            });
+            await fileStorage.Save(new TaskItem { Id = "duplicate", Version = 1 });
+            File.Copy(
+                Path.Combine(tempDir, "duplicate"),
+                Path.Combine(tempDir, "duplicate-copy"));
+            await SeedMigrationReports(tempDir);
+
+            await unified.Init();
+
+            var storedParent = await fileStorage.Load("parent", forced: true);
+            var storedChild = await fileStorage.Load("child", forced: true);
+            await Assert.That(storedParent).IsNotNull();
+            await Assert.That(storedChild).IsNotNull();
+            await Assert.That(storedParent!.BlockedByTasks).Contains("blocker");
+            await Assert.That(storedChild!.ParentTasks).Contains("parent");
+            await Assert.That(storedChild.IsCanBeCompleted).IsFalse();
+            await Assert.That(storedChild.UnlockedDateTime).IsNull();
         }
         finally
         {
@@ -256,5 +308,18 @@ public class UnifiedTaskStorageMigrationRegressionTests
         {
             // Best-effort cleanup for temp artifacts.
         }
+    }
+
+    private sealed class TestFileStorage(string path, IDatabaseWatcher watcher) : FileStorage(path, watcher);
+
+    private sealed class RawDatabaseWatcher : IDatabaseWatcher, IRawDatabaseWatcher
+    {
+        public event EventHandler<DbUpdatedEventArgs>? OnUpdated { add { } remove { } }
+        public event EventHandler<DbUpdatedEventArgs>? OnRawUpdated { add { } remove { } }
+        public event EventHandler? OnInvalidated { add { } remove { } }
+
+        public void AddIgnoredTask(string taskId) { }
+        public void SetEnable(bool enable) { }
+        public void ForceUpdateFile(string filename, UpdateType type) { }
     }
 }
