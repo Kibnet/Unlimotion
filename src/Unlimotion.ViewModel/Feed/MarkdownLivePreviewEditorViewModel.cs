@@ -1595,7 +1595,11 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
 
             block.IsCommitInProgress = true;
             block.ErrorMessage = null;
-            var patch = block.CreatePatch(currentSnapshot);
+            if (!TryCreatePatch(block, currentSnapshot, out var patch))
+            {
+                QueueSaveDraft(block);
+                return false;
+            }
             var result = await callback(patch, linkedCancellation.Token);
             linkedCancellation.Token.ThrowIfCancellationRequested();
 
@@ -1781,7 +1785,12 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
             }
 
             expectedBlock.ErrorMessage = null;
-            var patch = expectedBlock.CreatePatch(currentSnapshot);
+            if (!TryCreatePatch(expectedBlock, currentSnapshot, out var patch))
+            {
+                CancelPendingAutosave();
+                QueueSaveDraft(expectedBlock);
+                return false;
+            }
             MarkdownBlockCommitResult result;
             try
             {
@@ -1911,7 +1920,7 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
             return;
         }
 
-        var patch = block.CreatePatch(currentSnapshot);
+        var hasPatch = TryCreatePatch(block, currentSnapshot, out var patch);
         var draft = new FeedDraft(
             1,
             vaultId,
@@ -1920,7 +1929,7 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
             currentSnapshot.ExpectedRevisionHash,
             block.EditorText,
             timeProvider.GetUtcNow(),
-            patch.PatchedDocumentRaw,
+            hasPatch ? patch.PatchedDocumentRaw : null,
             currentSnapshot.HasUtf8Bom);
         lock (draftPersistenceSync)
         {
@@ -1930,6 +1939,24 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
         _ = QueueDraftOperationAsync(
             () => store.SaveAsync(draft, CancellationToken.None),
             onSuccess: null);
+    }
+
+    private static bool TryCreatePatch(
+        MarkdownLiveBlockViewModel block,
+        MarkdownLiveDocumentSnapshot snapshot,
+        out MarkdownBlockPatch patch)
+    {
+        try
+        {
+            patch = block.CreatePatch(snapshot);
+            return true;
+        }
+        catch (InvalidOperationException)
+        {
+            patch = null!;
+            block.ErrorMessage = L10n.Get("MarkdownBlockStalePatch");
+            return false;
+        }
     }
 
     private Task QueueDeleteDraftAsync(
