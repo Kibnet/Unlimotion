@@ -110,12 +110,18 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
             if (isFileStorage && TaskTreeManager.Storage is FileStorage fileStorage)
             {
                 StatusModelMigrationWasApplied = await MigrateTaskStatusModel(fileStorage);
+                if (fileStorage.Watcher is IRawDatabaseWatcher)
+                {
+                    // Build the typed snapshot once after the raw JSON status migration. The
+                    // following migrations read defensive clones and successful saves update the
+                    // live graph, avoiding two more complete directory deserializations.
+                    await fileStorage.EnableLiveGraphAsync();
+                }
                 var forceReverseLinksRecheck = ShouldForceReverseLinkRecheck(fileStorage);
                 var reverseLinksResult = await MigrateReverseLinks(TaskTreeManager, forceReverseLinksRecheck);
                 await MigrateIsCanBeCompleted(TaskTreeManager, forceRecheck: reverseLinksResult.AnyChanges);
                 if (fileStorage.Watcher is IRawDatabaseWatcher)
                 {
-                    await fileStorage.EnableLiveGraphAsync();
                     await fileStorage.SynchronizePendingFileChangesAsync();
                 }
             }

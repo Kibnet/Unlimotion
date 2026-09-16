@@ -106,6 +106,54 @@ namespace Unlimotion.ViewModel
             CanTrackEditableChange &&
             Volatile.Read(ref _statusOperationCount) == 0;
 
+        private IObservable<T> ObserveProperty<T>(string propertyName, Func<TaskItemViewModel, T> valueProvider) =>
+            Observable.Create<T>(observer =>
+            {
+                var gate = new object();
+                var disposed = false;
+                PropertyChangedEventHandler? handler = null;
+                handler = (_, args) =>
+                {
+                    if (!string.IsNullOrEmpty(args.PropertyName) &&
+                        !string.Equals(args.PropertyName, propertyName, StringComparison.Ordinal))
+                    {
+                        return;
+                    }
+
+                    lock (gate)
+                    {
+                        if (!disposed) observer.OnNext(valueProvider(this));
+                    }
+                };
+
+                var inpc = (INotifyPropertyChanged)this;
+                lock (gate)
+                {
+                    inpc.PropertyChanged += handler;
+                    try
+                    {
+                        observer.OnNext(valueProvider(this));
+                    }
+                    catch
+                    {
+                        disposed = true;
+                        inpc.PropertyChanged -= handler;
+                        throw;
+                    }
+                }
+
+                return Disposable.Create(() =>
+                {
+                    lock (gate)
+                    {
+                        if (disposed) return;
+                        disposed = true;
+                        inpc.PropertyChanged -= handler;
+                    }
+                });
+            })
+            .DistinctUntilChanged();
+
         private bool HasPendingEditableChanges
         {
             get
@@ -142,7 +190,7 @@ namespace Unlimotion.ViewModel
             RegisterCompletionCriteriaPropertyChangedSubscription();
 
             // Пересчитываем emoji текущей задачи и всех потомков при локальном изменении заголовка.
-            this.WhenAnyValue(t => t.Title)
+            ObserveProperty(nameof(Title), static task => task.Title)
                 .Subscribe(_ =>
                 {
                     RecalculateEmoji();
@@ -150,17 +198,17 @@ namespace Unlimotion.ViewModel
                 })
                 .AddToDispose(this);
 
-            this.WhenAnyValue(m => m.Status)
+            ObserveProperty(nameof(Status), static task => task.Status)
                 .Subscribe(_ => RefreshStatusOptions())
                 .AddToDispose(this);
 
-            this.WhenAnyValue(m => m.Status)
+            ObserveProperty(nameof(Status), static task => task.Status)
                 .Skip(1)
                 .Where(_ => CanAutosave)
                 .Subscribe(_ => ExecuteSaveCommand())
                 .AddToDispose(this);
 
-            this.WhenAnyValue(m => m.Status)
+            ObserveProperty(nameof(Status), static task => task.Status)
                 .Select(status => status == DomainTaskStatus.InProgress
                     ? Observable
                         .Timer(
@@ -174,15 +222,18 @@ namespace Unlimotion.ViewModel
                 .Subscribe(_ => OnPropertyChanged(nameof(InProgressElapsed)))
                 .AddToDispose(this);
 
-            this.WhenAnyValue(m => m.Status, m => m.StartedDateTime)
+            Observable.CombineLatest(
+                    ObserveProperty(nameof(Status), static task => task.Status),
+                    ObserveProperty(nameof(StartedDateTime), static task => task.StartedDateTime),
+                    static (status, startedDateTime) => (status, startedDateTime))
                 .Where(values => values.Item1 == DomainTaskStatus.InProgress)
                 .ObserveOn(RxSchedulers.MainThreadScheduler)
                 .Subscribe(_ => OnPropertyChanged(nameof(InProgressElapsed)))
                 .AddToDispose(this);
 
             Observable.Merge(
-                    this.WhenAnyValue(m => m.IsCanBeCompleted).Select(_ => Unit.Default),
-                    this.WhenAnyValue(m => m.PlannedBeginDateTime).Select(_ => Unit.Default))
+                    ObserveProperty(nameof(IsCanBeCompleted), static task => task.IsCanBeCompleted).Select(_ => Unit.Default),
+                    ObserveProperty(nameof(PlannedBeginDateTime), static task => task.PlannedBeginDateTime).Select(_ => Unit.Default))
                 .Subscribe(_ => RefreshStatusOptions())
                 .AddToDispose(this);
 
@@ -220,43 +271,30 @@ namespace Unlimotion.ViewModel
             }
 
             // Loading an authoritative model (including legacy data) must not clear its repeater.
-            this.WhenAnyValue(m => m.PlannedBeginDateTime)
+            ObserveProperty(nameof(PlannedBeginDateTime), static task => task.PlannedBeginDateTime)
                 .Skip(1)
                 .Where(begin => !begin.HasValue && !_isUpdatingFromModel)
                 .Subscribe(_ => Repeater = null)
                 .AddToDispose(this);
 
             //При изменении начала
-            this.WhenAnyValue(m => m.PlannedBeginDateTime)
+            ObserveProperty(nameof(PlannedBeginDateTime), static task => task.PlannedBeginDateTime)
                 .Subscribe(b =>
                 {
-                    //Если есть начальная и конечная дата
                     if (b.HasValue)
                     {
                         if (PlannedEndDateTime != null)
                         {
-                            //Если есть вычисленный период
                             if (plannedPeriod.HasValue)
                             {
-                                //Вычисляется новая конечная дата
                                 var newValue = b.Value.Add(plannedPeriod.Value);
-                                //Если есть изменения
-                                if (PlannedEndDateTime != newValue)
-                                {
-                                    //Меняем дату
-                                    PlannedEndDateTime = newValue;
-                                }
+                                if (PlannedEndDateTime != newValue) PlannedEndDateTime = newValue;
                             }
                             else
                             {
-                                //Если начало раньше либо равно концу
-                                if (b.Value <= PlannedEndDateTime)
-                                    //Вычисляем период
-                                    plannedPeriod = PlannedEndDateTime - b.Value;
-                                //Если начало позже конца
-                                else
-                                    //Обнуляем период
-                                    plannedPeriod = null;
+                                plannedPeriod = b.Value <= PlannedEndDateTime
+                                    ? PlannedEndDateTime - b.Value
+                                    : null;
                             }
                         }
                         else
@@ -267,25 +305,19 @@ namespace Unlimotion.ViewModel
                 })
                 .AddToDispose(this);
 
-            this.WhenAnyValue(m => m.PlannedEndDateTime)
+            ObserveProperty(nameof(PlannedEndDateTime), static task => task.PlannedEndDateTime)
                 .Subscribe(b =>
                 {
-                    //Если есть начальная и конечная дата
                     if (PlannedBeginDateTime != null && b.HasValue)
                     {
-                        //Если начало раньше либо равно концу
-                        if (PlannedBeginDateTime <= b.Value)
-                            //Вычисляем период
-                            plannedPeriod = b.Value - PlannedBeginDateTime;
-                        //Если начало позже конца
-                        else
-                            //Обнуляем период
-                            plannedPeriod = null;
+                        plannedPeriod = PlannedBeginDateTime <= b.Value
+                            ? b.Value - PlannedBeginDateTime
+                            : null;
                     }
                 })
                 .AddToDispose(this);
 
-            this.WhenAnyValue(t => t.Repeater)
+            ObserveProperty(nameof(Repeater), static task => task.Repeater)
                 .Subscribe(RegisterRepeaterPropertyChangedSubscription)
                 .AddToDispose(this);
 
@@ -536,7 +568,8 @@ namespace Unlimotion.ViewModel
         {
             get => GetOrCreateCommand(ref archiveCommand, () => ReactiveCommand.CreateFromTask(
                 ExecuteTrackedArchiveCommandAsync,
-                this.WhenAnyValue(m => m.Status, status => status != DomainTaskStatus.Completed)));
+                ObserveProperty(nameof(Status), static task => task.Status)
+                    .Select(status => status != DomainTaskStatus.Completed)));
             set { lock (commandInitializationLock) archiveCommand = value; }
         }
 
@@ -547,7 +580,8 @@ namespace Unlimotion.ViewModel
                 var criterion = new TaskCompletionCriterion();
                 CompletionCriteria.Add(criterion);
                 RequestCompletionCriterionFocus(criterion);
-            }, this.WhenAnyValue(t => t.Status, status => status != DomainTaskStatus.Completed),
+            }, ObserveProperty(nameof(Status), static task => task.Status)
+                .Select(status => status != DomainTaskStatus.Completed),
                 RxSchedulers.MainThreadScheduler));
             set { lock (commandInitializationLock) addCompletionCriterionCommand = value; }
         }
@@ -557,7 +591,8 @@ namespace Unlimotion.ViewModel
             get => GetOrCreateCommand(ref removeCompletionCriterionCommand, () => ReactiveCommand.Create<TaskCompletionCriterion>(criterion =>
             {
                 if (criterion != null) CompletionCriteria.Remove(criterion);
-            }, this.WhenAnyValue(t => t.Status, status => status != DomainTaskStatus.Completed),
+            }, ObserveProperty(nameof(Status), static task => task.Status)
+                .Select(status => status != DomainTaskStatus.Completed),
                 RxSchedulers.MainThreadScheduler));
             set { lock (commandInitializationLock) removeCompletionCriterionCommand = value; }
         }
