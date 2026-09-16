@@ -27,6 +27,7 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
     private volatile bool _liveGraphNeedsReload;
     private volatile bool _liveGraphRequiresFullReload;
     private readonly AsyncLocal<FileTaskGraphWriteScope?> _activeWriteScope = new();
+    private readonly AsyncLocal<LiveGraphGenerationGuard?> _activeLiveGraphGenerationGuard = new();
 
     public FileTaskStorage(FileTaskStorageOptions options)
     {
@@ -334,6 +335,28 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
     protected long CaptureLiveGraphInvalidationGeneration() =>
         Interlocked.Read(ref _liveGraphInvalidationGeneration);
 
+    public long CaptureLiveGraphGeneration() => CaptureLiveGraphInvalidationGeneration();
+
+    public ILiveGraphGenerationGuard GuardLiveGraphGeneration(long generation)
+    {
+        EnsureLiveGraphGenerationCurrent(generation);
+        var guard = new LiveGraphGenerationGuard(this, generation, _activeLiveGraphGenerationGuard.Value);
+        _activeLiveGraphGenerationGuard.Value = guard;
+        return guard;
+    }
+
+    public void EnsureLiveGraphGenerationCurrent(long generation)
+    {
+        lock (_liveGraphSync)
+        {
+            if (Interlocked.Read(ref _liveGraphInvalidationGeneration) != generation)
+            {
+                throw new LiveGraphInvalidatedException(
+                    "Task files changed while a live-graph operation was in progress.");
+            }
+        }
+    }
+
     protected bool LiveGraphRequiresFullReload => _liveGraphRequiresFullReload;
 
     protected bool HasLiveGraphSnapshot
@@ -469,6 +492,7 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
 
     private async Task<TaskItem> SaveCore(TaskItem taskItem)
     {
+        EnsureActiveLiveGraphGenerationCurrent();
         var item = TaskItemSnapshot.Clone(taskItem);
         var id = string.IsNullOrWhiteSpace(item.Id) ? Guid.NewGuid().ToString() : item.Id;
         ValidateTaskId(id);
@@ -484,16 +508,32 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
             await _activeWriteScope.Value.PrepareWriteAsync(item.Id, filePath, content);
         }
 
+        OnWritePrepared(item.Id, filePath, content);
         OnBeforeWrite(item.Id, filePath);
+        EnsureActiveLiveGraphGenerationCurrent();
         await AtomicWriteAllTextAsync(filePath, content);
+        EnsureActiveLiveGraphGenerationCurrent();
         OnAfterWritePersisted(item.Id, filePath);
 
         taskItem.Id = item.Id;
         var stored = TaskItemSnapshot.Clone(item);
         _tasks.AddOrUpdate(taskItem.Id, stored, (_, _) => stored);
         _taskFilePaths.AddOrUpdate(taskItem.Id, filePath, (_, _) => filePath);
+        var generationBeforePublication = CaptureLiveGraphInvalidationGeneration();
         PublishLiveFileChange(filePath, stored, error: null);
+        _activeLiveGraphGenerationGuard.Value?.AdvanceAfterOwnPublication(
+            generationBeforePublication,
+            CaptureLiveGraphInvalidationGeneration());
+        EnsureActiveLiveGraphGenerationCurrent();
         return TaskItemSnapshot.Clone(stored);
+    }
+
+    private void EnsureActiveLiveGraphGenerationCurrent()
+    {
+        if (_activeLiveGraphGenerationGuard.Value is { } guard)
+        {
+            EnsureLiveGraphGenerationCurrent(guard.Generation);
+        }
     }
 
     private Task<bool> RemoveCore(string itemId)
@@ -629,6 +669,10 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
     }
 
     protected virtual void OnBeforeWrite(string taskId, string filePath)
+    {
+    }
+
+    protected virtual void OnWritePrepared(string taskId, string filePath, string content)
     {
     }
 
@@ -1068,6 +1112,38 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
         }
     }
 
+    private sealed class LiveGraphGenerationGuard(
+        FileTaskStorage owner,
+        long generation,
+        LiveGraphGenerationGuard? previous) : ILiveGraphGenerationGuard
+    {
+        private bool _disposed;
+
+        public long Generation { get; private set; } = generation;
+
+        public void AdvanceAfterOwnPublication(long before, long after)
+        {
+            if (Generation == before && after == before + 1)
+            {
+                Generation = after;
+            }
+        }
+
+        public void Dispose()
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
+            if (ReferenceEquals(owner._activeLiveGraphGenerationGuard.Value, this))
+            {
+                owner._activeLiveGraphGenerationGuard.Value = previous;
+            }
+        }
+    }
+
     private sealed class RecoverableMutationJournal
     {
         public string Id { get; set; } = Guid.NewGuid().ToString("N");
@@ -1201,3 +1277,10 @@ public sealed record FileTaskStorageDirectoryReadResult(
 public sealed record FileTaskStorageLoadError(string File, string Message);
 
 public sealed record FileTaskStorageDuplicateIdIssue(string TaskId, IReadOnlyList<string> Files);
+
+public sealed class LiveGraphInvalidatedException(string message) : IOException(message);
+
+public interface ILiveGraphGenerationGuard : IDisposable
+{
+    long Generation { get; }
+}

@@ -5,6 +5,8 @@ using System.Threading.Tasks;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading;
 using Unlimotion.Services;
 using Unlimotion.Domain;
@@ -20,6 +22,8 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
     private readonly ConcurrentDictionary<string, PendingFileChange> _pendingFileChanges =
         new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, PendingWatcherUpdate> _pendingWatcherUpdates =
+        new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, byte[]> _confirmedOwnWrites =
         new(StringComparer.OrdinalIgnoreCase);
     private readonly SemaphoreSlim _watcherUpdateGate = new(1, 1);
     private long _nextPendingGeneration;
@@ -110,6 +114,12 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
     protected override void OnBeforeWrite(string taskId, string filePath) =>
         _dbWatcher?.AddIgnoredTask(System.IO.Path.GetFileName(filePath));
 
+    protected override void OnWritePrepared(string taskId, string filePath, string content)
+    {
+        _confirmedOwnWrites[System.IO.Path.GetFileName(filePath)] =
+            SHA256.HashData(Encoding.UTF8.GetBytes(content));
+    }
+
     protected override void OnBeforeRemove(string taskId, string filePath) =>
         _dbWatcher?.AddIgnoredTask(System.IO.Path.GetFileName(filePath));
 
@@ -133,6 +143,32 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
             await RefreshPendingFileChangesWithinWriteLockAsync();
         });
 
+    public long CapturePendingWatcherGeneration() => Interlocked.Read(ref _nextPendingGeneration);
+
+    public void DiscardPendingWatcherUpdatesThrough(long generation)
+    {
+        foreach (var entry in _pendingWatcherUpdates)
+        {
+            if (entry.Value.Generation <= generation)
+            {
+                RemovePendingWatcherUpdate(entry.Key, entry.Value);
+            }
+        }
+    }
+
+    public async Task WaitForRawWatcherQuiescenceAsync()
+    {
+        for (var attempt = 0; attempt < 5; attempt++)
+        {
+            var generation = CapturePendingWatcherGeneration();
+            await Task.Delay(20);
+            if (CapturePendingWatcherGeneration() == generation)
+            {
+                return;
+            }
+        }
+    }
+
     private void SubscribeToWatcher(IDatabaseWatcher watcher)
     {
         if (watcher is IRawDatabaseWatcher rawWatcher)
@@ -142,6 +178,11 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
             {
                 if (IsTaskFile(args.Id))
                 {
+                    if (IsConfirmedOwnWrite(args.Id))
+                    {
+                        return;
+                    }
+
                     var change = new PendingFileChange(
                         Interlocked.Increment(ref _nextPendingGeneration),
                         args.Type);
@@ -272,6 +313,42 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
         ((ICollection<KeyValuePair<string, PendingWatcherUpdate>>)_pendingWatcherUpdates).Remove(
             new KeyValuePair<string, PendingWatcherUpdate>(fileName, update));
 
+    private bool IsConfirmedOwnWrite(string fileName)
+    {
+        if (!_confirmedOwnWrites.TryGetValue(fileName, out var expectedHash))
+        {
+            return false;
+        }
+
+        var filePath = System.IO.Path.Combine(Path, fileName);
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            try
+            {
+                using var stream = File.Open(
+                    filePath,
+                    FileMode.Open,
+                    FileAccess.Read,
+                    FileShare.ReadWrite | FileShare.Delete);
+                return SHA256.HashData(stream).AsSpan().SequenceEqual(expectedHash);
+            }
+            catch (IOException) when (attempt < 2)
+            {
+                Thread.Sleep(1);
+            }
+            catch (IOException)
+            {
+                return false;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return false;
+            }
+        }
+
+        return false;
+    }
+
     public void Dispose()
     {
         if (_disposed)
@@ -283,6 +360,7 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
         (_dbWatcher as IDisposable)?.Dispose();
         _pendingFileChanges.Clear();
         _pendingWatcherUpdates.Clear();
+        _confirmedOwnWrites.Clear();
     }
 
     private sealed record PendingFileChange(long Generation, UpdateType Type);

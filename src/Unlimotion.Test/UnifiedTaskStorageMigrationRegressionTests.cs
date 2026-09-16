@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Unlimotion.Domain;
 using Unlimotion.TaskTree;
@@ -278,6 +279,53 @@ public class UnifiedTaskStorageMigrationRegressionTests
         }
     }
 
+    [Test]
+    public async Task UnifiedTaskStorage_Init_RetriesMigrationWhenRawEditArrivesBeforeSave()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var watcher = new RawDatabaseWatcher();
+            var fileStorage = new RacingFileStorage(tempDir, watcher);
+            await fileStorage.Save(new TaskItem
+            {
+                Id = "parent",
+                Version = 0,
+                Title = "Parent",
+                ContainsTasks = ["child"]
+            });
+            await fileStorage.Save(new TaskItem
+            {
+                Id = "child",
+                Version = 0,
+                Title = "Child"
+            });
+            await SeedMigrationReports(tempDir);
+            fileStorage.ArmExternalEdit((taskId, filePath) =>
+            {
+                var external = Newtonsoft.Json.JsonConvert.DeserializeObject<TaskItem>(File.ReadAllText(filePath))!;
+                external.Title = "External edit preserved";
+                File.WriteAllText(filePath, Newtonsoft.Json.JsonConvert.SerializeObject(external));
+                watcher.EmitRaw(Path.GetFileName(filePath), UpdateType.Saved);
+            });
+            using var unified = new UnifiedTaskStorage(new TaskTreeManager(fileStorage));
+
+            await unified.Init();
+
+            var parent = await fileStorage.Load("parent", forced: true);
+            var child = await fileStorage.Load("child", forced: true);
+            await Assert.That(fileStorage.ExternalEditCount).IsEqualTo(1);
+            await Assert.That(new[] { parent?.Title, child?.Title }).Contains("External edit preserved");
+            await Assert.That(parent?.Version).IsEqualTo(1);
+            await Assert.That(child?.Version).IsEqualTo(1);
+            await Assert.That(child?.ParentTasks).Contains("parent");
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
     private static string CreateTempDirectory()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "unified-migration-regression-" + Guid.NewGuid().ToString("N"));
@@ -312,14 +360,39 @@ public class UnifiedTaskStorageMigrationRegressionTests
 
     private sealed class TestFileStorage(string path, IDatabaseWatcher watcher) : FileStorage(path, watcher);
 
+    private sealed class RacingFileStorage(string path, IDatabaseWatcher watcher) : FileStorage(path, watcher)
+    {
+        private Action<string, string>? _externalEdit;
+
+        public int ExternalEditCount { get; private set; }
+
+        public void ArmExternalEdit(Action<string, string> externalEdit) => _externalEdit = externalEdit;
+
+        protected override void OnBeforeWrite(string taskId, string filePath)
+        {
+            var externalEdit = Interlocked.Exchange(ref _externalEdit, null);
+            if (externalEdit != null)
+            {
+                ExternalEditCount++;
+                externalEdit(taskId, filePath);
+            }
+
+            base.OnBeforeWrite(taskId, filePath);
+        }
+    }
+
     private sealed class RawDatabaseWatcher : IDatabaseWatcher, IRawDatabaseWatcher
     {
-        public event EventHandler<DbUpdatedEventArgs>? OnUpdated { add { } remove { } }
-        public event EventHandler<DbUpdatedEventArgs>? OnRawUpdated { add { } remove { } }
-        public event EventHandler? OnInvalidated { add { } remove { } }
+        public event EventHandler<DbUpdatedEventArgs>? OnUpdated;
+        public event EventHandler<DbUpdatedEventArgs>? OnRawUpdated;
+        public event EventHandler? OnInvalidated;
 
         public void AddIgnoredTask(string taskId) { }
         public void SetEnable(bool enable) { }
         public void ForceUpdateFile(string filename, UpdateType type) { }
+
+        public void EmitRaw(string filename, UpdateType type) => OnRawUpdated?.Invoke(
+            this,
+            new DbUpdatedEventArgs { Id = filename, Type = type });
     }
 }

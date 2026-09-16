@@ -1090,6 +1090,73 @@ public class FileStorageTaskStatusTests
     }
 
     [Test]
+    public async Task GuardedSave_IgnoresRawEchoOfConfirmedOwnWrite()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var watcher = new RecordingDatabaseWatcher();
+            var storage = new RawEchoFileStorage(tempDir, watcher);
+            await storage.Save(new TaskItem { Id = "task", Title = "Before" });
+            await storage.EnableLiveGraphAsync();
+            var task = await storage.Load("task", forced: true);
+            task!.Title = "After";
+            storage.ArmRawEcho();
+
+            var generation = storage.CaptureLiveGraphGeneration();
+            using var guard = storage.GuardLiveGraphGeneration(generation);
+            await storage.Save(task);
+
+            storage.EnsureLiveGraphGenerationCurrent(guard.Generation);
+            await Assert.That((await storage.Load("task", forced: true))?.Title).IsEqualTo("After");
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
+    [Test]
+    public async Task ConsumedStartupAliasIdentity_IsNotReusedByLaterUpdate()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var sourcePath = Path.Combine(tempDir, "alias.json");
+            await File.WriteAllTextAsync(
+                sourcePath,
+                JsonConvert.SerializeObject(new TaskItem { Id = "old", Title = "Original" }));
+            var watcher = new RecordingDatabaseWatcher();
+            var storage = new TestFileStorage(tempDir, watcher);
+            await storage.EnableLiveGraphAsync();
+
+            await File.WriteAllTextAsync(
+                sourcePath,
+                JsonConvert.SerializeObject(new TaskItem { Id = "new", Title = "Startup edit" }));
+            watcher.EmitRaw("alias.json", UpdateType.Saved);
+            await storage.SynchronizePendingFileChangesAsync();
+            var startupGeneration = storage.CapturePendingWatcherGeneration();
+            storage.DiscardPendingWatcherUpdatesThrough(startupGeneration);
+
+            var observed = new List<(string Id, UpdateType Type)>();
+            storage.Updating += (_, args) => observed.Add((args.Id, args.Type));
+            await File.WriteAllTextAsync(
+                sourcePath,
+                JsonConvert.SerializeObject(new TaskItem { Id = "newer", Title = "Later edit" }));
+            watcher.EmitRaw("alias.json", UpdateType.Saved);
+            await storage.TriggerUpdatingAsync("alias.json", UpdateType.Saved);
+
+            await Assert.That(observed).Count().IsEqualTo(2);
+            await Assert.That(observed[0]).IsEqualTo(("new", UpdateType.Removed));
+            await Assert.That(observed[1]).IsEqualTo(("newer", UpdateType.Saved));
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
+    [Test]
     public async Task DelayedWatcherUpdate_DoesNotHidePendingChangeFromQueuedCommand()
     {
         var tempDir = CreateTempDirectory();
@@ -1226,6 +1293,25 @@ public class FileStorageTaskStatusTests
         {
             DirectoryEnumerationCount++;
             return base.EnumerateTaskFiles();
+        }
+    }
+
+    private sealed class RawEchoFileStorage(
+        string path,
+        RecordingDatabaseWatcher watcher) : FileStorage(path, watcher)
+    {
+        private bool _emitRawEcho;
+
+        public void ArmRawEcho() => _emitRawEcho = true;
+
+        protected override void OnAfterWritePersisted(string taskId, string filePath)
+        {
+            base.OnAfterWritePersisted(taskId, filePath);
+            if (_emitRawEcho)
+            {
+                _emitRawEcho = false;
+                watcher.EmitRaw(System.IO.Path.GetFileName(filePath), UpdateType.Saved);
+            }
         }
     }
 
