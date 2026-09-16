@@ -128,23 +128,26 @@
                              SelectionMode="Single">
                         <ListBox.ItemTemplate>
                             <DataTemplate DataType="viewModel:EmojiFilter">
-                        <Grid ColumnDefinitions="Auto,Auto,Auto,*"
+                                <Grid ColumnDefinitions="Auto,18,Auto,Auto,*"
                                       MinWidth="0"
-                                      VerticalAlignment="Center"
-                                      Margin="{Binding HierarchyIndent}">
-                                    <Button Grid.Column="0"
+                                      VerticalAlignment="Center">
+                                    <Border Grid.Column="0"
+                                            Width="{Binding HierarchyIndentWidth}"
+                                            AutomationProperties.AutomationId="EmojiFilterHierarchyIndent"/>
+                                    <Button Grid.Column="1"
                                             Classes="EmojiFilterHierarchyToggle"
                                             Content="{Binding HierarchyToggleGlyph}"
-                                            IsVisible="{Binding HasHierarchyChildren}"
+                                            Focusable="{Binding HasHierarchyChildren}"
+                                            IsHitTestVisible="{Binding HasHierarchyChildren}"
                                             Click="HierarchyToggle_OnClick"
                                             AutomationProperties.AutomationId="EmojiFilterHierarchyToggle"/>
                                     <CheckBox Classes="EmojiFilterItemCheckBox"
-                                              Grid.Column="1"
+                                              Grid.Column="2"
                                               IsChecked="{Binding ShowTasks, Mode=TwoWay}"/>
-                                    <TextBlock Grid.Column="2"
+                                    <TextBlock Grid.Column="3"
                                                Classes="EmojiFilterItemEmoji"
                                                Text="{Binding Emoji}"/>
-                                    <TextBlock Grid.Column="3"
+                                    <TextBlock Grid.Column="4"
                                                Classes="EmojiFilterItemTitle"
                                                Text="{Binding DisplayTitle}"/>
                                 </Grid>

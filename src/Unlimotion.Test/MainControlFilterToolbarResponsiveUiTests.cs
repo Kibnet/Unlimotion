@@ -1512,6 +1512,41 @@ public class MainControlFilterToolbarResponsiveUiTests
         }
     }
 
+    private static async Task AssertEmojiRowsReserveToggleSlotAndIndentByDepth(ListBox list)
+    {
+        var rows = GetVisibleEmojiListBoxItems(list)
+            .Select(item => new
+            {
+                Item = item,
+                Filter = item.DataContext as EmojiFilter,
+                CheckBox = item.GetVisualDescendants()
+                    .OfType<CheckBox>()
+                    .FirstOrDefault(IsVisibleAndArranged)
+            })
+            .Where(static row => row.Filter != null && row.CheckBox != null)
+            .ToArray();
+        await Assert.That(rows).IsNotEmpty();
+
+        var rootRows = rows.Where(static row => row.Filter!.HierarchyDepth == 0).ToArray();
+        await Assert.That(rootRows).IsNotEmpty();
+        var rootCheckBoxLeft = GetBoundsRelativeTo(list, rootRows[0].CheckBox!).Left;
+
+        foreach (var row in rows)
+        {
+            var checkBoxLeft = GetBoundsRelativeTo(list, row.CheckBox!).Left;
+            var expectedLeft = rootCheckBoxLeft + row.Filter!.HierarchyIndentWidth;
+            await Assert.That(Math.Abs(checkBoxLeft - expectedLeft)).IsLessThanOrEqualTo(1);
+        }
+
+        var rootWithChildren = rootRows.FirstOrDefault(static row => row.Filter!.HasHierarchyChildren);
+        var rootWithoutChildren = rootRows.FirstOrDefault(static row => !row.Filter!.HasHierarchyChildren);
+        await Assert.That(rootWithChildren).IsNotNull();
+        await Assert.That(rootWithoutChildren).IsNotNull();
+        var rootWithChildrenLeft = GetBoundsRelativeTo(list, rootWithChildren!.CheckBox!).Left;
+        var rootWithoutChildrenLeft = GetBoundsRelativeTo(list, rootWithoutChildren!.CheckBox!).Left;
+        await Assert.That(Math.Abs(rootWithChildrenLeft - rootWithoutChildrenLeft)).IsLessThanOrEqualTo(1);
+    }
+
     private static IReadOnlyList<string?> GetVisibleEmojiItemTexts(ListBox list)
     {
         return list.GetVisualDescendants()
@@ -1687,9 +1722,12 @@ public class MainControlFilterToolbarResponsiveUiTests
                         .IsEqualTo("Nested repair target");
                     await Assert.That(includeListItems.Skip(1).All(static item =>
                         item.HierarchyDepth >= 0 &&
-                        item.HierarchyIndent.EndsWith(",0,0", StringComparison.Ordinal) &&
-                        item.HierarchyToggleGlyph is "▾" or "▸")).IsTrue();
+                        item.HierarchyIndentWidth == item.HierarchyDepth * 16d &&
+                        item.HierarchyToggleGlyph == (item.HasHierarchyChildren
+                            ? item.IsHierarchyExpanded ? "▾" : "▸"
+                            : string.Empty))).IsTrue();
                     await AssertEmojiRowsMeasureContentAndCenterVertically(includeList);
+                    await AssertEmojiRowsReserveToggleSlotAndIndentByDepth(includeList);
 
                     var inputBounds = GetBoundsRelativeTo(window, includeInput);
                     var dropDown = GetEmojiFilterDropDown(includeControl);

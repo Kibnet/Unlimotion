@@ -3033,14 +3033,16 @@ namespace Unlimotion.ViewModel
 
         // Runtime-only presentation state used by the emoji filter tree. Selection
         // remains keyed by Emoji; these properties never enter task JSON.
-        [AlsoNotifyFor(nameof(HierarchyIndent), nameof(HierarchyToggleGlyph))]
+        [AlsoNotifyFor(nameof(HierarchyIndentWidth), nameof(HierarchyToggleGlyph))]
         public int HierarchyDepth { get; set; }
         [AlsoNotifyFor(nameof(HierarchyToggleGlyph))]
         public bool HasHierarchyChildren { get; set; }
         [AlsoNotifyFor(nameof(HierarchyToggleGlyph))]
         public bool IsHierarchyExpanded { get; set; } = true;
-        public string HierarchyIndent => $"{HierarchyDepth * 16},0,0,0";
-        public string HierarchyToggleGlyph => IsHierarchyExpanded ? "▾" : "▸";
+        public double HierarchyIndentWidth => HierarchyDepth * 16d;
+        public string HierarchyToggleGlyph => HasHierarchyChildren
+            ? IsHierarchyExpanded ? "▾" : "▸"
+            : string.Empty;
         public EmojiFilter? HierarchyParent { get; set; }
         public string HierarchyPath
         {
