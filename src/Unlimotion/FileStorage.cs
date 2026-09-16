@@ -184,13 +184,23 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
 
     public async Task WaitForRawWatcherQuiescenceAsync()
     {
-        for (var attempt = 0; attempt < 5; attempt++)
+        const int stableSamplesRequired = 5;
+        var stableSamples = 0;
+        for (var attempt = 0; attempt < stableSamplesRequired * 2; attempt++)
         {
             var generation = CapturePendingWatcherGeneration();
             await Task.Delay(200);
             if (CapturePendingWatcherGeneration() == generation)
             {
-                return;
+                stableSamples++;
+                if (stableSamples == stableSamplesRequired)
+                {
+                    return;
+                }
+            }
+            else
+            {
+                stableSamples = 0;
             }
         }
     }
