@@ -326,6 +326,36 @@ public class UnifiedTaskStorageMigrationRegressionTests
         }
     }
 
+    [Test]
+    public async Task UnifiedTaskStorage_Init_IgnoresRawWatcherEchoesFromStatusMigration()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            const int taskCount = 32;
+            for (var index = 0; index < taskCount; index++)
+            {
+                var id = $"legacy-{index:D2}";
+                await File.WriteAllTextAsync(
+                    Path.Combine(tempDir, id),
+                    $$"""{"Id":"{{id}}","Title":"{{id}}","Version":1,"IsCompleted":false}""");
+            }
+
+            var fileStorage = new FileStorage(tempDir, watcher: true);
+            using var unified = new UnifiedTaskStorage(new TaskTreeManager(fileStorage));
+
+            await unified.Init();
+
+            await Assert.That(unified.StatusModelMigrationWasApplied).IsTrue();
+            await Assert.That(unified.Tasks.Count).IsEqualTo(taskCount);
+            await Assert.That(await fileStorage.Load("legacy-00", forced: true)).IsNotNull();
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
     private static string CreateTempDirectory()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "unified-migration-regression-" + Guid.NewGuid().ToString("N"));

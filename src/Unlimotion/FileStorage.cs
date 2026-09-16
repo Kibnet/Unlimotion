@@ -116,7 +116,18 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
 
     protected override void OnWritePrepared(string taskId, string filePath, string content)
     {
-        _confirmedOwnWrites[System.IO.Path.GetFileName(filePath)] = new ConfirmedOwnWrite(
+        ConfirmOwnWrite(System.IO.Path.GetFileName(filePath), content);
+    }
+
+    internal async Task WriteOwnedMigrationFileAsync(string filePath, string content)
+    {
+        ConfirmOwnWrite(System.IO.Path.GetFileName(filePath), content);
+        await AtomicWriteAllTextAsync(filePath, content);
+    }
+
+    private void ConfirmOwnWrite(string fileName, string content)
+    {
+        _confirmedOwnWrites[fileName] = new ConfirmedOwnWrite(
             SHA256.HashData(Encoding.UTF8.GetBytes(content)),
             DateTimeOffset.UtcNow.AddSeconds(5));
     }

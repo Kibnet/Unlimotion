@@ -640,7 +640,7 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
         Converters = CreateConverters()
     };
 
-    private async Task AtomicWriteAllTextAsync(string filePath, string content)
+    protected async Task AtomicWriteAllTextAsync(string filePath, string content)
     {
         var tempPath = filePath + "." + Guid.NewGuid().ToString("N") + ".tmp";
         var backupPath = filePath + "." + Guid.NewGuid().ToString("N") + ".bak";

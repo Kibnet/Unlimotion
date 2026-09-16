@@ -747,7 +747,7 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
                     rawJson);
             }
 
-            await File.WriteAllTextAsync(
+            await fileStorage.WriteOwnedMigrationFileAsync(
                 filePath,
                 JsonConvert.SerializeObject(taskJson, Formatting.Indented));
             changed++;
