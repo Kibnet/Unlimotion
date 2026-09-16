@@ -1186,6 +1186,10 @@ namespace Unlimotion.ViewModel
                 })
                 .Sort(sortObservable)
                 .TreatMovesAsRemoveAdd()
+                // Queue projection updates on the UI scheduler. A task edit can be raised from
+                // an ItemsControl collection callback; applying the nested change synchronously
+                // corrupts Avalonia's container indices while the previous change is in flight.
+                .ObserveOn(RxSchedulers.MainThreadScheduler)
                 .Bind(out _currentItems, resetThreshold: 1)
                 .Subscribe(_ =>
                 {
