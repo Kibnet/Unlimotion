@@ -959,7 +959,7 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
         FileStorage fileStorage,
         Func<ILiveGraphGenerationGuard, Task<T>> migration)
     {
-        for (var attempt = 0; attempt < 3; attempt++)
+        for (var attempt = 0; attempt < 5; attempt++)
         {
             try
             {
@@ -972,7 +972,7 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
                     return result;
                 });
             }
-            catch (LiveGraphInvalidatedException) when (attempt < 2)
+            catch (LiveGraphInvalidatedException) when (attempt < 4)
             {
                 // Let an already queued FileSystemWatcher burst finish before the next locked
                 // refresh. Any later edit still advances the generation and aborts that attempt.

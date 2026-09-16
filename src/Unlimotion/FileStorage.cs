@@ -162,7 +162,7 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
         for (var attempt = 0; attempt < 5; attempt++)
         {
             var generation = CapturePendingWatcherGeneration();
-            await Task.Delay(20);
+            await Task.Delay(200);
             if (CapturePendingWatcherGeneration() == generation)
             {
                 return;
