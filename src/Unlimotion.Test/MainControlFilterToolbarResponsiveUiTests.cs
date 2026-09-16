@@ -1376,7 +1376,8 @@ public class MainControlFilterToolbarResponsiveUiTests
             (MainWindowViewModelFixture.RootTask4Id, "\ud83e\uddea Delta assay target"),
             (MainWindowViewModelFixture.RootTask5Id, "\ud83d\udcda Epsilon library target"),
             (MainWindowViewModelFixture.RootTask6Id, "\u274C Gamma blocked target"),
-            (MainWindowViewModelFixture.RootTask7Id, "\u2705 Zeta done target")
+            (MainWindowViewModelFixture.RootTask7Id, "\u2705 Zeta done target"),
+            (MainWindowViewModelFixture.SubTask41Id, "\ud83d\udd27 Nested repair target")
         };
 
         foreach (var (taskId, title) in titlesById)
@@ -1509,6 +1510,41 @@ public class MainControlFilterToolbarResponsiveUiTests
                 await Assert.That(Math.Abs(GetCenterY(bounds) - rowCenterY)).IsLessThanOrEqualTo(2);
             }
         }
+    }
+
+    private static async Task AssertEmojiRowsReserveToggleSlotAndIndentByDepth(ListBox list)
+    {
+        var rows = GetVisibleEmojiListBoxItems(list)
+            .Select(item => new
+            {
+                Item = item,
+                Filter = item.DataContext as EmojiFilter,
+                CheckBox = item.GetVisualDescendants()
+                    .OfType<CheckBox>()
+                    .FirstOrDefault(IsVisibleAndArranged)
+            })
+            .Where(static row => row.Filter != null && row.CheckBox != null)
+            .ToArray();
+        await Assert.That(rows).IsNotEmpty();
+
+        var rootRows = rows.Where(static row => row.Filter!.HierarchyDepth == 0).ToArray();
+        await Assert.That(rootRows).IsNotEmpty();
+        var rootCheckBoxLeft = GetBoundsRelativeTo(list, rootRows[0].CheckBox!).Left;
+
+        foreach (var row in rows)
+        {
+            var checkBoxLeft = GetBoundsRelativeTo(list, row.CheckBox!).Left;
+            var expectedLeft = rootCheckBoxLeft + row.Filter!.HierarchyIndentWidth;
+            await Assert.That(Math.Abs(checkBoxLeft - expectedLeft)).IsLessThanOrEqualTo(1);
+        }
+
+        var rootWithChildren = rootRows.FirstOrDefault(static row => row.Filter!.HasHierarchyChildren);
+        var rootWithoutChildren = rootRows.FirstOrDefault(static row => !row.Filter!.HasHierarchyChildren);
+        await Assert.That(rootWithChildren).IsNotNull();
+        await Assert.That(rootWithoutChildren).IsNotNull();
+        var rootWithChildrenLeft = GetBoundsRelativeTo(list, rootWithChildren!.CheckBox!).Left;
+        var rootWithoutChildrenLeft = GetBoundsRelativeTo(list, rootWithoutChildren!.CheckBox!).Left;
+        await Assert.That(Math.Abs(rootWithChildrenLeft - rootWithoutChildrenLeft)).IsLessThanOrEqualTo(1);
     }
 
     private static IReadOnlyList<string?> GetVisibleEmojiItemTexts(ListBox list)
@@ -1681,7 +1717,17 @@ public class MainControlFilterToolbarResponsiveUiTests
                     await Assert.That(includeListItems.Count).IsEqualTo(vm.EmojiFilters.Count);
                     await Assert.That(includeListItems[0].Title).IsEqualTo("All");
                     await Assert.That(includeListItems[0].Emoji).IsEqualTo(string.Empty);
+                    await Assert.That(includeListItems.Any(static item => item.HierarchyDepth > 0)).IsTrue();
+                    await Assert.That(includeListItems.First(static item => item.HierarchyDepth > 0).DisplayTitle)
+                        .IsEqualTo("Nested repair target");
+                    await Assert.That(includeListItems.Skip(1).All(static item =>
+                        item.HierarchyDepth >= 0 &&
+                        item.HierarchyIndentWidth == item.HierarchyDepth * 16d &&
+                        item.HierarchyToggleGlyph == (item.HasHierarchyChildren
+                            ? item.IsHierarchyExpanded ? "▾" : "▸"
+                            : string.Empty))).IsTrue();
                     await AssertEmojiRowsMeasureContentAndCenterVertically(includeList);
+                    await AssertEmojiRowsReserveToggleSlotAndIndentByDepth(includeList);
 
                     var inputBounds = GetBoundsRelativeTo(window, includeInput);
                     var dropDown = GetEmojiFilterDropDown(includeControl);

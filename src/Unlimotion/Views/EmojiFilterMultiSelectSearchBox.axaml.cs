@@ -75,6 +75,7 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
 
     private readonly ObservableCollection<EmojiFilter> displayedFilters = [];
     private readonly List<EmojiFilter> selectableFilters = [];
+    private readonly HashSet<EmojiFilter> expandedFilters = [];
     private readonly List<INotifyPropertyChanged> subscribedFilters = [];
     private INotifyCollectionChanged? subscribedCollection;
     private bool isProgrammaticClose;
@@ -505,6 +506,7 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
 
         selectableFilters.Clear();
         selectableFilters.AddRange(EnumerateSelectableFilters(Filters));
+        BuildHierarchy();
 
         foreach (var filter in selectableFilters.OfType<INotifyPropertyChanged>())
         {
@@ -560,12 +562,12 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
     {
         var query = SearchDefinition.NormalizeText(searchText.Trim());
         var matches = string.IsNullOrEmpty(query)
-            ? selectableFilters
+            ? FlattenExpandedFilters()
             : selectableFilters
                 .Where(filter => SearchDefinition.NormalizeText(filter.SearchText).Contains(query, StringComparison.Ordinal))
                 .ToList();
         var hasNoMatches = query.Length > 0 && matches.Count == 0;
-        var itemsToShow = hasNoMatches ? selectableFilters : matches;
+        var itemsToShow = hasNoMatches ? FlattenExpandedFilters() : matches;
         var selectedFilter = PART_List.SelectedItem as EmojiFilter;
 
         displayedFilters.Clear();
@@ -591,6 +593,101 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
         {
             PART_List.SelectedIndex = displayedFilters.Count - 1;
         }
+    }
+
+    private void BuildHierarchy()
+    {
+        var expandedPaths = expandedFilters
+            .Select(static filter => filter.HierarchyPath)
+            .ToHashSet(StringComparer.Ordinal);
+        expandedFilters.Clear();
+        var byEmoji = selectableFilters
+            .Where(IsEmojiFilter)
+            .GroupBy(static filter => filter.Emoji, StringComparer.Ordinal)
+            .ToDictionary(static group => group.Key, static group => group.First(), StringComparer.Ordinal);
+
+        foreach (var filter in selectableFilters)
+        {
+            filter.HierarchyDepth = 0;
+            filter.HierarchyParent = null;
+            filter.HasHierarchyChildren = false;
+            filter.IsHierarchyExpanded = expandedPaths.Count == 0 || expandedPaths.Contains(filter.HierarchyPath);
+            if (!IsEmojiFilter(filter) || filter.Source == null)
+                continue;
+
+            var parent = filter.Source.GetAllParents()
+                .Reverse()
+                .Select(parentTask => byEmoji.TryGetValue(parentTask.Emoji, out var parentFilter) ? parentFilter : null)
+                .FirstOrDefault(parentFilter => parentFilter != null && !ReferenceEquals(parentFilter, filter));
+            if (parent == null)
+                continue;
+
+            filter.HierarchyParent = parent;
+            parent.HasHierarchyChildren = true;
+        }
+
+        var depthVisited = new HashSet<EmojiFilter>();
+        int GetDepth(EmojiFilter filter)
+        {
+            if (filter.HierarchyParent == null || !depthVisited.Add(filter))
+                return 0;
+            var depth = GetDepth(filter.HierarchyParent) + 1;
+            depthVisited.Remove(filter);
+            return depth;
+        }
+
+        foreach (var filter in selectableFilters)
+            filter.HierarchyDepth = GetDepth(filter);
+
+        foreach (var filter in selectableFilters.Where(filter => filter.IsHierarchyExpanded))
+            expandedFilters.Add(filter);
+    }
+
+    private IReadOnlyList<EmojiFilter> FlattenExpandedFilters()
+    {
+        var roots = selectableFilters
+            .Where(filter => filter.HierarchyParent == null)
+            .OrderBy(static filter => filter.SortText, StringComparer.CurrentCultureIgnoreCase)
+            .ThenBy(static filter => filter.Emoji, StringComparer.Ordinal)
+            .ToList();
+        var result = new List<EmojiFilter>(selectableFilters.Count);
+        var children = selectableFilters
+            .Where(filter => filter.HierarchyParent != null)
+            .GroupBy(filter => filter.HierarchyParent!)
+            .ToDictionary(group => group.Key, group => group
+                .OrderBy(static filter => filter.SortText, StringComparer.CurrentCultureIgnoreCase)
+                .ThenBy(static filter => filter.Emoji, StringComparer.Ordinal)
+                .ToList());
+
+        void Append(EmojiFilter filter)
+        {
+            result.Add(filter);
+            if (!expandedFilters.Contains(filter) || !children.TryGetValue(filter, out var descendants))
+                return;
+            foreach (var child in descendants)
+                Append(child);
+        }
+
+        foreach (var root in roots)
+            Append(root);
+        return result;
+    }
+
+    private void ToggleExpansion(EmojiFilter filter)
+    {
+        if (!filter.HasHierarchyChildren)
+            return;
+        if (!expandedFilters.Add(filter))
+            expandedFilters.Remove(filter);
+        filter.IsHierarchyExpanded = expandedFilters.Contains(filter);
+        ApplySearchFilter();
+    }
+
+    private void HierarchyToggle_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control { DataContext: EmojiFilter filter })
+            ToggleExpansion(filter);
+        e.Handled = true;
     }
 
     private void UpdateStaticTextAndAutomation()
