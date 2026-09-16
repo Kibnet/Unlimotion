@@ -67,10 +67,6 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
         }
 
         var initialTaskViews = await BuildInitialTaskViewsAsync();
-        var disabledWatcherGeneration = TaskTreeManager.Storage is FileStorage builtFileStorage &&
-                                        builtFileStorage.Watcher is IRawDatabaseWatcher
-            ? builtFileStorage.CapturePendingWatcherGeneration()
-            : 0;
         var shouldYieldBetweenBatches = SynchronizationContext.Current != null;
         await AddInitialTasksToCacheAsync(initialTaskViews, shouldYieldBetweenBatches);
 
@@ -78,6 +74,9 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
         if (TaskTreeManager.Storage is FileStorage initFileStorage &&
             initFileStorage.Watcher is IRawDatabaseWatcher)
         {
+            // Capture immediately before re-enabling publication. Raw events can arrive while
+            // batched cache hydration yields; reconciliation below consumes all of them.
+            var disabledWatcherGeneration = initFileStorage.CapturePendingWatcherGeneration();
             initFileStorage.Watcher?.SetEnable(true);
             await ReconcileFileStorageSnapshotAsync(initFileStorage);
             // Raw events raised while delayed publication was disabled have already been

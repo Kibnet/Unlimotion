@@ -286,26 +286,29 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
 
     public long LiveGraphRevision => Interlocked.Read(ref _liveGraphRevision);
 
-    public void InvalidateLiveGraph() => InvalidateLiveGraph(requiresFullReload: true);
+    public void InvalidateLiveGraph() => _ = InvalidateLiveGraph(requiresFullReload: true);
 
     protected void PublishKnownFileChange(Action publishChange) =>
-        InvalidateLiveGraph(requiresFullReload: false, publishChange);
+        _ = InvalidateLiveGraph(requiresFullReload: false, publishChange);
 
-    private void InvalidateLiveGraph(bool requiresFullReload, Action? publishChange = null)
+    private long InvalidateLiveGraph(bool requiresFullReload, Action? publishChange = null)
     {
         lock (_liveGraphSync)
         {
+            long generation;
             try
             {
                 publishChange?.Invoke();
             }
             finally
             {
-                Interlocked.Increment(ref _liveGraphInvalidationGeneration);
+                generation = Interlocked.Increment(ref _liveGraphInvalidationGeneration);
                 _liveGraphNeedsReload = true;
                 _liveGraphRequiresFullReload |= requiresFullReload;
                 _tasks.Clear();
             }
+
+            return generation;
         }
     }
 
@@ -520,10 +523,11 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
         _tasks.AddOrUpdate(taskItem.Id, stored, (_, _) => stored);
         _taskFilePaths.AddOrUpdate(taskItem.Id, filePath, (_, _) => filePath);
         var generationBeforePublication = CaptureLiveGraphInvalidationGeneration();
-        PublishLiveFileChange(filePath, stored, error: null);
+        OnBeforeLiveFileChangePublication(item.Id, filePath);
+        var ownInvalidationGeneration = PublishLiveFileChange(filePath, stored, error: null);
         _activeLiveGraphGenerationGuard.Value?.AdvanceAfterOwnPublication(
             generationBeforePublication,
-            CaptureLiveGraphInvalidationGeneration());
+            ownInvalidationGeneration);
         EnsureActiveLiveGraphGenerationCurrent();
         return TaskItemSnapshot.Clone(stored);
     }
@@ -684,6 +688,10 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
     {
     }
 
+    protected virtual void OnBeforeLiveFileChangePublication(string taskId, string filePath)
+    {
+    }
+
     protected virtual void OnAfterTransactionCommitted(string journalPath)
     {
     }
@@ -784,21 +792,20 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
         }
     }
 
-    private void PublishLiveFileChange(string filePath, TaskItem? task, string? error)
+    private long? PublishLiveFileChange(string filePath, TaskItem? task, string? error)
     {
         lock (_liveGraphSync)
         {
             if (_liveGraph == null)
             {
-                return;
+                return null;
             }
 
             // A graph with duplicate IDs needs its complete per-file ordering to select the canonical source.
             // It is already write-unsafe, so keep its diagnostics intact until an explicit reload.
             if (_liveGraph.DuplicateIdIssues.Count > 0)
             {
-                InvalidateLiveGraph();
-                return;
+                return InvalidateLiveGraph(requiresFullReload: true);
             }
 
             var previousTask = _liveGraph.FilesByTaskId
@@ -811,7 +818,7 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
                 JsonConvert.SerializeObject(previousTask, CreateSerializerSettings()) ==
                 JsonConvert.SerializeObject(task, CreateSerializerSettings()))
             {
-                return;
+                return null;
             }
 
             var previousIds = _liveGraph.FilesByTaskId
@@ -856,6 +863,8 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
                 _liveGraphNeedsReload = true;
                 _liveGraphRequiresFullReload = true;
             }
+
+            return null;
         }
     }
 
@@ -1121,11 +1130,11 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
 
         public long Generation { get; private set; } = generation;
 
-        public void AdvanceAfterOwnPublication(long before, long after)
+        public void AdvanceAfterOwnPublication(long before, long? ownInvalidationGeneration)
         {
-            if (Generation == before && after == before + 1)
+            if (Generation == before && ownInvalidationGeneration == before + 1)
             {
-                Generation = after;
+                Generation = ownInvalidationGeneration.Value;
             }
         }
 
