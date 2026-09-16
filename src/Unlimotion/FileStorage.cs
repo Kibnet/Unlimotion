@@ -19,6 +19,8 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
     private readonly IDatabaseWatcher? _dbWatcher;
     private readonly ConcurrentDictionary<string, PendingFileChange> _pendingFileChanges =
         new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, PendingWatcherUpdate> _pendingWatcherUpdates =
+        new(StringComparer.OrdinalIgnoreCase);
     private readonly SemaphoreSlim _watcherUpdateGate = new(1, 1);
     private long _nextPendingGeneration;
     private bool _disposed;
@@ -46,9 +48,9 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
 
     protected virtual async Task OnUpdatingAsync(TaskStorageUpdateEventArgs e)
     {
-        var taskId = TryGetTaskIdBySourceFileName(e.Id, out var mappedTaskId)
-            ? mappedTaskId
-            : e.Id;
+        _pendingWatcherUpdates.TryGetValue(e.Id, out var pendingWatcherUpdate);
+        var taskId = pendingWatcherUpdate?.TaskId ??
+            (TryGetTaskIdBySourceFileName(e.Id, out var mappedTaskId) ? mappedTaskId : e.Id);
         var refresh = await WithDirectoryLockAsync(async () =>
         {
             // Keep the raw entry pending until the directory lock is held. Otherwise a
@@ -98,6 +100,11 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
             StorageRevision = refresh.RevisionAfter,
             Snapshot = refresh.Task == null ? null : TaskItemSnapshot.Clone(refresh.Task)
         });
+
+        if (pendingWatcherUpdate != null)
+        {
+            RemovePendingWatcherUpdate(e.Id, pendingWatcherUpdate);
+        }
     }
 
     protected override void OnBeforeWrite(string taskId, string filePath) =>
@@ -142,7 +149,16 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
                     // the same lock used to accept a refreshed graph. A synchronizer therefore
                     // cannot observe the entry before the generation that owns it.
                     PublishKnownFileChange(() =>
-                        _pendingFileChanges.AddOrUpdate(args.Id, change, (_, _) => change));
+                    {
+                        var taskId = TryGetTaskIdBySourceFileName(args.Id, out var mappedTaskId)
+                            ? mappedTaskId
+                            : args.Id;
+                        _pendingFileChanges.AddOrUpdate(args.Id, change, (_, _) => change);
+                        _pendingWatcherUpdates.AddOrUpdate(
+                            args.Id,
+                            new PendingWatcherUpdate(change.Generation, taskId),
+                            (_, existing) => new PendingWatcherUpdate(change.Generation, existing.TaskId));
+                    });
                 }
             };
         }
@@ -252,6 +268,10 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
     private bool RemovePendingFileChange(KeyValuePair<string, PendingFileChange> entry) =>
         ((ICollection<KeyValuePair<string, PendingFileChange>>)_pendingFileChanges).Remove(entry);
 
+    private bool RemovePendingWatcherUpdate(string fileName, PendingWatcherUpdate update) =>
+        ((ICollection<KeyValuePair<string, PendingWatcherUpdate>>)_pendingWatcherUpdates).Remove(
+            new KeyValuePair<string, PendingWatcherUpdate>(fileName, update));
+
     public void Dispose()
     {
         if (_disposed)
@@ -262,9 +282,12 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
         _disposed = true;
         (_dbWatcher as IDisposable)?.Dispose();
         _pendingFileChanges.Clear();
+        _pendingWatcherUpdates.Clear();
     }
 
     private sealed record PendingFileChange(long Generation, UpdateType Type);
+
+    private sealed record PendingWatcherUpdate(long Generation, string TaskId);
 
     private sealed record FileRefreshResult(
         TaskItem? Task,

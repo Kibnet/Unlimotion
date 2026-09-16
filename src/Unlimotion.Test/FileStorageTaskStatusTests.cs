@@ -1039,6 +1039,8 @@ public class FileStorageTaskStatusTests
 
             File.Delete(sourcePath);
             watcher.EmitRaw("alias.json", UpdateType.Removed);
+            var refreshedGraph = await storage.SynchronizePendingFileChangesAsync();
+            await Assert.That(refreshedGraph.TasksById.ContainsKey("alias")).IsFalse();
             await storage.TriggerUpdatingAsync("alias.json", UpdateType.Removed);
 
             await Assert.That(observedId).IsEqualTo("alias");
