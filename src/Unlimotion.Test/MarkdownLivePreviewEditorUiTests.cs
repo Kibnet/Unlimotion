@@ -577,6 +577,12 @@ public class MarkdownLivePreviewEditorUiTests
                 window.Show();
                 RunLayoutJobs();
                 var checkbox = FindControlByAutomationId<CheckBox>(view, task.TaskCheckboxAutomationId);
+                var checkboxScaleHost = checkbox.FindAncestorOfType<Viewbox>();
+                await Assert.That(checkboxScaleHost).IsNotNull();
+                await Assert.That(checkboxScaleHost!.Bounds.Width).IsEqualTo(16);
+                await Assert.That(checkboxScaleHost.Bounds.Height).IsEqualTo(16);
+                await Assert.That(checkbox.Bounds.Width).IsEqualTo(20);
+                await Assert.That(checkbox.Bounds.Height).IsEqualTo(20);
                 var point = checkbox.TranslatePoint(new Point(checkbox.Bounds.Width / 2, checkbox.Bounds.Height / 2), window)!.Value;
                 window.MouseDown(point, MouseButton.Left);
                 window.MouseUp(point, MouseButton.Left);
@@ -678,6 +684,34 @@ public class MarkdownLivePreviewEditorUiTests
             {
                 window.Close();
             }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task PreviewRows_StretchToOneLeftAlignedReadingColumn()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            using var viewModel = new MarkdownLivePreviewEditorViewModel();
+            viewModel.Load(new MarkdownLiveDocumentSnapshot(
+                "Короткий\n\nОчень длинный блок текста, который должен занимать ту же ширину колонки чтения, что и короткий блок выше.\n",
+                "revision-1", false, "note.md"));
+            var view = new MarkdownBlockLivePreviewEditor { DataContext = viewModel };
+            var window = new Window { Width = 720, Height = 320, Content = view };
+            try
+            {
+                window.Show();
+                RunLayoutJobs();
+                var paragraphs = viewModel.Blocks.Where(block => block.Kind == MarkdownBlockKind.Paragraph).ToArray();
+                var shortRow = FindControlByAutomationId<Grid>(view, paragraphs[0].BlockAutomationId);
+                var longRow = FindControlByAutomationId<Grid>(view, paragraphs[1].BlockAutomationId);
+
+                await Assert.That(shortRow.Bounds.X).IsEqualTo(longRow.Bounds.X);
+                await Assert.That(shortRow.Bounds.Width).IsEqualTo(longRow.Bounds.Width);
+                await Assert.That(shortRow.Bounds.Width).IsGreaterThan(600);
+            }
+            finally { window.Close(); }
         }, CancellationToken.None);
     }
 

@@ -163,10 +163,10 @@ public sealed class MarkdownBlockPreviewControl : ContentControl
                 IsChecked = block.IsTaskCompleted,
                 IsHitTestVisible = true,
                 Focusable = true,
-                Width = 16,
-                Height = 16,
-                MinWidth = 16,
-                MinHeight = 16,
+                Width = 20,
+                Height = 20,
+                MinWidth = 20,
+                MinHeight = 20,
                 VerticalAlignment = VerticalAlignment.Top
             };
             checkBox.Click += async (_, args) =>
@@ -174,11 +174,18 @@ public sealed class MarkdownBlockPreviewControl : ContentControl
                 args.Handled = true;
                 await block.Owner.ToggleTaskCompletionAsync(block);
             };
-            marker = checkBox;
+            marker = new Viewbox
+            {
+                Width = 16,
+                Height = 16,
+                Stretch = Stretch.Uniform,
+                VerticalAlignment = VerticalAlignment.Top,
+                Child = checkBox
+            };
             AutomationProperties.SetName(
-                marker,
+                checkBox,
                 L10n.Get(block.IsTaskCompleted ? "MarkdownTaskCompleted" : "MarkdownTaskIncomplete"));
-            AutomationProperties.SetAutomationId(marker, block.TaskCheckboxAutomationId);
+            AutomationProperties.SetAutomationId(checkBox, block.TaskCheckboxAutomationId);
         }
         else
         {

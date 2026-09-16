@@ -295,6 +295,7 @@
   <data name="MarkdownBlockEditHelp" xml:space="preserve"><value>Press Enter or F2 to edit this block.</value></data>
   <data name="MarkdownBlockEditorAutomationName" xml:space="preserve"><value>Edit Markdown block {0}</value></data>
   <data name="MarkdownBlockSaveFailed" xml:space="preserve"><value>Could not save the Markdown block.</value></data>
+  <data name="MarkdownBlockStalePatch" xml:space="preserve"><value>The note changed while this block was being edited. Your text was saved as a recovery draft.</value></data>
   <data name="MarkdownEditingUnavailable" xml:space="preserve"><value>Editing is unavailable because no save handler is configured.</value></data>
   <data name="MarkdownLinkName" xml:space="preserve"><value>Link: {0}</value></data>
   <data name="MarkdownLivePreviewName" xml:space="preserve"><value>Markdown Live Preview</value></data>

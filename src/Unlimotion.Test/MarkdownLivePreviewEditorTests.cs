@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Unlimotion.Notes.Markdown;
@@ -11,6 +12,30 @@ namespace Unlimotion.Test;
 
 public class MarkdownLivePreviewEditorTests
 {
+    [Test]
+    public async Task StaleSnapshotWhileTyping_PersistsRecoverableDraftWithoutThrowing()
+    {
+        var drafts = new MemoryFeedDraftStore();
+        using var editor = new MarkdownLivePreviewEditorViewModel();
+        editor.ConfigureDraftPersistence("vault", drafts);
+        editor.Load(new MarkdownLiveDocumentSnapshot("Первый\n\nВторой\n", "revision-1", false, "note.md"));
+        var block = editor.Blocks.Single(candidate => candidate.PreviewText == "Второй");
+        editor.BeginEdit(block);
+
+        typeof(MarkdownLivePreviewEditorViewModel)
+            .GetField("snapshot", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(editor, new MarkdownLiveDocumentSnapshot("Внешний текст\n\nПервый\n\nВторой\n", "revision-2", false, "note.md"));
+
+        block.EditorText = "Текст, который нельзя потерять";
+        await editor.FlushDraftPersistenceAsync();
+
+        await Assert.That(block.ErrorMessage).IsEqualTo(
+            Unlimotion.ViewModel.Localization.Localization.Get("MarkdownBlockStalePatch"));
+        var draft = drafts.Items.Single();
+        await Assert.That(draft.RawMarkdown).IsEqualTo("Текст, который нельзя потерять");
+        await Assert.That(draft.EditorDocumentText).IsNull();
+    }
+
     [Test]
     [Arguments(false)]
     [Arguments(true)]

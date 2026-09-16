@@ -136,11 +136,17 @@
                    AutomationProperties.AutomationId="{Binding DraftPersistenceErrorAutomationId}" />
 
         <ItemsControl Grid.Row="2"
-                      ItemsSource="{Binding Blocks}"
-                      AutomationProperties.AutomationId="{Binding BlocksAutomationId}">
+                       ItemsSource="{Binding Blocks}"
+                       AutomationProperties.AutomationId="{Binding BlocksAutomationId}">
+        <ItemsControl.Styles>
+            <Style Selector="ContentPresenter">
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            </Style>
+        </ItemsControl.Styles>
         <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="feed:MarkdownLiveBlockViewModel">
                 <Grid Margin="0"
+                       HorizontalAlignment="Stretch"
                       ColumnDefinitions="20,*"
                       IsVisible="{Binding IsPresentationVisible}"
                       Classes="BlockRow"
@@ -186,7 +192,7 @@
                                    IsHitTestVisible="False" />
                     </ToggleButton>
 
-                    <Grid Grid.Column="1">
+                    <Grid Grid.Column="1" HorizontalAlignment="Stretch">
                         <Border Classes.ReviewHighlight="{Binding IsReviewHighlighted}">
                             <views:MarkdownBlockPreviewControl Block="{Binding}"
                                                            Background="Transparent"
