@@ -1308,6 +1308,64 @@ public class FileStorageTaskStatusTests
     }
 
     [Test]
+    public async Task WatcherEnableBarrier_ClassifiesConcurrentAliasEventAsEnabled()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var sourcePath = Path.Combine(tempDir, "alias.json");
+            await File.WriteAllTextAsync(
+                sourcePath,
+                JsonConvert.SerializeObject(new TaskItem { Id = "old", Title = "Original" }));
+            var watcher = new RecordingDatabaseWatcher();
+            var storage = new TestFileStorage(tempDir, watcher);
+            await storage.EnableLiveGraphAsync();
+            watcher.SetEnable(false);
+
+            var firstUpdateCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            storage.Updating += (_, args) =>
+            {
+                if (args is { Id: "new", Type: UpdateType.Saved })
+                {
+                    firstUpdateCompleted.TrySetResult();
+                }
+            };
+            watcher.ArmEnableBarrier();
+            var enable = Task.Run(storage.EnableWatcherAndCaptureDisabledGeneration);
+            await watcher.EnableBarrierEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+            await File.WriteAllTextAsync(
+                sourcePath,
+                JsonConvert.SerializeObject(new TaskItem { Id = "new", Title = "Concurrent edit" }));
+            var fileEvent = Task.Run(() => watcher.EmitFileEvent("alias.json", UpdateType.Saved));
+            await watcher.FileEventAttempted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await Assert.That(fileEvent.IsCompleted).IsFalse();
+
+            watcher.ReleaseEnableBarrier();
+            var disabledGeneration = await enable;
+            await fileEvent;
+            storage.DiscardPendingWatcherUpdatesThrough(disabledGeneration);
+            await firstUpdateCompleted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+            var observed = new List<(string Id, UpdateType Type)>();
+            storage.Updating += (_, args) => observed.Add((args.Id, args.Type));
+            await File.WriteAllTextAsync(
+                sourcePath,
+                JsonConvert.SerializeObject(new TaskItem { Id = "newer", Title = "Later edit" }));
+            watcher.EmitRaw("alias.json", UpdateType.Saved);
+            await storage.TriggerUpdatingAsync("alias.json", UpdateType.Saved);
+
+            await Assert.That(observed).Count().IsEqualTo(2);
+            await Assert.That(observed[0]).IsEqualTo(("new", UpdateType.Removed));
+            await Assert.That(observed[1]).IsEqualTo(("newer", UpdateType.Saved));
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
+    [Test]
     public async Task DelayedWatcherUpdate_DoesNotHidePendingChangeFromQueuedCommand()
     {
         var tempDir = CreateTempDirectory();
@@ -1575,9 +1633,19 @@ public class FileStorageTaskStatusTests
 
     private sealed class RecordingDatabaseWatcher : IDatabaseWatcher, IRawDatabaseWatcher, IDisposable
     {
+        private readonly object enableSync = new();
+        private bool isEnabled = true;
+        private bool blockNextEnable;
+        private TaskCompletionSource releaseEnableBarrier =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
         public List<string> IgnoredTaskIds { get; } = [];
         public bool IsDisposed { get; private set; }
         public Action? OnEnabled { get; set; }
+        public TaskCompletionSource EnableBarrierEntered { get; private set; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource FileEventAttempted { get; private set; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public event EventHandler<DbUpdatedEventArgs>? OnUpdated;
         public event EventHandler<DbUpdatedEventArgs>? OnRawUpdated;
@@ -1585,15 +1653,37 @@ public class FileStorageTaskStatusTests
 
         public void AddIgnoredTask(string taskId) => IgnoredTaskIds.Add(taskId);
 
-        public void SetEnable(bool enable)
+        public void SetEnable(bool enable, Action? beforeStateChange = null)
         {
-            if (enable)
+            lock (enableSync)
             {
-                var callback = OnEnabled;
-                OnEnabled = null;
-                callback?.Invoke();
+                beforeStateChange?.Invoke();
+                if (enable && blockNextEnable)
+                {
+                    blockNextEnable = false;
+                    EnableBarrierEntered.TrySetResult();
+                    releaseEnableBarrier.Task.GetAwaiter().GetResult();
+                }
+
+                isEnabled = enable;
+                if (enable)
+                {
+                    var callback = OnEnabled;
+                    OnEnabled = null;
+                    callback?.Invoke();
+                }
             }
         }
+
+        public void ArmEnableBarrier()
+        {
+            blockNextEnable = true;
+            EnableBarrierEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            FileEventAttempted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            releaseEnableBarrier = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        }
+
+        public void ReleaseEnableBarrier() => releaseEnableBarrier.TrySetResult();
 
         public void ForceUpdateFile(string filename, UpdateType type) => OnUpdated?.Invoke(this, new DbUpdatedEventArgs
         {
@@ -1606,6 +1696,20 @@ public class FileStorageTaskStatusTests
             Id = filename,
             Type = type
         });
+
+        public void EmitFileEvent(string filename, UpdateType type)
+        {
+            FileEventAttempted.TrySetResult();
+            lock (enableSync)
+            {
+                var args = new DbUpdatedEventArgs { Id = filename, Type = type };
+                OnRawUpdated?.Invoke(this, args);
+                if (isEnabled)
+                {
+                    OnUpdated?.Invoke(this, args);
+                }
+            }
+        }
 
         public void Invalidate() => OnInvalidated?.Invoke(this, EventArgs.Empty);
 

@@ -27,12 +27,13 @@ namespace Unlimotion.ViewModel
     private readonly INotificationManagerWrapper? _notificationManager;
     private readonly object itLockEnable = new();
 
-        public void SetEnable(bool enable)
+        public void SetEnable(bool enable, Action? beforeStateChange = null)
         {
             lock (itLockEnable)
             {
                 if (isDisposed)
                     return;
+                beforeStateChange?.Invoke();
                 isEnable = enable;
             }
         }
@@ -119,12 +120,15 @@ namespace Unlimotion.ViewModel
                     IsStorageServiceArtifact(e.Name))
                     return;
 
-                RegisterRawUpdate(
-                    e.Name,
-                    e.ChangeType == WatcherChangeTypes.Deleted ? UpdateType.Removed : UpdateType.Saved);
+                lock (itLockEnable)
+                {
+                    RegisterRawUpdate(
+                        e.Name,
+                        e.ChangeType == WatcherChangeTypes.Deleted ? UpdateType.Removed : UpdateType.Saved);
 
-                if (!isEnable)
-                    return;
+                    if (!isEnable)
+                        return;
+                }
                 
                 if (fullPath.EndsWith(GitLockPostfix)) 
                     fullPath = e.FullPath.Replace(GitLockPostfix, "");

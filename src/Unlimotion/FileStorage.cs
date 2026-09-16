@@ -146,6 +146,15 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
 
     public long CapturePendingWatcherGeneration() => Interlocked.Read(ref _nextPendingGeneration);
 
+    public long EnableWatcherAndCaptureDisabledGeneration()
+    {
+        var generation = 0L;
+        _dbWatcher?.SetEnable(
+            true,
+            () => generation = CapturePendingWatcherGeneration());
+        return generation;
+    }
+
     public void DiscardPendingWatcherUpdatesThrough(long generation)
     {
         foreach (var entry in _pendingWatcherUpdates)

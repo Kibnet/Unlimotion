@@ -74,10 +74,9 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
         if (TaskTreeManager.Storage is FileStorage initFileStorage &&
             initFileStorage.Watcher is IRawDatabaseWatcher)
         {
-            // Capture immediately before re-enabling publication. Raw events can arrive while
-            // batched cache hydration yields; reconciliation below consumes all of them.
-            var disabledWatcherGeneration = initFileStorage.CapturePendingWatcherGeneration();
-            initFileStorage.Watcher?.SetEnable(true);
+            // FileDbWatcher performs the cutoff capture and state transition under the same
+            // lock used to register a raw event and decide whether to schedule its callback.
+            var disabledWatcherGeneration = initFileStorage.EnableWatcherAndCaptureDisabledGeneration();
             await ReconcileFileStorageSnapshotAsync(initFileStorage);
             // Raw events raised while delayed publication was disabled have already been
             // reconciled into the startup snapshot. Retire only those generations; events

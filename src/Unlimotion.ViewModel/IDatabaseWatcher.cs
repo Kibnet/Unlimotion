@@ -6,7 +6,7 @@ public interface IDatabaseWatcher
 {
     public event EventHandler<DbUpdatedEventArgs> OnUpdated;
     public void AddIgnoredTask(string taskId);
-    public void SetEnable(bool enable);
+    public void SetEnable(bool enable, Action? beforeStateChange = null);
     public void ForceUpdateFile(string filename, UpdateType type);
 }
 

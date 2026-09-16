@@ -388,7 +388,7 @@ public class UnifiedTaskStorageMigrationRegressionTests
         public event EventHandler? OnInvalidated;
 
         public void AddIgnoredTask(string taskId) { }
-        public void SetEnable(bool enable) { }
+        public void SetEnable(bool enable, Action? beforeStateChange = null) => beforeStateChange?.Invoke();
         public void ForceUpdateFile(string filename, UpdateType type) { }
 
         public void EmitRaw(string filename, UpdateType type) => OnRawUpdated?.Invoke(
