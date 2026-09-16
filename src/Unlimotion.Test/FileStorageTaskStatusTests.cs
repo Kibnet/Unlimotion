@@ -501,6 +501,36 @@ public class FileStorageTaskStatusTests
     }
 
     [Test]
+    public async Task RawChange_InvalidatesLiveReadsBeforeExplicitSynchronization()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var watcher = new RecordingDatabaseWatcher();
+            var storage = new TestFileStorage(tempDir, watcher);
+            const string taskId = "raw-invalidates-live-read";
+            var task = new TaskItem { Id = taskId, Title = "Original", Status = DomainTaskStatus.NotReady };
+            await storage.Save(task);
+            await storage.EnableLiveGraphAsync();
+
+            task.Title = "External edit";
+            await File.WriteAllTextAsync(Path.Combine(tempDir, taskId), JsonConvert.SerializeObject(task));
+            watcher.EmitRaw(taskId, UpdateType.Saved);
+
+            var loaded = await storage.Load(taskId);
+            var all = new List<TaskItem>();
+            await foreach (var item in storage.GetAll()) all.Add(item);
+
+            await Assert.That(loaded?.Title).IsEqualTo("External edit");
+            await Assert.That(all.Single(item => item.Id == taskId).Title).IsEqualTo("External edit");
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
+    [Test]
     public async Task DebouncedEventType_IsDerivedFromCurrentPhysicalState()
     {
         var tempDir = CreateTempDirectory();

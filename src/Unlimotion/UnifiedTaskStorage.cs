@@ -118,6 +118,12 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
                     await fileStorage.EnableLiveGraphAsync();
                 }
                 var forceReverseLinksRecheck = ShouldForceReverseLinkRecheck(fileStorage);
+                if (fileStorage.Watcher is IRawDatabaseWatcher)
+                {
+                    // Raw watcher events remain active while projection publication is paused.
+                    // Consume them before the first migration reads the shared snapshot.
+                    await fileStorage.RefreshPendingFileChangesAsync();
+                }
                 var reverseLinksResult = await MigrateReverseLinks(TaskTreeManager, forceReverseLinksRecheck);
                 if (fileStorage.Watcher is IRawDatabaseWatcher)
                 {
@@ -151,7 +157,9 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
 
     private async Task ReconcileFileStorageSnapshotAsync(FileStorage fileStorage)
     {
-        var previousGraph = await fileStorage.ReadGraphAsync();
+        // Keep the last valid projection for files that became unreadable while startup
+        // publication was paused. Ordinary reads intentionally reject invalidated graphs.
+        var previousGraph = fileStorage.ReadLastPublishedGraph() ?? await fileStorage.ReadGraphAsync();
         var graph = await fileStorage.SynchronizePendingFileChangesAsync();
         await RunOnCacheSynchronizationContextAsync(() =>
         {

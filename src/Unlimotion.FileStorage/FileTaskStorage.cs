@@ -23,6 +23,7 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
     private readonly object _liveGraphSync = new();
     private TaskGraphReadResult? _liveGraph;
     private long _liveGraphRevision;
+    private long _liveGraphInvalidationGeneration;
     private volatile bool _liveGraphNeedsReload;
     private readonly AsyncLocal<FileTaskGraphWriteScope?> _activeWriteScope = new();
 
@@ -272,17 +273,35 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
     {
         await WithDirectoryLockAsync(async () =>
         {
+            var invalidationGeneration = Interlocked.Read(ref _liveGraphInvalidationGeneration);
             _tasks.Clear();
             _taskFilePaths.Clear();
             var result = await ReadDirectoryCoreAsync();
             PublishLiveGraph(ToGraphResult(result));
-            _liveGraphNeedsReload = false;
+            MarkLiveGraphReloaded(invalidationGeneration);
         });
     }
 
     public long LiveGraphRevision => Interlocked.Read(ref _liveGraphRevision);
 
-    public void InvalidateLiveGraph() => _liveGraphNeedsReload = true;
+    public void InvalidateLiveGraph()
+    {
+        lock (_liveGraphSync)
+        {
+            Interlocked.Increment(ref _liveGraphInvalidationGeneration);
+            _liveGraphNeedsReload = true;
+            _tasks.Clear();
+            _taskFilePaths.Clear();
+        }
+    }
+
+    public TaskGraphReadResult? ReadLastPublishedGraph()
+    {
+        lock (_liveGraphSync)
+        {
+            return _liveGraph == null ? null : CloneGraph(_liveGraph);
+        }
+    }
 
     protected async Task EnsureLiveGraphReadyWithinWriteLockAsync()
     {
@@ -291,11 +310,12 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
             return;
         }
 
+        var invalidationGeneration = Interlocked.Read(ref _liveGraphInvalidationGeneration);
         _tasks.Clear();
         _taskFilePaths.Clear();
         var result = await ReadDirectoryCoreAsync();
         PublishLiveGraph(ToGraphResult(result));
-        _liveGraphNeedsReload = false;
+        MarkLiveGraphReloaded(invalidationGeneration);
     }
 
     private static TaskGraphReadResult ToGraphResult(FileTaskStorageDirectoryReadResult result) =>
@@ -628,8 +648,8 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
     {
         lock (_liveGraphSync)
         {
-            liveGraphEnabled = _liveGraph != null;
-            if (_liveGraph?.TasksById.TryGetValue(taskId, out var cached) == true)
+            liveGraphEnabled = _liveGraph != null && !_liveGraphNeedsReload;
+            if (liveGraphEnabled && _liveGraph!.TasksById.TryGetValue(taskId, out var cached))
             {
                 task = TaskItemSnapshot.Clone(cached);
                 return true;
@@ -644,7 +664,7 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
     {
         lock (_liveGraphSync)
         {
-            if (_liveGraph == null)
+            if (_liveGraph == null || _liveGraphNeedsReload)
             {
                 graph = null!;
                 return false;
@@ -664,6 +684,17 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
         }
     }
 
+    private void MarkLiveGraphReloaded(long invalidationGeneration)
+    {
+        lock (_liveGraphSync)
+        {
+            if (Interlocked.Read(ref _liveGraphInvalidationGeneration) == invalidationGeneration)
+            {
+                _liveGraphNeedsReload = false;
+            }
+        }
+    }
+
     private void PublishLiveFileChange(string filePath, TaskItem? task, string? error)
     {
         lock (_liveGraphSync)
@@ -677,7 +708,7 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
             // It is already write-unsafe, so keep its diagnostics intact until an explicit reload.
             if (_liveGraph.DuplicateIdIssues.Count > 0)
             {
-                _liveGraphNeedsReload = true;
+                InvalidateLiveGraph();
                 return;
             }
 
@@ -843,12 +874,13 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
 
     private void InvalidateCachesAfterRecovery()
     {
-        _tasks.Clear();
-        _taskFilePaths.Clear();
         lock (_liveGraphSync)
         {
+            Interlocked.Increment(ref _liveGraphInvalidationGeneration);
             _liveGraphNeedsReload = true;
             _liveGraph = null;
+            _tasks.Clear();
+            _taskFilePaths.Clear();
             Interlocked.Increment(ref _liveGraphRevision);
         }
     }

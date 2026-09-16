@@ -117,6 +117,7 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
             {
                 if (IsTaskFile(args.Id))
                 {
+                    InvalidateLiveGraph();
                     var change = new PendingFileChange(
                         Interlocked.Increment(ref _nextPendingGeneration),
                         args.Type);
