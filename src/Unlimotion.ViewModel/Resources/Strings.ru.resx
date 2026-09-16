@@ -295,6 +295,7 @@
   <data name="MarkdownBlockEditHelp" xml:space="preserve"><value>Enter или F2 — редактировать блок.</value></data>
   <data name="MarkdownBlockEditorAutomationName" xml:space="preserve"><value>Редактирование Markdown-блока {0}</value></data>
   <data name="MarkdownBlockSaveFailed" xml:space="preserve"><value>Не удалось сохранить Markdown-блок.</value></data>
+  <data name="MarkdownBlockStalePatch" xml:space="preserve"><value>Заметка изменилась во время редактирования блока. Ваш текст сохранён в черновике для восстановления.</value></data>
   <data name="MarkdownEditingUnavailable" xml:space="preserve"><value>Редактирование недоступно: не задан обработчик сохранения.</value></data>
   <data name="MarkdownLinkName" xml:space="preserve"><value>Ссылка: {0}</value></data>
   <data name="MarkdownLivePreviewName" xml:space="preserve"><value>Live Preview Markdown</value></data>
