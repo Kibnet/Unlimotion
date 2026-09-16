@@ -23,6 +23,8 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
     private readonly FileTaskStorageOptions _options;
     private readonly object _liveGraphSync = new();
     private TaskGraphReadResult? _liveGraph;
+    private IReadOnlyDictionary<string, byte[]> _liveGraphSourceHashes =
+        new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
     private long _liveGraphRevision;
     private long _liveGraphInvalidationGeneration;
     private volatile bool _liveGraphNeedsReload;
@@ -110,9 +112,10 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
         }
 
         TaskItem? task;
+        byte[] sourceHash;
         try
         {
-            task = await Task.Run(() => DeserializeTask(filePath));
+            (task, sourceHash) = await Task.Run(() => DeserializeTaskSnapshot(filePath));
         }
         catch (Exception ex)
         {
@@ -136,7 +139,7 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
         RemoveCachedTaskMappedToFile(filePath, exceptTaskId: stored.Id);
         _tasks.AddOrUpdate(stored.Id, stored, (_, _) => stored);
         _taskFilePaths.AddOrUpdate(task.Id, filePath, (_, _) => filePath);
-        PublishLiveFileChange(filePath, stored, error: null);
+        PublishLiveFileChange(filePath, stored, error: null, sourceHash);
         return TaskItemSnapshot.Clone(stored);
     }
 
@@ -202,13 +205,14 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
     {
         var tasks = new List<TaskItem>();
         var taskFiles = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        var sourceHashes = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
         var loadErrors = new List<FileTaskStorageLoadError>();
 
         foreach (var file in EnumerateTaskFiles())
         {
             try
             {
-                var task = await Task.Run(() => DeserializeTask(file));
+                var (task, sourceHash) = await Task.Run(() => DeserializeTaskSnapshot(file));
                 if (task == null || string.IsNullOrWhiteSpace(task.Id))
                 {
                     loadErrors.Add(new FileTaskStorageLoadError(file, "File does not contain a task with non-empty Id."));
@@ -222,6 +226,7 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
                 }
 
                 tasks.Add(task);
+                sourceHashes[file] = sourceHash;
                 if (!taskFiles.TryGetValue(task.Id, out var files))
                 {
                     files = new List<string>();
@@ -248,7 +253,10 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
             .Where(static pair => pair.Value.Count > 0)
             .ToDictionary(static pair => pair.Key, static pair => pair.Value[^1], StringComparer.Ordinal);
 
-        return new FileTaskStorageDirectoryReadResult(tasks, filesByTaskId, loadErrors, duplicates);
+        return new FileTaskStorageDirectoryReadResult(tasks, filesByTaskId, loadErrors, duplicates)
+        {
+            SourceHashesByFile = sourceHashes
+        };
     }
 
     public virtual async Task<TaskGraphReadResult> ReadGraphAsync()
@@ -280,7 +288,7 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
             _tasks.Clear();
             _taskFilePaths.Clear();
             var result = await ReadDirectoryCoreAsync();
-            PublishLiveGraph(ToGraphResult(result));
+            PublishLiveGraph(ToGraphResult(result), result.SourceHashesByFile);
             MarkLiveGraphReloaded(invalidationGeneration);
         });
     }
@@ -332,7 +340,7 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
         _tasks.Clear();
         _taskFilePaths.Clear();
         var result = await ReadDirectoryCoreAsync();
-        PublishLiveGraph(ToGraphResult(result));
+        PublishLiveGraph(ToGraphResult(result), result.SourceHashesByFile);
         MarkLiveGraphReloaded(invalidationGeneration);
     }
 
@@ -507,6 +515,9 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
         var filePath = ResolveTaskFilePath(item.Id);
         var json = JsonConvert.SerializeObject(item, Formatting.Indented, CreateSerializerSettings());
         var content = json + Environment.NewLine;
+        var guardedSource = _activeLiveGraphGenerationGuard.Value != null
+            ? CaptureGuardedSourceSnapshot(filePath)
+            : null;
         if (_activeWriteScope.Value != null)
         {
             await _activeWriteScope.Value.PrepareWriteAsync(item.Id, filePath, content);
@@ -521,6 +532,12 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
             if (_activeLiveGraphGenerationGuard.Value != null)
             {
                 guardedWrite = await AtomicWriteAllTextRetainingBackupAsync(filePath, content);
+                if (!guardedWrite.MatchesDisplacedSource(guardedSource!))
+                {
+                    InvalidateLiveGraph();
+                    throw new LiveGraphInvalidatedException(
+                        "Task file contents changed before the guarded write replaced them.");
+                }
             }
             else
             {
@@ -536,7 +553,11 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
             _taskFilePaths.AddOrUpdate(taskItem.Id, filePath, (_, _) => filePath);
             var generationBeforePublication = CaptureLiveGraphInvalidationGeneration();
             OnBeforeLiveFileChangePublication(item.Id, filePath);
-            var ownInvalidationGeneration = PublishLiveFileChange(filePath, stored, error: null);
+            var ownInvalidationGeneration = PublishLiveFileChange(
+                filePath,
+                stored,
+                error: null,
+                SHA256.HashData(Encoding.UTF8.GetBytes(content)));
             _activeLiveGraphGenerationGuard.Value?.AdvanceAfterOwnPublication(
                 generationBeforePublication,
                 ownInvalidationGeneration);
@@ -564,6 +585,51 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
         {
             EnsureLiveGraphGenerationCurrent(guard.Generation);
         }
+    }
+
+    private GuardedSourceSnapshot CaptureGuardedSourceSnapshot(string filePath)
+    {
+        EnsureActiveLiveGraphGenerationCurrent();
+        byte[]? expectedHash;
+        lock (_liveGraphSync)
+        {
+            expectedHash = _liveGraphSourceHashes.GetValueOrDefault(filePath);
+        }
+
+        if (!File.Exists(filePath))
+        {
+            if (expectedHash == null)
+            {
+                return new GuardedSourceSnapshot(false, null);
+            }
+
+            InvalidateLiveGraph();
+            throw new LiveGraphInvalidatedException(
+                "Task file was removed after the live graph was loaded.");
+        }
+
+        byte[] bytes;
+        try
+        {
+            bytes = File.ReadAllBytes(filePath);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            InvalidateLiveGraph();
+            throw new LiveGraphInvalidatedException(
+                $"Task file '{filePath}' changed or became unreadable after the live graph was loaded.");
+        }
+
+        EnsureActiveLiveGraphGenerationCurrent();
+        var currentHash = SHA256.HashData(bytes);
+        if (expectedHash == null || !CryptographicOperations.FixedTimeEquals(expectedHash, currentHash))
+        {
+            InvalidateLiveGraph();
+            throw new LiveGraphInvalidatedException(
+                "Task file contents no longer match the live graph source.");
+        }
+
+        return new GuardedSourceSnapshot(true, currentHash);
     }
 
     private Task<bool> RemoveCore(string itemId)
@@ -597,6 +663,35 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
         });
 
         return JsonRepairingReader.DeserializeWithRepair<TaskItem>(fullPath, serializer, saveRepairedSidecar: false);
+    }
+
+    private (TaskItem? Task, byte[] Hash) DeserializeTaskSnapshot(string fullPath)
+    {
+        byte[] content;
+        using (var stream = new FileStream(
+                   fullPath,
+                   FileMode.Open,
+                   FileAccess.Read,
+                   FileShare.ReadWrite | FileShare.Delete))
+        using (var buffer = new MemoryStream())
+        {
+            stream.CopyTo(buffer);
+            content = buffer.ToArray();
+        }
+
+        var serializer = JsonSerializer.Create(new JsonSerializerSettings
+        {
+            ContractResolver = _options.PreserveUnknownJson
+                ? PreservingReadContractResolver
+                : IgnoringReadContractResolver,
+            Converters = CreateConverters()
+        });
+        var task = JsonRepairingReader.DeserializeWithRepair<TaskItem>(
+            content,
+            fullPath,
+            serializer,
+            saveRepairedSidecar: false);
+        return (task, SHA256.HashData(content));
     }
 
     protected virtual IEnumerable<string> EnumerateTaskFiles()
@@ -839,12 +934,18 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
         }
     }
 
-    private void PublishLiveGraph(TaskGraphReadResult graph)
+    private void PublishLiveGraph(
+        TaskGraphReadResult graph,
+        IReadOnlyDictionary<string, byte[]> sourceHashes)
     {
         lock (_liveGraphSync)
         {
             var revision = Interlocked.Increment(ref _liveGraphRevision);
             _liveGraph = CloneGraph(graph) with { Revision = revision };
+            _liveGraphSourceHashes = sourceHashes.ToDictionary(
+                static pair => pair.Key,
+                static pair => pair.Value.ToArray(),
+                StringComparer.OrdinalIgnoreCase);
         }
     }
 
@@ -860,7 +961,11 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
         }
     }
 
-    private long? PublishLiveFileChange(string filePath, TaskItem? task, string? error)
+    private long? PublishLiveFileChange(
+        string filePath,
+        TaskItem? task,
+        string? error,
+        byte[]? sourceHash = null)
     {
         lock (_liveGraphSync)
         {
@@ -886,6 +991,17 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
                 JsonConvert.SerializeObject(previousTask, CreateSerializerSettings()) ==
                 JsonConvert.SerializeObject(task, CreateSerializerSettings()))
             {
+                if (sourceHash != null)
+                {
+                    var unchangedSourceHashes = new Dictionary<string, byte[]>(
+                        _liveGraphSourceHashes,
+                        StringComparer.OrdinalIgnoreCase)
+                    {
+                        [filePath] = sourceHash.ToArray()
+                    };
+                    _liveGraphSourceHashes = unchangedSourceHashes;
+                }
+
                 return null;
             }
 
@@ -924,6 +1040,17 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
 
             var revision = Interlocked.Increment(ref _liveGraphRevision);
             _liveGraph = new TaskGraphReadResult(tasks, files, errors, duplicates) { Revision = revision };
+            var sourceHashes = new Dictionary<string, byte[]>(_liveGraphSourceHashes, StringComparer.OrdinalIgnoreCase);
+            if (task != null && sourceHash != null)
+            {
+                sourceHashes[filePath] = sourceHash.ToArray();
+            }
+            else
+            {
+                sourceHashes.Remove(filePath);
+            }
+
+            _liveGraphSourceHashes = sourceHashes;
             if (duplicates.Count > 0)
             {
                 // Incremental application detects the conflict but cannot reproduce the
@@ -1228,6 +1355,33 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
     {
         private bool _completed;
 
+        public bool MatchesDisplacedSource(GuardedSourceSnapshot expected)
+        {
+            if (expected.Exists != (displacedPath != null))
+            {
+                return false;
+            }
+
+            if (!expected.Exists)
+            {
+                return true;
+            }
+
+            try
+            {
+                var displacedHash = SHA256.HashData(File.ReadAllBytes(displacedPath!));
+                return CryptographicOperations.FixedTimeEquals(displacedHash, expected.Hash!);
+            }
+            catch (IOException)
+            {
+                return false;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return false;
+            }
+        }
+
         public void Commit()
         {
             if (_completed)
@@ -1319,6 +1473,8 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
             }
         }
     }
+
+    private sealed record GuardedSourceSnapshot(bool Exists, byte[]? Hash);
 
     private sealed class RecoverableMutationJournal
     {
@@ -1444,6 +1600,9 @@ public sealed record FileTaskStorageDirectoryReadResult(
     IReadOnlyList<FileTaskStorageLoadError> LoadErrors,
     IReadOnlyList<FileTaskStorageDuplicateIdIssue> DuplicateIdIssues)
 {
+    internal IReadOnlyDictionary<string, byte[]> SourceHashesByFile { get; init; } =
+        new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
+
     public IReadOnlyDictionary<string, TaskItem> TasksById { get; } = Tasks
         .Where(static task => !string.IsNullOrWhiteSpace(task.Id))
         .GroupBy(static task => task.Id, StringComparer.Ordinal)

@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Unlimotion.Domain;
 using Unlimotion.Storage;
 using Unlimotion.TaskTree;
@@ -1092,6 +1093,47 @@ public class FileStorageTaskStatusTests
     }
 
     [Test]
+    public async Task RawAliasIdChange_RepublishesOldIdTakenOverByAnotherSource()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var aliasPath = Path.Combine(tempDir, "alias.json");
+            await File.WriteAllTextAsync(
+                aliasPath,
+                JsonConvert.SerializeObject(new TaskItem { Id = "old", Title = "Original" }));
+            var watcher = new RecordingDatabaseWatcher();
+            var storage = new TestFileStorage(tempDir, watcher);
+            await storage.EnableLiveGraphAsync();
+            var observed = new List<(string Id, UpdateType Type, string? Title)>();
+            storage.Updating += (_, args) => observed.Add((
+                args.Id,
+                args.Type,
+                (args as FileStorageUpdateEventArgs)?.Snapshot?.Title));
+
+            await File.WriteAllTextAsync(
+                aliasPath,
+                JsonConvert.SerializeObject(new TaskItem { Id = "new", Title = "Replacement" }));
+            await File.WriteAllTextAsync(
+                Path.Combine(tempDir, "takeover.json"),
+                JsonConvert.SerializeObject(new TaskItem { Id = "old", Title = "Takeover" }));
+            watcher.EmitRaw("alias.json", UpdateType.Saved);
+            watcher.EmitRaw("takeover.json", UpdateType.Saved);
+            await storage.TriggerUpdatingAsync("alias.json", UpdateType.Saved);
+
+            await Assert.That(observed).Count().IsEqualTo(2);
+            await Assert.That(observed[0]).IsEqualTo(("old", UpdateType.Saved, "Takeover"));
+            await Assert.That(observed[1]).IsEqualTo(("new", UpdateType.Saved, "Replacement"));
+            await Assert.That((await storage.Load("old"))?.Title).IsEqualTo("Takeover");
+            await Assert.That((await storage.Load("new"))?.Title).IsEqualTo("Replacement");
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
+    [Test]
     public async Task GuardedSave_IgnoresRawEchoOfConfirmedOwnWrite()
     {
         var tempDir = CreateTempDirectory();
@@ -1178,6 +1220,70 @@ public class FileStorageTaskStatusTests
             await storage.SynchronizePendingFileChangesAsync();
             await Assert.That((await storage.Load("task", forced: true))?.Title).IsEqualTo("External edit");
             await Assert.That(Directory.EnumerateFiles(tempDir, "*.bak")).IsEmpty();
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
+    [Test]
+    public async Task GuardedSave_RestoresUnsignaledExternalEditDisplacedDuringAtomicReplace()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var storage = new AtomicReplaceRaceFileStorage(tempDir, new RecordingDatabaseWatcher());
+            await storage.Save(new TaskItem { Id = "task", Title = "Before" });
+            await storage.EnableLiveGraphAsync();
+            var task = await storage.Load("task", forced: true);
+            task!.Title = "Migration write";
+            storage.ArmExternalEdit(filePath =>
+            {
+                File.WriteAllText(
+                    filePath,
+                    JsonConvert.SerializeObject(new TaskItem { Id = "task", Title = "Delayed external event" }));
+            });
+
+            var generation = storage.CaptureLiveGraphGeneration();
+            using var guard = storage.GuardLiveGraphGeneration(generation);
+            await Assert.That(() => storage.Save(task)).Throws<LiveGraphInvalidatedException>();
+
+            await Assert.That((await storage.Load("task", forced: true))?.Title)
+                .IsEqualTo("Delayed external event");
+            await Assert.That(Directory.EnumerateFiles(tempDir, "*.bak")).IsEmpty();
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
+    [Test]
+    public async Task GuardedSave_AcceptsHashRefreshedBySemanticallyEquivalentRawEdit()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var watcher = new RecordingDatabaseWatcher();
+            var storage = new TestFileStorage(tempDir, watcher);
+            await storage.Save(new TaskItem { Id = "task", Title = "Before" });
+            await storage.EnableLiveGraphAsync();
+            var filePath = Path.Combine(tempDir, "task");
+            var taskJson = JObject.Parse(await File.ReadAllTextAsync(filePath));
+            await File.WriteAllTextAsync(filePath, taskJson.ToString(Formatting.None));
+            watcher.EmitRaw("task", UpdateType.Saved);
+            await storage.TriggerUpdatingAsync("task", UpdateType.Saved);
+
+            var task = await storage.Load("task");
+            task!.Title = "Migration write";
+            var generation = storage.CaptureLiveGraphGeneration();
+            using var guard = storage.GuardLiveGraphGeneration(generation);
+
+            await storage.Save(task);
+
+            await Assert.That((await storage.Load("task", forced: true))?.Title)
+                .IsEqualTo("Migration write");
         }
         finally
         {

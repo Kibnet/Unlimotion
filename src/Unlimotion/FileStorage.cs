@@ -74,6 +74,7 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
             refreshedTaskId = loadedTask?.Id ?? taskId;
             return new FileRefreshResult(
                 graph.TasksById.GetValueOrDefault(refreshedTaskId),
+                graph.TasksById.GetValueOrDefault(taskId),
                 physicallyAbsent,
                 graph.Revision);
         });
@@ -87,13 +88,17 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
 
         if (refresh.Task != null && !string.Equals(taskId, refresh.Task.Id, StringComparison.Ordinal))
         {
-            // A source file can legally change its domain Id. Remove the previous projection
-            // before publishing the replacement so the UI cannot retain both identities.
+            // A source file can legally change its domain Id. Another source can take over the
+            // old identity before this delayed callback runs; republish that surviving snapshot
+            // instead of removing it from the UI.
             RaiseUpdating(new FileStorageUpdateEventArgs
             {
                 Id = taskId,
-                Type = UpdateType.Removed,
-                StorageRevision = refresh.RevisionAfter
+                Type = refresh.PreviousIdentityTask == null ? UpdateType.Removed : UpdateType.Saved,
+                StorageRevision = refresh.RevisionAfter,
+                Snapshot = refresh.PreviousIdentityTask == null
+                    ? null
+                    : TaskItemSnapshot.Clone(refresh.PreviousIdentityTask)
             });
         }
 
@@ -410,6 +415,7 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
 
     private sealed record FileRefreshResult(
         TaskItem? Task,
+        TaskItem? PreviousIdentityTask,
         bool PhysicallyAbsent,
         long RevisionAfter);
 
