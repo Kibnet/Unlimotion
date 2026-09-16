@@ -25,6 +25,7 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
     private long _liveGraphRevision;
     private long _liveGraphInvalidationGeneration;
     private volatile bool _liveGraphNeedsReload;
+    private volatile bool _liveGraphRequiresFullReload;
     private readonly AsyncLocal<FileTaskGraphWriteScope?> _activeWriteScope = new();
 
     public FileTaskStorage(FileTaskStorageOptions options)
@@ -284,12 +285,18 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
 
     public long LiveGraphRevision => Interlocked.Read(ref _liveGraphRevision);
 
-    public void InvalidateLiveGraph()
+    public void InvalidateLiveGraph() => InvalidateLiveGraph(requiresFullReload: true);
+
+    protected void InvalidateLiveGraphForKnownFileChange() =>
+        InvalidateLiveGraph(requiresFullReload: false);
+
+    private void InvalidateLiveGraph(bool requiresFullReload)
     {
         lock (_liveGraphSync)
         {
             Interlocked.Increment(ref _liveGraphInvalidationGeneration);
             _liveGraphNeedsReload = true;
+            _liveGraphRequiresFullReload |= requiresFullReload;
             _tasks.Clear();
         }
     }
@@ -315,6 +322,37 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
         var result = await ReadDirectoryCoreAsync();
         PublishLiveGraph(ToGraphResult(result));
         MarkLiveGraphReloaded(invalidationGeneration);
+    }
+
+    protected long CaptureLiveGraphInvalidationGeneration() =>
+        Interlocked.Read(ref _liveGraphInvalidationGeneration);
+
+    protected bool LiveGraphRequiresFullReload => _liveGraphRequiresFullReload;
+
+    protected bool HasLiveGraphSnapshot
+    {
+        get
+        {
+            lock (_liveGraphSync)
+            {
+                return _liveGraph != null;
+            }
+        }
+    }
+
+    protected bool TryMarkKnownFileChangesApplied(long invalidationGeneration)
+    {
+        lock (_liveGraphSync)
+        {
+            if (_liveGraph == null || _liveGraphRequiresFullReload ||
+                Interlocked.Read(ref _liveGraphInvalidationGeneration) != invalidationGeneration)
+            {
+                return false;
+            }
+
+            _liveGraphNeedsReload = false;
+            return true;
+        }
     }
 
     private static TaskGraphReadResult ToGraphResult(FileTaskStorageDirectoryReadResult result) =>
@@ -690,6 +728,7 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
             if (Interlocked.Read(ref _liveGraphInvalidationGeneration) == invalidationGeneration)
             {
                 _liveGraphNeedsReload = false;
+                _liveGraphRequiresFullReload = false;
             }
         }
     }
@@ -759,6 +798,13 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
 
             var revision = Interlocked.Increment(ref _liveGraphRevision);
             _liveGraph = new TaskGraphReadResult(tasks, files, errors, duplicates) { Revision = revision };
+            if (duplicates.Count > 0)
+            {
+                // Incremental application detects the conflict but cannot reproduce the
+                // directory-order canonical source. Require one authoritative rescan.
+                _liveGraphNeedsReload = true;
+                _liveGraphRequiresFullReload = true;
+            }
         }
     }
 
@@ -877,6 +923,7 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
         {
             Interlocked.Increment(ref _liveGraphInvalidationGeneration);
             _liveGraphNeedsReload = true;
+            _liveGraphRequiresFullReload = true;
             _liveGraph = null;
             _tasks.Clear();
             _taskFilePaths.Clear();

@@ -531,6 +531,69 @@ public class FileStorageTaskStatusTests
     }
 
     [Test]
+    public async Task PreciseRawChange_IsAppliedWithoutFullDirectoryRescan()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var watcher = new RecordingDatabaseWatcher();
+            var storage = new CountingFileStorage(tempDir, watcher);
+            const string taskId = "incremental-raw-refresh";
+            var task = new TaskItem { Id = taskId, Title = "Original", Status = DomainTaskStatus.NotReady };
+            await storage.Save(task);
+            await storage.EnableLiveGraphAsync();
+            var initialEnumerations = storage.DirectoryEnumerationCount;
+
+            task.Title = "External edit";
+            await File.WriteAllTextAsync(Path.Combine(tempDir, taskId), JsonConvert.SerializeObject(task));
+            watcher.EmitRaw(taskId, UpdateType.Saved);
+            var graph = await storage.SynchronizePendingFileChangesAsync();
+
+            using (Assert.Multiple())
+            {
+                await Assert.That(graph.TasksById[taskId].Title).IsEqualTo("External edit");
+                await Assert.That(storage.DirectoryEnumerationCount).IsEqualTo(initialEnumerations);
+            }
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
+    [Test]
+    public async Task PreciseRawChange_WithNewDuplicateId_FallsBackToDirectoryRescan()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var watcher = new RecordingDatabaseWatcher();
+            var storage = new CountingFileStorage(tempDir, watcher);
+            await File.WriteAllTextAsync(
+                Path.Combine(tempDir, "first.json"),
+                JsonConvert.SerializeObject(new TaskItem { Id = "duplicate", Title = "First" }));
+            await storage.EnableLiveGraphAsync();
+            var initialEnumerations = storage.DirectoryEnumerationCount;
+
+            await File.WriteAllTextAsync(
+                Path.Combine(tempDir, "second.json"),
+                JsonConvert.SerializeObject(new TaskItem { Id = "duplicate", Title = "Second" }));
+            watcher.EmitRaw("second.json", UpdateType.Saved);
+            var graph = await storage.SynchronizePendingFileChangesAsync();
+
+            using (Assert.Multiple())
+            {
+                await Assert.That(storage.DirectoryEnumerationCount).IsEqualTo(initialEnumerations + 1);
+                await Assert.That(graph.DuplicateIdIssues).Count().IsEqualTo(1);
+            }
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
+    [Test]
     public async Task DebouncedEventType_IsDerivedFromCurrentPhysicalState()
     {
         var tempDir = CreateTempDirectory();

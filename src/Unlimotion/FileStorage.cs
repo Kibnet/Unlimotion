@@ -88,24 +88,21 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
     public override Task<T> WithWriteLockAsync<T>(Func<Task<T>> operation) =>
         WithDirectoryLockAsync(async () =>
         {
-            await EnsureLiveGraphReadyWithinWriteLockAsync();
-            await DrainPendingFileChangesAsync();
+            await RefreshPendingFileChangesWithinWriteLockAsync();
             return await operation();
         });
 
     public Task<TaskGraphReadResult> SynchronizePendingFileChangesAsync() =>
         WithDirectoryLockAsync(async () =>
         {
-            await EnsureLiveGraphReadyWithinWriteLockAsync();
-            await DrainPendingFileChangesAsync();
+            await RefreshPendingFileChangesWithinWriteLockAsync();
             return await ReadGraphAsync();
         });
 
     public Task RefreshPendingFileChangesAsync() =>
         WithDirectoryLockAsync(async () =>
         {
-            await EnsureLiveGraphReadyWithinWriteLockAsync();
-            await DrainPendingFileChangesAsync();
+            await RefreshPendingFileChangesWithinWriteLockAsync();
         });
 
     private void SubscribeToWatcher(IDatabaseWatcher watcher)
@@ -117,11 +114,14 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
             {
                 if (IsTaskFile(args.Id))
                 {
-                    InvalidateLiveGraph();
                     var change = new PendingFileChange(
                         Interlocked.Increment(ref _nextPendingGeneration),
                         args.Type);
                     _pendingFileChanges.AddOrUpdate(args.Id, change, (_, _) => change);
+                    // Publish the precise work before advancing the invalidation generation.
+                    // A synchronizer can then either consume this entry or observe the newer
+                    // generation; it cannot mark a graph current while the change is invisible.
+                    InvalidateLiveGraphForKnownFileChange();
                 }
             };
         }
@@ -186,6 +186,45 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
         if (!_pendingFileChanges.IsEmpty)
         {
             throw new IOException("Task files keep changing while preparing a graph command.");
+        }
+    }
+
+    private async Task RefreshPendingFileChangesWithinWriteLockAsync()
+    {
+        if (!HasLiveGraphSnapshot && !LiveGraphRequiresFullReload)
+        {
+            await DrainPendingFileChangesAsync();
+            return;
+        }
+
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            if (LiveGraphRequiresFullReload)
+            {
+                await EnsureLiveGraphReadyWithinWriteLockAsync();
+            }
+
+            var invalidationGeneration = CaptureLiveGraphInvalidationGeneration();
+            await DrainPendingFileChangesAsync();
+            if (TryMarkKnownFileChangesApplied(invalidationGeneration))
+            {
+                return;
+            }
+
+            if (!LiveGraphRequiresFullReload)
+            {
+                continue;
+            }
+        }
+
+        // A global watcher invalidation, recovery, or duplicate-bearing graph cannot be
+        // reconciled from per-file events. Fall back to the authoritative directory scan.
+        await EnsureLiveGraphReadyWithinWriteLockAsync();
+        var finalInvalidationGeneration = CaptureLiveGraphInvalidationGeneration();
+        await DrainPendingFileChangesAsync();
+        if (!TryMarkKnownFileChangesApplied(finalInvalidationGeneration))
+        {
+            throw new IOException("Task files keep changing while finalizing the live graph.");
         }
     }
 
