@@ -143,23 +143,31 @@ public sealed class TaskLoadingPerformanceFlaUiTests
                 Wait(() => details.IsToggled == true, "The previous task card did not close.", TimeSpan.FromSeconds(15));
             }
             var lastClick = Stopwatch.StartNew();
+            var clicked = false;
+            var toggledAfterClick = false;
             Wait(() =>
             {
                 if (Find(session, "CurrentTaskTitleTextBox")?.AsTextBox().Text == title) return true;
-                if (lastClick.Elapsed < TimeSpan.FromMilliseconds(500)) return false;
-                if (details.IsToggled != true)
+                if (clicked && lastClick.Elapsed >= TimeSpan.FromSeconds(1) &&
+                    details.IsToggled == true && !toggledAfterClick)
                 {
+                    // Some UIA providers select the row without opening the pane. Toggle once,
+                    // but never close a pane that the row click has already opened.
                     details.Toggle();
-                    lastClick.Restart();
+                    toggledAfterClick = true;
                     return false;
                 }
+
+                if (clicked && lastClick.Elapsed < TimeSpan.FromSeconds(3)) return false;
+
                 var task = session.MainWindow
                     .FindAllDescendants(session.ConditionFactory.ByAutomationId("InlineTaskTitleTextBlock"))
                     .FirstOrDefault(e => e.Name == title && Visible(e));
                 if (task is null) return false;
                 task.Focus();
                 task.Click();
-                if (details.IsToggled == true) details.Toggle();
+                clicked = true;
+                toggledAfterClick = false;
                 lastClick.Restart();
                 return false;
             }, "The selected task card did not open.", TimeSpan.FromSeconds(15));
