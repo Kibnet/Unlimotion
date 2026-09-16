@@ -49,9 +49,12 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
         var taskId = TryGetTaskIdBySourceFileName(e.Id, out var mappedTaskId)
             ? mappedTaskId
             : e.Id;
-        RemovePendingFileChange(e.Id);
         var refresh = await WithDirectoryLockAsync(async () =>
         {
+            // Keep the raw entry pending until the directory lock is held. Otherwise a
+            // command queued ahead of this delayed callback can observe an empty queue,
+            // mark the invalidated graph current, and consume stale task content.
+            await RefreshPendingFileChangesWithinWriteLockAsync();
             var loadedTask = await Load(taskId, forced: true);
             var graph = await ReadGraphAsync();
             var sourcePath = System.IO.Path.Combine(Path, e.Id);
@@ -225,14 +228,6 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
         if (!TryMarkKnownFileChangesApplied(finalInvalidationGeneration))
         {
             throw new IOException("Task files keep changing while finalizing the live graph.");
-        }
-    }
-
-    private void RemovePendingFileChange(string fileName)
-    {
-        if (_pendingFileChanges.TryGetValue(fileName, out var pending))
-        {
-            RemovePendingFileChange(new KeyValuePair<string, PendingFileChange>(fileName, pending));
         }
     }
 

@@ -1050,6 +1050,49 @@ public class FileStorageTaskStatusTests
         }
     }
 
+    [Test]
+    public async Task DelayedWatcherUpdate_DoesNotHidePendingChangeFromQueuedCommand()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var watcher = new RecordingDatabaseWatcher();
+            var storage = new TestFileStorage(tempDir, watcher);
+            var task = new TaskItem { Id = "concurrent-update", Title = "Old title" };
+            await storage.Save(task);
+            await storage.EnableLiveGraphAsync();
+
+            var lockEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var releaseLock = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var blockingOperation = storage.WithDirectoryLockAsync(async () =>
+            {
+                lockEntered.TrySetResult();
+                await releaseLock.Task;
+            });
+            await lockEntered.Task;
+
+            task.Title = "New title";
+            await File.WriteAllTextAsync(
+                Path.Combine(tempDir, task.Id),
+                JsonConvert.SerializeObject(task));
+            watcher.EmitRaw(task.Id, UpdateType.Saved);
+
+            // Queue the command first. On the old implementation the delayed callback below
+            // removed the pending entry synchronously before either waiter acquired the lock.
+            var command = storage.WithWriteLockAsync(async () => (await storage.Load(task.Id))?.Title);
+            var delayedUpdate = storage.TriggerUpdatingAsync(task.Id);
+            releaseLock.TrySetResult();
+
+            await Assert.That(await command).IsEqualTo("New title");
+            await delayedUpdate;
+            await blockingOperation;
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
     private static string CreateTempDirectory()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "file-storage-status-" + Guid.NewGuid().ToString("N"));
