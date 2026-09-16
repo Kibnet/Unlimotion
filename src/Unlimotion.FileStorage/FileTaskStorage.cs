@@ -287,17 +287,24 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
 
     public void InvalidateLiveGraph() => InvalidateLiveGraph(requiresFullReload: true);
 
-    protected void InvalidateLiveGraphForKnownFileChange() =>
-        InvalidateLiveGraph(requiresFullReload: false);
+    protected void PublishKnownFileChange(Action publishChange) =>
+        InvalidateLiveGraph(requiresFullReload: false, publishChange);
 
-    private void InvalidateLiveGraph(bool requiresFullReload)
+    private void InvalidateLiveGraph(bool requiresFullReload, Action? publishChange = null)
     {
         lock (_liveGraphSync)
         {
-            Interlocked.Increment(ref _liveGraphInvalidationGeneration);
-            _liveGraphNeedsReload = true;
-            _liveGraphRequiresFullReload |= requiresFullReload;
-            _tasks.Clear();
+            try
+            {
+                publishChange?.Invoke();
+            }
+            finally
+            {
+                Interlocked.Increment(ref _liveGraphInvalidationGeneration);
+                _liveGraphNeedsReload = true;
+                _liveGraphRequiresFullReload |= requiresFullReload;
+                _tasks.Clear();
+            }
         }
     }
 

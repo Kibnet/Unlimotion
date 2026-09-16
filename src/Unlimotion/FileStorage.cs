@@ -120,11 +120,11 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
                     var change = new PendingFileChange(
                         Interlocked.Increment(ref _nextPendingGeneration),
                         args.Type);
-                    _pendingFileChanges.AddOrUpdate(args.Id, change, (_, _) => change);
-                    // Publish the precise work before advancing the invalidation generation.
-                    // A synchronizer can then either consume this entry or observe the newer
-                    // generation; it cannot mark a graph current while the change is invisible.
-                    InvalidateLiveGraphForKnownFileChange();
+                    // Publish the precise work and advance the invalidation generation under
+                    // the same lock used to accept a refreshed graph. A synchronizer therefore
+                    // cannot observe the entry before the generation that owns it.
+                    PublishKnownFileChange(() =>
+                        _pendingFileChanges.AddOrUpdate(args.Id, change, (_, _) => change));
                 }
             };
         }

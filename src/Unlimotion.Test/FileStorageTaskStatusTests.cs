@@ -1093,6 +1093,41 @@ public class FileStorageTaskStatusTests
         }
     }
 
+    [Test]
+    public async Task KnownFileChangePublication_IsAtomicWithGenerationInvalidation()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var storage = new TestFileStorage(tempDir);
+            await storage.Save(new TaskItem { Id = "atomic-raw-change", Title = "Initial" });
+            await storage.EnableLiveGraphAsync();
+            var previousGeneration = storage.CaptureInvalidationGenerationForTest();
+            var publicationEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var releasePublication = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            var publication = Task.Run(() => storage.PublishKnownFileChangeForTest(() =>
+            {
+                publicationEntered.TrySetResult();
+                releasePublication.Task.GetAwaiter().GetResult();
+            }));
+            await publicationEntered.Task;
+
+            var staleAcceptance = Task.Run(() =>
+                storage.TryMarkKnownFileChangesAppliedForTest(previousGeneration));
+            await Task.Delay(50);
+            await Assert.That(staleAcceptance.IsCompleted).IsFalse();
+
+            releasePublication.TrySetResult();
+            await publication;
+            await Assert.That(await staleAcceptance).IsFalse();
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
     private static string CreateTempDirectory()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "file-storage-status-" + Guid.NewGuid().ToString("N"));
@@ -1127,6 +1162,13 @@ public class FileStorageTaskStatusTests
             Id = id,
             Type = type
         });
+
+        public long CaptureInvalidationGenerationForTest() => CaptureLiveGraphInvalidationGeneration();
+
+        public void PublishKnownFileChangeForTest(Action publishChange) => PublishKnownFileChange(publishChange);
+
+        public bool TryMarkKnownFileChangesAppliedForTest(long generation) =>
+            TryMarkKnownFileChangesApplied(generation);
     }
 
     private sealed class CountingFileStorage : FileStorage
