@@ -18,6 +18,7 @@ namespace Unlimotion;
 
 public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposable
 {
+    internal static StringComparer SourcePathComparer => TaskFilePathComparer;
     private readonly IDatabaseWatcher? _dbWatcher;
     private readonly ConcurrentDictionary<string, PendingFileChange> _pendingFileChanges =
         new(TaskFilePathComparer);
@@ -152,12 +153,26 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
 
     private void CompleteOwnWrite(string fileName)
     {
-        if (_confirmedOwnWrites.TryGetValue(fileName, out var confirmation))
+        if (!_confirmedOwnWrites.TryGetValue(fileName, out var confirmation))
         {
-            lock (confirmation.Sync)
-            {
-                confirmation.IsWriteInProgress = false;
-            }
+            return;
+        }
+
+        UpdateType? deferredEventType;
+        lock (confirmation.Sync)
+        {
+            confirmation.IsWriteInProgress = false;
+            deferredEventType = confirmation.DeferredEventType;
+            confirmation.DeferredEventType = null;
+        }
+
+        // A raw event raised while File.Replace exposed an intermediate target cannot be
+        // classified synchronously. Validate the completed target now; a mismatching external
+        // write must invalidate the generation before the guarded save can publish its graph.
+        if (deferredEventType is { } eventType &&
+            !MatchesConfirmedOwnWrite(fileName, confirmation))
+        {
+            PublishRawFileChange(fileName, eventType);
         }
     }
 
@@ -228,28 +243,12 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
             {
                 if (IsTaskFile(args.Id))
                 {
-                    if (IsConfirmedOwnWrite(args.Id))
+                    if (IsConfirmedOwnWrite(args.Id, args.Type))
                     {
                         return;
                     }
 
-                    var change = new PendingFileChange(
-                        Interlocked.Increment(ref _nextPendingGeneration),
-                        args.Type);
-                    // Publish the precise work and advance the invalidation generation under
-                    // the same lock used to accept a refreshed graph. A synchronizer therefore
-                    // cannot observe the entry before the generation that owns it.
-                    PublishKnownFileChange(() =>
-                    {
-                        var taskId = TryGetTaskIdBySourceFileName(args.Id, out var mappedTaskId)
-                            ? mappedTaskId
-                            : args.Id;
-                        _pendingFileChanges.AddOrUpdate(args.Id, change, (_, _) => change);
-                        _pendingWatcherUpdates.AddOrUpdate(
-                            args.Id,
-                            new PendingWatcherUpdate(change.Generation, taskId),
-                            (_, existing) => new PendingWatcherUpdate(change.Generation, existing.TaskId));
-                    });
+                    PublishRawFileChange(args.Id, args.Type);
                 }
             };
         }
@@ -363,7 +362,28 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
         ((ICollection<KeyValuePair<string, PendingWatcherUpdate>>)_pendingWatcherUpdates).Remove(
             new KeyValuePair<string, PendingWatcherUpdate>(fileName, update));
 
-    private bool IsConfirmedOwnWrite(string fileName)
+    private void PublishRawFileChange(string fileName, UpdateType type)
+    {
+        var change = new PendingFileChange(
+            Interlocked.Increment(ref _nextPendingGeneration),
+            type);
+        // Publish the precise work and advance the invalidation generation under
+        // the same lock used to accept a refreshed graph. A synchronizer therefore
+        // cannot observe the entry before the generation that owns it.
+        PublishKnownFileChange(() =>
+        {
+            var taskId = TryGetTaskIdBySourceFileName(fileName, out var mappedTaskId)
+                ? mappedTaskId
+                : fileName;
+            _pendingFileChanges.AddOrUpdate(fileName, change, (_, _) => change);
+            _pendingWatcherUpdates.AddOrUpdate(
+                fileName,
+                new PendingWatcherUpdate(change.Generation, taskId),
+                (_, existing) => new PendingWatcherUpdate(change.Generation, existing.TaskId));
+        });
+    }
+
+    private bool IsConfirmedOwnWrite(string fileName, UpdateType type)
     {
         if (!_confirmedOwnWrites.TryGetValue(fileName, out var confirmation))
         {
@@ -377,6 +397,7 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
             // by its exact hash; guarded writes independently verify the displaced source.
             if (confirmation.IsWriteInProgress)
             {
+                confirmation.DeferredEventType = type;
                 return true;
             }
         }
@@ -387,6 +408,11 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
             return false;
         }
 
+        return MatchesConfirmedOwnWrite(fileName, confirmation);
+    }
+
+    private bool MatchesConfirmedOwnWrite(string fileName, ConfirmedOwnWrite confirmation)
+    {
         var filePath = System.IO.Path.Combine(Path, fileName);
         for (var attempt = 0; attempt < 3; attempt++)
         {
@@ -452,6 +478,7 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
         public DateTimeOffset ExpiresAt { get; } = expiresAt;
         public object Sync { get; } = new();
         public bool IsWriteInProgress { get; set; } = true;
+        public UpdateType? DeferredEventType { get; set; }
     }
 
     private sealed record FileRefreshResult(

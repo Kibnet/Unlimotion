@@ -914,6 +914,26 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
             }
         }
 
+        // A full reload rebuilds the mutable path cache. Raw watcher events can arrive in that
+        // scan window, so retain alias identity through the last published immutable graph.
+        lock (_liveGraphSync)
+        {
+            if (_liveGraph != null)
+            {
+                foreach (var pair in _liveGraph.FilesByTaskId)
+                {
+                    if (string.Equals(
+                            System.IO.Path.GetFileName(pair.Value),
+                            fileName,
+                            FilePathComparison))
+                    {
+                        taskId = pair.Key;
+                        return true;
+                    }
+                }
+            }
+        }
+
         taskId = string.Empty;
         return false;
     }

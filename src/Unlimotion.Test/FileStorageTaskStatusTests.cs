@@ -534,6 +534,47 @@ public class FileStorageTaskStatusTests
     }
 
     [Test]
+    public async Task InitFinalCheckpoint_DistinguishesCaseDistinctSourcePathsOnUnix()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var watcher = new RecordingDatabaseWatcher();
+            var storage = new TestFileStorage(tempDir, watcher);
+            var corruptPath = Path.Combine(tempDir, "case-source");
+            var deletedPath = Path.Combine(tempDir, "CASE-SOURCE");
+            await File.WriteAllTextAsync(
+                corruptPath,
+                JsonConvert.SerializeObject(new TaskItem { Id = "case-corrupt", Title = "Keep" }));
+            await File.WriteAllTextAsync(
+                deletedPath,
+                JsonConvert.SerializeObject(new TaskItem { Id = "case-deleted", Title = "Remove" }));
+            watcher.OnEnabled = () =>
+            {
+                File.WriteAllText(corruptPath, "{ corrupt json");
+                File.Delete(deletedPath);
+                watcher.EmitRaw("case-source", UpdateType.Saved);
+                watcher.EmitRaw("CASE-SOURCE", UpdateType.Removed);
+            };
+
+            using var unified = new UnifiedTaskStorage(new TaskTreeManager(storage));
+            await unified.Init();
+
+            await Assert.That(unified.Tasks.Lookup("case-corrupt").HasValue).IsTrue();
+            await Assert.That(unified.Tasks.Lookup("case-deleted").HasValue).IsFalse();
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
+    [Test]
     public async Task PreciseRawChange_IsAppliedWithoutFullDirectoryRescan()
     {
         var tempDir = CreateTempDirectory();
@@ -1194,6 +1235,72 @@ public class FileStorageTaskStatusTests
     }
 
     [Test]
+    public async Task GuardedSave_RejectsExternalWriteObservedDuringOwnAtomicWrite()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var watcher = new RecordingDatabaseWatcher();
+            var storage = new PostReplaceRaceFileStorage(tempDir, watcher);
+            await storage.Save(new TaskItem { Id = "task", Title = "Before" });
+            await storage.EnableLiveGraphAsync();
+            var task = await storage.Load("task", forced: true);
+            task!.Title = "Migration write";
+            storage.ArmExternalEdit(filePath =>
+            {
+                File.WriteAllText(
+                    filePath,
+                    JsonConvert.SerializeObject(new TaskItem { Id = "task", Title = "External edit" }));
+                watcher.EmitRaw(Path.GetFileName(filePath), UpdateType.Saved);
+            });
+
+            var generation = storage.CaptureLiveGraphGeneration();
+            using var guard = storage.GuardLiveGraphGeneration(generation);
+            await Assert.That(() => storage.Save(task)).Throws<LiveGraphInvalidatedException>();
+
+            await storage.SynchronizePendingFileChangesAsync();
+            await Assert.That((await storage.Load("task", forced: true))?.Title).IsEqualTo("External edit");
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
+    [Test]
+    public async Task FullReload_RetainsAliasIdentityForRawDeletionDuringScan()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var watcher = new RecordingDatabaseWatcher();
+            var storage = new ReloadRaceFileStorage(tempDir, watcher);
+            var sourcePath = Path.Combine(tempDir, "alias.json");
+            await File.WriteAllTextAsync(
+                sourcePath,
+                JsonConvert.SerializeObject(new TaskItem { Id = "alias", Title = "Aliased" }));
+            await storage.EnableLiveGraphAsync();
+            storage.ArmReloadAction(() =>
+            {
+                File.Delete(sourcePath);
+                watcher.EmitRaw("alias.json", UpdateType.Removed);
+            });
+            storage.InvalidateLiveGraph();
+
+            await storage.SynchronizePendingFileChangesAsync();
+            string? observedId = null;
+            storage.Updating += (_, args) => observedId = args.Id;
+            await storage.TriggerUpdatingAsync("alias.json", UpdateType.Removed);
+
+            await Assert.That(observedId).IsEqualTo("alias");
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
+    [Test]
     public async Task GuardedSave_RestoresExternalEditDisplacedDuringAtomicReplace()
     {
         var tempDir = CreateTempDirectory();
@@ -1628,7 +1735,7 @@ public class FileStorageTaskStatusTests
         }
     }
 
-    private sealed class TestFileStorage : FileStorage
+    private class TestFileStorage : FileStorage
     {
         public TestFileStorage(string path) : base(path, watcher: false)
         {
@@ -1702,6 +1809,36 @@ public class FileStorageTaskStatusTests
         {
             base.OnBeforeLiveFileChangePublication(taskId, filePath);
             Interlocked.Exchange(ref _externalEdit, null)?.Invoke(filePath);
+        }
+    }
+
+    private sealed class PostReplaceRaceFileStorage(
+        string path,
+        RecordingDatabaseWatcher watcher) : FileStorage(path, watcher)
+    {
+        private Action<string>? _externalEdit;
+
+        public void ArmExternalEdit(Action<string> externalEdit) => _externalEdit = externalEdit;
+
+        protected override void OnAfterWritePersisted(string taskId, string filePath)
+        {
+            Interlocked.Exchange(ref _externalEdit, null)?.Invoke(filePath);
+            base.OnAfterWritePersisted(taskId, filePath);
+        }
+    }
+
+    private sealed class ReloadRaceFileStorage(
+        string path,
+        RecordingDatabaseWatcher watcher) : TestFileStorage(path, watcher)
+    {
+        private Action? _reloadAction;
+
+        public void ArmReloadAction(Action action) => _reloadAction = action;
+
+        protected override IEnumerable<string> EnumerateTaskFiles()
+        {
+            Interlocked.Exchange(ref _reloadAction, null)?.Invoke();
+            return base.EnumerateTaskFiles();
         }
     }
 

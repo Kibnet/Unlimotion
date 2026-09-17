@@ -204,7 +204,7 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
             // Preserve its last visible VM; write commands remain blocked by the graph diagnostic.
             var errorFiles = graph.LoadErrors
                 .Select(static error => error.File)
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                .ToHashSet(FileStorage.SourcePathComparer);
             var idsWithUnreadableSources = previousGraph.FilesByTaskId
                 .Where(pair => errorFiles.Contains(pair.Value))
                 .Select(static pair => pair.Key)
