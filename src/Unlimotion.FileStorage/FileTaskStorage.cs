@@ -12,19 +12,26 @@ namespace Unlimotion.Storage;
 
 public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraphWriteLock, ITaskGraphWriteScopeStorage
 {
+    internal static readonly StringComparer FilePathComparer = OperatingSystem.IsWindows()
+        ? StringComparer.OrdinalIgnoreCase
+        : StringComparer.Ordinal;
+    protected static StringComparer TaskFilePathComparer => FilePathComparer;
+    private static readonly StringComparison FilePathComparison = OperatingSystem.IsWindows()
+        ? StringComparison.OrdinalIgnoreCase
+        : StringComparison.Ordinal;
     // Contract metadata is reusable; serializers and converters remain local to each read.
     private static readonly IContractResolver PreservingReadContractResolver = new DefaultContractResolver();
     private static readonly IContractResolver IgnoringReadContractResolver = new IgnoreExtensionDataContractResolver();
     private static readonly AsyncLocal<HashSet<string>?> HeldDirectoryLocks = new();
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> DirectorySemaphores =
-        new(StringComparer.OrdinalIgnoreCase);
+        new(FilePathComparer);
     private readonly ConcurrentDictionary<string, TaskItem> _tasks = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, string> _taskFilePaths = new(StringComparer.Ordinal);
     private readonly FileTaskStorageOptions _options;
     private readonly object _liveGraphSync = new();
     private TaskGraphReadResult? _liveGraph;
     private IReadOnlyDictionary<string, byte[]> _liveGraphSourceHashes =
-        new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
+        new Dictionary<string, byte[]>(FilePathComparer);
     private long _liveGraphRevision;
     private long _liveGraphInvalidationGeneration;
     private volatile bool _liveGraphNeedsReload;
@@ -205,7 +212,7 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
     {
         var tasks = new List<TaskItem>();
         var taskFiles = new Dictionary<string, List<string>>(StringComparer.Ordinal);
-        var sourceHashes = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
+        var sourceHashes = new Dictionary<string, byte[]>(FilePathComparer);
         var loadErrors = new List<FileTaskStorageLoadError>();
 
         foreach (var file in EnumerateTaskFiles())
@@ -468,8 +475,8 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
         {
             lockStream = await AcquireDirectoryLockAsync(lockPath, linked.Token, cancellationToken);
             var currentLocks = previousLocks == null
-                ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-                : new HashSet<string>(previousLocks, StringComparer.OrdinalIgnoreCase);
+                ? new HashSet<string>(FilePathComparer)
+                : new HashSet<string>(previousLocks, FilePathComparer);
             currentLocks.Add(lockPath);
             HeldDirectoryLocks.Value = currentLocks;
 
@@ -900,7 +907,7 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
             if (string.Equals(
                     System.IO.Path.GetFileName(pair.Value),
                     fileName,
-                    StringComparison.OrdinalIgnoreCase))
+                    FilePathComparison))
             {
                 taskId = pair.Key;
                 return true;
@@ -953,7 +960,7 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
             _liveGraphSourceHashes = sourceHashes.ToDictionary(
                 static pair => pair.Key,
                 static pair => pair.Value.ToArray(),
-                StringComparer.OrdinalIgnoreCase);
+                FilePathComparer);
         }
     }
 
@@ -990,11 +997,11 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
             }
 
             var previousTask = _liveGraph.FilesByTaskId
-                .Where(pair => string.Equals(pair.Value, filePath, StringComparison.OrdinalIgnoreCase))
+                .Where(pair => string.Equals(pair.Value, filePath, FilePathComparison))
                 .Select(pair => _liveGraph.TasksById.GetValueOrDefault(pair.Key))
                 .FirstOrDefault(existing => existing != null);
             var previousError = _liveGraph.LoadErrors.FirstOrDefault(existing =>
-                string.Equals(existing.File, filePath, StringComparison.OrdinalIgnoreCase));
+                string.Equals(existing.File, filePath, FilePathComparison));
             if (task != null && previousTask != null && previousError == null &&
                 JsonConvert.SerializeObject(previousTask, CreateSerializerSettings()) ==
                 JsonConvert.SerializeObject(task, CreateSerializerSettings()))
@@ -1003,7 +1010,7 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
                 {
                     var unchangedSourceHashes = new Dictionary<string, byte[]>(
                         _liveGraphSourceHashes,
-                        StringComparer.OrdinalIgnoreCase)
+                        FilePathComparer)
                     {
                         [filePath] = sourceHash.ToArray()
                     };
@@ -1014,7 +1021,7 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
             }
 
             var previousIds = _liveGraph.FilesByTaskId
-                .Where(pair => string.Equals(pair.Value, filePath, StringComparison.OrdinalIgnoreCase))
+                .Where(pair => string.Equals(pair.Value, filePath, FilePathComparison))
                 .Select(static pair => pair.Key)
                 .ToHashSet(StringComparer.Ordinal);
             var tasks = _liveGraph.Tasks
@@ -1025,7 +1032,7 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
                 .Where(pair => !previousIds.Contains(pair.Key))
                 .ToDictionary(static pair => pair.Key, static pair => pair.Value, StringComparer.Ordinal);
             var errors = _liveGraph.LoadErrors
-                .Where(existing => !string.Equals(existing.File, filePath, StringComparison.OrdinalIgnoreCase))
+                .Where(existing => !string.Equals(existing.File, filePath, FilePathComparison))
                 .ToList();
             var duplicates = new List<TaskGraphDuplicateIdIssue>();
 
@@ -1033,7 +1040,7 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
             {
                 var stored = TaskItemSnapshot.Clone(task);
                 if (files.TryGetValue(stored.Id, out var otherFile) &&
-                    !string.Equals(otherFile, filePath, StringComparison.OrdinalIgnoreCase))
+                    !string.Equals(otherFile, filePath, FilePathComparison))
                 {
                     duplicates.Add(new TaskGraphDuplicateIdIssue(stored.Id, [otherFile, filePath]));
                 }
@@ -1048,7 +1055,7 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
 
             var revision = Interlocked.Increment(ref _liveGraphRevision);
             _liveGraph = new TaskGraphReadResult(tasks, files, errors, duplicates) { Revision = revision };
-            var sourceHashes = new Dictionary<string, byte[]>(_liveGraphSourceHashes, StringComparer.OrdinalIgnoreCase);
+            var sourceHashes = new Dictionary<string, byte[]>(_liveGraphSourceHashes, FilePathComparer);
             if (task != null && sourceHash != null)
             {
                 sourceHashes[filePath] = sourceHash.ToArray();
@@ -1075,7 +1082,7 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
     {
         foreach (var pair in _taskFilePaths)
         {
-            if (string.Equals(pair.Value, filePath, StringComparison.OrdinalIgnoreCase) &&
+            if (string.Equals(pair.Value, filePath, FilePathComparison) &&
                 (exceptTaskId == null || !string.Equals(pair.Key, exceptTaskId, StringComparison.Ordinal)))
             {
                 _taskFilePaths.TryRemove(pair.Key, out _);
@@ -1170,8 +1177,8 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
     {
         var fullPath = System.IO.Path.GetFullPath(candidate);
         var directoryPrefix = Path.TrimEnd(System.IO.Path.DirectorySeparatorChar) + System.IO.Path.DirectorySeparatorChar;
-        if (!fullPath.StartsWith(directoryPrefix, StringComparison.OrdinalIgnoreCase) ||
-            !string.Equals(System.IO.Path.GetDirectoryName(fullPath), Path, StringComparison.OrdinalIgnoreCase) ||
+        if (!fullPath.StartsWith(directoryPrefix, FilePathComparison) ||
+            !string.Equals(System.IO.Path.GetDirectoryName(fullPath), Path, FilePathComparison) ||
             !IsTaskFile(System.IO.Path.GetFileName(fullPath)))
         {
             throw new InvalidDataException($"Transaction journal contains an invalid task path '{candidate}'.");
@@ -1279,7 +1286,7 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
         private RecoverableMutationEntry GetOrCreateEntry(string taskId, string filePath)
         {
             var existing = _journal.Entries.FirstOrDefault(entry =>
-                string.Equals(entry.FilePath, filePath, StringComparison.OrdinalIgnoreCase));
+                string.Equals(entry.FilePath, filePath, FilePathComparison));
             if (existing != null)
             {
                 return existing;
@@ -1609,7 +1616,7 @@ public sealed record FileTaskStorageDirectoryReadResult(
     IReadOnlyList<FileTaskStorageDuplicateIdIssue> DuplicateIdIssues)
 {
     internal IReadOnlyDictionary<string, byte[]> SourceHashesByFile { get; init; } =
-        new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
+        new Dictionary<string, byte[]>(FileTaskStorage.FilePathComparer);
 
     public IReadOnlyDictionary<string, TaskItem> TasksById { get; } = Tasks
         .Where(static task => !string.IsNullOrWhiteSpace(task.Id))

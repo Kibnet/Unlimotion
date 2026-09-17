@@ -20,11 +20,11 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
 {
     private readonly IDatabaseWatcher? _dbWatcher;
     private readonly ConcurrentDictionary<string, PendingFileChange> _pendingFileChanges =
-        new(StringComparer.OrdinalIgnoreCase);
+        new(TaskFilePathComparer);
     private readonly ConcurrentDictionary<string, PendingWatcherUpdate> _pendingWatcherUpdates =
-        new(StringComparer.OrdinalIgnoreCase);
+        new(TaskFilePathComparer);
     private readonly ConcurrentDictionary<string, ConfirmedOwnWrite> _confirmedOwnWrites =
-        new(StringComparer.OrdinalIgnoreCase);
+        new(TaskFilePathComparer);
     private readonly SemaphoreSlim _watcherUpdateGate = new(1, 1);
     private long _nextPendingGeneration;
     private bool _disposed;

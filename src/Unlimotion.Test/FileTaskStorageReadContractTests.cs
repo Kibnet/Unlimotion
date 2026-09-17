@@ -15,6 +15,35 @@ namespace Unlimotion.Test;
 public sealed class FileTaskStorageReadContractTests
 {
     [Test]
+    public async Task GuardedSave_PreservesHashesForCaseDistinctSourceFiles()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var fixture = new Fixture();
+        await File.WriteAllTextAsync(Path.Combine(fixture.Path, "case-task"), RichJson("case-task"));
+        await File.WriteAllTextAsync(Path.Combine(fixture.Path, "CASE-TASK"), RichJson("CASE-TASK"));
+
+        var storage = fixture.CreateStorage(preserveUnknown: true);
+        await storage.EnableLiveGraphAsync();
+        var generation = storage.CaptureLiveGraphGeneration();
+        var task = await storage.Load("case-task", forced: true);
+
+        await Assert.That(task).IsNotNull();
+        task!.Title = "Updated independently";
+        using (storage.GuardLiveGraphGeneration(generation))
+        {
+            await storage.Save(task);
+        }
+
+        var upperCaseTask = await storage.Load("CASE-TASK", forced: true);
+        await Assert.That(upperCaseTask).IsNotNull();
+        await Assert.That(upperCaseTask!.Title).IsNotEqualTo(task.Title);
+    }
+
+    [Test]
     public async Task ReadDirectory_RepeatedModelsStayWithinAllocationBudget()
     {
         using var fixture = new Fixture();
