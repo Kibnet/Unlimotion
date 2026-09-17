@@ -16,17 +16,23 @@ public class MarkdownLivePreviewEditorTests
     public async Task StaleSnapshotWhileTyping_PersistsRecoverableDraftWithoutThrowing()
     {
         var drafts = new MemoryFeedDraftStore();
-        using var editor = new MarkdownLivePreviewEditorViewModel();
+        using var editor = new MarkdownLivePreviewEditorViewModel(
+            autosaveDelayAsync: static (_, cancellationToken) =>
+                Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken));
+        editor.CommitBlockAsync = (_, _) => throw new InvalidOperationException(
+            "A stale patch must be rejected before the commit callback.");
         editor.ConfigureDraftPersistence("vault", drafts);
         editor.Load(new MarkdownLiveDocumentSnapshot("Первый\n\nВторой\n", "revision-1", false, "note.md"));
         var block = editor.Blocks.Single(candidate => candidate.PreviewText == "Второй");
-        editor.BeginEdit(block);
+        await Assert.That(editor.BeginEdit(block)).IsTrue();
 
         typeof(MarkdownLivePreviewEditorViewModel)
             .GetField("snapshot", BindingFlags.Instance | BindingFlags.NonPublic)!
             .SetValue(editor, new MarkdownLiveDocumentSnapshot("Внешний текст\n\nПервый\n\nВторой\n", "revision-2", false, "note.md"));
 
         block.EditorText = "Текст, который нельзя потерять";
+        await Assert.That(block.ErrorMessage).IsEqualTo(
+            Unlimotion.ViewModel.Localization.Localization.Get("MarkdownBlockStalePatch"));
         await editor.FlushDraftPersistenceAsync();
 
         await Assert.That(block.ErrorMessage).IsEqualTo(

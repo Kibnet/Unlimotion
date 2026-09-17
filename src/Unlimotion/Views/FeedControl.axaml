@@ -209,8 +209,15 @@
                                       AutomationProperties.Name="{Binding ChronologyAutomationName}"
                                       AutomationProperties.AutomationId="FeedChronologyList">
                             <ItemsControl x:Name="ChronologyList"
+                                          MaxWidth="982"
+                                          HorizontalAlignment="Stretch"
                                           ItemsSource="{Binding VisibleDays}"
                                           AutomationProperties.AutomationId="FeedChronologyItems">
+                                <ItemsControl.Styles>
+                                    <Style Selector="ContentPresenter">
+                                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                    </Style>
+                                </ItemsControl.Styles>
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
                                         <VirtualizingStackPanel />
@@ -219,8 +226,7 @@
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate x:DataType="feed:FeedDayViewModel">
                                         <Border Margin="0,0,0,8"
-                                                MaxWidth="960"
-                                                HorizontalAlignment="Center"
+                                                HorizontalAlignment="Stretch"
                                                 Padding="10"
                                                 CornerRadius="8"
                                                 BorderBrush="{DynamicResource ThemeBorderMidBrush}"

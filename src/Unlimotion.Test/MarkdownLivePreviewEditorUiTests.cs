@@ -577,12 +577,21 @@ public class MarkdownLivePreviewEditorUiTests
                 window.Show();
                 RunLayoutJobs();
                 var checkbox = FindControlByAutomationId<CheckBox>(view, task.TaskCheckboxAutomationId);
-                var checkboxScaleHost = checkbox.FindAncestorOfType<Viewbox>();
-                await Assert.That(checkboxScaleHost).IsNotNull();
-                await Assert.That(checkboxScaleHost!.Bounds.Width).IsEqualTo(16);
-                await Assert.That(checkboxScaleHost.Bounds.Height).IsEqualTo(16);
-                await Assert.That(checkbox.Bounds.Width).IsEqualTo(20);
-                await Assert.That(checkbox.Bounds.Height).IsEqualTo(20);
+                await Assert.That(checkbox.FindAncestorOfType<Viewbox>()).IsNull();
+                await Assert.That(checkbox.Bounds.Width).IsEqualTo(16);
+                await Assert.That(checkbox.Bounds.Height).IsEqualTo(16);
+                await Assert.That(checkbox.ClipToBounds).IsFalse();
+                foreach (var visual in checkbox.GetVisualDescendants().OfType<Control>())
+                {
+                    var topLeft = visual.TranslatePoint(new Point(0, 0), checkbox)!.Value;
+                    var bottomRight = visual.TranslatePoint(
+                        new Point(visual.Bounds.Width, visual.Bounds.Height),
+                        checkbox)!.Value;
+                    await Assert.That(topLeft.X).IsGreaterThanOrEqualTo(0);
+                    await Assert.That(topLeft.Y).IsGreaterThanOrEqualTo(0);
+                    await Assert.That(bottomRight.X).IsLessThanOrEqualTo(checkbox.Bounds.Width);
+                    await Assert.That(bottomRight.Y).IsLessThanOrEqualTo(checkbox.Bounds.Height);
+                }
                 var point = checkbox.TranslatePoint(new Point(checkbox.Bounds.Width / 2, checkbox.Bounds.Height / 2), window)!.Value;
                 window.MouseDown(point, MouseButton.Left);
                 window.MouseUp(point, MouseButton.Left);
