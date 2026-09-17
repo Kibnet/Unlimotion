@@ -7,6 +7,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Threading;
 using DynamicData;
+using Newtonsoft.Json;
 using TUnit.Assertions;
 using TUnit.Core;
 using Unlimotion.AppAutomation.TestHost;
@@ -182,6 +183,44 @@ public sealed class CliLiveRefreshHeadlessTests
         });
 
         await Assert.That(File.Exists(Path.Combine(fileStorage.Path, child.Id))).IsFalse();
+    }
+
+    [Test]
+    public async Task ExternalAliasIdChange_ReplacesOldDesktopProjection()
+    {
+        MainWindowViewModel? capturedViewModel = null;
+        using var session = DesktopAppSession.Launch(
+            UnlimotionAppLaunchHost.CreateHeadlessLaunchOptions(
+                UnlimotionAutomationScenario.CliLiveRefresh,
+                language: "en",
+                afterViewModelPrepared: viewModel => capturedViewModel = viewModel));
+
+        var viewModel = capturedViewModel
+            ?? throw new InvalidOperationException("Alias refresh view model was not captured.");
+        var storage = viewModel.taskRepository as UnifiedTaskStorage
+            ?? throw new InvalidOperationException("Alias refresh scenario did not use UnifiedTaskStorage.");
+        BindHeadlessSynchronizationContext(storage);
+        var fileStorage = storage.TaskTreeManager.Storage as FileStorage
+            ?? throw new InvalidOperationException("Alias refresh scenario did not use FileStorage.");
+        var page = new MainWindowPage(new HeadlessControlResolver(session.MainWindow));
+        var allTasksTree = GetNativeControl<TreeView>(page.AllTasksTree);
+        var oldId = UnlimotionAutomationScenarioData.CliLiveRefreshTaskId;
+        var replacementId = oldId + "-renamed";
+        var sourcePath = Path.Combine(fileStorage.Path, oldId);
+        var replacement = (await CreateExternalStorage(fileStorage.Path).Load(oldId, forced: true))
+            ?? throw new InvalidOperationException($"Persisted task '{oldId}' was not found.");
+        replacement.Id = replacementId;
+
+        await File.WriteAllTextAsync(sourcePath, JsonConvert.SerializeObject(replacement));
+
+        await WaitForUiAsync(() =>
+            !TryGetTask(storage, oldId, out _) &&
+            TryGetTask(storage, replacementId, out var refreshed) &&
+            string.Equals(refreshed.Title, replacement.Title, StringComparison.Ordinal) &&
+            !ContainsRenderedTask(allTasksTree, oldId) &&
+            ContainsRenderedTask(allTasksTree, replacementId));
+        await Assert.That(File.Exists(sourcePath)).IsTrue();
+        await Assert.That(File.Exists(Path.Combine(fileStorage.Path, replacementId))).IsFalse();
     }
 
     private static TaskItemViewModel CurrentTask(MainWindowViewModel viewModel) =>

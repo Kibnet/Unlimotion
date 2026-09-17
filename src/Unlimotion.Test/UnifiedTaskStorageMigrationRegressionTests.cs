@@ -2,9 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Unlimotion.Domain;
 using Unlimotion.TaskTree;
+using Unlimotion.ViewModel;
 
 namespace Unlimotion.Test;
 
@@ -101,6 +103,57 @@ public class UnifiedTaskStorageMigrationRegressionTests
             await Assert.That(storedBlocked.BlockedByTasks).Contains("blocker");
             await Assert.That(storedBlocked.IsCanBeCompleted).IsFalse();
             await Assert.That(storedBlocked.UnlockedDateTime).IsNull();
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
+    [Test]
+    public async Task UnifiedTaskStorage_Init_ShouldRefreshDuplicateGraph_BetweenDependentMigrations()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var watcher = new RawDatabaseWatcher();
+            var fileStorage = new TestFileStorage(tempDir, watcher);
+            var manager = new TaskTreeManager(fileStorage);
+            var unified = new UnifiedTaskStorage(manager);
+
+            await fileStorage.Save(new TaskItem
+            {
+                Id = "blocker", Version = 1, IsCompleted = false,
+                BlocksTasks = new List<string> { "parent" }
+            });
+            await fileStorage.Save(new TaskItem
+            {
+                Id = "parent", Version = 1, IsCompleted = false,
+                ContainsTasks = new List<string> { "child" },
+                IsCanBeCompleted = true
+            });
+            await fileStorage.Save(new TaskItem
+            {
+                Id = "child", Version = 1, IsCompleted = false,
+                IsCanBeCompleted = true,
+                UnlockedDateTime = DateTimeOffset.UtcNow
+            });
+            await fileStorage.Save(new TaskItem { Id = "duplicate", Version = 1 });
+            File.Copy(
+                Path.Combine(tempDir, "duplicate"),
+                Path.Combine(tempDir, "duplicate-copy"));
+            await SeedMigrationReports(tempDir);
+
+            await unified.Init();
+
+            var storedParent = await fileStorage.Load("parent", forced: true);
+            var storedChild = await fileStorage.Load("child", forced: true);
+            await Assert.That(storedParent).IsNotNull();
+            await Assert.That(storedChild).IsNotNull();
+            await Assert.That(storedParent!.BlockedByTasks).Contains("blocker");
+            await Assert.That(storedChild!.ParentTasks).Contains("parent");
+            await Assert.That(storedChild.IsCanBeCompleted).IsFalse();
+            await Assert.That(storedChild.UnlockedDateTime).IsNull();
         }
         finally
         {
@@ -226,6 +279,83 @@ public class UnifiedTaskStorageMigrationRegressionTests
         }
     }
 
+    [Test]
+    public async Task UnifiedTaskStorage_Init_RetriesMigrationWhenRawEditArrivesBeforeSave()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var watcher = new RawDatabaseWatcher();
+            var fileStorage = new RacingFileStorage(tempDir, watcher);
+            await fileStorage.Save(new TaskItem
+            {
+                Id = "parent",
+                Version = 0,
+                Title = "Parent",
+                ContainsTasks = ["child"]
+            });
+            await fileStorage.Save(new TaskItem
+            {
+                Id = "child",
+                Version = 0,
+                Title = "Child"
+            });
+            await SeedMigrationReports(tempDir);
+            fileStorage.ArmExternalEdit((taskId, filePath) =>
+            {
+                var external = Newtonsoft.Json.JsonConvert.DeserializeObject<TaskItem>(File.ReadAllText(filePath))!;
+                external.Title = "External edit preserved";
+                File.WriteAllText(filePath, Newtonsoft.Json.JsonConvert.SerializeObject(external));
+                watcher.EmitRaw(Path.GetFileName(filePath), UpdateType.Saved);
+            });
+            using var unified = new UnifiedTaskStorage(new TaskTreeManager(fileStorage));
+
+            await unified.Init();
+
+            var parent = await fileStorage.Load("parent", forced: true);
+            var child = await fileStorage.Load("child", forced: true);
+            await Assert.That(fileStorage.ExternalEditCount).IsEqualTo(1);
+            await Assert.That(new[] { parent?.Title, child?.Title }).Contains("External edit preserved");
+            await Assert.That(parent?.Version).IsEqualTo(1);
+            await Assert.That(child?.Version).IsEqualTo(1);
+            await Assert.That(child?.ParentTasks).Contains("parent");
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
+    [Test]
+    public async Task UnifiedTaskStorage_Init_IgnoresRawWatcherEchoesFromStatusMigration()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            const int taskCount = 32;
+            for (var index = 0; index < taskCount; index++)
+            {
+                var id = $"legacy-{index:D2}";
+                await File.WriteAllTextAsync(
+                    Path.Combine(tempDir, id),
+                    $$"""{"Id":"{{id}}","Title":"{{id}}","Version":1,"IsCompleted":false}""");
+            }
+
+            var fileStorage = new FileStorage(tempDir, watcher: true);
+            using var unified = new UnifiedTaskStorage(new TaskTreeManager(fileStorage));
+
+            await unified.Init();
+
+            await Assert.That(unified.StatusModelMigrationWasApplied).IsTrue();
+            await Assert.That(unified.Tasks.Count).IsEqualTo(taskCount);
+            await Assert.That(await fileStorage.Load("legacy-00", forced: true)).IsNotNull();
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
     private static string CreateTempDirectory()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "unified-migration-regression-" + Guid.NewGuid().ToString("N"));
@@ -256,5 +386,43 @@ public class UnifiedTaskStorageMigrationRegressionTests
         {
             // Best-effort cleanup for temp artifacts.
         }
+    }
+
+    private sealed class TestFileStorage(string path, IDatabaseWatcher watcher) : FileStorage(path, watcher);
+
+    private sealed class RacingFileStorage(string path, IDatabaseWatcher watcher) : FileStorage(path, watcher)
+    {
+        private Action<string, string>? _externalEdit;
+
+        public int ExternalEditCount { get; private set; }
+
+        public void ArmExternalEdit(Action<string, string> externalEdit) => _externalEdit = externalEdit;
+
+        protected override void OnBeforeWrite(string taskId, string filePath)
+        {
+            var externalEdit = Interlocked.Exchange(ref _externalEdit, null);
+            if (externalEdit != null)
+            {
+                ExternalEditCount++;
+                externalEdit(taskId, filePath);
+            }
+
+            base.OnBeforeWrite(taskId, filePath);
+        }
+    }
+
+    private sealed class RawDatabaseWatcher : IDatabaseWatcher, IRawDatabaseWatcher
+    {
+        public event EventHandler<DbUpdatedEventArgs>? OnUpdated;
+        public event EventHandler<DbUpdatedEventArgs>? OnRawUpdated;
+        public event EventHandler? OnInvalidated;
+
+        public void AddIgnoredTask(string taskId) { }
+        public void SetEnable(bool enable, Action? beforeStateChange = null) => beforeStateChange?.Invoke();
+        public void ForceUpdateFile(string filename, UpdateType type) { }
+
+        public void EmitRaw(string filename, UpdateType type) => OnRawUpdated?.Invoke(
+            this,
+            new DbUpdatedEventArgs { Id = filename, Type = type });
     }
 }

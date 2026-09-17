@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Unlimotion.Domain;
+using Unlimotion.Storage;
 
 namespace Unlimotion;
 
@@ -34,7 +35,8 @@ public class FileTaskMigrator
 
     public static async Task<MigrationResult> Migrate(IAsyncEnumerable<TaskItem> tasks,
         Dictionary<string, (string getChild, string getParent)> links, Func<TaskItem, Task<TaskItem>> saveFunc,
-        string storagePath, bool dryRun = false, CancellationToken ct = default, bool forceRecheck = false)
+        string storagePath, bool dryRun = false, CancellationToken ct = default, bool forceRecheck = false,
+        Func<Task>? validateSource = null)
     {
         var reportPath = Path.Combine(storagePath, "migration.report");
         if (!forceRecheck && IsCurrentReport(reportPath))
@@ -223,6 +225,10 @@ public class FileTaskMigrator
 
                 await saveFunc(taskItem);
             }
+            catch (LiveGraphInvalidatedException)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 issues.Add($"WriteError: {taskItem} -> {ex.Message}");
@@ -246,8 +252,26 @@ public class FileTaskMigrator
             Issues = issues.OrderBy(x => x).ToArray()
         };
 
+        if (validateSource != null)
+        {
+            await validateSource();
+        }
+
         await File.WriteAllTextAsync(reportPath,
             JsonConvert.SerializeObject(report, Formatting.Indented));
+
+        if (validateSource != null)
+        {
+            try
+            {
+                await validateSource();
+            }
+            catch
+            {
+                File.Delete(reportPath);
+                throw;
+            }
+        }
 
         Debug.WriteLine(dryRun
             ? $"[DRY-RUN] Готово. Отчёт: {reportPath}"

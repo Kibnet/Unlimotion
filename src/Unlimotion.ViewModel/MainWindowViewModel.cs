@@ -1186,16 +1186,24 @@ namespace Unlimotion.ViewModel
                 })
                 .Sort(sortObservable)
                 .TreatMovesAsRemoveAdd()
+                // Use the current-thread trampoline so the initial projection remains synchronous,
+                // while a task edit raised from CollectionChanged is queued until the current
+                // notification completes. This prevents nested Avalonia container mutations.
+                .ObserveOn(CurrentThreadScheduler.Instance)
                 .Bind(out _currentItems, resetThreshold: 1)
                 .Subscribe(_ =>
                 {
                     var isSearchActive = !string.IsNullOrWhiteSpace(Search.SearchText);
                     if (!isSearchActive && wasAllTasksSearchActive && AllTasksMode)
                     {
-                        RestoreCurrentAllTasksSelectionAfterSearchClear();
+                        // Clearing a filter can arrive as more than one change set. Keep the
+                        // restore pending until the selected task's replacement wrapper exists.
+                        wasAllTasksSearchActive = !RestoreCurrentAllTasksSelectionAfterSearchClear();
                     }
-
-                    wasAllTasksSearchActive = isSearchActive;
+                    else
+                    {
+                        wasAllTasksSearchActive = isSearchActive;
+                    }
                 })
                 .AddToDispose(connectionDisposableList);
 
@@ -2762,14 +2770,14 @@ namespace Unlimotion.ViewModel
                    string.Equals(left.Id, right.Id, StringComparison.Ordinal);
         }
 
-        private void RestoreCurrentAllTasksSelection(bool useLastSelectedFallback = false)
+        private bool RestoreCurrentAllTasksSelection(bool useLastSelectedFallback = false)
         {
             var taskItem = CurrentTaskItem ??
                            (useLastSelectedFallback ? _lastSelectedAllTasksItem : null);
             if (taskItem == null)
             {
                 CurrentAllTasksItem = null;
-                return;
+                return true;
             }
 
             var wrapper = FindTaskWrapperViewModel(taskItem, CurrentAllTasksItems);
@@ -2780,7 +2788,7 @@ namespace Unlimotion.ViewModel
                     CurrentAllTasksItem = null;
                 }
 
-                return;
+                return false;
             }
 
             if (CurrentTaskItem == null)
@@ -2789,16 +2797,18 @@ namespace Unlimotion.ViewModel
             }
 
             ExpandParentNodesForTask(taskItem);
+            return IsSameTask(CurrentAllTasksItem?.TaskItem, taskItem);
         }
 
-        private void RestoreCurrentAllTasksSelectionAfterSearchClear()
+        private bool RestoreCurrentAllTasksSelectionAfterSearchClear()
         {
-            RestoreCurrentAllTasksSelection(useLastSelectedFallback: true);
+            var restored = RestoreCurrentAllTasksSelection(useLastSelectedFallback: true);
             RxSchedulers.MainThreadScheduler.Schedule(() =>
                 RestoreCurrentAllTasksSelection(useLastSelectedFallback: true));
             // TreeView can clear SelectedItem after processing search-clear collection changes.
             RxSchedulers.MainThreadScheduler.Schedule(TimeSpan.FromMilliseconds(50), () =>
                 RestoreCurrentAllTasksSelection(useLastSelectedFallback: true));
+            return restored;
         }
 
         private void ExpandParentNodesForTask(TaskItemViewModel? taskItem)

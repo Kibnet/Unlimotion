@@ -1,5 +1,8 @@
 using System;
+using System.ComponentModel;
 using System.Linq;
+using System.Reflection;
+using System.Reactive.Linq;
 using System.Reactive.Threading.Tasks;
 using System.Threading.Tasks;
 using DynamicData;
@@ -13,6 +16,51 @@ namespace Unlimotion.Test;
 [ParallelLimiter<SharedUiStateParallelLimit>]
 public sealed class TaskItemViewModelStorageUpdateTests
 {
+    [Test]
+    public async Task DirectObservation_BroadAndEqualNotificationsDoNotAutosave()
+    {
+        using var storage = new TestTaskStorage();
+        using var viewModel = new TaskItemViewModel(CreateTask(), storage, () => true);
+
+        RaisePropertyChanged(viewModel, nameof(TaskItemViewModel.Status));
+        RaisePropertyChanged(viewModel, string.Empty);
+        RaisePropertyChanged(viewModel, null);
+        viewModel.Status = viewModel.Status;
+        await Task.Delay(100);
+
+        await Assert.That(storage.Updates).IsEmpty();
+    }
+
+    [Test]
+    public async Task DirectObservation_DisposeDetachesEveryPropertyChangedHandler()
+    {
+        using var storage = new TestTaskStorage();
+        var viewModel = new TaskItemViewModel(CreateTask(), storage, () => true);
+        await Assert.That(PropertyChangedHandlerCount(viewModel)).IsGreaterThan(0);
+
+        viewModel.Dispose();
+
+        await Assert.That(PropertyChangedHandlerCount(viewModel)).IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task DirectObservation_InitialSubscriberFailureDetachesHandler()
+    {
+        using var storage = new TestTaskStorage();
+        using var viewModel = new TaskItemViewModel(CreateTask(), storage, () => true);
+        var handlerCountBefore = PropertyChangedHandlerCount(viewModel);
+        var method = typeof(TaskItemViewModel)
+            .GetMethod("ObserveProperty", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .MakeGenericMethod(typeof(Unlimotion.Domain.TaskStatus));
+        var observable = (IObservable<Unlimotion.Domain.TaskStatus>)method.Invoke(
+            viewModel,
+            [nameof(TaskItemViewModel.Status), new Func<TaskItemViewModel, Unlimotion.Domain.TaskStatus>(task => task.Status)])!;
+
+        await Assert.That(() => observable.Subscribe(_ => throw new InvalidOperationException("subscriber failed")))
+            .ThrowsException();
+        await Assert.That(PropertyChangedHandlerCount(viewModel)).IsEqualTo(handlerCountBefore);
+    }
+
     [Test]
     [Arguments(nameof(TaskItemViewModel.Title))]
     [Arguments(nameof(TaskItemViewModel.Description))]
@@ -279,6 +327,16 @@ public sealed class TaskItemViewModelStorageUpdateTests
                 throw new ArgumentOutOfRangeException(nameof(changedField), changedField, null);
         }
     }
+
+    private static void RaisePropertyChanged(TaskItemViewModel viewModel, string? propertyName) =>
+        typeof(TaskItemViewModel)
+            .GetMethod("OnPropertyChanged", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(viewModel, [propertyName]);
+
+    private static int PropertyChangedHandlerCount(TaskItemViewModel viewModel) =>
+        ((Delegate?)typeof(TaskItemViewModel)
+            .GetField(nameof(INotifyPropertyChanged.PropertyChanged), BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(viewModel))?.GetInvocationList().Length ?? 0;
 
     private sealed class TestTaskStorage : ITaskStorage, IDisposable
     {

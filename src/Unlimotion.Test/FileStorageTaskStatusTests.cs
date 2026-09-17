@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -6,7 +7,9 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Unlimotion.Domain;
+using Unlimotion.Storage;
 using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
 using DomainTaskStatus = Unlimotion.Domain.TaskStatus;
@@ -501,6 +504,140 @@ public class FileStorageTaskStatusTests
     }
 
     [Test]
+    public async Task RawChange_InvalidatesLiveReadsBeforeExplicitSynchronization()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var watcher = new RecordingDatabaseWatcher();
+            var storage = new TestFileStorage(tempDir, watcher);
+            const string taskId = "raw-invalidates-live-read";
+            var task = new TaskItem { Id = taskId, Title = "Original", Status = DomainTaskStatus.NotReady };
+            await storage.Save(task);
+            await storage.EnableLiveGraphAsync();
+
+            task.Title = "External edit";
+            await File.WriteAllTextAsync(Path.Combine(tempDir, taskId), JsonConvert.SerializeObject(task));
+            watcher.EmitRaw(taskId, UpdateType.Saved);
+
+            var loaded = await storage.Load(taskId);
+            var all = new List<TaskItem>();
+            await foreach (var item in storage.GetAll()) all.Add(item);
+
+            await Assert.That(loaded?.Title).IsEqualTo("External edit");
+            await Assert.That(all.Single(item => item.Id == taskId).Title).IsEqualTo("External edit");
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
+    [Test]
+    public async Task InitFinalCheckpoint_DistinguishesCaseDistinctSourcePathsOnUnix()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var watcher = new RecordingDatabaseWatcher();
+            var storage = new TestFileStorage(tempDir, watcher);
+            var corruptPath = Path.Combine(tempDir, "case-source");
+            var deletedPath = Path.Combine(tempDir, "CASE-SOURCE");
+            await File.WriteAllTextAsync(
+                corruptPath,
+                JsonConvert.SerializeObject(new TaskItem { Id = "case-corrupt", Title = "Keep" }));
+            await File.WriteAllTextAsync(
+                deletedPath,
+                JsonConvert.SerializeObject(new TaskItem { Id = "case-deleted", Title = "Remove" }));
+            watcher.OnEnabled = () =>
+            {
+                File.WriteAllText(corruptPath, "{ corrupt json");
+                File.Delete(deletedPath);
+                watcher.EmitRaw("case-source", UpdateType.Saved);
+                watcher.EmitRaw("CASE-SOURCE", UpdateType.Removed);
+            };
+
+            using var unified = new UnifiedTaskStorage(new TaskTreeManager(storage));
+            await unified.Init();
+
+            await Assert.That(unified.Tasks.Lookup("case-corrupt").HasValue).IsTrue();
+            await Assert.That(unified.Tasks.Lookup("case-deleted").HasValue).IsFalse();
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
+    [Test]
+    public async Task PreciseRawChange_IsAppliedWithoutFullDirectoryRescan()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var watcher = new RecordingDatabaseWatcher();
+            var storage = new CountingFileStorage(tempDir, watcher);
+            const string taskId = "incremental-raw-refresh";
+            var task = new TaskItem { Id = taskId, Title = "Original", Status = DomainTaskStatus.NotReady };
+            await storage.Save(task);
+            await storage.EnableLiveGraphAsync();
+            var initialEnumerations = storage.DirectoryEnumerationCount;
+
+            task.Title = "External edit";
+            await File.WriteAllTextAsync(Path.Combine(tempDir, taskId), JsonConvert.SerializeObject(task));
+            watcher.EmitRaw(taskId, UpdateType.Saved);
+            var graph = await storage.SynchronizePendingFileChangesAsync();
+
+            using (Assert.Multiple())
+            {
+                await Assert.That(graph.TasksById[taskId].Title).IsEqualTo("External edit");
+                await Assert.That(storage.DirectoryEnumerationCount).IsEqualTo(initialEnumerations);
+            }
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
+    [Test]
+    public async Task PreciseRawChange_WithNewDuplicateId_FallsBackToDirectoryRescan()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var watcher = new RecordingDatabaseWatcher();
+            var storage = new CountingFileStorage(tempDir, watcher);
+            await File.WriteAllTextAsync(
+                Path.Combine(tempDir, "first.json"),
+                JsonConvert.SerializeObject(new TaskItem { Id = "duplicate", Title = "First" }));
+            await storage.EnableLiveGraphAsync();
+            var initialEnumerations = storage.DirectoryEnumerationCount;
+
+            await File.WriteAllTextAsync(
+                Path.Combine(tempDir, "second.json"),
+                JsonConvert.SerializeObject(new TaskItem { Id = "duplicate", Title = "Second" }));
+            watcher.EmitRaw("second.json", UpdateType.Saved);
+            var graph = await storage.SynchronizePendingFileChangesAsync();
+
+            using (Assert.Multiple())
+            {
+                await Assert.That(storage.DirectoryEnumerationCount).IsEqualTo(initialEnumerations + 1);
+                await Assert.That(graph.DuplicateIdIssues).Count().IsEqualTo(1);
+            }
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
+    [Test]
     public async Task DebouncedEventType_IsDerivedFromCurrentPhysicalState()
     {
         var tempDir = CreateTempDirectory();
@@ -928,6 +1065,657 @@ public class FileStorageTaskStatusTests
         }
     }
 
+    [Test]
+    public async Task RawAliasDeletion_PreservesDomainIdForDelayedUpdate()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var sourcePath = Path.Combine(tempDir, "alias.json");
+            await File.WriteAllTextAsync(
+                sourcePath,
+                JsonConvert.SerializeObject(new TaskItem { Id = "alias", Title = "Aliased" }));
+            var watcher = new RecordingDatabaseWatcher();
+            var storage = new TestFileStorage(tempDir, watcher);
+            await storage.EnableLiveGraphAsync();
+            string? observedId = null;
+            storage.Updating += (_, args) => observedId = args.Id;
+
+            File.Delete(sourcePath);
+            watcher.EmitRaw("alias.json", UpdateType.Removed);
+            var refreshedGraph = await storage.SynchronizePendingFileChangesAsync();
+            await Assert.That(refreshedGraph.TasksById.ContainsKey("alias")).IsFalse();
+            await storage.TriggerUpdatingAsync("alias.json", UpdateType.Removed);
+
+            await Assert.That(observedId).IsEqualTo("alias");
+            await Assert.That(await storage.Load("alias")).IsNull();
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
+    [Test]
+    public async Task RawAliasIdChange_PublishesRemovalAndReplacementFromSourceFile()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var sourcePath = Path.Combine(tempDir, "alias.json");
+            await File.WriteAllTextAsync(
+                sourcePath,
+                JsonConvert.SerializeObject(new TaskItem { Id = "old", Title = "Original" }));
+            var watcher = new RecordingDatabaseWatcher();
+            var storage = new TestFileStorage(tempDir, watcher);
+            await storage.EnableLiveGraphAsync();
+            var observed = new List<(string Id, UpdateType Type, string? Title)>();
+            storage.Updating += (_, args) => observed.Add((
+                args.Id,
+                args.Type,
+                (args as FileStorageUpdateEventArgs)?.Snapshot?.Title));
+
+            await File.WriteAllTextAsync(
+                sourcePath,
+                JsonConvert.SerializeObject(new TaskItem { Id = "new", Title = "Replacement" }));
+            watcher.EmitRaw("alias.json", UpdateType.Saved);
+            await storage.TriggerUpdatingAsync("alias.json", UpdateType.Saved);
+
+            await Assert.That(observed).Count().IsEqualTo(2);
+            await Assert.That(observed[0]).IsEqualTo(("old", UpdateType.Removed, (string?)null));
+            await Assert.That(observed[1]).IsEqualTo(("new", UpdateType.Saved, "Replacement"));
+            await Assert.That(await storage.Load("old")).IsNull();
+            await Assert.That((await storage.Load("new"))?.Title).IsEqualTo("Replacement");
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
+    [Test]
+    public async Task RawAliasIdChange_RepublishesOldIdTakenOverByAnotherSource()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var aliasPath = Path.Combine(tempDir, "alias.json");
+            await File.WriteAllTextAsync(
+                aliasPath,
+                JsonConvert.SerializeObject(new TaskItem { Id = "old", Title = "Original" }));
+            var watcher = new RecordingDatabaseWatcher();
+            var storage = new TestFileStorage(tempDir, watcher);
+            await storage.EnableLiveGraphAsync();
+            var observed = new List<(string Id, UpdateType Type, string? Title)>();
+            storage.Updating += (_, args) => observed.Add((
+                args.Id,
+                args.Type,
+                (args as FileStorageUpdateEventArgs)?.Snapshot?.Title));
+
+            await File.WriteAllTextAsync(
+                aliasPath,
+                JsonConvert.SerializeObject(new TaskItem { Id = "new", Title = "Replacement" }));
+            await File.WriteAllTextAsync(
+                Path.Combine(tempDir, "takeover.json"),
+                JsonConvert.SerializeObject(new TaskItem { Id = "old", Title = "Takeover" }));
+            watcher.EmitRaw("alias.json", UpdateType.Saved);
+            watcher.EmitRaw("takeover.json", UpdateType.Saved);
+            await storage.TriggerUpdatingAsync("alias.json", UpdateType.Saved);
+
+            await Assert.That(observed).Count().IsEqualTo(2);
+            await Assert.That(observed[0]).IsEqualTo(("old", UpdateType.Saved, "Takeover"));
+            await Assert.That(observed[1]).IsEqualTo(("new", UpdateType.Saved, "Replacement"));
+            await Assert.That((await storage.Load("old"))?.Title).IsEqualTo("Takeover");
+            await Assert.That((await storage.Load("new"))?.Title).IsEqualTo("Replacement");
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
+    [Test]
+    public async Task GuardedSave_IgnoresRawEchoOfConfirmedOwnWrite()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var watcher = new RecordingDatabaseWatcher();
+            var storage = new RawEchoFileStorage(tempDir, watcher);
+            await storage.Save(new TaskItem { Id = "task", Title = "Before" });
+            await storage.EnableLiveGraphAsync();
+            var task = await storage.Load("task", forced: true);
+            task!.Title = "After";
+            storage.ArmRawEcho();
+
+            var generation = storage.CaptureLiveGraphGeneration();
+            using var guard = storage.GuardLiveGraphGeneration(generation);
+            await storage.Save(task);
+
+            storage.EnsureLiveGraphGenerationCurrent(guard.Generation);
+            await Assert.That((await storage.Load("task", forced: true))?.Title).IsEqualTo("After");
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
+    [Test]
+    public async Task GuardedSave_RejectsExternalInvalidationDuringLiveGraphPublication()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var watcher = new RecordingDatabaseWatcher();
+            var storage = new PublicationRaceFileStorage(tempDir, watcher);
+            await storage.Save(new TaskItem { Id = "task", Title = "Before" });
+            await storage.EnableLiveGraphAsync();
+            var task = await storage.Load("task", forced: true);
+            task!.Title = "Migration write";
+            storage.ArmExternalEdit((filePath) =>
+            {
+                File.WriteAllText(
+                    filePath,
+                    JsonConvert.SerializeObject(new TaskItem { Id = "task", Title = "External edit" }));
+                watcher.EmitRaw(Path.GetFileName(filePath), UpdateType.Saved);
+            });
+
+            var generation = storage.CaptureLiveGraphGeneration();
+            using var guard = storage.GuardLiveGraphGeneration(generation);
+            await Assert.That(() => storage.Save(task)).Throws<LiveGraphInvalidatedException>();
+
+            await storage.SynchronizePendingFileChangesAsync();
+            await Assert.That((await storage.Load("task", forced: true))?.Title).IsEqualTo("External edit");
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
+    [Test]
+    public async Task GuardedSave_RejectsExternalWriteObservedDuringOwnAtomicWrite()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var watcher = new RecordingDatabaseWatcher();
+            var storage = new PostReplaceRaceFileStorage(tempDir, watcher);
+            await storage.Save(new TaskItem { Id = "task", Title = "Before" });
+            await storage.EnableLiveGraphAsync();
+            var task = await storage.Load("task", forced: true);
+            task!.Title = "Migration write";
+            storage.ArmExternalEdit(filePath =>
+            {
+                File.WriteAllText(
+                    filePath,
+                    JsonConvert.SerializeObject(new TaskItem { Id = "task", Title = "External edit" }));
+                watcher.EmitRaw(Path.GetFileName(filePath), UpdateType.Saved);
+            });
+
+            var generation = storage.CaptureLiveGraphGeneration();
+            using var guard = storage.GuardLiveGraphGeneration(generation);
+            await Assert.That(() => storage.Save(task)).Throws<LiveGraphInvalidatedException>();
+
+            await storage.SynchronizePendingFileChangesAsync();
+            await Assert.That((await storage.Load("task", forced: true))?.Title).IsEqualTo("External edit");
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
+    [Test]
+    public async Task FullReload_RetainsAliasIdentityForRawDeletionDuringScan()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var watcher = new RecordingDatabaseWatcher();
+            var storage = new ReloadRaceFileStorage(tempDir, watcher);
+            var sourcePath = Path.Combine(tempDir, "alias.json");
+            await File.WriteAllTextAsync(
+                sourcePath,
+                JsonConvert.SerializeObject(new TaskItem { Id = "alias", Title = "Aliased" }));
+            await storage.EnableLiveGraphAsync();
+            storage.ArmReloadAction(() =>
+            {
+                File.Delete(sourcePath);
+                watcher.EmitRaw("alias.json", UpdateType.Removed);
+            });
+            storage.InvalidateLiveGraph();
+
+            await storage.SynchronizePendingFileChangesAsync();
+            string? observedId = null;
+            storage.Updating += (_, args) => observedId = args.Id;
+            await storage.TriggerUpdatingAsync("alias.json", UpdateType.Removed);
+
+            await Assert.That(observedId).IsEqualTo("alias");
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
+    [Test]
+    public async Task GuardedSave_RestoresExternalEditDisplacedDuringAtomicReplace()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var watcher = new RecordingDatabaseWatcher();
+            var storage = new AtomicReplaceRaceFileStorage(tempDir, watcher);
+            await storage.Save(new TaskItem { Id = "task", Title = "Before" });
+            await storage.EnableLiveGraphAsync();
+            var task = await storage.Load("task", forced: true);
+            task!.Title = "Migration write";
+            storage.ArmExternalEdit(filePath =>
+            {
+                File.WriteAllText(
+                    filePath,
+                    JsonConvert.SerializeObject(new TaskItem { Id = "task", Title = "External edit" }));
+                watcher.EmitRaw(Path.GetFileName(filePath), UpdateType.Saved);
+            });
+
+            var generation = storage.CaptureLiveGraphGeneration();
+            using var guard = storage.GuardLiveGraphGeneration(generation);
+            await Assert.That(() => storage.Save(task)).Throws<LiveGraphInvalidatedException>();
+
+            await storage.SynchronizePendingFileChangesAsync();
+            await Assert.That((await storage.Load("task", forced: true))?.Title).IsEqualTo("External edit");
+            await Assert.That(Directory.EnumerateFiles(tempDir, "*.bak")).IsEmpty();
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
+    [Test]
+    public async Task GuardedSave_RestoresUnsignaledExternalEditDisplacedDuringAtomicReplace()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var storage = new AtomicReplaceRaceFileStorage(tempDir, new RecordingDatabaseWatcher());
+            await storage.Save(new TaskItem { Id = "task", Title = "Before" });
+            await storage.EnableLiveGraphAsync();
+            var task = await storage.Load("task", forced: true);
+            task!.Title = "Migration write";
+            storage.ArmExternalEdit(filePath =>
+            {
+                File.WriteAllText(
+                    filePath,
+                    JsonConvert.SerializeObject(new TaskItem { Id = "task", Title = "Delayed external event" }));
+            });
+
+            var generation = storage.CaptureLiveGraphGeneration();
+            using var guard = storage.GuardLiveGraphGeneration(generation);
+            await Assert.That(() => storage.Save(task)).Throws<LiveGraphInvalidatedException>();
+
+            await Assert.That((await storage.Load("task", forced: true))?.Title)
+                .IsEqualTo("Delayed external event");
+            await Assert.That(Directory.EnumerateFiles(tempDir, "*.bak")).IsEmpty();
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
+    [Test]
+    public async Task GuardedSave_AcceptsHashRefreshedBySemanticallyEquivalentRawEdit()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var watcher = new RecordingDatabaseWatcher();
+            var storage = new TestFileStorage(tempDir, watcher);
+            await storage.Save(new TaskItem { Id = "task", Title = "Before" });
+            await storage.EnableLiveGraphAsync();
+            var filePath = Path.Combine(tempDir, "task");
+            var taskJson = JObject.Parse(await File.ReadAllTextAsync(filePath));
+            await File.WriteAllTextAsync(filePath, taskJson.ToString(Formatting.None));
+            watcher.EmitRaw("task", UpdateType.Saved);
+            await storage.TriggerUpdatingAsync("task", UpdateType.Saved);
+
+            var task = await storage.Load("task");
+            task!.Title = "Migration write";
+            var generation = storage.CaptureLiveGraphGeneration();
+            using var guard = storage.GuardLiveGraphGeneration(generation);
+
+            await storage.Save(task);
+
+            await Assert.That((await storage.Load("task", forced: true))?.Title)
+                .IsEqualTo("Migration write");
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
+    [Test]
+    public async Task GuardedSave_RollsBackWhenPostWritePublicationFails()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var storage = new FailingWriteFileStorage(tempDir, new RecordingDatabaseWatcher());
+            await storage.Save(new TaskItem { Id = "task", Title = "Before" });
+            await storage.EnableLiveGraphAsync();
+            var task = await storage.Load("task", forced: true);
+            task!.Title = "Migration write";
+            storage.FailWhenWriting(task.Id);
+
+            var generation = storage.CaptureLiveGraphGeneration();
+            using var guard = storage.GuardLiveGraphGeneration(generation);
+            await Assert.That(() => storage.Save(task)).Throws<IOException>();
+
+            await Assert.That((await storage.Load("task", forced: true))?.Title).IsEqualTo("Before");
+            await Assert.That(Directory.EnumerateFiles(tempDir, "*.bak")).IsEmpty();
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
+    [Test]
+    public async Task ExternalChange_ExpiresConfirmedWriteBeforeContentReturnsToSameBytes()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var watcher = new RecordingDatabaseWatcher();
+            var storage = new TestFileStorage(tempDir, watcher);
+            await storage.Save(new TaskItem { Id = "task", Title = "Own content" });
+            var taskPath = Path.Combine(tempDir, "task");
+            var ownContent = await File.ReadAllTextAsync(taskPath);
+            await storage.EnableLiveGraphAsync();
+
+            await File.WriteAllTextAsync(
+                taskPath,
+                JsonConvert.SerializeObject(new TaskItem { Id = "task", Title = "External content" }));
+            watcher.EmitRaw("task", UpdateType.Saved);
+            await storage.SynchronizePendingFileChangesAsync();
+            await Assert.That((await storage.Load("task"))?.Title).IsEqualTo("External content");
+
+            var generation = storage.CaptureLiveGraphGeneration();
+            using var guard = storage.GuardLiveGraphGeneration(generation);
+            await File.WriteAllTextAsync(taskPath, ownContent);
+            watcher.EmitRaw("task", UpdateType.Saved);
+
+            await Assert.That(async () =>
+            {
+                storage.EnsureLiveGraphGenerationCurrent(guard.Generation);
+                await Task.CompletedTask;
+            }).Throws<LiveGraphInvalidatedException>();
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
+    [Test]
+    public async Task ConsumedStartupAliasIdentity_IsNotReusedByLaterUpdate()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var sourcePath = Path.Combine(tempDir, "alias.json");
+            await File.WriteAllTextAsync(
+                sourcePath,
+                JsonConvert.SerializeObject(new TaskItem { Id = "old", Title = "Original" }));
+            var watcher = new RecordingDatabaseWatcher();
+            var storage = new TestFileStorage(tempDir, watcher);
+            await storage.EnableLiveGraphAsync();
+
+            await File.WriteAllTextAsync(
+                sourcePath,
+                JsonConvert.SerializeObject(new TaskItem { Id = "new", Title = "Startup edit" }));
+            watcher.EmitRaw("alias.json", UpdateType.Saved);
+            await storage.SynchronizePendingFileChangesAsync();
+            var startupGeneration = storage.CapturePendingWatcherGeneration();
+            storage.DiscardPendingWatcherUpdatesThrough(startupGeneration);
+
+            var observed = new List<(string Id, UpdateType Type)>();
+            storage.Updating += (_, args) => observed.Add((args.Id, args.Type));
+            await File.WriteAllTextAsync(
+                sourcePath,
+                JsonConvert.SerializeObject(new TaskItem { Id = "newer", Title = "Later edit" }));
+            watcher.EmitRaw("alias.json", UpdateType.Saved);
+            await storage.TriggerUpdatingAsync("alias.json", UpdateType.Saved);
+
+            await Assert.That(observed).Count().IsEqualTo(2);
+            await Assert.That(observed[0]).IsEqualTo(("new", UpdateType.Removed));
+            await Assert.That(observed[1]).IsEqualTo(("newer", UpdateType.Saved));
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
+    [Test]
+    public async Task DisabledWatcherIdentityRaisedDuringCacheHydration_IsDiscarded()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var sourcePath = Path.Combine(tempDir, "alias.json");
+            await File.WriteAllTextAsync(
+                sourcePath,
+                JsonConvert.SerializeObject(new TaskItem { Id = "old", Title = "Original" }));
+            for (var i = 0; i < 64; i++)
+            {
+                var id = $"task-{i:D2}";
+                await File.WriteAllTextAsync(
+                    Path.Combine(tempDir, id),
+                    JsonConvert.SerializeObject(new TaskItem { Id = id, Title = id }));
+            }
+
+            var watcher = new RecordingDatabaseWatcher();
+            var storage = new TestFileStorage(tempDir, watcher);
+            using var unified = new UnifiedTaskStorage(new TaskTreeManager(storage));
+            var context = new PumpSynchronizationContext();
+            var previousContext = SynchronizationContext.Current;
+            Task init;
+            try
+            {
+                SynchronizationContext.SetSynchronizationContext(context);
+                init = unified.Init();
+            }
+            finally
+            {
+                SynchronizationContext.SetSynchronizationContext(previousContext);
+            }
+
+            var hydrationDeadline = DateTimeOffset.UtcNow.AddSeconds(10);
+            while (!init.IsCompleted && unified.Tasks.Count < 64)
+            {
+                if (!context.ExecuteOne(TimeSpan.FromMilliseconds(100)) &&
+                    DateTimeOffset.UtcNow >= hydrationDeadline)
+                {
+                    throw new TimeoutException("Timed out waiting for the first cache hydration batch.");
+                }
+            }
+
+            await Assert.That(unified.Tasks.Count).IsEqualTo(64);
+            await File.WriteAllTextAsync(
+                sourcePath,
+                JsonConvert.SerializeObject(new TaskItem { Id = "new", Title = "Startup edit" }));
+            watcher.EmitRaw("alias.json", UpdateType.Saved);
+
+            var initDeadline = DateTimeOffset.UtcNow.AddSeconds(10);
+            while (!init.IsCompleted)
+            {
+                context.ExecuteOne(TimeSpan.FromMilliseconds(100));
+                if (DateTimeOffset.UtcNow >= initDeadline)
+                {
+                    throw new TimeoutException("Timed out completing startup reconciliation.");
+                }
+            }
+            await init;
+
+            var observed = new List<(string Id, UpdateType Type)>();
+            storage.Updating += (_, args) => observed.Add((args.Id, args.Type));
+            await File.WriteAllTextAsync(
+                sourcePath,
+                JsonConvert.SerializeObject(new TaskItem { Id = "newer", Title = "Later edit" }));
+            watcher.EmitRaw("alias.json", UpdateType.Saved);
+            await storage.TriggerUpdatingAsync("alias.json", UpdateType.Saved);
+
+            await Assert.That(observed).Count().IsEqualTo(2);
+            await Assert.That(observed[0]).IsEqualTo(("new", UpdateType.Removed));
+            await Assert.That(observed[1]).IsEqualTo(("newer", UpdateType.Saved));
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
+    [Test]
+    public async Task WatcherEnableBarrier_ClassifiesConcurrentAliasEventAsEnabled()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var sourcePath = Path.Combine(tempDir, "alias.json");
+            await File.WriteAllTextAsync(
+                sourcePath,
+                JsonConvert.SerializeObject(new TaskItem { Id = "old", Title = "Original" }));
+            var watcher = new RecordingDatabaseWatcher();
+            var storage = new TestFileStorage(tempDir, watcher);
+            await storage.EnableLiveGraphAsync();
+            watcher.SetEnable(false);
+
+            var firstUpdateCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            storage.Updating += (_, args) =>
+            {
+                if (args is { Id: "new", Type: UpdateType.Saved })
+                {
+                    firstUpdateCompleted.TrySetResult();
+                }
+            };
+            watcher.ArmEnableBarrier();
+            var enable = Task.Run(storage.EnableWatcherAndCaptureDisabledGeneration);
+            await watcher.EnableBarrierEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+            await File.WriteAllTextAsync(
+                sourcePath,
+                JsonConvert.SerializeObject(new TaskItem { Id = "new", Title = "Concurrent edit" }));
+            var fileEvent = Task.Run(() => watcher.EmitFileEvent("alias.json", UpdateType.Saved));
+            await watcher.FileEventAttempted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await Assert.That(fileEvent.IsCompleted).IsFalse();
+
+            watcher.ReleaseEnableBarrier();
+            var disabledGeneration = await enable;
+            await fileEvent;
+            storage.DiscardPendingWatcherUpdatesThrough(disabledGeneration);
+            await firstUpdateCompleted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+            var observed = new List<(string Id, UpdateType Type)>();
+            storage.Updating += (_, args) => observed.Add((args.Id, args.Type));
+            await File.WriteAllTextAsync(
+                sourcePath,
+                JsonConvert.SerializeObject(new TaskItem { Id = "newer", Title = "Later edit" }));
+            watcher.EmitRaw("alias.json", UpdateType.Saved);
+            await storage.TriggerUpdatingAsync("alias.json", UpdateType.Saved);
+
+            await Assert.That(observed).Count().IsEqualTo(2);
+            await Assert.That(observed[0]).IsEqualTo(("new", UpdateType.Removed));
+            await Assert.That(observed[1]).IsEqualTo(("newer", UpdateType.Saved));
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
+    [Test]
+    public async Task DelayedWatcherUpdate_DoesNotHidePendingChangeFromQueuedCommand()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var watcher = new RecordingDatabaseWatcher();
+            var storage = new TestFileStorage(tempDir, watcher);
+            var task = new TaskItem { Id = "concurrent-update", Title = "Old title" };
+            await storage.Save(task);
+            await storage.EnableLiveGraphAsync();
+
+            var lockEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var releaseLock = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var blockingOperation = storage.WithDirectoryLockAsync(async () =>
+            {
+                lockEntered.TrySetResult();
+                await releaseLock.Task;
+            });
+            await lockEntered.Task;
+
+            task.Title = "New title";
+            await File.WriteAllTextAsync(
+                Path.Combine(tempDir, task.Id),
+                JsonConvert.SerializeObject(task));
+            watcher.EmitRaw(task.Id, UpdateType.Saved);
+
+            // Queue the command first. On the old implementation the delayed callback below
+            // removed the pending entry synchronously before either waiter acquired the lock.
+            var command = storage.WithWriteLockAsync(async () => (await storage.Load(task.Id))?.Title);
+            var delayedUpdate = storage.TriggerUpdatingAsync(task.Id);
+            releaseLock.TrySetResult();
+
+            await Assert.That(await command).IsEqualTo("New title");
+            await delayedUpdate;
+            await blockingOperation;
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
+    [Test]
+    public async Task KnownFileChangePublication_IsAtomicWithGenerationInvalidation()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            var storage = new TestFileStorage(tempDir);
+            await storage.Save(new TaskItem { Id = "atomic-raw-change", Title = "Initial" });
+            await storage.EnableLiveGraphAsync();
+            var previousGeneration = storage.CaptureInvalidationGenerationForTest();
+            var publicationEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var releasePublication = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            var publication = Task.Run(() => storage.PublishKnownFileChangeForTest(() =>
+            {
+                publicationEntered.TrySetResult();
+                releasePublication.Task.GetAwaiter().GetResult();
+            }));
+            await publicationEntered.Task;
+
+            var staleAcceptance = Task.Run(() =>
+                storage.TryMarkKnownFileChangesAppliedForTest(previousGeneration));
+            await Task.Delay(50);
+            await Assert.That(staleAcceptance.IsCompleted).IsFalse();
+
+            releasePublication.TrySetResult();
+            await publication;
+            await Assert.That(await staleAcceptance).IsFalse();
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
     private static string CreateTempDirectory()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "file-storage-status-" + Guid.NewGuid().ToString("N"));
@@ -947,7 +1735,7 @@ public class FileStorageTaskStatusTests
         }
     }
 
-    private sealed class TestFileStorage : FileStorage
+    private class TestFileStorage : FileStorage
     {
         public TestFileStorage(string path) : base(path, watcher: false)
         {
@@ -962,6 +1750,13 @@ public class FileStorageTaskStatusTests
             Id = id,
             Type = type
         });
+
+        public long CaptureInvalidationGenerationForTest() => CaptureLiveGraphInvalidationGeneration();
+
+        public void PublishKnownFileChangeForTest(Action publishChange) => PublishKnownFileChange(publishChange);
+
+        public bool TryMarkKnownFileChangesAppliedForTest(long generation) =>
+            TryMarkKnownFileChangesApplied(generation);
     }
 
     private sealed class CountingFileStorage : FileStorage
@@ -980,6 +1775,113 @@ public class FileStorageTaskStatusTests
         {
             DirectoryEnumerationCount++;
             return base.EnumerateTaskFiles();
+        }
+    }
+
+    private sealed class RawEchoFileStorage(
+        string path,
+        RecordingDatabaseWatcher watcher) : FileStorage(path, watcher)
+    {
+        private bool _emitRawEcho;
+
+        public void ArmRawEcho() => _emitRawEcho = true;
+
+        protected override void OnAfterWritePersisted(string taskId, string filePath)
+        {
+            base.OnAfterWritePersisted(taskId, filePath);
+            if (_emitRawEcho)
+            {
+                _emitRawEcho = false;
+                watcher.EmitRaw(System.IO.Path.GetFileName(filePath), UpdateType.Saved);
+            }
+        }
+    }
+
+    private sealed class PublicationRaceFileStorage(
+        string path,
+        RecordingDatabaseWatcher watcher) : FileStorage(path, watcher)
+    {
+        private Action<string>? _externalEdit;
+
+        public void ArmExternalEdit(Action<string> externalEdit) => _externalEdit = externalEdit;
+
+        protected override void OnBeforeLiveFileChangePublication(string taskId, string filePath)
+        {
+            base.OnBeforeLiveFileChangePublication(taskId, filePath);
+            Interlocked.Exchange(ref _externalEdit, null)?.Invoke(filePath);
+        }
+    }
+
+    private sealed class PostReplaceRaceFileStorage(
+        string path,
+        RecordingDatabaseWatcher watcher) : FileStorage(path, watcher)
+    {
+        private Action<string>? _externalEdit;
+
+        public void ArmExternalEdit(Action<string> externalEdit) => _externalEdit = externalEdit;
+
+        protected override void OnAfterWritePersisted(string taskId, string filePath)
+        {
+            Interlocked.Exchange(ref _externalEdit, null)?.Invoke(filePath);
+            base.OnAfterWritePersisted(taskId, filePath);
+        }
+    }
+
+    private sealed class ReloadRaceFileStorage(
+        string path,
+        RecordingDatabaseWatcher watcher) : TestFileStorage(path, watcher)
+    {
+        private Action? _reloadAction;
+
+        public void ArmReloadAction(Action action) => _reloadAction = action;
+
+        protected override IEnumerable<string> EnumerateTaskFiles()
+        {
+            Interlocked.Exchange(ref _reloadAction, null)?.Invoke();
+            return base.EnumerateTaskFiles();
+        }
+    }
+
+    private sealed class AtomicReplaceRaceFileStorage(
+        string path,
+        RecordingDatabaseWatcher watcher) : FileStorage(path, watcher)
+    {
+        private Action<string>? _externalEdit;
+
+        public void ArmExternalEdit(Action<string> externalEdit) => _externalEdit = externalEdit;
+
+        protected override void OnBeforeGuardedAtomicReplace(string filePath)
+        {
+            base.OnBeforeGuardedAtomicReplace(filePath);
+            Interlocked.Exchange(ref _externalEdit, null)?.Invoke(filePath);
+        }
+    }
+
+    private sealed class PumpSynchronizationContext : SynchronizationContext
+    {
+        private readonly BlockingCollection<(SendOrPostCallback Callback, object? State)> queue = new();
+
+        public override void Post(SendOrPostCallback d, object? state) => queue.Add((d, state));
+
+        public bool ExecuteOne(TimeSpan timeout)
+        {
+            if (!queue.TryTake(out var work, timeout))
+            {
+                return false;
+            }
+
+            var previousContext = Current;
+            try
+            {
+                SetSynchronizationContext(this);
+                work.Callback(work.State);
+            }
+            finally
+            {
+                SetSynchronizationContext(previousContext);
+            }
+
+            return true;
         }
     }
 
@@ -1049,9 +1951,19 @@ public class FileStorageTaskStatusTests
 
     private sealed class RecordingDatabaseWatcher : IDatabaseWatcher, IRawDatabaseWatcher, IDisposable
     {
+        private readonly object enableSync = new();
+        private bool isEnabled = true;
+        private bool blockNextEnable;
+        private TaskCompletionSource releaseEnableBarrier =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
         public List<string> IgnoredTaskIds { get; } = [];
         public bool IsDisposed { get; private set; }
         public Action? OnEnabled { get; set; }
+        public TaskCompletionSource EnableBarrierEntered { get; private set; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource FileEventAttempted { get; private set; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public event EventHandler<DbUpdatedEventArgs>? OnUpdated;
         public event EventHandler<DbUpdatedEventArgs>? OnRawUpdated;
@@ -1059,15 +1971,37 @@ public class FileStorageTaskStatusTests
 
         public void AddIgnoredTask(string taskId) => IgnoredTaskIds.Add(taskId);
 
-        public void SetEnable(bool enable)
+        public void SetEnable(bool enable, Action? beforeStateChange = null)
         {
-            if (enable)
+            lock (enableSync)
             {
-                var callback = OnEnabled;
-                OnEnabled = null;
-                callback?.Invoke();
+                beforeStateChange?.Invoke();
+                if (enable && blockNextEnable)
+                {
+                    blockNextEnable = false;
+                    EnableBarrierEntered.TrySetResult();
+                    releaseEnableBarrier.Task.GetAwaiter().GetResult();
+                }
+
+                isEnabled = enable;
+                if (enable)
+                {
+                    var callback = OnEnabled;
+                    OnEnabled = null;
+                    callback?.Invoke();
+                }
             }
         }
+
+        public void ArmEnableBarrier()
+        {
+            blockNextEnable = true;
+            EnableBarrierEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            FileEventAttempted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            releaseEnableBarrier = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        }
+
+        public void ReleaseEnableBarrier() => releaseEnableBarrier.TrySetResult();
 
         public void ForceUpdateFile(string filename, UpdateType type) => OnUpdated?.Invoke(this, new DbUpdatedEventArgs
         {
@@ -1080,6 +2014,20 @@ public class FileStorageTaskStatusTests
             Id = filename,
             Type = type
         });
+
+        public void EmitFileEvent(string filename, UpdateType type)
+        {
+            FileEventAttempted.TrySetResult();
+            lock (enableSync)
+            {
+                var args = new DbUpdatedEventArgs { Id = filename, Type = type };
+                OnRawUpdated?.Invoke(this, args);
+                if (isEnabled)
+                {
+                    OnUpdated?.Invoke(this, args);
+                }
+            }
+        }
 
         public void Invalidate() => OnInvalidated?.Invoke(this, EventArgs.Empty);
 

@@ -6,6 +6,7 @@ using System.Text.Json;
 using AppAutomation.FlaUI.Session;
 using AppAutomation.Session.Contracts;
 using FlaUI.Core.AutomationElements;
+using FlaUI.Core.Exceptions;
 using TUnit.Core;
 using Unlimotion.AppAutomation.TestHost;
 
@@ -51,14 +52,26 @@ public sealed class TaskLoadingPerformanceFlaUiTests
             }
 
             var executable = Environment.GetEnvironmentVariable("UNLIMOTION_LOADING_EXE");
-            if (!string.IsNullOrWhiteSpace(executable))
+            var tieredCompilation = Environment.GetEnvironmentVariable(
+                "UNLIMOTION_LOADING_DOTNET_TIERED_COMPILATION");
+            if (!string.IsNullOrWhiteSpace(executable) || !string.IsNullOrWhiteSpace(tieredCompilation))
+            {
+                var environmentVariables = new Dictionary<string, string?>(
+                    options.EnvironmentVariables, StringComparer.OrdinalIgnoreCase);
+                if (!string.IsNullOrWhiteSpace(tieredCompilation))
+                    environmentVariables["DOTNET_TieredCompilation"] = tieredCompilation;
+
                 options = new DesktopAppLaunchOptions
                 {
-                    ExecutablePath = executable, WorkingDirectory = Path.GetDirectoryName(executable)!,
-                    Arguments = options.Arguments, EnvironmentVariables = options.EnvironmentVariables,
+                    ExecutablePath = string.IsNullOrWhiteSpace(executable) ? options.ExecutablePath : executable,
+                    WorkingDirectory = string.IsNullOrWhiteSpace(executable)
+                        ? options.WorkingDirectory
+                        : Path.GetDirectoryName(executable)!,
+                    Arguments = options.Arguments, EnvironmentVariables = environmentVariables,
                     MainWindowTimeout = options.MainWindowTimeout, PollInterval = options.PollInterval,
                     WindowPlacement = options.WindowPlacement, DisposeCallback = options.DisposeCallback
                 };
+            }
 
             Console.WriteLine(JsonSerializer.Serialize(new
             {
@@ -72,8 +85,8 @@ public sealed class TaskLoadingPerformanceFlaUiTests
             session = DesktopAppSession.Launch(options);
             var windowAvailableMs = watch.Elapsed.TotalMilliseconds;
             session.MainWindow.Focus();
-            var readyMs = ReadyAndAct(session, UnlimotionAutomationScenarioData.TaskSpacesSpaceATitle, watch);
-            WriteMeasurement("startup", readyMs, watch.Elapsed.TotalMilliseconds, windowAvailableMs, copied);
+            var measurement = ReadyAndAct(session, UnlimotionAutomationScenarioData.TaskSpacesSpaceATitle, watch);
+            WriteMeasurement(session, "startup", measurement, windowAvailableMs, copied);
             MeasureSwitch(session, "Space B", UnlimotionAutomationScenarioData.TaskSpacesSpaceBTitle, copied);
             MeasureSwitch(session, "Space A", UnlimotionAutomationScenarioData.TaskSpacesSpaceATitle, copied);
         }
@@ -92,12 +105,21 @@ public sealed class TaskLoadingPerformanceFlaUiTests
         Wait(() => selector.Items.Any(item => item.Name == space), "Task-space choices did not open.");
         var target = selector.Items.Single(item => item.Name == space);
         var watch = Stopwatch.StartNew();
-        target.Click();
-        var readyMs = ReadyAndAct(session, title, watch);
-        WriteMeasurement(space, readyMs, watch.Elapsed.TotalMilliseconds, null, copied);
+        var selection = target.Patterns.SelectionItem.PatternOrDefault;
+        if (selection is not null)
+        {
+            selection.Select();
+        }
+        else
+        {
+            target.Patterns.ScrollItem.PatternOrDefault?.ScrollIntoView();
+            target.Click();
+        }
+        var measurement = ReadyAndAct(session, title, watch);
+        WriteMeasurement(session, space, measurement, null, copied);
     }
 
-    private static double ReadyAndAct(DesktopAppSession session, string title, Stopwatch watch)
+    private static ReadyActionMeasurement ReadyAndAct(DesktopAppSession session, string title, Stopwatch watch)
     {
         Wait(() =>
         {
@@ -109,24 +131,61 @@ public sealed class TaskLoadingPerformanceFlaUiTests
         var readyMs = watch.Elapsed.TotalMilliseconds;
 
         // A successful task-card action distinguishes readiness from a hidden overlay on failure.
+        var details = Find(session, "DetailsPaneToggleButton")!.AsToggleButton();
         if (Find(session, "CurrentTaskTitleTextBox")?.AsTextBox().Text != title)
         {
-            var task = session.MainWindow.FindAllDescendants(session.ConditionFactory.ByAutomationId("InlineTaskTitleTextBlock"))
-                .First(e => e.Name == title && Visible(e));
-            task.Click();
+            // Close a previously selected card before clicking the new row. Closing after the click
+            // races with the same toggle that the row click opens and made the benchmark flaky.
+            // The button binds to !DetailsAreOpen: checked means the pane is closed.
+            if (details.IsToggled != true)
+            {
+                details.Toggle();
+                Wait(() => details.IsToggled == true, "The previous task card did not close.", TimeSpan.FromSeconds(15));
+            }
+            var lastClick = Stopwatch.StartNew();
+            var clicked = false;
+            var toggledAfterClick = false;
+            Wait(() =>
+            {
+                if (Find(session, "CurrentTaskTitleTextBox")?.AsTextBox().Text == title) return true;
+                if (clicked && lastClick.Elapsed >= TimeSpan.FromSeconds(1) &&
+                    details.IsToggled == true && !toggledAfterClick)
+                {
+                    // Some UIA providers select the row without opening the pane. Toggle once,
+                    // but never close a pane that the row click has already opened.
+                    details.Toggle();
+                    toggledAfterClick = true;
+                    return false;
+                }
+
+                if (clicked && lastClick.Elapsed < TimeSpan.FromSeconds(3)) return false;
+
+                var task = session.MainWindow
+                    .FindAllDescendants(session.ConditionFactory.ByAutomationId("InlineTaskTitleTextBlock"))
+                    .FirstOrDefault(e => e.Name == title && Visible(e));
+                if (task is null) return false;
+                task.Focus();
+                task.Click();
+                clicked = true;
+                toggledAfterClick = false;
+                lastClick.Restart();
+                return false;
+            }, "The selected task card did not open.", TimeSpan.FromSeconds(15));
         }
-        var details = Find(session, "DetailsPaneToggleButton")!.AsToggleButton();
-        if (details.IsToggled == true) details.Toggle();
-        Wait(() => Find(session, "CurrentTaskTitleTextBox")?.AsTextBox().Text == title,
-            "The selected task card did not open.", TimeSpan.FromSeconds(15));
+        var cardOpenedMs = watch.Elapsed.TotalMilliseconds;
         Find(session, "CurrentTaskParentsRelationAddButton")!.AsButton().Invoke();
         Wait(() => Visible(Find(session, "CurrentTaskParentsRelationAddInput")),
             "The task relation editor did not respond.", TimeSpan.FromSeconds(15));
+        var relationEditorOpenedMs = watch.Elapsed.TotalMilliseconds;
         Find(session, "CurrentTaskParentsRelationAddCancelButton")!.AsButton().Invoke();
         Wait(() => !Visible(Find(session, "CurrentTaskParentsRelationAddInput")),
             "The task relation editor did not close.", TimeSpan.FromSeconds(15));
         CheckErrors(session);
-        return readyMs;
+        return new ReadyActionMeasurement(
+            readyMs,
+            cardOpenedMs,
+            relationEditorOpenedMs,
+            watch.Elapsed.TotalMilliseconds);
     }
 
     private static AutomationElement? Find(DesktopAppSession session, string id) =>
@@ -154,20 +213,80 @@ public sealed class TaskLoadingPerformanceFlaUiTests
         {
             try { if (predicate()) return; }
             catch (COMException) { /* Avalonia may replace its UIA tree while switching. */ }
+            catch (NoClickablePointException) { /* Retry after layout gives the element a clickable point. */ }
             Thread.Sleep(100);
         } while (watch.Elapsed < (timeout ?? TimeSpan.FromMinutes(10)));
         throw new TimeoutException(failure);
     }
 
-    private static void WriteMeasurement(string scenario, double readyMs, double readyAndActionMs, double? windowAvailableMs, int copiedFiles)
+    private static void WriteMeasurement(
+        DesktopAppSession session,
+        string scenario,
+        ReadyActionMeasurement measurement,
+        double? windowAvailableMs,
+        int copiedFiles)
     {
+        using var process = Process.GetProcessById(session.MainWindow.Properties.ProcessId.ValueOrDefault);
+        var peakPrivateMemoryBytes = GetPeakPrivateMemoryBytes(process);
         var json = JsonSerializer.Serialize(new
         {
-            label = Environment.GetEnvironmentVariable("UNLIMOTION_LOADING_LABEL") ?? "smoke",
-            scenario, readyMs, readyAndActionMs, windowAvailableMs, copiedFiles, utc = DateTime.UtcNow
+            label = Environment.GetEnvironmentVariable("UNLIMOTION_LOADING_LABEL") ?? "smoke", scenario,
+            readyMs = measurement.ReadyMs,
+            readyAndActionMs = measurement.RelationEditorOpenedMs,
+            cardOpenedMs = measurement.CardOpenedMs,
+            relationEditorOpenedMs = measurement.RelationEditorOpenedMs,
+            actionCleanupCompleteMs = measurement.ActionCleanupCompleteMs,
+            windowAvailableMs, copiedFiles,
+            privateMemoryBytes = process.PrivateMemorySize64,
+            peakPrivateMemoryBytes,
+            peakWorkingSetBytes = process.PeakWorkingSet64,
+            utc = DateTime.UtcNow
         });
         Console.WriteLine(json);
         var report = Environment.GetEnvironmentVariable("UNLIMOTION_LOADING_REPORT");
         if (!string.IsNullOrWhiteSpace(report)) File.AppendAllText(report, json + Environment.NewLine);
+    }
+
+    private static long GetPeakPrivateMemoryBytes(Process process)
+    {
+        var counters = new ProcessMemoryCounters
+        {
+            Size = (uint)Marshal.SizeOf<ProcessMemoryCounters>()
+        };
+        if (!GetProcessMemoryInfo(process.Handle, ref counters, counters.Size))
+        {
+            throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+        }
+
+        // Win32 PeakPagefileUsage is the process's peak committed private memory.
+        return checked((long)counters.PeakPagefileUsage.ToUInt64());
+    }
+
+    [DllImport("psapi.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetProcessMemoryInfo(
+        IntPtr process,
+        ref ProcessMemoryCounters counters,
+        uint size);
+
+    private sealed record ReadyActionMeasurement(
+        double ReadyMs,
+        double CardOpenedMs,
+        double RelationEditorOpenedMs,
+        double ActionCleanupCompleteMs);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct ProcessMemoryCounters
+    {
+        public uint Size;
+        public uint PageFaultCount;
+        public UIntPtr PeakWorkingSetSize;
+        public UIntPtr WorkingSetSize;
+        public UIntPtr QuotaPeakPagedPoolUsage;
+        public UIntPtr QuotaPagedPoolUsage;
+        public UIntPtr QuotaPeakNonPagedPoolUsage;
+        public UIntPtr QuotaNonPagedPoolUsage;
+        public UIntPtr PagefileUsage;
+        public UIntPtr PeakPagefileUsage;
     }
 }

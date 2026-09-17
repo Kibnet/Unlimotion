@@ -9,13 +9,33 @@ public static class JsonRepairingReader
     {
         ArgumentNullException.ThrowIfNull(jsonSerializer);
 
+        byte[] content;
+        using (var stream = new FileStream(
+                   fullPath,
+                   FileMode.Open,
+                   FileAccess.Read,
+                   FileShare.ReadWrite | FileShare.Delete))
+        using (var buffer = new MemoryStream())
+        {
+            stream.CopyTo(buffer);
+            content = buffer.ToArray();
+        }
+
+        return DeserializeWithRepair<T>(content, fullPath, jsonSerializer, saveRepairedSidecar);
+    }
+
+    public static T DeserializeWithRepair<T>(
+        byte[] content,
+        string sourcePath,
+        JsonSerializer jsonSerializer,
+        bool saveRepairedSidecar = false)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        ArgumentNullException.ThrowIfNull(jsonSerializer);
+
         try
         {
-            using var stream = new FileStream(
-                fullPath,
-                FileMode.Open,
-                FileAccess.Read,
-                FileShare.ReadWrite | FileShare.Delete);
+            using var stream = new MemoryStream(content, writable: false);
             using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
             using var jsonReader = new JsonTextReader(reader);
             return jsonSerializer.Deserialize<T>(jsonReader)!;
@@ -26,11 +46,7 @@ public static class JsonRepairingReader
         }
 
         string original;
-        using (var stream = new FileStream(
-                   fullPath,
-                   FileMode.Open,
-                   FileAccess.Read,
-                   FileShare.ReadWrite | FileShare.Delete))
+        using (var stream = new MemoryStream(content, writable: false))
         using (var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true))
         {
             original = reader.ReadToEnd();
@@ -45,7 +61,7 @@ public static class JsonRepairingReader
 
             if (saveRepairedSidecar)
             {
-                File.WriteAllText(fullPath + ".repaired.json", repaired, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+                File.WriteAllText(sourcePath + ".repaired.json", repaired, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
             }
 
             return result!;
@@ -53,7 +69,7 @@ public static class JsonRepairingReader
         catch (JsonReaderException ex)
         {
             throw new JsonReaderException(
-                $"Failed to repair JSON file '{fullPath}'. Repaired preview: {Preview(repaired, 200)}",
+                $"Failed to repair JSON file '{sourcePath}'. Repaired preview: {Preview(repaired, 200)}",
                 ex);
         }
     }

@@ -11,6 +11,7 @@ using DynamicData;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Unlimotion.Domain;
+using Unlimotion.Storage;
 using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
 using DomainTaskStatus = Unlimotion.Domain.TaskStatus;
@@ -73,8 +74,14 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
         if (TaskTreeManager.Storage is FileStorage initFileStorage &&
             initFileStorage.Watcher is IRawDatabaseWatcher)
         {
-            initFileStorage.Watcher?.SetEnable(true);
+            // FileDbWatcher performs the cutoff capture and state transition under the same
+            // lock used to register a raw event and decide whether to schedule its callback.
+            var disabledWatcherGeneration = initFileStorage.EnableWatcherAndCaptureDisabledGeneration();
             await ReconcileFileStorageSnapshotAsync(initFileStorage);
+            // Raw events raised while delayed publication was disabled have already been
+            // reconciled into the startup snapshot. Retire only those generations; events
+            // raised after re-enable keep their identity until their delayed callback runs.
+            initFileStorage.DiscardPendingWatcherUpdatesThrough(disabledWatcherGeneration);
         }
 
         OnInited();
@@ -110,12 +117,54 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
             if (isFileStorage && TaskTreeManager.Storage is FileStorage fileStorage)
             {
                 StatusModelMigrationWasApplied = await MigrateTaskStatusModel(fileStorage);
-                var forceReverseLinksRecheck = ShouldForceReverseLinkRecheck(fileStorage);
-                var reverseLinksResult = await MigrateReverseLinks(TaskTreeManager, forceReverseLinksRecheck);
-                await MigrateIsCanBeCompleted(TaskTreeManager, forceRecheck: reverseLinksResult.AnyChanges);
                 if (fileStorage.Watcher is IRawDatabaseWatcher)
                 {
+                    // Build the typed snapshot once after the raw JSON status migration. The
+                    // following migrations read defensive clones and successful saves update the
+                    // live graph, avoiding two more complete directory deserializations.
                     await fileStorage.EnableLiveGraphAsync();
+                }
+                var forceReverseLinksRecheck = ShouldForceReverseLinkRecheck(fileStorage);
+                if (fileStorage.Watcher is IRawDatabaseWatcher)
+                {
+                    // Raw watcher events remain active while projection publication is paused.
+                    // Consume them before the first migration reads the shared snapshot.
+                    await fileStorage.RefreshPendingFileChangesAsync();
+                }
+                var reverseLinksResult = fileStorage.Watcher is IRawDatabaseWatcher
+                    ? await RunStableLiveGraphMigrationAsync(
+                        fileStorage,
+                        guard => MigrateReverseLinks(
+                            TaskTreeManager,
+                            forceReverseLinksRecheck,
+                            () => guard.Generation))
+                    : await MigrateReverseLinks(TaskTreeManager, forceReverseLinksRecheck);
+                if (fileStorage.Watcher is IRawDatabaseWatcher)
+                {
+                    // A save cannot update a duplicate-bearing live graph incrementally because
+                    // the canonical source depends on the complete per-file ordering. Refresh an
+                    // invalidated graph before the availability migration consumes reverse links.
+                    await fileStorage.RefreshPendingFileChangesAsync();
+                }
+                if (fileStorage.Watcher is IRawDatabaseWatcher)
+                {
+                    await RunStableLiveGraphMigrationAsync(fileStorage, async guard =>
+                    {
+                        await MigrateIsCanBeCompleted(
+                            TaskTreeManager,
+                            forceRecheck: reverseLinksResult.AnyChanges,
+                            () => guard.Generation);
+                        return true;
+                    });
+                }
+                else
+                {
+                    await MigrateIsCanBeCompleted(
+                        TaskTreeManager,
+                        forceRecheck: reverseLinksResult.AnyChanges);
+                }
+                if (fileStorage.Watcher is IRawDatabaseWatcher)
+                {
                     await fileStorage.SynchronizePendingFileChangesAsync();
                 }
             }
@@ -138,7 +187,9 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
 
     private async Task ReconcileFileStorageSnapshotAsync(FileStorage fileStorage)
     {
-        var previousGraph = await fileStorage.ReadGraphAsync();
+        // Keep the last valid projection for files that became unreadable while startup
+        // publication was paused. Ordinary reads intentionally reject invalidated graphs.
+        var previousGraph = fileStorage.ReadLastPublishedGraph() ?? await fileStorage.ReadGraphAsync();
         var graph = await fileStorage.SynchronizePendingFileChangesAsync();
         await RunOnCacheSynchronizationContextAsync(() =>
         {
@@ -153,7 +204,7 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
             // Preserve its last visible VM; write commands remain blocked by the graph diagnostic.
             var errorFiles = graph.LoadErrors
                 .Select(static error => error.File)
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                .ToHashSet(FileStorage.SourcePathComparer);
             var idsWithUnreadableSources = previousGraph.FilesByTaskId
                 .Where(pair => errorFiles.Contains(pair.Value))
                 .Select(static pair => pair.Key)
@@ -696,7 +747,7 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
                     rawJson);
             }
 
-            await File.WriteAllTextAsync(
+            await fileStorage.WriteOwnedMigrationFileAsync(
                 filePath,
                 JsonConvert.SerializeObject(taskJson, Formatting.Indented));
             changed++;
@@ -902,8 +953,37 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
         return property != null;
     }
 
+    private static async Task<T> RunStableLiveGraphMigrationAsync<T>(
+        FileStorage fileStorage,
+        Func<ILiveGraphGenerationGuard, Task<T>> migration)
+    {
+        for (var attempt = 0; attempt < 5; attempt++)
+        {
+            try
+            {
+                return await fileStorage.WithWriteLockAsync(async () =>
+                {
+                    var generation = fileStorage.CaptureLiveGraphGeneration();
+                    using var guard = fileStorage.GuardLiveGraphGeneration(generation);
+                    var result = await migration(guard);
+                    fileStorage.EnsureLiveGraphGenerationCurrent(guard.Generation);
+                    return result;
+                });
+            }
+            catch (LiveGraphInvalidatedException) when (attempt < 4)
+            {
+                // Let an already queued FileSystemWatcher burst finish before the next locked
+                // refresh. Any later edit still advances the generation and aborts that attempt.
+                await fileStorage.WaitForRawWatcherQuiescenceAsync();
+            }
+        }
+
+        throw new IOException("Task files keep changing while running startup migrations.");
+    }
+
     private static async Task<FileTaskMigrator.MigrationResult> MigrateReverseLinks(TaskTreeManager taskTreeManager,
-        bool forceRecheck = false)
+        bool forceRecheck = false,
+        Func<long>? sourceGeneration = null)
     {
         if (taskTreeManager.Storage is FileStorage fileStorage)
             return await FileTaskMigrator.Migrate(taskTreeManager.Storage.GetAll(),
@@ -911,12 +991,22 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
                 {
                     { "Contain", (nameof(TaskItem.ContainsTasks), nameof(TaskItem.ParentTasks)) },
                     { "Block", (nameof(TaskItem.BlocksTasks), nameof(TaskItem.BlockedByTasks)) }
-                }, taskTreeManager.Storage.Save, fileStorage.Path, forceRecheck: forceRecheck);
+                }, taskTreeManager.Storage.Save, fileStorage.Path, forceRecheck: forceRecheck,
+                validateSource: sourceGeneration != null
+                    ? () =>
+                    {
+                        fileStorage.EnsureLiveGraphGenerationCurrent(sourceGeneration());
+                        return Task.CompletedTask;
+                    }
+                    : null);
 
         return new FileTaskMigrator.MigrationResult(SkippedByReport: false, AnyChanges: false, UpdatedItems: 0);
     }
 
-    private static async Task MigrateIsCanBeCompleted(TaskTreeManager taskTreeManager, bool forceRecheck = false)
+    private static async Task MigrateIsCanBeCompleted(
+        TaskTreeManager taskTreeManager,
+        bool forceRecheck = false,
+        Func<long>? sourceGeneration = null)
     {
         if (taskTreeManager.Storage is not FileStorage fileStorage) return;
         var migrationReportPath = Path.Combine(fileStorage.Path, "availability.migration.report");
@@ -960,6 +1050,11 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
         foreach (var changedTask in changedTasks)
             await taskTreeManager.Storage.Save(changedTask);
 
+        if (sourceGeneration != null)
+        {
+            fileStorage.EnsureLiveGraphGenerationCurrent(sourceGeneration());
+        }
+
         // Create migration report
         var report = new
         {
@@ -973,6 +1068,19 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
 
         await File.WriteAllTextAsync(migrationReportPath,
             JsonConvert.SerializeObject(report, Formatting.Indented));
+
+        if (sourceGeneration != null)
+        {
+            try
+            {
+                fileStorage.EnsureLiveGraphGenerationCurrent(sourceGeneration());
+            }
+            catch
+            {
+                File.Delete(migrationReportPath);
+                throw;
+            }
+        }
     }
 
     private static bool IsCanBeCompletedForTask(TaskItem task, IReadOnlyDictionary<string, TaskItem> taskById)

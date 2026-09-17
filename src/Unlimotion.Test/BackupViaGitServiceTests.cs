@@ -1473,8 +1473,9 @@ public sealed class BackupViaGitServiceTests : IDisposable
         {
         }
 
-        public void SetEnable(bool enable)
+        public void SetEnable(bool enable, Action? beforeStateChange = null)
         {
+            beforeStateChange?.Invoke();
             SetEnableCalls++;
         }
 
