@@ -498,12 +498,15 @@ public class FeedControlUiTests
     [Test]
     public async Task Feed_ChronologyUsesCompactReadableDensity()
     {
-        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(SkiaHeadlessAppBuilder));
         await session.DispatchAsync(async () =>
         {
             using var directory = new FeedTempDirectory();
             var today = new DateOnly(2026, 8, 24);
-            directory.WriteDaily(today, "## Работа\nПлотная запись дня\n");
+            directory.WriteDaily(today, "## Работа\n- [ ] Проверить компактный чекбокс\n\nПлотная запись дня\n");
+            directory.WriteDaily(
+                today.AddDays(-1),
+                "## Работа\nОчень длинная запись предыдущего дня, которая намеренно задаёт другую intrinsic-ширину содержимого.\n");
             using var viewModel = new FeedViewModel(() => today);
             await viewModel.InitializeVaultAsync(directory.Path);
             var view = new FeedControl { DataContext = viewModel };
@@ -516,19 +519,32 @@ public class FeedControlUiTests
                 var toolbar = FindControlByAutomationId<Grid>(view, "FeedLocalToolbar");
                 var toolbarBorder = toolbar.Parent as Border
                     ?? throw new InvalidOperationException("The local toolbar border was not found.");
-                var day = viewModel.Days.Single();
-                var dayBorder = FindControlByAutomationId<Border>(view, day.AutomationId);
+                var days = viewModel.Days.OrderByDescending(static day => day.Date).ToArray();
+                var dayBorder = FindControlByAutomationId<Border>(view, days[0].AutomationId);
+                var previousDayBorder = FindControlByAutomationId<Border>(view, days[1].AutomationId);
                 var handle = FindControlByAutomationId<ToggleButton>(
                     view,
-                    day.MarkdownEditor.Blocks.First(static block => block.IsMovable).MoveHandleAutomationId);
+                    days[0].MarkdownEditor.Blocks.First(static block => block.IsMovable).MoveHandleAutomationId);
 
                 using (Assert.Multiple())
                 {
                     await Assert.That(toolbarBorder.Padding).IsEqualTo(new Thickness(12, 8));
                     await Assert.That(dayBorder.Padding).IsEqualTo(new Thickness(10));
                     await Assert.That(dayBorder.Margin.Bottom).IsEqualTo(8);
+                    await Assert.That(dayBorder.Bounds.X).IsEqualTo(previousDayBorder.Bounds.X);
+                    await Assert.That(dayBorder.Bounds.Width).IsEqualTo(previousDayBorder.Bounds.Width);
+                    await Assert.That(dayBorder.Bounds.Width).IsGreaterThan(700);
                     await Assert.That(handle.Width).IsEqualTo(18);
                     await Assert.That(handle.MinHeight).IsGreaterThanOrEqualTo(24);
+                }
+
+                var evidenceDirectory = Environment.GetEnvironmentVariable("UNLIMOTION_FEED_LAYOUT_EVIDENCE");
+                if (!string.IsNullOrWhiteSpace(evidenceDirectory))
+                {
+                    Directory.CreateDirectory(evidenceDirectory);
+                    using var frame = window.CaptureRenderedFrame();
+                    if (frame is null) throw new InvalidOperationException("Headless renderer returned no frame.");
+                    frame.Save(Path.Combine(evidenceDirectory, "two-days-and-checkbox.png"));
                 }
             }
             finally
