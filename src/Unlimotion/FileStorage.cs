@@ -127,7 +127,14 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
     internal async Task WriteOwnedMigrationFileAsync(string filePath, string content)
     {
         ConfirmOwnWrite(System.IO.Path.GetFileName(filePath), content);
-        await AtomicWriteAllTextAsync(filePath, content);
+        try
+        {
+            await AtomicWriteAllTextAsync(filePath, content);
+        }
+        finally
+        {
+            CompleteOwnWrite(System.IO.Path.GetFileName(filePath));
+        }
     }
 
     private void ConfirmOwnWrite(string fileName, string content)
@@ -135,6 +142,23 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
         _confirmedOwnWrites[fileName] = new ConfirmedOwnWrite(
             SHA256.HashData(Encoding.UTF8.GetBytes(content)),
             DateTimeOffset.UtcNow.AddSeconds(5));
+    }
+
+    protected override void OnWriteFinished(string taskId, string filePath) =>
+        CompleteOwnWrite(System.IO.Path.GetFileName(filePath));
+
+    protected override void OnAfterWritePersisted(string taskId, string filePath) =>
+        CompleteOwnWrite(System.IO.Path.GetFileName(filePath));
+
+    private void CompleteOwnWrite(string fileName)
+    {
+        if (_confirmedOwnWrites.TryGetValue(fileName, out var confirmation))
+        {
+            lock (confirmation.Sync)
+            {
+                confirmation.IsWriteInProgress = false;
+            }
+        }
     }
 
     protected override void OnBeforeRemove(string taskId, string filePath) =>
@@ -184,23 +208,13 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
 
     public async Task WaitForRawWatcherQuiescenceAsync()
     {
-        const int stableSamplesRequired = 5;
-        var stableSamples = 0;
-        for (var attempt = 0; attempt < stableSamplesRequired * 2; attempt++)
+        for (var attempt = 0; attempt < 5; attempt++)
         {
             var generation = CapturePendingWatcherGeneration();
             await Task.Delay(200);
             if (CapturePendingWatcherGeneration() == generation)
             {
-                stableSamples++;
-                if (stableSamples == stableSamplesRequired)
-                {
-                    return;
-                }
-            }
-            else
-            {
-                stableSamples = 0;
+                return;
             }
         }
     }
@@ -356,6 +370,17 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
             return false;
         }
 
+        lock (confirmation.Sync)
+        {
+            // FileSystemWatcher can raise Changed/Renamed while File.Replace still exposes
+            // the displaced or temporarily absent target. The completed write is classified
+            // by its exact hash; guarded writes independently verify the displaced source.
+            if (confirmation.IsWriteInProgress)
+            {
+                return true;
+            }
+        }
+
         if (confirmation.ExpiresAt <= DateTimeOffset.UtcNow)
         {
             RemoveConfirmedOwnWrite(fileName, confirmation);
@@ -421,7 +446,13 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
 
     private sealed record PendingWatcherUpdate(long Generation, string TaskId);
 
-    private sealed record ConfirmedOwnWrite(byte[] Hash, DateTimeOffset ExpiresAt);
+    private sealed class ConfirmedOwnWrite(byte[] hash, DateTimeOffset expiresAt)
+    {
+        public byte[] Hash { get; } = hash;
+        public DateTimeOffset ExpiresAt { get; } = expiresAt;
+        public object Sync { get; } = new();
+        public bool IsWriteInProgress { get; set; } = true;
+    }
 
     private sealed record FileRefreshResult(
         TaskItem? Task,

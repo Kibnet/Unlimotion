@@ -523,12 +523,12 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
             await _activeWriteScope.Value.PrepareWriteAsync(item.Id, filePath, content);
         }
 
-        OnWritePrepared(item.Id, filePath, content);
-        OnBeforeWrite(item.Id, filePath);
-        EnsureActiveLiveGraphGenerationCurrent();
         AtomicWriteLease? guardedWrite = null;
         try
         {
+            OnWritePrepared(item.Id, filePath, content);
+            OnBeforeWrite(item.Id, filePath);
+            EnsureActiveLiveGraphGenerationCurrent();
             if (_activeLiveGraphGenerationGuard.Value != null)
             {
                 guardedWrite = await AtomicWriteAllTextRetainingBackupAsync(filePath, content);
@@ -576,6 +576,10 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
             }
 
             throw;
+        }
+        finally
+        {
+            OnWriteFinished(item.Id, filePath);
         }
     }
 
@@ -844,6 +848,10 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
     }
 
     protected virtual void OnAfterWritePersisted(string taskId, string filePath)
+    {
+    }
+
+    protected virtual void OnWriteFinished(string taskId, string filePath)
     {
     }
 
