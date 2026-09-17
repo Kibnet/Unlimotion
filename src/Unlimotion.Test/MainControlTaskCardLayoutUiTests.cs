@@ -100,7 +100,7 @@ public class MainControlTaskCardLayoutUiTests
                 var detailsPanelFrame = FindControlByAutomationId<Border>(view, "CurrentTaskDetailsPanelFrame");
                 var card = FindControlByAutomationId<Border>(view, "CurrentTaskCard");
                 var header = FindControlByAutomationId<Control>(card, "CurrentTaskHeader");
-                var createMenuButton = FindControlByAutomationId<DropDownButton>(view, "GlobalTaskCreateMenuButton");
+                var createMenuButton = FindControlByAutomationId<Button>(view, "GlobalCreateMenuButton");
                 var actionsMenuButton = FindControlByAutomationId<DropDownButton>(view, "CurrentTaskActionsMenuButton");
                 var titleTextBox = FindControlByAutomationId<TextBox>(view, "CurrentTaskTitleTextBox");
                 var descriptionTextBox = FindControlByAutomationId<TextBox>(view, "CurrentTaskDescriptionTextBox");
@@ -953,7 +953,7 @@ public class MainControlTaskCardLayoutUiTests
                 var commandBar = FindControlByAutomationId<Control>(view, "CurrentTaskCommandBar");
                 var header = FindControlByAutomationId<Control>(card, "CurrentTaskHeader");
                 var title = FindControlByAutomationId<TextBox>(card, "CurrentTaskTitleTextBox");
-                var createMenuButton = FindControlByAutomationId<DropDownButton>(view, "GlobalTaskCreateMenuButton");
+                var createMenuButton = FindControlByAutomationId<Button>(view, "GlobalCreateMenuButton");
                 var actionsMenuButton = FindControlByAutomationId<DropDownButton>(view, "CurrentTaskActionsMenuButton");
 
                 AssertNoHorizontalOverflow(scrollViewer, card);
@@ -962,7 +962,7 @@ public class MainControlTaskCardLayoutUiTests
                 await Assert.That(IsVisibleAndArranged(parentEmojiTrail)).IsTrue();
                 await Assert.That(parentEmojiTrail.EmojiText).IsEqualTo(LongEmojiAncestorTrail);
                 AssertHorizontallyContained(scrollViewer, parentEmojiTrail);
-                AssertHasClass(createMenuButton, "TaskCreateMenuButton");
+                AssertHasClass(createMenuButton, "GlobalCreateButton");
                 AssertCreateMenuContainsTaskCommands(createMenuButton);
                 AssertHorizontallyContained(view, createMenuButton);
                 AssertHasClass(actionsMenuButton, "TaskActionsMenuButton");

@@ -39,6 +39,35 @@
             <Setter Property="BorderBrush" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
         </Style>
+        <Style Selector="CheckBox.MarkdownTaskCheckBox">
+            <Setter Property="Width" Value="16" />
+            <Setter Property="Height" Value="16" />
+            <Setter Property="MinWidth" Value="16" />
+            <Setter Property="MinHeight" Value="16" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="ClipToBounds" Value="False" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Grid Width="16" Height="16">
+                        <Border Margin="1"
+                                CornerRadius="2"
+                                BorderThickness="1.25"
+                                Background="Transparent"
+                                BorderBrush="{TemplateBinding Foreground}" />
+                        <Path Width="10"
+                              Height="8"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center"
+                              Data="M 1,4 L 4,7 L 9,1"
+                              IsVisible="{TemplateBinding IsChecked}"
+                              Stroke="{DynamicResource MarkdownReviewAccentBrush}"
+                              StrokeThickness="1.75"
+                              StrokeLineCap="Round"
+                              StrokeJoin="Round" />
+                    </Grid>
+                </ControlTemplate>
+            </Setter>
+        </Style>
         <Style Selector="TextBox.MarkdownBlockEditor">
             <Setter Property="MinHeight" Value="0" />
             <Setter Property="Padding" Value="0" />
