@@ -151,6 +151,7 @@ public sealed class TaskAvailabilityService
         }
 
         ValidateContainmentCycles(referenceIssues);
+        ValidateDependencyCycles(referenceIssues);
 
         var availabilityMismatches = _tasks.Values
             .Select(Analyze)
@@ -237,6 +238,58 @@ public sealed class TaskAvailabilityService
                     });
                 }
             }
+        }
+    }
+
+    private void ValidateDependencyCycles(ICollection<TaskGraphReferenceIssue> issues)
+    {
+        var states = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var start in _tasks.Values.OrderBy(static task => task.Id, StringComparer.Ordinal))
+        {
+            if (states.ContainsKey(start.Id))
+            {
+                continue;
+            }
+
+            Visit(start);
+        }
+
+        void Visit(TaskItem current)
+        {
+            states[current.Id] = 1;
+            foreach (var blockedId in (current.BlocksTasks ?? [])
+                         .Where(static id => !string.IsNullOrWhiteSpace(id))
+                         .Distinct(StringComparer.Ordinal)
+                         .OrderBy(static id => id, StringComparer.Ordinal))
+            {
+                if (!_tasks.TryGetValue(blockedId, out var blocked))
+                {
+                    continue;
+                }
+
+                if (!states.TryGetValue(blockedId, out var state))
+                {
+                    Visit(blocked);
+                    continue;
+                }
+
+                if (state == 1)
+                {
+                    issues.Add(new TaskGraphReferenceIssue
+                    {
+                        Kind = TaskGraphReferenceIssueKind.DependencyCycle,
+                        SourceTaskId = current.Id,
+                        SourceTaskTitle = current.Title,
+                        Relation = nameof(TaskItem.BlocksTasks),
+                        TargetTaskId = blocked.Id,
+                        TargetTaskTitle = blocked.Title,
+                        InverseRelation = nameof(TaskItem.BlockedByTasks),
+                        Details = $"{nameof(TaskItem.BlocksTasks)} contains a dependency cycle through task '{blocked.Id}'."
+                    });
+                }
+            }
+
+            states[current.Id] = 2;
         }
     }
 

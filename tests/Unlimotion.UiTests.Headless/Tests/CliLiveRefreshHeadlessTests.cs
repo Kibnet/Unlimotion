@@ -8,6 +8,7 @@ using Avalonia.Controls;
 using Avalonia.Threading;
 using DynamicData;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using TUnit.Assertions;
 using TUnit.Core;
 using Unlimotion.AppAutomation.TestHost;
@@ -103,6 +104,65 @@ public sealed class CliLiveRefreshHeadlessTests
                       DomainTaskStatus.Completed),
             () => DescribeRefreshState(fileStorage, storage, viewModel));
 
+    }
+
+    [Test]
+    public async Task Apply_RefreshesOpenDesktopProjection()
+    {
+        MainWindowViewModel? capturedViewModel = null;
+        using var session = DesktopAppSession.Launch(
+            UnlimotionAppLaunchHost.CreateHeadlessLaunchOptions(
+                UnlimotionAutomationScenario.CliLiveRefresh,
+                language: "en",
+                afterViewModelPrepared: viewModel => capturedViewModel = viewModel));
+
+        var viewModel = capturedViewModel
+            ?? throw new InvalidOperationException("Apply live-refresh view model was not captured.");
+        var storage = viewModel.taskRepository as UnifiedTaskStorage
+            ?? throw new InvalidOperationException("Apply live-refresh scenario did not use UnifiedTaskStorage.");
+        BindHeadlessSynchronizationContext(storage);
+        var fileStorage = storage.TaskTreeManager.Storage as FileStorage
+            ?? throw new InvalidOperationException("Apply live-refresh scenario did not use FileStorage.");
+        var page = new MainWindowPage(new HeadlessControlResolver(session.MainWindow));
+        var titleTextBox = GetNativeControl<TextBox>(page.CurrentTaskTitleTextBox);
+        var taskId = UnlimotionAutomationScenarioData.CliLiveRefreshTaskId;
+        var snapshot = JObject.Parse(await RunCliAsync("task", fileStorage.Path, "--id", taskId, "--include", "details"));
+        var etag = snapshot.Value<string>("etag")
+            ?? throw new InvalidOperationException("Task snapshot did not return an etag.");
+        var newTitle = "Applied external title";
+        var requestPath = Path.Combine(Path.GetTempPath(), $"unlimotion-apply-{Guid.NewGuid():N}.json");
+        var request = new JObject
+        {
+            ["schemaVersion"] = 1,
+            ["applicationId"] = "ui-live-refresh-apply",
+            ["proposalRefs"] = new JArray(new JObject { ["id"] = "ui-live-refresh", ["revision"] = 1 }),
+            ["author"] = "headless-test",
+            ["reason"] = "Verify the desktop projection observes an apply transaction.",
+            ["preconditions"] = new JArray(new JObject { ["taskId"] = taskId, ["etag"] = etag }),
+            ["operations"] = new JArray(new JObject
+            {
+                ["operationId"] = "rename",
+                ["kind"] = "setField",
+                ["taskId"] = taskId,
+                ["field"] = "title",
+                ["value"] = newTitle
+            })
+        };
+
+        await File.WriteAllTextAsync(requestPath, request.ToString(Formatting.None));
+        try
+        {
+            var applyOutput = JObject.Parse(await RunCliAsync("apply", fileStorage.Path, "--request", requestPath));
+            await Assert.That(applyOutput.Value<bool>("success")).IsTrue();
+            await Assert.That(applyOutput.Value<string>("mode")).IsEqualTo("applied");
+            await WaitForUiAsync(() =>
+                string.Equals(CurrentTask(viewModel).Title, newTitle, StringComparison.Ordinal) &&
+                string.Equals(titleTextBox.Text, newTitle, StringComparison.Ordinal));
+        }
+        finally
+        {
+            File.Delete(requestPath);
+        }
     }
 
     [Test]
@@ -239,7 +299,7 @@ public sealed class CliLiveRefreshHeadlessTests
             ?? throw new InvalidOperationException($"Headless control '{wrappedControl.AutomationId}' was not a {typeof(TControl).Name}.");
     }
 
-    private static async Task RunCliAsync(string command, string tasksPath, params string[] arguments)
+    private static async Task<string> RunCliAsync(string command, string tasksPath, params string[] arguments)
     {
         var startInfo = new ProcessStartInfo("dotnet")
         {
@@ -267,6 +327,7 @@ public sealed class CliLiveRefreshHeadlessTests
             throw new InvalidOperationException(
                 $"CLI command '{command}' failed with exit code {process.ExitCode}. stdout={output}; stderr={error}");
         }
+        return output;
     }
 
     private static async Task WaitForUiAsync(Func<bool> condition, Func<string>? diagnostic = null)
