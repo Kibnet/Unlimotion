@@ -43,9 +43,12 @@ public class MainScreenLoadingUiTests
                 Dispatcher.UIThread.RunJobs();
 
                 var overlay = FindControlByAutomationId<Grid>(view, "TasksLoadingOverlay");
-                var spinner = FindControlByAutomationId<Grid>(view, "TasksLoadingSpinner");
+                var spinner = FindControlByAutomationId<SeamlessLoadingIndicator>(
+                    view,
+                    "TasksLoadingSpinner");
 
                 await Assert.That(overlay.IsVisible).IsFalse();
+                await Assert.That(spinner.GetType().Name).IsEqualTo("SeamlessLoadingIndicator");
 
                 SetTasksLoading(vm, true);
                 var becameVisible = WaitFor(() => overlay.IsVisible && spinner.IsVisible);
@@ -54,6 +57,8 @@ public class MainScreenLoadingUiTests
                 SetTasksLoading(vm, false);
                 var becameHidden = WaitFor(() => !overlay.IsVisible);
                 await Assert.That(becameHidden).IsTrue();
+                Dispatcher.UIThread.RunJobs();
+                await Assert.That(spinner.CurrentPhase).IsEqualTo(0d);
             }
             finally
             {
@@ -81,7 +86,9 @@ public class MainScreenLoadingUiTests
                 Dispatcher.UIThread.RunJobs();
 
                 var overlay = FindControlByAutomationId<Grid>(view, "TasksLoadingOverlay");
-                var spinner = FindControlByAutomationId<Grid>(view, "TasksLoadingSpinner");
+                var spinner = FindControlByAutomationId<SeamlessLoadingIndicator>(
+                    view,
+                    "TasksLoadingSpinner");
                 var connectTask = vm.Connect();
 
                 var loadStarted = WaitFor(

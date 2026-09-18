@@ -2379,9 +2379,10 @@
             <StackPanel HorizontalAlignment="Center"
                         VerticalAlignment="Center"
                         Spacing="12">
-                <ProgressBar IsIndeterminate="True"
-                             Width="220"
-                             AutomationProperties.AutomationId="TaskSpaceSwitchProgress"/>
+                <unlimotion:SeamlessLoadingIndicator Width="180"
+                                                      Height="80"
+                                                      IsVisible="{Binding Settings.IsTaskSpaceSwitching}"
+                                                      AutomationProperties.AutomationId="TaskSpaceSwitchProgress"/>
                 <TextBlock Text="{DynamicResource TaskSpaceSwitching}"
                            HorizontalAlignment="Center"/>
             </StackPanel>

@@ -1105,6 +1105,12 @@ public class App : Application
         settings.IsTaskSpaceSwitching = true;
         try
         {
+            var evidenceDelay = GetAutomationTaskSpaceSwitchDelay();
+            if (evidenceDelay > TimeSpan.Zero)
+            {
+                await Task.Delay(evidenceDelay).ConfigureAwait(true);
+            }
+
             var descriptor = manager.ConfiguredSources.FirstOrDefault(source =>
                 string.Equals(source.Id, sourceId, StringComparison.Ordinal));
             if (descriptor?.Kind == TaskSourceKind.File)
@@ -1148,6 +1154,16 @@ public class App : Application
         {
             settings.IsTaskSpaceSwitching = false;
         }
+    }
+
+    private static TimeSpan GetAutomationTaskSpaceSwitchDelay()
+    {
+        const string variableName = "UNLIMOTION_AUTOMATION_TASK_SPACE_SWITCH_DELAY_MS";
+        var configuredValue = Environment.GetEnvironmentVariable(variableName);
+        return int.TryParse(configuredValue, out var milliseconds) &&
+               milliseconds is >= 0 and <= 10_000
+            ? TimeSpan.FromMilliseconds(milliseconds)
+            : TimeSpan.Zero;
     }
 
     private async Task AddTaskSpaceAsync(SettingsViewModel settings)
