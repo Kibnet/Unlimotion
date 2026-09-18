@@ -44,6 +44,7 @@ public static class Program
                 "status" => await RunReadCommand(options, storage, RunStatus),
                 "unlocked" => await RunReadCommand(options, storage, RunUnlocked),
                 "candidates" => await RunReadCommand(options, storage, RunCandidates),
+                "apply" => await RunApply(options, storage),
                 "claim" => await RunClaim(options, storage),
                 "execution" => await RunExecution(options, storage),
                 "release" => await RunRelease(options, storage),
@@ -128,7 +129,9 @@ public static class Program
             return 1;
         }
 
+        var scopedIds = ResolveUnlockedScope(options.RootIds, analyzer);
         var output = analyzer.AnalyzeAll()
+            .Where(analysis => scopedIds == null || scopedIds.Contains(analysis.TaskId))
             .Where(static analysis => analysis.CanStart)
             .Select(static analysis => TaskSummary.FromAnalysis(analysis))
             .ToArray();
@@ -151,6 +154,39 @@ public static class Program
         }
 
         return 0;
+    }
+
+    private static IReadOnlySet<string>? ResolveUnlockedScope(
+        IReadOnlyList<string> rootIds,
+        TaskAvailabilityAnalyzer analyzer)
+    {
+        if (rootIds.Count == 0)
+        {
+            return null;
+        }
+
+        var scoped = new HashSet<string>(StringComparer.Ordinal);
+        var pending = new Stack<string>(rootIds.Reverse());
+        while (pending.Count > 0)
+        {
+            var id = pending.Pop();
+            if (!scoped.Add(id))
+            {
+                continue;
+            }
+
+            if (!analyzer.TryGetTask(id, out var task) || task == null)
+            {
+                throw new CliException($"Scope root task '{id}' was not found.", exitCode: 1, kind: "notFound");
+            }
+
+            foreach (var childId in task.ContainsTasks ?? [])
+            {
+                pending.Push(childId);
+            }
+        }
+
+        return scoped;
     }
 
     private static int RunCandidates(CliOptions options, FileTaskStorageDirectoryReadResult loadResult, TaskAvailabilityAnalyzer analyzer)
@@ -387,6 +423,106 @@ public static class Program
 
         return 0;
     }
+
+    private static async Task<int> RunApply(CliOptions options, FileTaskStorage storage)
+    {
+        var requestPath = string.IsNullOrWhiteSpace(options.RequestPath)
+            ? throw new CliException("Command 'apply' requires --request <path|->.")
+            : options.RequestPath;
+        var json = requestPath == "-"
+            ? await Console.In.ReadToEndAsync()
+            : await File.ReadAllTextAsync(requestPath);
+        if (System.Text.Encoding.UTF8.GetByteCount(json) > 4 * 1024 * 1024)
+        {
+            throw new CliException("Application request exceeds the 4 MiB limit.");
+        }
+        ApplicationRequestInput? input;
+        try
+        {
+            input = JsonSerializer.Deserialize<ApplicationRequestInput>(json, JsonOptions);
+        }
+        catch (JsonException ex)
+        {
+            throw new CliException($"Application request JSON is invalid: {ex.Message}");
+        }
+
+        if (input == null)
+        {
+            throw new CliException("Application request JSON is empty.");
+        }
+
+        var request = input.ToDomain();
+        var requestHash = RequestHash(json);
+        TaskApplicationResult result;
+        var receiptWritten = false;
+        if (!options.DryRun)
+        {
+            var receipts = new TaskApplicationReceiptStore(storage.Path);
+            var receipt = await receipts.ReadAsync(request.ApplicationId);
+            if (receipt != null)
+            {
+                result = string.Equals(receipt.RequestHash, requestHash, StringComparison.Ordinal)
+                    ? new TaskApplicationResult
+                    {
+                        Success = true,
+                        Mode = "alreadyApplied",
+                        ChangedTaskIds = receipt.ChangedTaskIds,
+                        CreatedTaskIds = receipt.CreatedTaskIds,
+                        OperationResults = receipt.OperationIds.Select(id => new TaskApplicationOperationResult { OperationId = id, Outcome = "alreadyApplied" }).ToArray()
+                    }
+                    : new TaskApplicationResult
+                    {
+                        Success = false,
+                        Error = new TaskApplicationError { Kind = TaskApplicationErrorKind.IdempotencyConflict, Message = "Application id already belongs to a different request." }
+                    };
+            }
+            else
+            {
+                var service = new TaskApplicationCommandService(storage, TaskEtag.Create);
+                result = await service.TryApplyAsync(request);
+                if (result.Success)
+                {
+                    await receipts.WriteAsync(new TaskApplicationReceipt
+                    {
+                        ApplicationId = request.ApplicationId,
+                        RequestHash = requestHash,
+                        AppliedAt = DateTimeOffset.UtcNow,
+                        ProposalRefs = request.ProposalRefs.Select(reference => new ApplicationReceiptProposalReference
+                        {
+                            Id = reference.Id,
+                            Revision = reference.Revision
+                        }).ToArray(),
+                        ChangedTaskIds = result.ChangedTaskIds,
+                        CreatedTaskIds = result.CreatedTaskIds,
+                        OperationIds = request.Operations.Select(static operation => operation.OperationId).ToArray()
+                    });
+                    receiptWritten = true;
+                }
+            }
+        }
+        else
+        {
+            result = await new TaskApplicationCommandService(storage, TaskEtag.Create).PreviewAsync(request);
+        }
+        var output = ApplicationCommandOutput.From(request.ApplicationId, requestHash, result, receiptWritten);
+        if (options.Format == OutputFormat.Json)
+        {
+            WriteJson(output);
+        }
+        else if (result.Success)
+        {
+            Console.WriteLine($"{output.Mode}: {string.Join(", ", output.ChangedTaskIds)}");
+        }
+        else
+        {
+            Console.Error.WriteLine(output.Error?.Message ?? "Application request failed.");
+        }
+
+        return result.Success ? 0 : 1;
+    }
+
+    private static string RequestHash(string json) =>
+        "sha256:" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(json))).ToLowerInvariant();
 
     private static int RenderExecutionResult(
         CliOptions options,
@@ -703,6 +839,7 @@ public static class Program
         writer.WriteLine("  unlimotion-cli status --tasks <path> [--format text|json]");
         writer.WriteLine("  --tasks <path> is optional; without it the active local desktop task-space path is used.");
         writer.WriteLine("  unlimotion-cli unlocked --tasks <path> [--format text|json]");
+        writer.WriteLine("  unlimotion-cli unlocked [--root <task-id>]... --tasks <path> [--format text|json]");
         writer.WriteLine("  unlimotion-cli candidates --tasks <path> --limit <1..100> [--status <status>] [--startable true|false] [--sort default] [--format text|json]");
         writer.WriteLine("  unlimotion-cli claim --tasks <path> --id <task-id> --agent <agent-id> --expected-status Prepared [--format text|json]");
         writer.WriteLine("  unlimotion-cli execution question --tasks <path> --id <task-id> --agent <agent-id> --lease <lease-id> --text <text> [--format text|json]");
@@ -710,6 +847,7 @@ public static class Program
         writer.WriteLine("  unlimotion-cli execution result|complete --tasks <path> --id <task-id> --agent <agent-id> --lease <lease-id> --summary <text> [--link <absolute-uri>] [--format text|json]");
         writer.WriteLine("  unlimotion-cli release --tasks <path> --id <task-id> --agent <agent-id> --lease <lease-id> --reason <text> [--format text|json]");
         writer.WriteLine("  unlimotion-cli create --tasks <path> --title <text> [--description <text>] [--parent <task-id>] [--format text|json]");
+        writer.WriteLine("  unlimotion-cli apply --tasks <path> --request <path|-> [--dry-run] [--format text|json]");
         writer.WriteLine("  unlimotion-cli task --tasks <path> --id <task-id> [--include details,relations,criteria,history,execution] [--format text|json]");
         writer.WriteLine("  unlimotion-cli validate --tasks <path> [--format text|json]");
         writer.WriteLine("  unlimotion-cli set-status --tasks <path> --id <task-id> --status <status> [--author <name>] [--format text|json]");
@@ -726,6 +864,7 @@ public sealed record CliOptions
         "status",
         "unlocked",
         "candidates",
+        "apply",
         "claim",
         "execution",
         "release",
@@ -753,6 +892,9 @@ public sealed record CliOptions
     public string? Description { get; init; }
     public IReadOnlyList<string> Links { get; init; } = Array.Empty<string>();
     public IReadOnlyList<string> ParentIds { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> RootIds { get; init; } = Array.Empty<string>();
+    public string? RequestPath { get; init; }
+    public bool DryRun { get; init; }
     public IReadOnlySet<string> IncludeSections { get; init; } = new HashSet<string>(StringComparer.Ordinal);
     public DomainTaskStatus? ExpectedStatus { get; init; }
     public int? Limit { get; init; }
@@ -808,6 +950,9 @@ public sealed record CliOptions
         string? description = null;
         var links = new List<string>();
         var parentIds = new List<string>();
+        var rootIds = new List<string>();
+        string? requestPath = null;
+        var dryRun = false;
         var includeSections = new HashSet<string>(StringComparer.Ordinal);
         DomainTaskStatus? expectedStatus = null;
         int? limit = null;
@@ -881,6 +1026,18 @@ public sealed record CliOptions
                     suppliedOptions.Add(arg);
                     parentIds.Add(RequireValue(args, ref i, arg));
                     break;
+                case "--root":
+                    suppliedOptions.Add(arg);
+                    rootIds.Add(RequireValue(args, ref i, arg));
+                    break;
+                case "--request":
+                    suppliedOptions.Add(arg);
+                    requestPath = RequireValue(args, ref i, arg);
+                    break;
+                case "--dry-run":
+                    suppliedOptions.Add(arg);
+                    dryRun = true;
+                    break;
                 case "--include":
                     suppliedOptions.Add(arg);
                     AddIncludeSections(includeSections, RequireValue(args, ref i, arg));
@@ -947,6 +1104,9 @@ public sealed record CliOptions
             Description = description,
             Links = links,
             ParentIds = parentIds,
+            RootIds = rootIds,
+            RequestPath = requestPath,
+            DryRun = dryRun,
             IncludeSections = includeSections,
             ExpectedStatus = expectedStatus,
             Limit = limit,
@@ -1017,7 +1177,9 @@ public sealed record CliOptions
     {
         var allowedOptions = (command, executionCommand) switch
         {
-            ("status" or "unlocked" or "validate", _) => new[] { "--tasks", "--format" },
+            ("status" or "validate", _) => new[] { "--tasks", "--format" },
+            ("unlocked", _) => new[] { "--tasks", "--root", "--format" },
+            ("apply", _) => new[] { "--tasks", "--request", "--dry-run", "--format" },
             ("candidates", _) => new[] { "--tasks", "--limit", "--status", "--startable", "--sort", "--format" },
             ("claim", _) => new[] { "--tasks", "--id", "--agent", "--expected-status", "--format" },
             ("task", _) => new[] { "--tasks", "--id", "--include", "--format" },
@@ -1318,6 +1480,7 @@ public sealed record AuthoritativeTaskOutput
 
 public sealed record TaskSnapshotOutput
 {
+    public string Etag { get; init; } = string.Empty;
     public TaskSummary Task { get; init; } = new();
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public TaskDetailsOutput? Details { get; init; }
@@ -1338,6 +1501,7 @@ public sealed record TaskSnapshotOutput
     {
         return new TaskSnapshotOutput
         {
+            Etag = TaskEtag.Create(task),
             Task = TaskSummary.FromAnalysis(analysis),
             Details = include.Contains("details") ? TaskDetailsOutput.From(task) : null,
             Relations = include.Contains("relations") ? BuildRelations(task, analyzer) : null,
@@ -1409,6 +1573,7 @@ public sealed record TaskSnapshotOutput
 public sealed record TaskDetailsOutput
 {
     public string Description { get; init; } = string.Empty;
+    public string DescriptionUserText { get; init; } = string.Empty;
     public int Importance { get; init; }
     public bool Wanted { get; init; }
     public DateTimeOffset CreatedDateTime { get; init; }
@@ -1417,9 +1582,13 @@ public sealed record TaskDetailsOutput
     public DateTimeOffset? PlannedEndDateTime { get; init; }
     public TimeSpan? PlannedDuration { get; init; }
 
-    public static TaskDetailsOutput From(TaskItem task) => new()
+    public static TaskDetailsOutput From(TaskItem task)
     {
+        var markerState = AgentExecutionDescriptionRenderer.TryRemove(task.Description, out var userText, out _);
+        return new TaskDetailsOutput
+        {
         Description = task.Description,
+        DescriptionUserText = markerState ? userText : task.Description,
         Importance = task.Importance,
         Wanted = task.Wanted,
         CreatedDateTime = task.CreatedDateTime,
@@ -1427,7 +1596,101 @@ public sealed record TaskDetailsOutput
         PlannedBeginDateTime = task.PlannedBeginDateTime,
         PlannedEndDateTime = task.PlannedEndDateTime,
         PlannedDuration = task.PlannedDuration
+        };
+    }
+}
+
+public sealed record ApplicationCommandOutput
+{
+    public bool Success { get; init; }
+    public string Mode { get; init; } = string.Empty;
+    public string ApplicationId { get; init; } = string.Empty;
+    public string RequestHash { get; init; } = string.Empty;
+    public bool DidMutate { get; init; }
+    public IReadOnlyList<string> ChangedTaskIds { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> CreatedTaskIds { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<TaskApplicationOperationResult> OperationResults { get; init; } = Array.Empty<TaskApplicationOperationResult>();
+    public bool ReceiptWritten { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public TaskGraphValidationReport? Validation { get; init; }
+    public IReadOnlyList<ApplicationAuthoritativeTaskOutput> AuthoritativeTasks { get; init; } = Array.Empty<ApplicationAuthoritativeTaskOutput>();
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ApplicationCommandError? Error { get; init; }
+
+    public static ApplicationCommandOutput From(string applicationId, string requestHash, TaskApplicationResult result, bool receiptWritten) => new()
+    {
+        Success = result.Success,
+        Mode = result.Mode,
+        ApplicationId = applicationId,
+        RequestHash = requestHash,
+        DidMutate = result.DidMutate,
+        ChangedTaskIds = result.ChangedTaskIds,
+        CreatedTaskIds = result.CreatedTaskIds,
+        OperationResults = result.OperationResults,
+        ReceiptWritten = receiptWritten,
+        Validation = result.Validation,
+        AuthoritativeTasks = result.AuthoritativeTasks.Select(ApplicationAuthoritativeTaskOutput.From).ToArray(),
+        Error = result.Error == null ? null : new ApplicationCommandError
+        {
+            Kind = Map(result.Error.Kind),
+            Message = result.Error.Message,
+            OperationId = result.Error.OperationId,
+            TaskId = result.Error.TaskId,
+            ExpectedEtag = result.Error.ExpectedEtag,
+            ActualEtag = result.Error.ActualEtag
+        }
     };
+
+    private static string Map(TaskApplicationErrorKind kind) => kind switch
+    {
+        TaskApplicationErrorKind.InvalidArguments => "invalidArguments",
+        TaskApplicationErrorKind.NotFound => "notFound",
+        TaskApplicationErrorKind.PreconditionFailed => "preconditionFailed",
+        TaskApplicationErrorKind.ConflictingOperations => "conflictingOperations",
+        TaskApplicationErrorKind.DescriptionMarkerConflict => "descriptionMarkerConflict",
+        TaskApplicationErrorKind.BusinessRuleDenied => "businessRuleDenied",
+        TaskApplicationErrorKind.ValidationFailed => "validationFailed",
+        TaskApplicationErrorKind.IdempotencyConflict => "idempotencyConflict",
+        TaskApplicationErrorKind.ReconciliationRequired => "reconciliationRequired",
+        TaskApplicationErrorKind.OutcomeUnknown => "outcomeUnknown",
+        _ => "operationFailed"
+    };
+}
+
+public sealed record ApplicationAuthoritativeTaskOutput
+{
+    public string Id { get; init; } = string.Empty;
+    public string Etag { get; init; } = string.Empty;
+    public DomainTaskStatus Status { get; init; }
+    public TaskDetailsOutput Details { get; init; } = new();
+    public IReadOnlyList<TaskCriterionOutput> Criteria { get; init; } = Array.Empty<TaskCriterionOutput>();
+    public IReadOnlyDictionary<string, IReadOnlyList<string>> RelationIds { get; init; } = new Dictionary<string, IReadOnlyList<string>>();
+
+    public static ApplicationAuthoritativeTaskOutput From(TaskItem task) => new()
+    {
+        Id = task.Id,
+        Etag = TaskEtag.Create(task),
+        Status = task.Status,
+        Details = TaskDetailsOutput.From(task),
+        Criteria = task.CompletionCriteria.OrderBy(static item => item.Id, StringComparer.Ordinal)
+            .Select(static item => new TaskCriterionOutput { Id = item.Id, Text = item.Text, IsSatisfied = item.IsSatisfied }).ToArray(),
+        RelationIds = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
+        {
+            ["contains"] = task.ContainsTasks.OrderBy(static id => id, StringComparer.Ordinal).ToArray(),
+            ["parents"] = task.ParentTasks.OrderBy(static id => id, StringComparer.Ordinal).ToArray(),
+            ["blocks"] = task.BlocksTasks.OrderBy(static id => id, StringComparer.Ordinal).ToArray(),
+            ["blockedBy"] = task.BlockedByTasks.OrderBy(static id => id, StringComparer.Ordinal).ToArray()
+        }
+    };
+}
+
+public sealed record ApplicationCommandError
+{
+    public string Kind { get; init; } = string.Empty;
+    public string Message { get; init; } = string.Empty;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? OperationId { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? TaskId { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? ExpectedEtag { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? ActualEtag { get; init; }
 }
 
 public sealed record TaskRelationOutput

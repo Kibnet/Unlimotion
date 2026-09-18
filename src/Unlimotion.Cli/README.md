@@ -20,9 +20,12 @@ CLI требует совместимый .NET 10 SDK/runtime. Явный `--tas
 Для локальной сборки рекомендуется отдельный каталог инструмента, чтобы агент не изменял глобальную установку пользователя:
 
 ```powershell
-dotnet pack src\Unlimotion.Cli\Unlimotion.Cli.csproj -c Release -o artifacts\tools
-dotnet tool install --tool-path C:\tmp\unlimotion-cli-tool --add-source artifacts\tools Unlimotion.Cli --version 1.30.1
+$packageVersion = "1.31.0-local.1"
+dotnet pack src\Unlimotion.Cli\Unlimotion.Cli.csproj -c Release -p:PackageVersion=$packageVersion -o artifacts\tools
+dotnet tool install --tool-path C:\tmp\unlimotion-cli-tool --add-source artifacts\tools Unlimotion.Cli --version $packageVersion
 ```
+
+Версию опубликованного пакета определяет stable GitHub release tag (`vMAJOR.MINOR.PATCH`), а не файл проекта. Для локальной упаковки всегда передавайте собственный допустимый NuGet `PackageVersion`.
 
 ## Команды
 

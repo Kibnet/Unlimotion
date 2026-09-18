@@ -955,6 +955,265 @@ public sealed class UnlimotionCliIntegrationTests
             .Contains("Unknown command");
     }
 
+    [Test]
+    public async Task Apply_DryRunThenApplyUsesEtagAndReceiptWithoutMutatingPreview()
+    {
+        using var temp = TempTaskDirectory.Create();
+        var root = CreateTask("root", DomainTaskStatus.Prepared, isCanBeCompleted: true);
+        var child = CreateTask("child", DomainTaskStatus.Prepared, isCanBeCompleted: true);
+        root.ContainsTasks.Add(child.Id);
+        child.ParentTasks.Add(root.Id);
+        await SaveTasks(temp.DirectoryPath, root, child);
+
+        var scoped = await RunCli("unlocked", "--tasks", temp.DirectoryPath, "--root", root.Id, "--format", "json");
+        await Assert.That(scoped.ExitCode).IsEqualTo(0);
+        await Assert.That(ParseJson(scoped.StdOut).GetArrayLength()).IsEqualTo(1)
+            .Because("the root is unavailable while its unfinished child remains startable in the selected scope.");
+
+        var snapshot = await RunCli("task", "--tasks", temp.DirectoryPath, "--id", child.Id, "--include", "details", "--format", "json");
+        var snapshotJson = ParseJson(snapshot.StdOut);
+        var etag = snapshotJson.GetProperty("etag").GetString() ?? throw new InvalidOperationException("Expanded task snapshot did not return etag.");
+        await Assert.That(snapshotJson.GetProperty("details").GetProperty("descriptionUserText").GetString()).IsEqualTo(string.Empty);
+
+        using var requestFile = TempRequestFile.Create();
+        await File.WriteAllTextAsync(requestFile.Path, $$"""
+        {
+          "schemaVersion": 1,
+          "applicationId": "A-duration-1",
+          "proposalRefs": [{ "id": "P-42", "revision": 1 }],
+          "author": "test-agent",
+          "reason": "Approved estimate",
+          "preconditions": [{ "taskId": "child", "etag": "{{etag}}", "status": "Prepared" }],
+          "operations": [{ "operationId": "P-42-duration", "kind": "setField", "taskId": "child", "field": "plannedDuration", "value": "PT45M" }]
+        }
+        """);
+
+        var preview = await RunCli("apply", "--tasks", temp.DirectoryPath, "--request", requestFile.Path, "--dry-run", "--format", "json");
+        await Assert.That(preview.ExitCode).IsEqualTo(0);
+        var previewJson = ParseJson(preview.StdOut);
+        await Assert.That(previewJson.GetProperty("mode").GetString()).IsEqualTo("preview");
+        await Assert.That(previewJson.GetProperty("receiptWritten").GetBoolean()).IsFalse();
+        await Assert.That((await LoadTask(temp.DirectoryPath, child.Id)).PlannedDuration).IsNull();
+
+        var applied = await RunCli("apply", "--tasks", temp.DirectoryPath, "--request", requestFile.Path, "--format", "json");
+        await Assert.That(applied.ExitCode).IsEqualTo(0);
+        var appliedJson = ParseJson(applied.StdOut);
+        await Assert.That(appliedJson.GetProperty("mode").GetString()).IsEqualTo("applied");
+        await Assert.That(appliedJson.GetProperty("receiptWritten").GetBoolean()).IsTrue();
+        await Assert.That(appliedJson.GetProperty("validation").GetProperty("isValid").GetBoolean()).IsTrue();
+        await Assert.That(appliedJson.GetProperty("authoritativeTasks").GetArrayLength()).IsGreaterThanOrEqualTo(1);
+        await Assert.That((await LoadTask(temp.DirectoryPath, child.Id)).PlannedDuration).IsEqualTo(TimeSpan.FromMinutes(45));
+
+        var receipt = Directory.GetFiles(Path.Combine(temp.DirectoryPath, ".unlimotion.applies", "v1"), "*.json").Single();
+        File.Delete(receipt);
+        var repeated = await RunCli("apply", "--tasks", temp.DirectoryPath, "--request", requestFile.Path, "--format", "json");
+        await Assert.That(repeated.ExitCode).IsEqualTo(0);
+        await Assert.That(ParseJson(repeated.StdOut).GetProperty("mode").GetString()).IsEqualTo("alreadyApplied");
+    }
+
+    [Test]
+    public async Task Apply_RejectsDependencyCycleBeforeWriting()
+    {
+        using var temp = TempTaskDirectory.Create();
+        var first = CreateTask("first", DomainTaskStatus.Prepared, isCanBeCompleted: true);
+        var second = CreateTask("second", DomainTaskStatus.Prepared, isCanBeCompleted: false);
+        first.BlocksTasks.Add(second.Id);
+        second.BlockedByTasks.Add(first.Id);
+        await SaveTasks(temp.DirectoryPath, first, second);
+
+        var firstSnapshot = ParseJson((await RunCli("task", "--tasks", temp.DirectoryPath, "--id", first.Id, "--include", "details", "--format", "json")).StdOut);
+        var secondSnapshot = ParseJson((await RunCli("task", "--tasks", temp.DirectoryPath, "--id", second.Id, "--include", "details", "--format", "json")).StdOut);
+        using var requestFile = TempRequestFile.Create();
+        await File.WriteAllTextAsync(requestFile.Path, $$"""
+        {
+          "schemaVersion": 1, "applicationId": "A-cycle-1", "proposalRefs": [{ "id": "P-43", "revision": 1 }], "author": "test-agent", "reason": "cycle test",
+          "preconditions": [
+            { "taskId": "first", "etag": "{{firstSnapshot.GetProperty("etag").GetString()}}" },
+            { "taskId": "second", "etag": "{{secondSnapshot.GetProperty("etag").GetString()}}" }
+          ],
+          "operations": [{ "operationId": "P-43-edge", "kind": "addRelation", "relation": "blocks", "fromTaskId": "second", "toTaskId": "first" }]
+        }
+        """);
+
+        var result = await RunCli("apply", "--tasks", temp.DirectoryPath, "--request", requestFile.Path, "--format", "json");
+        await Assert.That(result.ExitCode).IsEqualTo(1);
+        await Assert.That(ParseJson(result.StdOut).GetProperty("error").GetProperty("kind").GetString()).IsEqualTo("validationFailed");
+        var persistedFirst = await LoadTask(temp.DirectoryPath, first.Id);
+        var persistedSecond = await LoadTask(temp.DirectoryPath, second.Id);
+        await Assert.That(persistedFirst.BlockedByTasks).IsEmpty();
+        await Assert.That(persistedSecond.BlocksTasks).IsEmpty();
+    }
+
+    [Test]
+    public async Task Apply_ChangesExistingTaskFieldsCriteriaAndRelation()
+    {
+        using var temp = TempTaskDirectory.Create();
+        var current = CreateTask("current", DomainTaskStatus.Prepared, true, "Текущий шаг");
+        current.Description = "Старый контекст";
+        var next = CreateTask("next", DomainTaskStatus.Prepared, true, "Следующий шаг");
+        await SaveTasks(temp.DirectoryPath, current, next);
+
+        var currentSnapshot = ParseJson((await RunCli("task", "--tasks", temp.DirectoryPath, "--id", current.Id, "--include", "details", "--format", "json")).StdOut);
+        var nextSnapshot = ParseJson((await RunCli("task", "--tasks", temp.DirectoryPath, "--id", next.Id, "--include", "details", "--format", "json")).StdOut);
+        using var requestFile = TempRequestFile.Create();
+        await File.WriteAllTextAsync(requestFile.Path, $$"""
+        {
+          "schemaVersion": 1,
+          "applicationId": "A-existing-task-edit",
+          "proposalRefs": [{ "id": "P-edit", "revision": 1 }],
+          "author": "test-agent",
+          "reason": "Обновить утверждённый план текущего шага",
+          "preconditions": [
+            { "taskId": "current", "etag": "{{currentSnapshot.GetProperty("etag").GetString()}}" },
+            { "taskId": "next", "etag": "{{nextSnapshot.GetProperty("etag").GetString()}}" }
+          ],
+          "operations": [
+            {
+              "operationId": "rename",
+              "kind": "setField",
+              "taskId": "current",
+              "field": "title",
+              "value": "Проверить договор"
+            },
+            {
+              "operationId": "context",
+              "kind": "setField",
+              "taskId": "current",
+              "field": "descriptionUserText",
+              "value": "Сверить правки с приложениями."
+            },
+            {
+              "operationId": "duration",
+              "kind": "setField",
+              "taskId": "current",
+              "field": "plannedDuration",
+              "value": "PT90M"
+            },
+            {
+              "operationId": "criterion",
+              "kind": "addCriterion",
+              "taskId": "current",
+              "criterionId": "legal-review",
+              "text": "Все существенные правки проверены",
+              "isSatisfied": false
+            },
+            {
+              "operationId": "block-next",
+              "kind": "addRelation",
+              "relation": "blocks",
+              "fromTaskId": "current",
+              "toTaskId": "next"
+            }
+          ]
+        }
+        """);
+
+        var result = await RunCli("apply", "--tasks", temp.DirectoryPath, "--request", requestFile.Path, "--format", "json");
+
+        await Assert.That(result.ExitCode).IsEqualTo(0).Because(result.StdOut);
+        var currentAfter = await LoadTask(temp.DirectoryPath, "current");
+        var nextAfter = await LoadTask(temp.DirectoryPath, "next");
+        await Assert.That(currentAfter.Title).IsEqualTo("Проверить договор");
+        await Assert.That(currentAfter.Description).IsEqualTo("Сверить правки с приложениями.");
+        await Assert.That(currentAfter.PlannedDuration).IsEqualTo(TimeSpan.FromMinutes(90));
+        await Assert.That(currentAfter.CompletionCriteria.Single().Text).IsEqualTo("Все существенные правки проверены");
+        await Assert.That(currentAfter.BlocksTasks).Contains("next");
+        await Assert.That(nextAfter.BlockedByTasks).Contains("current");
+    }
+
+    [Test]
+    public async Task Apply_CreatesTaskWithParentDescriptionEstimateAndCriterion()
+    {
+        using var temp = TempTaskDirectory.Create();
+        var goal = CreateTask("goal", DomainTaskStatus.Prepared, true, "Цель");
+        await SaveTasks(temp.DirectoryPath, goal);
+
+        var goalSnapshot = ParseJson((await RunCli("task", "--tasks", temp.DirectoryPath, "--id", goal.Id, "--include", "details", "--format", "json")).StdOut);
+        using var requestFile = TempRequestFile.Create();
+        await File.WriteAllTextAsync(requestFile.Path, $$"""
+        {
+          "schemaVersion": 1,
+          "applicationId": "A-create-task",
+          "proposalRefs": [{ "id": "P-create", "revision": 1 }],
+          "author": "test-agent",
+          "reason": "Создать выбранный следующий шаг",
+          "preconditions": [{ "taskId": "goal", "etag": "{{goalSnapshot.GetProperty("etag").GetString()}}" }],
+          "operations": [{
+            "operationId": "create-next",
+            "kind": "createTask",
+            "newTaskId": "next",
+            "title": "Подготовить ответ",
+            "descriptionUserText": "Собрать вопросы и сформировать ответ.",
+            "plannedDuration": "PT45M",
+            "parentIds": ["goal"],
+            "criteria": [{ "criterionId": "answer-ready", "text": "Ответ готов к отправке", "isSatisfied": false }]
+          }]
+        }
+        """);
+
+        var result = await RunCli("apply", "--tasks", temp.DirectoryPath, "--request", requestFile.Path, "--format", "json");
+
+        await Assert.That(result.ExitCode).IsEqualTo(0).Because(result.StdOut);
+        var created = await LoadTask(temp.DirectoryPath, "next");
+        var goalAfter = await LoadTask(temp.DirectoryPath, "goal");
+        await Assert.That(created.Description).IsEqualTo("Собрать вопросы и сформировать ответ.");
+        await Assert.That(created.PlannedDuration).IsEqualTo(TimeSpan.FromMinutes(45));
+        await Assert.That(created.ParentTasks).Contains("goal");
+        await Assert.That(created.CompletionCriteria.Single().Id).IsEqualTo("answer-ready");
+        await Assert.That(goalAfter.ContainsTasks).Contains("next");
+    }
+
+    [Test]
+    public async Task Apply_CreatesNextStepAndBlocksItInOneApprovedRequest()
+    {
+        using var temp = TempTaskDirectory.Create();
+        var goal = CreateTask("goal", DomainTaskStatus.Prepared, true, "Цель");
+        var current = CreateTask("current", DomainTaskStatus.Prepared, true, "Текущий шаг");
+        await SaveTasks(temp.DirectoryPath, goal, current);
+
+        var goalSnapshot = ParseJson((await RunCli("task", "--tasks", temp.DirectoryPath, "--id", goal.Id, "--include", "details", "--format", "json")).StdOut);
+        var currentSnapshot = ParseJson((await RunCli("task", "--tasks", temp.DirectoryPath, "--id", current.Id, "--include", "details", "--format", "json")).StdOut);
+        using var requestFile = TempRequestFile.Create();
+        await File.WriteAllTextAsync(requestFile.Path, $$"""
+        {
+          "schemaVersion": 1,
+          "applicationId": "A-create-and-link-next",
+          "proposalRefs": [{ "id": "P-next", "revision": 1 }],
+          "author": "test-agent",
+          "reason": "Создать и связать утверждённый следующий шаг",
+          "preconditions": [
+            { "taskId": "goal", "etag": "{{goalSnapshot.GetProperty("etag").GetString()}}" },
+            { "taskId": "current", "etag": "{{currentSnapshot.GetProperty("etag").GetString()}}" }
+          ],
+          "operations": [
+            {
+              "operationId": "create-next",
+              "kind": "createTask",
+              "newTaskId": "next",
+              "title": "Подготовить ответ",
+              "parentIds": ["goal"]
+            },
+            {
+              "operationId": "block-next",
+              "kind": "addRelation",
+              "relation": "blocks",
+              "fromTaskId": "current",
+              "toTaskId": "next"
+            }
+          ]
+        }
+        """);
+
+        var result = await RunCli("apply", "--tasks", temp.DirectoryPath, "--request", requestFile.Path, "--format", "json");
+
+        await Assert.That(result.ExitCode).IsEqualTo(0).Because(result.StdOut);
+        var currentAfter = await LoadTask(temp.DirectoryPath, "current");
+        var nextAfter = await LoadTask(temp.DirectoryPath, "next");
+        await Assert.That(currentAfter.BlocksTasks).Contains("next");
+        await Assert.That(nextAfter.BlockedByTasks).Contains("current");
+        await Assert.That(nextAfter.ParentTasks).Contains("goal");
+    }
+
     private static TaskItem CreateTask(
         string id,
         DomainTaskStatus status,
@@ -1083,6 +1342,22 @@ public sealed class UnlimotionCliIntegrationTests
     }
 
     private sealed record CliRunResult(int ExitCode, string StdOut, string StdErr);
+
+    private sealed class TempRequestFile : IDisposable
+    {
+        private TempRequestFile(string path) => Path = path;
+
+        public string Path { get; }
+
+        public static TempRequestFile Create() => new(System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(), "unlimotion-cli-tests", $"request-{Guid.NewGuid():N}.json"));
+
+        public void Dispose()
+        {
+            try { File.Delete(Path); }
+            catch { /* Best-effort test cleanup. */ }
+        }
+    }
 
     private sealed class TempTaskDirectory : IDisposable
     {

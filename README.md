@@ -9,6 +9,19 @@
 3. A task can be a subtask in several tasks at once
 4. Storing your data on your device
 
+## Approved task applications from the CLI
+
+`unlimotion-cli unlocked --root <task-id> --format json` returns the startable tasks in the selected task and its contained subtree. Each expanded `task` response includes an `etag`; use it as a precondition when an approved proposal changes an existing task.
+
+Store the application JSON outside the task directory, inspect it first, then preview and apply it:
+
+```text
+unlimotion-cli apply --tasks <task-directory> --request <approved-request.json> --dry-run --format json
+unlimotion-cli apply --tasks <task-directory> --request <approved-request.json> --format json
+```
+
+An application identifies its proposal revision, author, reason, optimistic `etag` preconditions and declarative operations. The CLI validates the whole task graph before writing and returns JSON with `preview`, `applied`, or a structured refusal. A successful application records a local receipt under `.unlimotion.applies/v1`; retrying the identical request returns `alreadyApplied`. If a crash occurs after the task transaction but before the receipt, the same deterministic operations are reconciled against the authoritative graph rather than written twice.
+
 ## Download and install
 
 Ready-to-run self-contained published builds are available on the [latest GitHub release](https://github.com/Kibnet/Unlimotion/releases/latest) page. They do not require the .NET SDK. An artifact being published does not guarantee compatibility with every OS version; a complete platform smoke-test matrix is still being established.
