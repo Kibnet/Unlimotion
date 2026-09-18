@@ -1,0 +1,54 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:feed="clr-namespace:Unlimotion.ViewModel.Feed;assembly=Unlimotion.ViewModel"
+             x:Class="Unlimotion.Views.FeedReviewRecovery"
+             x:DataType="feed:FeedReviewRecoveryViewModel"
+             mc:Ignorable="d">
+    <Border IsVisible="{Binding IsOpen, FallbackValue=False}"
+            Margin="16"
+            Padding="16"
+            VerticalAlignment="Top"
+            BorderBrush="{DynamicResource FeedAccentBrush}"
+            BorderThickness="2"
+            CornerRadius="10"
+            Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
+            AutomationProperties.ControlTypeOverride="Pane"
+            AutomationProperties.Name="{DynamicResource FeedReviewRecoveryTitle}"
+            AutomationProperties.AutomationId="FeedReviewRecoveryRoot">
+        <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="*,Auto" RowSpacing="8" ColumnSpacing="12">
+            <StackPanel>
+                <TextBlock FontSize="18"
+                           FontWeight="SemiBold"
+                           Text="{DynamicResource FeedReviewRecoveryTitle}" />
+                <TextBlock Text="{DynamicResource FeedReviewRecoveryDescription}"
+                           TextWrapping="Wrap" />
+            </StackPanel>
+            <WrapPanel Grid.Column="1" VerticalAlignment="Center">
+                <Button Margin="0,0,8,0"
+                        Command="{Binding ContinueCommand}"
+                        IsEnabled="{Binding !IsResolving}"
+                        Content="{DynamicResource FeedReviewRecoveryContinue}"
+                        AutomationProperties.AutomationId="FeedReviewRecoveryContinueButton" />
+                <Button Command="{Binding AbandonCommand}"
+                        IsEnabled="{Binding !IsResolving}"
+                        Content="{DynamicResource FeedReviewRecoveryAbandon}"
+                        AutomationProperties.AutomationId="FeedReviewRecoveryAbandonButton" />
+            </WrapPanel>
+            <WrapPanel Grid.Row="1"
+                       Grid.ColumnSpan="2"
+                       Opacity="0.68">
+                <TextBlock Margin="0,0,4,0" Text="{DynamicResource FeedReviewRecoveryOwner}" />
+                <TextBlock Text="{Binding OwnerDeviceId}" />
+            </WrapPanel>
+            <TextBlock Grid.Row="2"
+                       Grid.ColumnSpan="2"
+                       IsVisible="{Binding HasError}"
+                       Text="{Binding ErrorMessage}"
+                       TextWrapping="Wrap"
+                       Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+                       AutomationProperties.AutomationId="FeedReviewRecoveryErrorText" />
+        </Grid>
+    </Border>
+</UserControl>

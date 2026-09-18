@@ -15,6 +15,7 @@ permissions:
   contents: write
 
 env:
+  EMX_TELEMETRY_OPTOUT: "1"
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   RELEASE_TAG: ${{ github.event.release.tag_name || github.event.inputs.tag || github.ref_name }}
   DOTNET_NUGET_SIGNATURE_VERIFICATION: "false"

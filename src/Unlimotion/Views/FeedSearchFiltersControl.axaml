@@ -1,0 +1,52 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Unlimotion.Views.FeedSearchFiltersControl"
+             x:CompileBindings="False">
+    <Grid ColumnDefinitions="*,*,Auto" ColumnSpacing="8">
+        <ComboBox ItemsSource="{Binding SearchTypeOptions}"
+                  SelectedItem="{Binding SelectedSearchType, Mode=TwoWay}"
+                  AutomationProperties.Name="{DynamicResource FeedSearchType}"
+                  AutomationProperties.AutomationId="GlobalSearchTypePicker">
+            <ComboBox.ItemTemplate>
+                <DataTemplate>
+                    <TextBlock Text="{Binding DisplayName}" />
+                </DataTemplate>
+            </ComboBox.ItemTemplate>
+        </ComboBox>
+        <ComboBox Grid.Column="1"
+                  ItemsSource="{Binding SearchAreaOptions}"
+                  SelectedItem="{Binding SelectedSearchArea, Mode=TwoWay}"
+                  AutomationProperties.Name="{DynamicResource FeedSearchArea}"
+                  AutomationProperties.AutomationId="GlobalSearchAreaPicker">
+            <ComboBox.ItemTemplate>
+                <DataTemplate>
+                    <TextBlock Text="{Binding DisplayName}" />
+                </DataTemplate>
+            </ComboBox.ItemTemplate>
+        </ComboBox>
+        <DropDownButton Grid.Column="2"
+                        Content="{Binding SearchPeriodCaption}"
+                        AutomationProperties.AutomationId="GlobalSearchPeriodButton">
+            <DropDownButton.Flyout>
+                <Flyout Placement="BottomEdgeAlignedRight">
+                    <StackPanel Width="260" Spacing="8">
+                        <TextBlock Text="{DynamicResource FeedSearchDateFrom}" />
+                        <CalendarDatePicker SelectedDate="{Binding SearchFromCalendarDate, Mode=TwoWay}"
+                                            HorizontalAlignment="Stretch"
+                                            SelectedDateFormat="Short"
+                                            AutomationProperties.Name="{DynamicResource FeedSearchDateFrom}"
+                                            AutomationProperties.AutomationId="GlobalSearchFromDatePicker" />
+                        <TextBlock Text="{DynamicResource FeedSearchDateTo}" />
+                        <CalendarDatePicker SelectedDate="{Binding SearchToCalendarDate, Mode=TwoWay}"
+                                            HorizontalAlignment="Stretch"
+                                            SelectedDateFormat="Short"
+                                            AutomationProperties.Name="{DynamicResource FeedSearchDateTo}"
+                                            AutomationProperties.AutomationId="GlobalSearchToDatePicker" />
+                        <Button Content="{DynamicResource FeedSearchClearPeriod}"
+                                Click="OnClearSearchPeriodClick" />
+                    </StackPanel>
+                </Flyout>
+            </DropDownButton.Flyout>
+        </DropDownButton>
+    </Grid>
+</UserControl>

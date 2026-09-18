@@ -1,6 +1,7 @@
 using AppAutomation.Session.Contracts;
 using AppAutomation.TestHost.Avalonia;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using Microsoft.Extensions.Configuration;
@@ -55,13 +56,19 @@ public static class UnlimotionAppLaunchHost
         TimeSpan? mainWindowTimeout = null,
         TimeSpan? pollInterval = null,
         string? theme = null,
-        DesktopWindowPlacement? windowPlacement = null)
+        DesktopWindowPlacement? windowPlacement = null,
+        Action<string>? feedVaultPrepared = null)
     {
         var launchData = UnlimotionAutomationLaunchData.Create(scenario, language, currentTaskId, theme);
         var environmentVariables = CreateEnvironmentVariables(launchData);
 
         try
         {
+            if (scenario == UnlimotionAutomationScenario.Feed)
+            {
+                feedVaultPrepared?.Invoke(launchData.VaultPath);
+            }
+
             var launchOptions = AvaloniaDesktopLaunchHost.CreateLaunchOptions(
                 DesktopApp,
                 new AvaloniaDesktopLaunchOptions
@@ -93,12 +100,24 @@ public static class UnlimotionAppLaunchHost
         string? language = null,
         Action<MainWindowViewModel>? afterViewModelPrepared = null,
         string? currentTaskId = null,
-        string? theme = null)
+        string? theme = null,
+        Action<string>? feedVaultPrepared = null,
+        Action<MainWindowViewModel>? beforeViewModelInitialized = null,
+        Func<Func<MainWindowViewModel>, MainWindowViewModel>? viewModelFactoryDispatcher = null,
+        Action<Window>? headlessWindowCleanup = null,
+        Func<Func<Task>, Task>? prepareViewModelDispatcher = null)
     {
         var launchData = UnlimotionAutomationLaunchData.Create(scenario, language, currentTaskId, theme);
+        if (scenario == UnlimotionAutomationScenario.Feed)
+        {
+            feedVaultPrepared?.Invoke(launchData.VaultPath);
+        }
+
         var previousDefaultIsExpanded = TaskWrapperViewModel.DefaultIsExpanded;
         var lifetime = new HeadlessSessionLifetime(launchData, previousDefaultIsExpanded);
         MainWindowViewModel? vm = null;
+        Window? window = null;
+        var disposeState = 0;
 
         return new HeadlessAppLaunchOptions
         {
@@ -106,13 +125,33 @@ public static class UnlimotionAppLaunchHost
             {
                 async Task PrepareViewModelAsync()
                 {
+                    ReportHeadlessProgress("prepare.begin");
                     if (launchData.ExpandAllTaskTrees)
                     {
                         TaskWrapperViewModel.DefaultIsExpanded = true;
                     }
 
-                    vm = CreateHeadlessViewModel(launchData, lifetime);
+                    vm = viewModelFactoryDispatcher is null || Dispatcher.UIThread.CheckAccess()
+                        ? CreateHeadlessViewModel(launchData, lifetime)
+                        : viewModelFactoryDispatcher(() => CreateHeadlessViewModel(launchData, lifetime));
+                    vm.Feed.SetNotificationDispatcher(action =>
+                    {
+                        if (Dispatcher.UIThread.CheckAccess()) action();
+                        else Dispatcher.UIThread.Post(action);
+                    });
+                    beforeViewModelInitialized?.Invoke(vm);
+                    ReportHeadlessProgress("connect.begin");
                     await vm.Connect();
+                    ReportHeadlessProgress("connect.completed");
+
+                    if (scenario == UnlimotionAutomationScenario.Feed)
+                    {
+                        vm.Feed.IsExternalVaultSupported = true;
+                        vm.Feed.TaskOwner = vm;
+                        vm.Feed.TaskResolver = taskId => FindTaskById(vm, taskId);
+                        await vm.Feed.InitializeVaultAsync(launchData.VaultPath);
+                        ReportHeadlessProgress("vault.completed");
+                    }
 
                     if (!IsTaskSpaceRecoveryScenario(scenario))
                     {
@@ -120,24 +159,26 @@ public static class UnlimotionAppLaunchHost
                     }
                     ApplyAutomationWindowTitle(vm, launchData);
                     afterViewModelPrepared?.Invoke(vm);
+                    ReportHeadlessProgress("prepare.completed");
                 }
 
-                if (scenario == UnlimotionAutomationScenario.StatusContract)
+                // DesktopAppSession.Launch synchronously waits for this callback. Neither the
+                // preparation nor this continuation may capture the caller's TUnit context.
+                // UI-owned construction still goes through viewModelFactoryDispatcher above.
+                if (prepareViewModelDispatcher is not null)
                 {
-                    // Status commands capture their cache context on first use. Prepare this
-                    // synthetic ViewModel without inheriting TUnit's context so the real UI
-                    // command can capture the Headless dispatcher context deterministically.
-                    await Task.Run(PrepareViewModelAsync, cancellationToken);
+                    await prepareViewModelDispatcher(PrepareViewModelAsync).ConfigureAwait(false);
                 }
                 else
                 {
-                    await PrepareViewModelAsync();
+                    await Task.Run(PrepareViewModelAsync, cancellationToken).ConfigureAwait(false);
                 }
             },
             CreateMainWindow = () =>
             {
+                ReportHeadlessProgress("window.create");
                 ApplyAutomationTheme(theme);
-                var window = new MainWindow
+                window = new MainWindow
                 {
                     Width = scenario == UnlimotionAutomationScenario.StatusContract ? 1280 : 1200,
                     Height = 800,
@@ -146,8 +187,38 @@ public static class UnlimotionAppLaunchHost
                 window.Opened += (_, __) => ApplyAutomationTreeExpansion(vm, launchData);
                 return window;
             },
-            DisposeCallback = lifetime.Dispose
+            DisposeCallback = () =>
+            {
+                if (Interlocked.Exchange(ref disposeState, 1) != 0)
+                {
+                    return;
+                }
+
+                try
+                {
+                    if (window is not null)
+                    {
+                        headlessWindowCleanup?.Invoke(window);
+                    }
+                }
+                finally
+                {
+                    lifetime.Dispose();
+                }
+            }
         };
+    }
+
+    private static void ReportHeadlessProgress(string phase)
+    {
+        var entry = $"{DateTimeOffset.UtcNow:O} pid={Environment.ProcessId} thread={Environment.CurrentManagedThreadId} {phase}";
+        Console.Error.WriteLine(entry);
+        var directory = Environment.GetEnvironmentVariable("UNLIMOTION_TEST_TRACE_DIRECTORY");
+        if (!string.IsNullOrWhiteSpace(directory))
+        {
+            Directory.CreateDirectory(directory);
+            File.AppendAllText(Path.Combine(directory, $"headless-launch-{Environment.ProcessId}.log"), entry + Environment.NewLine);
+        }
     }
 
     private static void ApplyAutomationTheme(string? theme)
@@ -345,15 +416,47 @@ public static class UnlimotionAppLaunchHost
 
         async Task Activate(TaskSpaceOptionViewModel target)
         {
+            var previousSourceId = sourceManager.ActiveSource?.Descriptor.Id
+                ?? throw new InvalidOperationException("There is no active task space to restore.");
+            var previousVaultRoot = settings.IsFeedEnabled
+                ? settings.NoteVaultRootPath
+                : null;
+            var taskSourceSwitched = false;
             await RunOnUiThread(() => settings.IsTaskSpaceSwitching = true);
             try
             {
+                await vm.Feed.CommitActiveEditorsAsync();
                 await coordinator.SwitchAsync(target.SourceId);
+                taskSourceSwitched = true;
                 await RunOnUiThread(() =>
                 {
                     settings.ReloadActiveTaskSpaceSettings();
                     Refresh();
                 });
+                var expectedRoot = settings.IsFeedEnabled
+                    ? settings.NoteVaultRootPath
+                    : null;
+                await vm.Feed.InitializeVaultAsync(expectedRoot);
+                if (!vm.Feed.IsBoundToVaultRoot(expectedRoot))
+                {
+                    throw new InvalidOperationException(
+                        vm.Feed.ErrorMessage ?? "The note vault did not switch with its task space.");
+                }
+            }
+            catch
+            {
+                if (taskSourceSwitched)
+                {
+                    await coordinator.SwitchAsync(previousSourceId);
+                    await RunOnUiThread(() =>
+                    {
+                        settings.ReloadActiveTaskSpaceSettings();
+                        Refresh();
+                    });
+                    await vm.Feed.InitializeVaultAsync(previousVaultRoot);
+                }
+
+                await RunOnUiThread(Refresh);
             }
             finally
             {
@@ -622,6 +725,12 @@ public static class UnlimotionAppLaunchHost
         vm.SelectCurrentTask();
     }
 
+    private static TaskItemViewModel? FindTaskById(MainWindowViewModel vm, string taskId)
+    {
+        var lookup = vm.taskRepository?.Tasks.Lookup(taskId);
+        return lookup?.HasValue == true ? lookup.Value.Value : null;
+    }
+
     private sealed class HeadlessSessionLifetime : IDisposable
     {
         private readonly bool _previousDefaultIsExpanded;
@@ -725,6 +834,7 @@ public static class UnlimotionAppLaunchHost
             string repositoryRoot,
             string rootPath,
             string tasksPath,
+            string vaultPath,
             string configPath,
             string currentTaskId,
             string currentTaskTitle,
@@ -735,6 +845,7 @@ public static class UnlimotionAppLaunchHost
             RepositoryRoot = repositoryRoot;
             RootPath = rootPath;
             TasksPath = tasksPath;
+            VaultPath = vaultPath;
             ConfigPath = configPath;
             CurrentTaskId = currentTaskId;
             CurrentTaskTitle = currentTaskTitle;
@@ -748,6 +859,8 @@ public static class UnlimotionAppLaunchHost
         public string RootPath { get; }
 
         public string TasksPath { get; }
+
+        public string VaultPath { get; }
 
         public string ConfigPath { get; }
 
@@ -770,6 +883,7 @@ public static class UnlimotionAppLaunchHost
             var repositoryRoot = FindRepositoryRoot();
             var rootPath = Path.Combine(Path.GetTempPath(), "Unlimotion.AppAutomation", Guid.NewGuid().ToString("N"));
             var tasksPath = Path.Combine(rootPath, "Tasks");
+            var vaultPath = Path.Combine(rootPath, "Vault");
             var configPath = Path.Combine(rootPath, "Settings.json");
             var currentTaskId = string.IsNullOrWhiteSpace(currentTaskIdOverride)
                 ? UnlimotionAutomationScenarioData.GetCurrentTaskId(scenario, language)
@@ -790,12 +904,25 @@ public static class UnlimotionAppLaunchHost
 
             Directory.CreateDirectory(tasksPath);
             UnlimotionAutomationScenarioData.SeedTasks(scenario, repositoryRoot, tasksPath, language);
-            UnlimotionAutomationScenarioData.WriteConfig(scenario, configPath, tasksPath, language, theme);
+            if (scenario == UnlimotionAutomationScenario.Feed)
+            {
+                Directory.CreateDirectory(vaultPath);
+                UnlimotionAutomationScenarioData.SeedFeedVault(vaultPath);
+            }
+
+            UnlimotionAutomationScenarioData.WriteConfig(
+                scenario,
+                configPath,
+                tasksPath,
+                language,
+                theme,
+                vaultPath);
 
             return new UnlimotionAutomationLaunchData(
                 repositoryRoot,
                 rootPath,
                 tasksPath,
+                vaultPath,
                 configPath,
                 currentTaskId,
                 currentTaskTitle,

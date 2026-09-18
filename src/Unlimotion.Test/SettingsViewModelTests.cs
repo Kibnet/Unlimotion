@@ -134,6 +134,844 @@ public class SettingsViewModelTests : IDisposable
     }
 
     [Test]
+    public async System.Threading.Tasks.Task NoteVaultRootPath_PersistsInDedicatedConfigurationSection()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var settings = new SettingsViewModel(configuration, isExternalNoteVaultSupported: true);
+        var selectedPath = Path.Combine(Environment.CurrentDirectory, "ObsidianVault");
+
+        settings.NoteVaultRootPath = selectedPath;
+
+        await Assert.That(configuration
+                .GetSection("NoteVault")
+                .GetSection("RootPath")
+                .Get<string>())
+            .IsEqualTo(selectedPath);
+
+        var reloaded = new SettingsViewModel(configuration, isExternalNoteVaultSupported: true);
+        await Assert.That(reloaded.NoteVaultRootPath).IsEqualTo(selectedPath);
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task FeedEnabled_DefaultsToTrueAndPersistsRollbackChoice()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var settings = new SettingsViewModel(configuration, isExternalNoteVaultSupported: true);
+
+        await Assert.That(settings.IsFeedEnabled).IsTrue();
+
+        settings.IsFeedEnabled = false;
+
+        await Assert.That(configuration
+                .GetSection("NoteVault")
+                .GetSection("IsFeedEnabled")
+                .Get<bool>())
+            .IsFalse();
+
+        var reloaded = new SettingsViewModel(configuration, isExternalNoteVaultSupported: true);
+        await Assert.That(reloaded.IsFeedEnabled).IsFalse();
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task NoteDayBoundary_PersistsAsValidatedLocalMinutes()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var settings = new SettingsViewModel(configuration, isExternalNoteVaultSupported: true);
+
+        settings.NoteDayBoundary = TimeSpan.FromHours(4.5);
+
+        await Assert.That(configuration
+                .GetSection("NoteVault")
+                .GetSection("DayBoundaryMinutes")
+                .Get<int>())
+            .IsEqualTo(270);
+        var reloaded = new SettingsViewModel(configuration, isExternalNoteVaultSupported: true);
+        await Assert.That(reloaded.NoteDayBoundary).IsEqualTo(TimeSpan.FromMinutes(270));
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task NoteDayBoundary_InvalidStoredValue_FallsBackToMidnight()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        configuration.GetSection("NoteVault").GetSection("DayBoundaryMinutes").Set(24 * 60);
+
+        var settings = new SettingsViewModel(configuration, isExternalNoteVaultSupported: true);
+
+        await Assert.That(settings.NoteDayBoundary).IsEqualTo(TimeSpan.Zero);
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task ExternalNoteVaultSupport_CanBeDisabledForUnsupportedPlatforms()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var settings = new SettingsViewModel(configuration, isExternalNoteVaultSupported: false);
+
+        await Assert.That(settings.IsExternalNoteVaultSupported).IsFalse();
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task NoteDailyFileNameFormat_DraftShowsPreviewAndInvalidInputCannotApply()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var root = Path.Combine(Environment.CurrentDirectory, "DailyFormatVault");
+        var applyCalls = 0;
+        var settings = CreateNoteDailyFileNameFormatSettings(
+            configuration,
+            root,
+            applyAsync: format =>
+            {
+                applyCalls++;
+                return System.Threading.Tasks.Task.FromResult(new NoteDailyFileNameFormatApplyResult(
+                    true,
+                    new NoteDailyFileNameFormatState(format, root, "revision-1")));
+            });
+
+        settings.NoteDailyFileNameFormatDraft = "yyyy.MM.dd";
+
+        await Assert.That(settings.NoteDailyFileNameFormatPreview)
+            .EndsWith(".md")
+            .And.Contains("Ежедневные/");
+        await Assert.That(settings.IsNoteDailyFileNameFormatValidationVisible).IsFalse();
+        await Assert.That(settings.CanApplyNoteDailyFileNameFormat).IsTrue();
+
+        settings.NoteDailyFileNameFormatDraft = "yyyy/MM/dd";
+
+        await Assert.That(settings.IsNoteDailyFileNameFormatValidationVisible).IsTrue();
+        await Assert.That(settings.CanApplyNoteDailyFileNameFormat).IsFalse();
+        await settings.ApplyNoteDailyFileNameFormatAsync();
+        await Assert.That(applyCalls).IsEqualTo(0);
+        await Assert.That(settings.AppliedNoteDailyFileNameFormat).IsEqualTo("yyyy-MM-dd");
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task NoteDailyFileNameFormat_RequiresASelectedVaultRootEvenWhenFeedReportsInitialized()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var settings = CreateNoteDailyFileNameFormatSettings(configuration, string.Empty);
+
+        settings.NoteDailyFileNameFormatDraft = "yyyy.MM.dd";
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(settings.IsNoteDailyFileNameFormatRootRequiredVisible).IsTrue();
+            await Assert.That(settings.CanApplyNoteDailyFileNameFormat).IsFalse();
+        }
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task NoteDailyFileNameFormat_DoesNotApplyToPreviousFeedVaultAfterSelectedVaultFailsToInitialize()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var firstRoot = Path.Combine(Environment.CurrentDirectory, "DailyFormatFirstVault");
+        var secondRoot = Path.Combine(Environment.CurrentDirectory, "DailyFormatSecondVault");
+        var applyCalls = 0;
+        var settings = CreateNoteDailyFileNameFormatSettings(
+            configuration,
+            firstRoot,
+            applyAsync: format =>
+            {
+                applyCalls++;
+                return System.Threading.Tasks.Task.FromResult(
+                    new NoteDailyFileNameFormatApplyResult(
+                        true,
+                        new NoteDailyFileNameFormatState(format, firstRoot, "revision-first")));
+            });
+
+        // Feed preserves its healthy first-root session when the selected
+        // second root is corrupt or cannot be initialized. Settings must not
+        // route a new sidecar write back into that previous session.
+        settings.NoteVaultRootPath = secondRoot;
+        settings.SetNoteDailyFileNameFormatFeedAvailability(
+            isVaultInitialized: true,
+            isBusyOrRecovering: false,
+            activeFeedVaultRootPath: firstRoot);
+        settings.NoteDailyFileNameFormatDraft = "yyyy.MM.dd";
+
+        await settings.ApplyNoteDailyFileNameFormatAsync();
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(settings.CanApplyNoteDailyFileNameFormat).IsFalse();
+            await Assert.That(settings.ActiveNoteDailyFileNameFormatFeedRootPath).IsEqualTo(firstRoot);
+            await Assert.That(applyCalls).IsEqualTo(0);
+            await Assert.That(settings.AppliedNoteDailyFileNameFormat).IsEqualTo("yyyy-MM-dd");
+        }
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task NoteDailyFileNameFormat_AppliesThroughFeedBridgeWithoutGlobalConfigurationPersistence()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var root = Path.Combine(Environment.CurrentDirectory, "DailyFormatVault");
+        var settings = CreateNoteDailyFileNameFormatSettings(
+            configuration,
+            root,
+            applyAsync: format => System.Threading.Tasks.Task.FromResult(
+                new NoteDailyFileNameFormatApplyResult(
+                    true,
+                    new NoteDailyFileNameFormatState(format, root, "revision-2"))));
+
+        settings.NoteDailyFileNameFormatDraft = "yyyy.MM.dd";
+        await settings.ApplyNoteDailyFileNameFormatAsync();
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(settings.AppliedNoteDailyFileNameFormat).IsEqualTo("yyyy.MM.dd");
+            await Assert.That(settings.NoteDailyFileNameFormatDraft).IsEqualTo("yyyy.MM.dd");
+            await Assert.That(settings.HasUnappliedNoteDailyFileNameFormatDraft).IsFalse();
+            await Assert.That(settings.NoteDailyFileNameFormatStatusText)
+                .Contains("NoteDailyFileNameFormatApplied");
+            await Assert.That(configuration
+                    .GetSection("NoteVault")
+                    .GetSection("DailyFileNameFormat")
+                    .Get<string>())
+                .IsNull();
+        }
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task NoteDailyFileNameFormat_AcceptsCanonicalStateForRelativeConfiguredVaultRoot()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var relativeRoot = Path.Combine("DailyFormatVault", Guid.NewGuid().ToString("N"));
+        var settings = CreateNoteDailyFileNameFormatSettings(configuration, relativeRoot);
+
+        settings.ApplyNoteDailyFileNameFormatState(new NoteDailyFileNameFormatState(
+            "yyyy.MM.dd",
+            Path.GetFullPath(relativeRoot),
+            "revision-canonical"));
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(settings.AppliedNoteDailyFileNameFormat).IsEqualTo("yyyy.MM.dd");
+            await Assert.That(settings.NoteDailyFileNameFormatDraft).IsEqualTo("yyyy.MM.dd");
+        }
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task NoteDailyFileNameFormat_InitialCleanStateDoesNotShowAppliedStatus()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var root = Path.Combine(Environment.CurrentDirectory, "DailyFormatVault");
+        var settings = CreateNoteDailyFileNameFormatSettings(configuration, root);
+
+        settings.ApplyNoteDailyFileNameFormatState(new NoteDailyFileNameFormatState(
+            "yyyy.MM.dd",
+            root,
+            "revision-initial"));
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(settings.AppliedNoteDailyFileNameFormat).IsEqualTo("yyyy.MM.dd");
+            await Assert.That(settings.NoteDailyFileNameFormatDraft).IsEqualTo("yyyy.MM.dd");
+            await Assert.That(settings.NoteDailyFileNameFormatStatusText).IsNull();
+        }
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task NoteDailyFileNameFormat_QueuedSameRootStateKeepsDirtyDraftUntilExplicitReplace()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var root = Path.Combine(Environment.CurrentDirectory, "DailyFormatVault");
+        var settings = CreateNoteDailyFileNameFormatSettings(configuration, root);
+        var initialState = new NoteDailyFileNameFormatState(
+            "yyyy-MM-dd",
+            root,
+            "revision-initial",
+            SessionGeneration: 10);
+        var queuedOlderState = initialState with { Revision = "revision-delayed" };
+        var newerExternalState = new NoteDailyFileNameFormatState(
+            "dd.MM.yyyy",
+            root,
+            "revision-newer",
+            IsExternalChange: true,
+            SessionGeneration: 11);
+
+        settings.ApplyNoteDailyFileNameFormatState(initialState);
+        settings.NoteDailyFileNameFormatDraft = "yyyy.MM.dd";
+        settings.SetNoteDailyFileNameFormatFeedAvailability(
+            isVaultInitialized: false,
+            isBusyOrRecovering: true,
+            activeFeedVaultRootPath: root);
+        settings.SetNoteDailyFileNameFormatFeedAvailability(
+            isVaultInitialized: true,
+            isBusyOrRecovering: false,
+            activeFeedVaultRootPath: root);
+
+        // Simulates an older Feed callback that was queued before a same-root
+        // rebind but reaches Settings after the user begins editing.
+        settings.ApplyNoteDailyFileNameFormatState(queuedOlderState);
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(settings.AppliedNoteDailyFileNameFormat).IsEqualTo("yyyy-MM-dd");
+            await Assert.That(settings.NoteDailyFileNameFormatDraft).IsEqualTo("yyyy.MM.dd");
+            await Assert.That(settings.HasExternalNoteDailyFileNameFormatChange).IsFalse();
+        }
+
+        settings.ApplyNoteDailyFileNameFormatState(newerExternalState);
+        settings.ApplyNoteDailyFileNameFormatState(queuedOlderState);
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(settings.AppliedNoteDailyFileNameFormat).IsEqualTo("dd.MM.yyyy");
+            await Assert.That(settings.NoteDailyFileNameFormatDraft).IsEqualTo("yyyy.MM.dd");
+            await Assert.That(settings.HasExternalNoteDailyFileNameFormatChange).IsTrue();
+        }
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task NoteDailyFileNameFormat_ApplyAcceptsItsSuccessfulNewerSessionAfterSameRootRebind()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var root = Path.Combine(Environment.CurrentDirectory, "DailyFormatVault");
+        var completion = new System.Threading.Tasks.TaskCompletionSource<NoteDailyFileNameFormatApplyResult>();
+        var settings = CreateNoteDailyFileNameFormatSettings(
+            configuration,
+            root,
+            applyAsync: _ => completion.Task);
+        var initialState = new NoteDailyFileNameFormatState(
+            "yyyy-MM-dd",
+            root,
+            "revision-initial",
+            SessionGeneration: 10);
+        var externallyAppliedState = new NoteDailyFileNameFormatState(
+            "dd.MM.yyyy",
+            root,
+            "revision-external",
+            IsExternalChange: true,
+            SessionGeneration: 10);
+        var locallyAppliedState = new NoteDailyFileNameFormatState(
+            "yyyy.MM.dd",
+            root,
+            "revision-local",
+            SessionGeneration: 11);
+
+        settings.ApplyNoteDailyFileNameFormatState(initialState);
+        settings.NoteDailyFileNameFormatDraft = "yyyy.MM.dd";
+        settings.ApplyNoteDailyFileNameFormatState(externallyAppliedState);
+
+        var applying = settings.ApplyNoteDailyFileNameFormatAsync();
+        settings.SetNoteDailyFileNameFormatFeedAvailability(
+            isVaultInitialized: false,
+            isBusyOrRecovering: true,
+            activeFeedVaultRootPath: null);
+        settings.SetNoteDailyFileNameFormatFeedAvailability(
+            isVaultInitialized: true,
+            isBusyOrRecovering: false,
+            activeFeedVaultRootPath: root);
+
+        // The Feed notification is passive, so it must preserve the dirty draft until
+        // the result of this exact Apply confirms that the rebind persisted it.
+        settings.ApplyNoteDailyFileNameFormatState(locallyAppliedState);
+        completion.SetResult(new NoteDailyFileNameFormatApplyResult(true, locallyAppliedState));
+        await applying;
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(settings.AppliedNoteDailyFileNameFormat).IsEqualTo("yyyy.MM.dd");
+            await Assert.That(settings.NoteDailyFileNameFormatDraft).IsEqualTo("yyyy.MM.dd");
+            await Assert.That(settings.HasExternalNoteDailyFileNameFormatChange).IsFalse();
+            await Assert.That(settings.CanReloadExternalNoteDailyFileNameFormat).IsFalse();
+            await Assert.That(settings.NoteDailyFileNameFormatStatusText)
+                .IsEqualTo("NoteDailyFileNameFormatApplied: yyyy.MM.dd");
+            await Assert.That(settings.IsApplyingNoteDailyFileNameFormat).IsFalse();
+        }
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task NoteDailyFileNameFormat_ApplyAcceptsNewerSessionBeforeInitialStateWasPublished()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var root = Path.Combine(Environment.CurrentDirectory, "DailyFormatVault");
+        var completion = new System.Threading.Tasks.TaskCompletionSource<NoteDailyFileNameFormatApplyResult>();
+        var settings = CreateNoteDailyFileNameFormatSettings(
+            configuration,
+            root,
+            applyAsync: _ => completion.Task);
+        var locallyAppliedState = new NoteDailyFileNameFormatState(
+            "yyyy.MM.dd",
+            root,
+            "revision-local",
+            SessionGeneration: 1);
+
+        // The bridge has published availability but no initial state, so CanApply must be
+        // usable without a known Feed session generation.
+        settings.NoteDailyFileNameFormatDraft = "yyyy.MM.dd";
+        await Assert.That(settings.CanApplyNoteDailyFileNameFormat).IsTrue();
+        var applying = settings.ApplyNoteDailyFileNameFormatAsync();
+        settings.SetNoteDailyFileNameFormatFeedAvailability(
+            isVaultInitialized: false,
+            isBusyOrRecovering: true,
+            activeFeedVaultRootPath: null);
+        settings.SetNoteDailyFileNameFormatFeedAvailability(
+            isVaultInitialized: true,
+            isBusyOrRecovering: false,
+            activeFeedVaultRootPath: root);
+        // The successful command completion can win the race with App's queued UI callback.
+        completion.SetResult(new NoteDailyFileNameFormatApplyResult(true, locallyAppliedState));
+        await applying;
+        settings.ApplyNoteDailyFileNameFormatState(locallyAppliedState);
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(settings.AppliedNoteDailyFileNameFormat).IsEqualTo("yyyy.MM.dd");
+            await Assert.That(settings.NoteDailyFileNameFormatDraft).IsEqualTo("yyyy.MM.dd");
+            await Assert.That(settings.HasExternalNoteDailyFileNameFormatChange).IsFalse();
+            await Assert.That(settings.CanReloadExternalNoteDailyFileNameFormat).IsFalse();
+            await Assert.That(settings.NoteDailyFileNameFormatStatusText)
+                .IsEqualTo("NoteDailyFileNameFormatApplied: yyyy.MM.dd");
+            await Assert.That(settings.IsApplyingNoteDailyFileNameFormat).IsFalse();
+        }
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task NoteDailyFileNameFormat_ExternalChangeKeepsDirtyDraftUntilReload()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var root = Path.Combine(Environment.CurrentDirectory, "DailyFormatVault");
+        var reloaded = new NoteDailyFileNameFormatState(
+            "dd.MM.yyyy",
+            root,
+            "revision-3",
+            IsExternalChange: true);
+        var settings = CreateNoteDailyFileNameFormatSettings(
+            configuration,
+            root,
+            reloadAsync: () => System.Threading.Tasks.Task.FromResult(reloaded));
+
+        settings.NoteDailyFileNameFormatDraft = "yyyy.MM.dd";
+        settings.ApplyNoteDailyFileNameFormatState(reloaded);
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(settings.AppliedNoteDailyFileNameFormat).IsEqualTo("dd.MM.yyyy");
+            await Assert.That(settings.NoteDailyFileNameFormatDraft).IsEqualTo("yyyy.MM.dd");
+            await Assert.That(settings.HasExternalNoteDailyFileNameFormatChange).IsTrue();
+            await Assert.That(settings.CanReloadExternalNoteDailyFileNameFormat).IsTrue();
+        }
+
+        await settings.ReloadExternalNoteDailyFileNameFormatAsync();
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(settings.NoteDailyFileNameFormatDraft).IsEqualTo("dd.MM.yyyy");
+            await Assert.That(settings.HasExternalNoteDailyFileNameFormatChange).IsFalse();
+        }
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task NoteDailyFileNameFormat_ReloadAcceptsResultFromItsNewerFeedSession()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var root = Path.Combine(Environment.CurrentDirectory, "DailyFormatVault");
+        var completion = new System.Threading.Tasks.TaskCompletionSource<NoteDailyFileNameFormatState>();
+        var settings = CreateNoteDailyFileNameFormatSettings(
+            configuration,
+            root,
+            reloadAsync: () => completion.Task);
+        var currentState = new NoteDailyFileNameFormatState(
+            "yyyy-MM-dd",
+            root,
+            "revision-current",
+            SessionGeneration: 10);
+        settings.ApplyNoteDailyFileNameFormatState(currentState);
+        settings.NoteDailyFileNameFormatDraft = "yyyy.MM.dd";
+        settings.ApplyNoteDailyFileNameFormatState(currentState with { IsExternalChange = true });
+
+        var reloading = settings.ReloadExternalNoteDailyFileNameFormatAsync();
+        settings.SetNoteDailyFileNameFormatFeedAvailability(
+            isVaultInitialized: false,
+            isBusyOrRecovering: true,
+            activeFeedVaultRootPath: root);
+        settings.SetNoteDailyFileNameFormatFeedAvailability(
+            isVaultInitialized: true,
+            isBusyOrRecovering: false,
+            activeFeedVaultRootPath: root);
+        var reconfiguredState = new NoteDailyFileNameFormatState(
+            "dd.MM.yyyy",
+            root,
+            "revision-reconfigured",
+            IsExternalChange: true,
+            SessionGeneration: 11);
+        settings.ApplyNoteDailyFileNameFormatState(reconfiguredState);
+        completion.SetResult(reconfiguredState);
+        await reloading;
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(settings.NoteDailyFileNameFormatDraft).IsEqualTo("dd.MM.yyyy");
+            await Assert.That(settings.AppliedNoteDailyFileNameFormat).IsEqualTo("dd.MM.yyyy");
+            await Assert.That(settings.HasExternalNoteDailyFileNameFormatChange).IsFalse();
+        }
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task NoteDailyFileNameFormat_ApplyExternalWinnerKeepsDirtyDraftAndExposesReload()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var root = Path.Combine(Environment.CurrentDirectory, "DailyFormatVault");
+        var externalWinner = new NoteDailyFileNameFormatState(
+            "dd.MM.yyyy",
+            root,
+            "revision-external",
+            IsExternalChange: true);
+        var settings = CreateNoteDailyFileNameFormatSettings(
+            configuration,
+            root,
+            applyAsync: _ => System.Threading.Tasks.Task.FromResult(
+                new NoteDailyFileNameFormatApplyResult(true, externalWinner)));
+        settings.NoteDailyFileNameFormatDraft = "yyyy.MM.dd";
+
+        await settings.ApplyNoteDailyFileNameFormatAsync();
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(settings.AppliedNoteDailyFileNameFormat).IsEqualTo("dd.MM.yyyy");
+            await Assert.That(settings.NoteDailyFileNameFormatDraft).IsEqualTo("yyyy.MM.dd");
+            await Assert.That(settings.HasExternalNoteDailyFileNameFormatChange).IsTrue();
+            await Assert.That(settings.CanReloadExternalNoteDailyFileNameFormat).IsTrue();
+        }
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task NoteDailyFileNameFormat_RetryableExternalFailureKeepsDraftAndExposesReload()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var root = Path.Combine(Environment.CurrentDirectory, "DailyFormatVault");
+        var settings = CreateNoteDailyFileNameFormatSettings(configuration, root);
+        settings.NoteDailyFileNameFormatDraft = "yyyy.MM.dd";
+
+        settings.ApplyNoteDailyFileNameFormatState(new NoteDailyFileNameFormatState(
+            "yyyy-MM-dd",
+            root,
+            "revision-last-known-good",
+            "The external daily note format is invalid.",
+            IsExternalChange: true,
+            RequiresReload: true));
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(settings.AppliedNoteDailyFileNameFormat).IsEqualTo("yyyy-MM-dd");
+            await Assert.That(settings.NoteDailyFileNameFormatDraft).IsEqualTo("yyyy.MM.dd");
+            await Assert.That(settings.HasExternalNoteDailyFileNameFormatChange).IsTrue();
+            await Assert.That(settings.CanReloadExternalNoteDailyFileNameFormat).IsTrue();
+            await Assert.That(settings.NoteDailyFileNameFormatStatusText)
+                .IsEqualTo("The external daily note format is invalid.");
+        }
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task NoteDailyFileNameFormat_ApplyingDisablesRelatedVaultControlsUntilFeedCompletes()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var root = Path.Combine(Environment.CurrentDirectory, "DailyFormatVault");
+        var completion = new System.Threading.Tasks.TaskCompletionSource<NoteDailyFileNameFormatApplyResult>();
+        var settings = CreateNoteDailyFileNameFormatSettings(
+            configuration,
+            root,
+            applyAsync: _ => completion.Task);
+        settings.NoteDailyFileNameFormatDraft = "yyyy.MM.dd";
+
+        var applying = settings.ApplyNoteDailyFileNameFormatAsync();
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(settings.IsApplyingNoteDailyFileNameFormat).IsTrue();
+            await Assert.That(settings.CanEditNoteVaultSettings).IsFalse();
+            await Assert.That(settings.CanApplyNoteDailyFileNameFormat).IsFalse();
+            await Assert.That(settings.IsNoteDailyFileNameFormatReadOnly).IsTrue();
+        }
+
+        completion.SetResult(new NoteDailyFileNameFormatApplyResult(
+            true,
+            new NoteDailyFileNameFormatState("yyyy.MM.dd", root, "revision-4")));
+        await applying;
+
+        await Assert.That(settings.IsApplyingNoteDailyFileNameFormat).IsFalse();
+        await Assert.That(settings.CanEditNoteVaultSettings).IsTrue();
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task NoteDailyFileNameFormat_ApplyDiscardsStaleResultAndStatusAfterVaultSwitch()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var firstRoot = Path.Combine(Environment.CurrentDirectory, "DailyFormatFirstVault");
+        var secondRoot = Path.Combine(Environment.CurrentDirectory, "DailyFormatSecondVault");
+        var completion = new System.Threading.Tasks.TaskCompletionSource<NoteDailyFileNameFormatApplyResult>();
+        var settings = CreateNoteDailyFileNameFormatSettings(
+            configuration,
+            firstRoot,
+            applyAsync: _ => completion.Task);
+        settings.NoteDailyFileNameFormatDraft = "yyyy.MM.dd";
+
+        var applying = settings.ApplyNoteDailyFileNameFormatAsync();
+        settings.NoteVaultRootPath = secondRoot;
+        completion.SetResult(new NoteDailyFileNameFormatApplyResult(
+            true,
+            new NoteDailyFileNameFormatState(
+                "yyyy.MM.dd",
+                firstRoot,
+                "revision-first",
+                "First vault applied the change.")));
+        await applying;
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(settings.NoteVaultRootPath).IsEqualTo(secondRoot);
+            await Assert.That(settings.AppliedNoteDailyFileNameFormat).IsEqualTo("yyyy-MM-dd");
+            await Assert.That(settings.NoteDailyFileNameFormatStatusText).IsNull();
+            await Assert.That(settings.IsApplyingNoteDailyFileNameFormat).IsFalse();
+        }
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task NoteDailyFileNameFormat_ApplyDiscardsStaleSuccessfulResultAfterFeedSessionReplacement()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var root = Path.Combine(Environment.CurrentDirectory, "DailyFormatVault");
+        var completion = new System.Threading.Tasks.TaskCompletionSource<NoteDailyFileNameFormatApplyResult>();
+        var settings = CreateNoteDailyFileNameFormatSettings(
+            configuration,
+            root,
+            applyAsync: _ => completion.Task);
+        settings.NoteDailyFileNameFormatDraft = "yyyy.MM.dd";
+
+        var applying = settings.ApplyNoteDailyFileNameFormatAsync();
+        settings.SetNoteDailyFileNameFormatFeedAvailability(
+            isVaultInitialized: false,
+            isBusyOrRecovering: true,
+            activeFeedVaultRootPath: root);
+        settings.SetNoteDailyFileNameFormatFeedAvailability(
+            isVaultInitialized: true,
+            isBusyOrRecovering: false,
+            activeFeedVaultRootPath: root);
+        completion.SetResult(new NoteDailyFileNameFormatApplyResult(
+            true,
+            new NoteDailyFileNameFormatState(
+                "yyyy.MM.dd",
+                root,
+                "revision-stale-session",
+                "Old session applied the change.")));
+        await applying;
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(settings.AppliedNoteDailyFileNameFormat).IsEqualTo("yyyy-MM-dd");
+            await Assert.That(settings.NoteDailyFileNameFormatDraft).IsEqualTo("yyyy.MM.dd");
+            await Assert.That(settings.NoteDailyFileNameFormatStatusText).IsNull();
+            await Assert.That(settings.IsApplyingNoteDailyFileNameFormat).IsFalse();
+        }
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task NoteDailyFileNameFormat_ApplyDiscardsSuccessfulResultFromAnOlderFeedSession()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var root = Path.Combine(Environment.CurrentDirectory, "DailyFormatVault");
+        var completion = new System.Threading.Tasks.TaskCompletionSource<NoteDailyFileNameFormatApplyResult>();
+        var settings = CreateNoteDailyFileNameFormatSettings(
+            configuration,
+            root,
+            applyAsync: _ => completion.Task);
+        settings.ApplyNoteDailyFileNameFormatState(new NoteDailyFileNameFormatState(
+            "yyyy-MM-dd",
+            root,
+            "revision-current",
+            SessionGeneration: 10));
+        settings.NoteDailyFileNameFormatDraft = "yyyy.MM.dd";
+
+        var applying = settings.ApplyNoteDailyFileNameFormatAsync();
+        settings.ApplyNoteDailyFileNameFormatState(new NoteDailyFileNameFormatState(
+            "dd.MM.yyyy",
+            root,
+            "revision-external",
+            IsExternalChange: true,
+            SessionGeneration: 11));
+        completion.SetResult(new NoteDailyFileNameFormatApplyResult(
+            true,
+            new NoteDailyFileNameFormatState(
+                "yyyy.MM.dd",
+                root,
+                "revision-old-session",
+                "Old session applied the change.",
+                SessionGeneration: 10)));
+        await applying;
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(settings.AppliedNoteDailyFileNameFormat).IsEqualTo("dd.MM.yyyy");
+            await Assert.That(settings.NoteDailyFileNameFormatDraft).IsEqualTo("yyyy.MM.dd");
+            await Assert.That(settings.HasExternalNoteDailyFileNameFormatChange).IsTrue();
+            await Assert.That(settings.NoteDailyFileNameFormatStatusText)
+                .Contains("NoteDailyFileNameFormatExternalChanged");
+            await Assert.That(settings.IsApplyingNoteDailyFileNameFormat).IsFalse();
+        }
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task NoteDailyFileNameFormat_ApplyDiscardsStaleSuccessfulResultAfterFeedIsReenabled()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var root = Path.Combine(Environment.CurrentDirectory, "DailyFormatVault");
+        var completion = new System.Threading.Tasks.TaskCompletionSource<NoteDailyFileNameFormatApplyResult>();
+        var settings = CreateNoteDailyFileNameFormatSettings(
+            configuration,
+            root,
+            applyAsync: _ => completion.Task);
+        settings.NoteDailyFileNameFormatDraft = "yyyy.MM.dd";
+
+        var applying = settings.ApplyNoteDailyFileNameFormatAsync();
+        settings.IsFeedEnabled = false;
+        settings.IsFeedEnabled = true;
+        completion.SetResult(new NoteDailyFileNameFormatApplyResult(
+            true,
+            new NoteDailyFileNameFormatState(
+                "yyyy.MM.dd",
+                root,
+                "revision-stale-enabled",
+                "Disabled session applied the change.")));
+        await applying;
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(settings.AppliedNoteDailyFileNameFormat).IsEqualTo("yyyy-MM-dd");
+            await Assert.That(settings.NoteDailyFileNameFormatDraft).IsEqualTo("yyyy.MM.dd");
+            await Assert.That(settings.NoteDailyFileNameFormatStatusText).IsNull();
+            await Assert.That(settings.IsApplyingNoteDailyFileNameFormat).IsFalse();
+        }
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task NoteDailyFileNameFormat_ReloadDiscardsStaleStateAndStatusAfterVaultSwitch()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var firstRoot = Path.Combine(Environment.CurrentDirectory, "DailyFormatFirstVault");
+        var secondRoot = Path.Combine(Environment.CurrentDirectory, "DailyFormatSecondVault");
+        var completion = new System.Threading.Tasks.TaskCompletionSource<NoteDailyFileNameFormatState>();
+        var externalState = new NoteDailyFileNameFormatState(
+            "dd.MM.yyyy",
+            firstRoot,
+            "revision-external",
+            IsExternalChange: true);
+        var settings = CreateNoteDailyFileNameFormatSettings(
+            configuration,
+            firstRoot,
+            reloadAsync: () => completion.Task);
+        settings.NoteDailyFileNameFormatDraft = "yyyy.MM.dd";
+        settings.ApplyNoteDailyFileNameFormatState(externalState);
+
+        var reloading = settings.ReloadExternalNoteDailyFileNameFormatAsync();
+        settings.NoteVaultRootPath = secondRoot;
+        completion.SetResult(externalState);
+        await reloading;
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(settings.NoteVaultRootPath).IsEqualTo(secondRoot);
+            await Assert.That(settings.AppliedNoteDailyFileNameFormat).IsEqualTo("dd.MM.yyyy");
+            await Assert.That(settings.NoteDailyFileNameFormatDraft).IsEqualTo("yyyy.MM.dd");
+            await Assert.That(settings.NoteDailyFileNameFormatStatusText).IsNull();
+            await Assert.That(settings.IsApplyingNoteDailyFileNameFormat).IsFalse();
+        }
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task NoteDailyFileNameFormat_ReloadDiscardsStateFromAnOlderFeedSession()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var root = Path.Combine(Environment.CurrentDirectory, "DailyFormatVault");
+        var completion = new System.Threading.Tasks.TaskCompletionSource<NoteDailyFileNameFormatState>();
+        var currentExternalState = new NoteDailyFileNameFormatState(
+            "dd.MM.yyyy",
+            root,
+            "revision-current",
+            IsExternalChange: true,
+            SessionGeneration: 20);
+        var newerExternalState = new NoteDailyFileNameFormatState(
+            "yyyy-MM-dd",
+            root,
+            "revision-newer",
+            IsExternalChange: true,
+            SessionGeneration: 21);
+        var settings = CreateNoteDailyFileNameFormatSettings(
+            configuration,
+            root,
+            reloadAsync: () => completion.Task);
+        settings.NoteDailyFileNameFormatDraft = "yyyy.MM.dd";
+        settings.ApplyNoteDailyFileNameFormatState(currentExternalState);
+
+        var reloading = settings.ReloadExternalNoteDailyFileNameFormatAsync();
+        settings.ApplyNoteDailyFileNameFormatState(newerExternalState);
+        completion.SetResult(currentExternalState);
+        await reloading;
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(settings.AppliedNoteDailyFileNameFormat).IsEqualTo("yyyy-MM-dd");
+            await Assert.That(settings.NoteDailyFileNameFormatDraft).IsEqualTo("yyyy.MM.dd");
+            await Assert.That(settings.HasExternalNoteDailyFileNameFormatChange).IsTrue();
+            await Assert.That(settings.NoteDailyFileNameFormatStatusText)
+                .Contains("NoteDailyFileNameFormatExternalChanged");
+            await Assert.That(settings.IsApplyingNoteDailyFileNameFormat).IsFalse();
+        }
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task BrowseNoteVaultRootPathCommand_UsesCurrentFolderAndPersistsSelection()
+    {
+        IConfigurationRoot configuration = CreateConfiguration();
+        var currentTaskPath = Path.Combine(Environment.CurrentDirectory, $"NoteVaultPickerTasks-{Guid.NewGuid():N}");
+        var currentVaultPath = Path.Combine(Environment.CurrentDirectory, "CurrentVault");
+        var selectedVaultPath = Path.Combine(Environment.CurrentDirectory, "SelectedVault");
+        var backupService = new FakeRemoteBackupService();
+        using var storageFactory = new RecordingTaskStorageFactory(
+            currentTaskPath,
+            new ConcurrentQueue<string>());
+        var settings = new SettingsViewModel(
+            configuration,
+            backupService,
+            localizationService: new FakeLocalizationService(),
+            isExternalNoteVaultSupported: true)
+        {
+            NoteVaultRootPath = currentVaultPath
+        };
+        using var appScope = ConfigureAppSettingsCommands(
+            settings,
+            configuration,
+            backupService,
+            storageFactory,
+            new Dialogs());
+        var previousPlatformPicker = Dialogs.PlatformOpenFolderDialogAsync;
+        string? capturedDirectory = null;
+
+        try
+        {
+            Dialogs.PlatformOpenFolderDialogAsync = (_, directory) =>
+            {
+                capturedDirectory = directory;
+                return System.Threading.Tasks.Task.FromResult<string?>(selectedVaultPath);
+            };
+
+            settings.BrowseNoteVaultRootPathCommand!.Execute(null);
+
+            await WaitForConditionAsync(
+                () => string.Equals(settings.NoteVaultRootPath, selectedVaultPath, StringComparison.Ordinal),
+                "Note vault folder picker command did not update the selected path.");
+            await Assert.That(capturedDirectory).IsEqualTo(currentVaultPath);
+            await Assert.That(configuration
+                    .GetSection("NoteVault")
+                    .GetSection("RootPath")
+                    .Get<string>())
+                .IsEqualTo(selectedVaultPath);
+        }
+        finally
+        {
+            Dialogs.PlatformOpenFolderDialogAsync = previousPlatformPicker;
+        }
+    }
+
+    [Test]
     public async System.Threading.Tasks.Task TaskTreeExpansionStateStore_BatchesChangesIntoOneWrite()
     {
         var writes = new ConcurrentQueue<string>();
@@ -1793,11 +2631,19 @@ public class SettingsViewModelTests : IDisposable
         SettingsViewModel settings,
         IConfiguration configuration,
         IRemoteBackupService backupService,
-        ITaskStorageFactory storageFactory)
+        ITaskStorageFactory storageFactory,
+        IDialogs? dialogs = null)
     {
         var appType = typeof(App);
         var app = new App();
         app.ConfigureRuntimeForTests(configuration, backupService, storageFactory);
+
+        if (dialogs != null)
+        {
+            var dialogsField = appType.GetField("_dialogs", BindingFlags.Instance | BindingFlags.NonPublic)
+                               ?? throw new MissingFieldException(nameof(App), "_dialogs");
+            dialogsField.SetValue(app, dialogs);
+        }
 
         var setupSettingsCommands = appType.GetMethod(
                                         "SetupSettingsCommands",
@@ -1971,6 +2817,52 @@ public class SettingsViewModelTests : IDisposable
     private static SettingsViewModel CreateSettingsViewModel(IConfiguration configuration)
     {
         return new SettingsViewModel(configuration, localizationService: new FakeLocalizationService());
+    }
+
+    private static SettingsViewModel CreateNoteDailyFileNameFormatSettings(
+        IConfiguration configuration,
+        string root,
+        Func<string, System.Threading.Tasks.Task<NoteDailyFileNameFormatApplyResult>>? applyAsync = null,
+        Func<System.Threading.Tasks.Task<NoteDailyFileNameFormatState>>? reloadAsync = null)
+    {
+        var settings = new SettingsViewModel(
+            configuration,
+            localizationService: new FakeLocalizationService(),
+            isExternalNoteVaultSupported: true)
+        {
+            NoteVaultRootPath = root
+        };
+        settings.ConfigureNoteDailyFileNameFormatBridge(
+            format => format switch
+            {
+                "yyyy-MM-dd" => new NoteDailyFileNameFormatValidation(
+                    true,
+                    "Ежедневные/2026-08-25.md",
+                    null),
+                "yyyy.MM.dd" => new NoteDailyFileNameFormatValidation(
+                    true,
+                    "Ежедневные/2026.08.25.md",
+                    null),
+                "dd.MM.yyyy" => new NoteDailyFileNameFormatValidation(
+                    true,
+                    "Ежедневные/25.08.2026.md",
+                    null),
+                _ => new NoteDailyFileNameFormatValidation(
+                    false,
+                    null,
+                    "Invalid format.")
+            },
+            applyAsync ?? (format => System.Threading.Tasks.Task.FromResult(
+                new NoteDailyFileNameFormatApplyResult(
+                    true,
+                    new NoteDailyFileNameFormatState(format, root, "revision-default")))),
+            reloadAsync ?? (() => System.Threading.Tasks.Task.FromResult(
+                new NoteDailyFileNameFormatState("yyyy-MM-dd", root, "revision-default"))));
+        settings.SetNoteDailyFileNameFormatFeedAvailability(
+            isVaultInitialized: true,
+            isBusyOrRecovering: false,
+            activeFeedVaultRootPath: root);
+        return settings;
     }
 
     private sealed class FakeLocalizationService : ILocalizationService

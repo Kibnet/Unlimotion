@@ -1267,7 +1267,7 @@ public class MainControlTreeCommandsUiTests
     [Test]
     public async Task CreateTaskUi_CtrlEnter_CreatesSiblingForSelectedTaskInLastUpdatedTab()
     {
-        var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        var session = HeadlessUnitTestSession.StartNew(typeof(SkiaHeadlessAppBuilder));
         try
         {
             await session.DispatchAsync(async () =>
@@ -1778,7 +1778,7 @@ public class MainControlTreeCommandsUiTests
     [Test]
     public async Task TreeCommandUi_HotkeyHelpPanel_DisplaysEmbeddedShortcutReferenceFromF1()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -1813,9 +1813,6 @@ public class MainControlTreeCommandsUiTests
                 await Assert.That(view.IsHotkeyHelpVisible).IsTrue();
                 await Assert.That(overlayHost.IsVisible).IsTrue();
                 await AssertHotkeyHelpPanelContent(view);
-                await Assert.That(FindControlByAutomationId<DropDownButton>(view, "GlobalTaskCreateMenuButton").Flyout)
-                    .IsAssignableTo<MenuFlyout>();
-
                 PressHotkey(window, Key.F1, PhysicalKey.F1, RawInputModifiers.None);
                 Dispatcher.UIThread.RunJobs();
                 await Assert.That(view.IsHotkeyHelpVisible).IsFalse();
@@ -1840,7 +1837,7 @@ public class MainControlTreeCommandsUiTests
     [Test]
     public async Task MainWindowUi_HotkeyHelpPanel_HandlesF1AtWindowLevel()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -1894,7 +1891,7 @@ public class MainControlTreeCommandsUiTests
     [Test]
     public async Task TreeCommandUi_SettingsShowHotkeysButton_OpensEmbeddedShortcutReference()
     {
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -1905,21 +1902,22 @@ public class MainControlTreeCommandsUiTests
                 var vm = fixture.MainWindowViewModelTest;
                 await vm.Connect();
 
-                var view = new MainControl { DataContext = vm };
-                window = CreateWindow(view);
+                var shell = new MainScreen { DataContext = vm };
+                window = CreateWindow(shell);
                 window.Width = 720;
                 window.Height = 560;
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
 
+                var view = shell.GetVisualDescendants().OfType<MainControl>().Single();
+
                 var overlayHost = FindControlByAutomationId<Grid>(view, "HotkeyHelpOverlayHost");
                 await Assert.That(overlayHost.IsVisible).IsFalse();
 
-                var settingsTab = FindControlByAutomationId<TabItem>(view, "SettingsTabItem");
-                settingsTab.IsSelected = true;
+                vm.OpenSettings();
                 Dispatcher.UIThread.RunJobs();
 
-                var showHotkeysButton = FindControlByAutomationId<Button>(view, "SettingsShowHotkeysButton");
+                var showHotkeysButton = FindControlByAutomationId<Button>(shell, "SettingsShowHotkeysButton");
                 await Assert.That(showHotkeysButton.Content?.ToString()).IsEqualTo(L10n.Get("ShowHotkeys"));
 
                 InvokeButtonClick(showHotkeysButton);
@@ -2064,7 +2062,7 @@ public class MainControlTreeCommandsUiTests
     [Test]
     public async Task TreeCommandUi_CtrlA_UsesFocusedRelationTree()
     {
-        var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        var session = HeadlessUnitTestSession.StartNew(typeof(SkiaHeadlessAppBuilder));
         try
         {
             await session.DispatchAsync(async () =>

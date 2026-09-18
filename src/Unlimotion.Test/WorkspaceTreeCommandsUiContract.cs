@@ -16,7 +16,7 @@ internal static class WorkspaceTreeCommandsUiContract
     public static async Task<WorkspaceTreeCommandsScenarioResult> ExecuteWorkspaceTreeCommandsScenarioAsync()
     {
         var result = new WorkspaceTreeCommandsScenarioResult();
-        var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        var session = HeadlessUnitTestSession.StartNew(typeof(SkiaHeadlessAppBuilder));
 
         try
         {

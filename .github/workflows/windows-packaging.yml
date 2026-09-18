@@ -9,6 +9,7 @@ permissions:
   contents: write
 
 env:
+  EMX_TELEMETRY_OPTOUT: "1"
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   INSTALLER_PUBLISHER: Kibnet
   WINDOWS_PUBLISH_DIR: ${{ github.workspace }}\src\Unlimotion.Desktop\bin\Release\net10.0\win-x64\publish
