@@ -26,6 +26,8 @@ public static class UnlimotionAppLaunchHost
     public const string AutomationDesktopMonitorEnvironmentVariable = "UNLIMOTION_AUTOMATION_DESKTOP_MONITOR";
     public const string AutomationWindowWidthEnvironmentVariable = "UNLIMOTION_AUTOMATION_WINDOW_WIDTH";
     public const string AutomationWindowHeightEnvironmentVariable = "UNLIMOTION_AUTOMATION_WINDOW_HEIGHT";
+    public const string AutomationTaskSpaceSwitchDelayEnvironmentVariable =
+        "UNLIMOTION_AUTOMATION_TASK_SPACE_SWITCH_DELAY_MS";
     public const string CurrentTaskId = UnlimotionAutomationScenarioData.SmokeCurrentTaskId;
     public const string CurrentTaskTitle = UnlimotionAutomationScenarioData.SmokeCurrentTaskTitle;
 
@@ -491,6 +493,13 @@ public static class UnlimotionAppLaunchHost
         if (launchData.ExpandAllTaskTrees)
         {
             environmentVariables[AutomationExpandAllTaskTreesEnvironmentVariable] = bool.TrueString;
+        }
+
+        var taskSpaceSwitchDelay = Environment.GetEnvironmentVariable(
+            AutomationTaskSpaceSwitchDelayEnvironmentVariable);
+        if (!string.IsNullOrWhiteSpace(taskSpaceSwitchDelay))
+        {
+            environmentVariables[AutomationTaskSpaceSwitchDelayEnvironmentVariable] = taskSpaceSwitchDelay;
         }
 
         var configuredMonitor = Environment.GetEnvironmentVariable(

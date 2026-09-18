@@ -67,10 +67,12 @@ public class SettingsControlResponsiveUiTests
                 Dispatcher.UIThread.RunJobs();
 
                 var overlay = FindControlByAutomationId<Grid>(mainView, "TaskSpaceSwitchOverlay");
+                var progress = FindControlByAutomationId<Control>(mainView, "TaskSpaceSwitchProgress");
                 var selector = FindControlByAutomationId<ComboBox>(mainView, "TaskSpaceSelector");
                 var addButton = FindControlByAutomationId<Button>(settingsView, "AddTaskSpaceButton");
                 var pathInput = FindControlByAutomationId<TextBox>(settingsView, "TaskStoragePathTextBox");
                 await Assert.That(overlay.IsVisible).IsTrue();
+                await Assert.That(progress.GetType().Name).IsEqualTo("SeamlessLoadingIndicator");
                 await Assert.That(selector.IsEffectivelyEnabled).IsFalse();
                 await Assert.That(addButton.IsEffectivelyEnabled).IsFalse();
                 await Assert.That(pathInput.IsEffectivelyEnabled).IsFalse();
