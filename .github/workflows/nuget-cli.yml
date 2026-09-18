@@ -48,12 +48,6 @@ jobs:
         }
 
         $version = $Matches.version
-        [xml]$project = Get-Content -Raw 'src/Unlimotion.Cli/Unlimotion.Cli.csproj'
-        $projectVersion = [string]$project.Project.PropertyGroup.Version
-        if ($projectVersion -ne $version) {
-          throw "Release tag version '$version' does not match Unlimotion.Cli version '$projectVersion'."
-        }
-
         git fetch origin main:refs/remotes/origin/main
         git merge-base --is-ancestor HEAD origin/main
         if ($LASTEXITCODE -ne 0) {
@@ -81,7 +75,7 @@ jobs:
 
     - name: Build CLI
       shell: pwsh
-      run: dotnet build src/Unlimotion.Cli/Unlimotion.Cli.csproj -c Release --no-restore
+      run: dotnet build src/Unlimotion.Cli/Unlimotion.Cli.csproj -c Release --no-restore -p:PackageVersion=${{ steps.release.outputs.version }}
 
     - name: Pack CLI
       id: pack
@@ -89,7 +83,7 @@ jobs:
       run: |
         $output = Join-Path $env:RUNNER_TEMP 'unlimotion-cli-package'
         New-Item -ItemType Directory -Force $output | Out-Null
-        dotnet pack src/Unlimotion.Cli/Unlimotion.Cli.csproj -c Release --no-build -o $output
+        dotnet pack src/Unlimotion.Cli/Unlimotion.Cli.csproj -c Release --no-build -p:PackageVersion=${{ steps.release.outputs.version }} -o $output
         $package = Join-Path $output "Unlimotion.Cli.${{ steps.release.outputs.version }}.nupkg"
         if (-not (Test-Path -LiteralPath $package)) {
           throw "Expected CLI package was not created: $package"
