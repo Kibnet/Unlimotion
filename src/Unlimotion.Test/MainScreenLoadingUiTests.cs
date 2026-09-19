@@ -26,6 +26,85 @@ namespace Unlimotion.Test;
 public class MainScreenLoadingUiTests
 {
     [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task SettingsConnectCommand_ShowsOverlayUntilCompletion(bool fail)
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            using var context = TestMainWindowContext.Create(TimeSpan.Zero);
+            var vm = context.MainWindowViewModel;
+            var settings = vm.Settings;
+            var path = Path.Combine(Path.GetTempPath(), $"connect-overlay-{Guid.NewGuid():N}");
+            using var factory = new SettingsViewModelTests.RecordingTaskStorageFactory(
+                path, new System.Collections.Concurrent.ConcurrentQueue<string>());
+            var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var entered = false;
+            factory.BeforeSwitchAsync = async () =>
+            {
+                entered = true;
+                await release.Task;
+                if (fail) throw new InvalidOperationException("Simulated connection failure");
+            };
+            settings.TaskStoragePath = path;
+            using var commands = SettingsViewModelTests.ConfigureAppSettingsCommands(
+                settings, context.Configuration, new SettingsViewModelTests.FakeRemoteBackupService(), factory);
+            var view = new MainScreen { DataContext = vm };
+            var window = CreateWindow(view);
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            FindControlByAutomationId<TabItem>(view, "SettingsTabItem").IsSelected = true;
+            Dispatcher.UIThread.RunJobs();
+            var connectButton = FindControlByAutomationId<Button>(view, "ConnectLocalStorageButton");
+            var overlay = FindControlByAutomationId<Grid>(view, "TaskSpaceSwitchOverlay");
+            var spinner = FindControlByAutomationId<SeamlessLoadingIndicator>(view, "TaskSpaceSwitchProgress");
+            try
+            {
+                settings.IsTaskSpaceSwitching = true;
+                settings.ConnectCommand!.Execute(null);
+                Dispatcher.UIThread.RunJobs();
+                await Assert.That(entered).IsFalse();
+                await Assert.That(settings.IsTaskSpaceSwitching).IsTrue();
+                settings.IsTaskSpaceSwitching = false;
+                Dispatcher.UIThread.RunJobs();
+                await Assert.That(connectButton.Command == settings.ConnectCommand).IsTrue();
+                connectButton.Command!.Execute(connectButton.CommandParameter);
+                await Assert.That(WaitFor(() => entered)).IsTrue();
+                await Assert.That(overlay.IsEffectivelyVisible).IsTrue();
+                await Assert.That(spinner.IsEffectivelyVisible).IsTrue();
+                SaveConnectFrame(window, fail ? "error-pending" : "loading");
+                var callbackRan = false;
+                Dispatcher.UIThread.Post(() => callbackRan = true);
+                await Assert.That(WaitFor(() => callbackRan)).IsTrue();
+                release.TrySetResult();
+                await Assert.That(WaitFor(() => settings.StorageConnectionState != SettingsConnectionState.Connecting &&
+                    !overlay.IsVisible)).IsTrue();
+                await Assert.That(settings.StorageConnectionState).IsEqualTo(
+                    fail ? SettingsConnectionState.Error : SettingsConnectionState.Connected);
+                await Assert.That(spinner.IsEffectivelyVisible).IsFalse();
+                SaveConnectFrame(window, fail ? "error" : "connected");
+            }
+            finally
+            {
+                release.TrySetResult();
+                WaitFor(() => settings.StorageConnectionState != SettingsConnectionState.Connecting);
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    private static void SaveConnectFrame(Window window, string state)
+    {
+        var directory = Environment.GetEnvironmentVariable("UNLIMOTION_CONNECT_EVIDENCE");
+        if (string.IsNullOrEmpty(directory)) return;
+        using var frame = window.CaptureRenderedFrame();
+        if (frame == null) { Console.WriteLine("Connect screenshot unavailable in headless renderer."); return; }
+        Directory.CreateDirectory(directory);
+        frame.Save(Path.Combine(directory, $"connect-{state}.png"));
+    }
+
+    [Test]
     public async Task MainScreen_TogglesTasksLoadingOverlay_WithLoadingState()
     {
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
@@ -43,9 +122,12 @@ public class MainScreenLoadingUiTests
                 Dispatcher.UIThread.RunJobs();
 
                 var overlay = FindControlByAutomationId<Grid>(view, "TasksLoadingOverlay");
-                var spinner = FindControlByAutomationId<Grid>(view, "TasksLoadingSpinner");
+                var spinner = FindControlByAutomationId<SeamlessLoadingIndicator>(
+                    view,
+                    "TasksLoadingSpinner");
 
                 await Assert.That(overlay.IsVisible).IsFalse();
+                await Assert.That(spinner.GetType().Name).IsEqualTo("SeamlessLoadingIndicator");
 
                 SetTasksLoading(vm, true);
                 var becameVisible = WaitFor(() => overlay.IsVisible && spinner.IsVisible);
@@ -54,6 +136,8 @@ public class MainScreenLoadingUiTests
                 SetTasksLoading(vm, false);
                 var becameHidden = WaitFor(() => !overlay.IsVisible);
                 await Assert.That(becameHidden).IsTrue();
+                Dispatcher.UIThread.RunJobs();
+                await Assert.That(spinner.CurrentPhase).IsEqualTo(0d);
             }
             finally
             {
@@ -81,7 +165,9 @@ public class MainScreenLoadingUiTests
                 Dispatcher.UIThread.RunJobs();
 
                 var overlay = FindControlByAutomationId<Grid>(view, "TasksLoadingOverlay");
-                var spinner = FindControlByAutomationId<Grid>(view, "TasksLoadingSpinner");
+                var spinner = FindControlByAutomationId<SeamlessLoadingIndicator>(
+                    view,
+                    "TasksLoadingSpinner");
                 var connectTask = vm.Connect();
 
                 var loadStarted = WaitFor(
@@ -180,6 +266,7 @@ public class MainScreenLoadingUiTests
         }
 
         public MainWindowViewModel MainWindowViewModel { get; }
+        public IConfiguration Configuration { get; private init; } = null!;
 
         public static TestMainWindowContext Create(TimeSpan loadDelay)
         {
@@ -208,7 +295,7 @@ public class MainScreenLoadingUiTests
             return new TestMainWindowContext(
                 configPath,
                 mainWindowViewModel,
-                configuration as IDisposable);
+                configuration as IDisposable) { Configuration = configuration };
         }
 
         public void Dispose()

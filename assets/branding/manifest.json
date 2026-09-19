@@ -1,0 +1,322 @@
+[
+  {
+    "path": "assets/branding/master-D-2048.png",
+    "bytes": 540478,
+    "sha256": "B6C5B59BF28B6D9267D32BCE26E248FAB629EAFB60C8D307FB3C9EE8DEB24106"
+  },
+  {
+    "path": "assets/branding/master-D-opaque-2048.png",
+    "bytes": 469897,
+    "sha256": "91575452B0000C2E52B6CEBA0F64C6737DC52F87C91931B42B52140F3DF451C2"
+  },
+  {
+    "path": "assets/branding/png/unlimotion-1024.png",
+    "bytes": 198001,
+    "sha256": "62CFA22B72A765392E562F260625A03FA95209321E0D633B6C07B6E3897BEDF0"
+  },
+  {
+    "path": "assets/branding/png/unlimotion-128.png",
+    "bytes": 9051,
+    "sha256": "D5FC6FFDA085D6564E2FF45BB44CB28348E88A56B876413E88FAD85FFB9082E1"
+  },
+  {
+    "path": "assets/branding/png/unlimotion-16.png",
+    "bytes": 559,
+    "sha256": "7E57B3D31BF7D6D4F9E035588BC63A62B3AE3A64EEAFF903CEC8EE6B54E07F7C"
+  },
+  {
+    "path": "assets/branding/png/unlimotion-192.png",
+    "bytes": 16848,
+    "sha256": "B442A7AC7CC480781877311F869BE82ABED9C8D80543F684A703E18447F66970"
+  },
+  {
+    "path": "assets/branding/png/unlimotion-2048.png",
+    "bytes": 540478,
+    "sha256": "B6C5B59BF28B6D9267D32BCE26E248FAB629EAFB60C8D307FB3C9EE8DEB24106"
+  },
+  {
+    "path": "assets/branding/png/unlimotion-24.png",
+    "bytes": 990,
+    "sha256": "08AC27733E0B26A67590262A40CF292F6F49D312C1484F141FA93A3BA5C7CEEB"
+  },
+  {
+    "path": "assets/branding/png/unlimotion-256.png",
+    "bytes": 25641,
+    "sha256": "4D2CD75A65624A361A3E6A4D2AC7F7851531438EB12DCB8237F09D47A9E1D3B0"
+  },
+  {
+    "path": "assets/branding/png/unlimotion-32.png",
+    "bytes": 1459,
+    "sha256": "3EAF4BAC6C5B636A7E47EB220C8D8EA364C55EFCF75060352A2A38825B040354"
+  },
+  {
+    "path": "assets/branding/png/unlimotion-48.png",
+    "bytes": 2562,
+    "sha256": "B6CD6398F66D52308DD0D5A954430600289CC2B0854ADC994EB0EC51C83A4D42"
+  },
+  {
+    "path": "assets/branding/png/unlimotion-512.png",
+    "bytes": 71419,
+    "sha256": "E2F662A7F0A56F7848D34902ADC68C5CFA5CEC5AA8BAADBC5D9927840B7BCCC5"
+  },
+  {
+    "path": "assets/branding/png/unlimotion-64.png",
+    "bytes": 3318,
+    "sha256": "D9AF53EEA5667F77C652B542235BFF9D5163816D42C3A792FE957A32A7055F04"
+  },
+  {
+    "path": "assets/branding/png/unlimotion-96.png",
+    "bytes": 5946,
+    "sha256": "BD688C58C58BBF1DEED64B7F9D5E01FD6086ABF30752235A0A9873CC997155D6"
+  },
+  {
+    "path": "fastlane/metadata/android/en-US/images/icon.png",
+    "bytes": 62543,
+    "sha256": "9E89D6BA0EE4C6C74A9A526316A6F31C4BE6F7D9F42E82AC9D522CDA08344386"
+  },
+  {
+    "path": "fastlane/metadata/android/ru-RU/images/icon.png",
+    "bytes": 62543,
+    "sha256": "9E89D6BA0EE4C6C74A9A526316A6F31C4BE6F7D9F42E82AC9D522CDA08344386"
+  },
+  {
+    "path": "src/Unlimotion.Android/Icon.png",
+    "bytes": 62543,
+    "sha256": "9E89D6BA0EE4C6C74A9A526316A6F31C4BE6F7D9F42E82AC9D522CDA08344386"
+  },
+  {
+    "path": "src/Unlimotion.Android/Resources/drawable-hdpi/ic_launcher_foreground.png",
+    "bytes": 7713,
+    "sha256": "39293A91D4FE28B8B72E004F6BB673AB658653A22CA1900B18846AE2E57F64C6"
+  },
+  {
+    "path": "src/Unlimotion.Android/Resources/drawable-mdpi/ic_launcher_foreground.png",
+    "bytes": 4285,
+    "sha256": "FBB41943ED66C8D7C24E0AA54D9D8DA35B7CD9605879AC08597FFAEDDC26E98B"
+  },
+  {
+    "path": "src/Unlimotion.Android/Resources/drawable-xhdpi/ic_launcher_foreground.png",
+    "bytes": 11817,
+    "sha256": "0E31B757E5D655E360F52A05D1F5925FECFF55A6A00D3D9766E6DF270E9DC3CE"
+  },
+  {
+    "path": "src/Unlimotion.Android/Resources/drawable-xxhdpi/ic_launcher_foreground.png",
+    "bytes": 22071,
+    "sha256": "20D45830AFF0DF943CED547B21B25D31C9585C9CA66F76792406EF5E32D8F0D2"
+  },
+  {
+    "path": "src/Unlimotion.Android/Resources/drawable-xxxhdpi/ic_launcher_foreground.png",
+    "bytes": 33213,
+    "sha256": "104678C0EF115A9B44BF70BC095B8E62A69633ED8E064D3A6735920904B6B135"
+  },
+  {
+    "path": "src/Unlimotion.Android/Resources/mipmap-anydpi-v26/ic_launcher.xml",
+    "bytes": 218,
+    "sha256": "D8FCAE6D417232FF11BEEEE4B2AFC606F5B4C2C27886127C66B227F85FE4133E"
+  },
+  {
+    "path": "src/Unlimotion.Android/Resources/mipmap-hdpi/ic_launcher.png",
+    "bytes": 3258,
+    "sha256": "F1F60F431D067CEDCBB773EF20CD7E095C6822830603F0C7F246E56312D780AB"
+  },
+  {
+    "path": "src/Unlimotion.Android/Resources/mipmap-mdpi/ic_launcher.png",
+    "bytes": 2113,
+    "sha256": "2AAD7078E904625AFC3B6932483955E1916A474BD37B7EDE9D98C241E3D47E43"
+  },
+  {
+    "path": "src/Unlimotion.Android/Resources/mipmap-xhdpi/ic_launcher.png",
+    "bytes": 5025,
+    "sha256": "32D714CD4ECE608341DDBA35027A5D62AA3FD73597AFA8D5294984A4707E14AC"
+  },
+  {
+    "path": "src/Unlimotion.Android/Resources/mipmap-xxhdpi/ic_launcher.png",
+    "bytes": 9121,
+    "sha256": "08126F113176C2E56514FFC5707AFBD364342825018C095695B3D8D6022B76F8"
+  },
+  {
+    "path": "src/Unlimotion.Android/Resources/mipmap-xxxhdpi/ic_launcher.png",
+    "bytes": 14306,
+    "sha256": "6900D9162E019F29DA4D94EAF9E267CA152416D333B8DD16D81675A31844D05B"
+  },
+  {
+    "path": "src/Unlimotion.Browser/AppBundle/apple-touch-icon.png",
+    "bytes": 12923,
+    "sha256": "5CB356F45198DA0CAC7935378C28BB1F5590FF9FD96AE7B5D0EE588D5866F390"
+  },
+  {
+    "path": "src/Unlimotion.Browser/AppBundle/favicon.ico",
+    "bytes": 43698,
+    "sha256": "AC3397752FB061964F37AA5AF1BB6DDC1F432791C3664883CCA0BE7D3B7AA04D"
+  },
+  {
+    "path": "src/Unlimotion.Browser/AppBundle/icon-192.png",
+    "bytes": 16848,
+    "sha256": "B442A7AC7CC480781877311F869BE82ABED9C8D80543F684A703E18447F66970"
+  },
+  {
+    "path": "src/Unlimotion.Browser/AppBundle/icon-32.png",
+    "bytes": 1459,
+    "sha256": "3EAF4BAC6C5B636A7E47EB220C8D8EA364C55EFCF75060352A2A38825B040354"
+  },
+  {
+    "path": "src/Unlimotion.Browser/AppBundle/icon-512.png",
+    "bytes": 71419,
+    "sha256": "E2F662A7F0A56F7848D34902ADC68C5CFA5CEC5AA8BAADBC5D9927840B7BCCC5"
+  },
+  {
+    "path": "src/Unlimotion.Browser/wwwroot/apple-touch-icon.png",
+    "bytes": 12923,
+    "sha256": "5CB356F45198DA0CAC7935378C28BB1F5590FF9FD96AE7B5D0EE588D5866F390"
+  },
+  {
+    "path": "src/Unlimotion.Browser/wwwroot/favicon.ico",
+    "bytes": 43698,
+    "sha256": "AC3397752FB061964F37AA5AF1BB6DDC1F432791C3664883CCA0BE7D3B7AA04D"
+  },
+  {
+    "path": "src/Unlimotion.Browser/wwwroot/icon-192.png",
+    "bytes": 16848,
+    "sha256": "B442A7AC7CC480781877311F869BE82ABED9C8D80543F684A703E18447F66970"
+  },
+  {
+    "path": "src/Unlimotion.Browser/wwwroot/icon-32.png",
+    "bytes": 1459,
+    "sha256": "3EAF4BAC6C5B636A7E47EB220C8D8EA364C55EFCF75060352A2A38825B040354"
+  },
+  {
+    "path": "src/Unlimotion.Browser/wwwroot/icon-512.png",
+    "bytes": 71419,
+    "sha256": "E2F662A7F0A56F7848D34902ADC68C5CFA5CEC5AA8BAADBC5D9927840B7BCCC5"
+  },
+  {
+    "path": "src/Unlimotion.Desktop/Assets/Unlimotion.icns",
+    "bytes": 411381,
+    "sha256": "0A50B019B0FAF8D881E65FD890FB065972188F6FDD2B96D87AA18E244F46D2C7"
+  },
+  {
+    "path": "src/Unlimotion.Desktop/Assets/Unlimotion.ico",
+    "bytes": 43698,
+    "sha256": "AC3397752FB061964F37AA5AF1BB6DDC1F432791C3664883CCA0BE7D3B7AA04D"
+  },
+  {
+    "path": "src/Unlimotion.Desktop/Assets/hicolor/128x128/apps/unlimotion.png",
+    "bytes": 9051,
+    "sha256": "D5FC6FFDA085D6564E2FF45BB44CB28348E88A56B876413E88FAD85FFB9082E1"
+  },
+  {
+    "path": "src/Unlimotion.Desktop/Assets/hicolor/16x16/apps/unlimotion.png",
+    "bytes": 559,
+    "sha256": "7E57B3D31BF7D6D4F9E035588BC63A62B3AE3A64EEAFF903CEC8EE6B54E07F7C"
+  },
+  {
+    "path": "src/Unlimotion.Desktop/Assets/hicolor/24x24/apps/unlimotion.png",
+    "bytes": 990,
+    "sha256": "08AC27733E0B26A67590262A40CF292F6F49D312C1484F141FA93A3BA5C7CEEB"
+  },
+  {
+    "path": "src/Unlimotion.Desktop/Assets/hicolor/256x256/apps/unlimotion.png",
+    "bytes": 25641,
+    "sha256": "4D2CD75A65624A361A3E6A4D2AC7F7851531438EB12DCB8237F09D47A9E1D3B0"
+  },
+  {
+    "path": "src/Unlimotion.Desktop/Assets/hicolor/32x32/apps/unlimotion.png",
+    "bytes": 1459,
+    "sha256": "3EAF4BAC6C5B636A7E47EB220C8D8EA364C55EFCF75060352A2A38825B040354"
+  },
+  {
+    "path": "src/Unlimotion.Desktop/Assets/hicolor/48x48/apps/unlimotion.png",
+    "bytes": 2562,
+    "sha256": "B6CD6398F66D52308DD0D5A954430600289CC2B0854ADC994EB0EC51C83A4D42"
+  },
+  {
+    "path": "src/Unlimotion.Desktop/Assets/hicolor/512x512/apps/unlimotion.png",
+    "bytes": 71419,
+    "sha256": "E2F662A7F0A56F7848D34902ADC68C5CFA5CEC5AA8BAADBC5D9927840B7BCCC5"
+  },
+  {
+    "path": "src/Unlimotion.Desktop/Assets/hicolor/64x64/apps/unlimotion.png",
+    "bytes": 3318,
+    "sha256": "D9AF53EEA5667F77C652B542235BFF9D5163816D42C3A792FE957A32A7055F04"
+  },
+  {
+    "path": "src/Unlimotion.iOS/Assets.xcassets/AppIcon.appiconset/Contents.json",
+    "bytes": 2138,
+    "sha256": "8E1339F683EAEFC83FF45C0E87784106F7F76F43C24E1DD883E0579A3EC6B754"
+  },
+  {
+    "path": "src/Unlimotion.iOS/Assets.xcassets/AppIcon.appiconset/icon-1024.png",
+    "bytes": 172701,
+    "sha256": "A1B756BEDA2C778AD29DFBB7B4084B7E524AB7161D77BF976622DF401C7A13D0"
+  },
+  {
+    "path": "src/Unlimotion.iOS/Assets.xcassets/AppIcon.appiconset/icon-120.png",
+    "bytes": 6890,
+    "sha256": "33DBCC0B0EE7C0F4E360C7AFD74968C0BD24228B70456063EF2249C91E92EEB2"
+  },
+  {
+    "path": "src/Unlimotion.iOS/Assets.xcassets/AppIcon.appiconset/icon-152.png",
+    "bytes": 10011,
+    "sha256": "4F2B7162BA279646A8ECDF678CE99E49E1521DFD01CF6E65B2999147F529DDBD"
+  },
+  {
+    "path": "src/Unlimotion.iOS/Assets.xcassets/AppIcon.appiconset/icon-167.png",
+    "bytes": 11568,
+    "sha256": "556542BC611385268D8B33D3E2C8A519B3C222AE548373F97A506C2295F6FDB6"
+  },
+  {
+    "path": "src/Unlimotion.iOS/Assets.xcassets/AppIcon.appiconset/icon-180.png",
+    "bytes": 12923,
+    "sha256": "5CB356F45198DA0CAC7935378C28BB1F5590FF9FD96AE7B5D0EE588D5866F390"
+  },
+  {
+    "path": "src/Unlimotion.iOS/Assets.xcassets/AppIcon.appiconset/icon-20.png",
+    "bytes": 656,
+    "sha256": "589E63372893B8FB4FF26F33FEE9A061CBCB7FFD65D5D7EF6EC3E5340AE5BEC4"
+  },
+  {
+    "path": "src/Unlimotion.iOS/Assets.xcassets/AppIcon.appiconset/icon-29.png",
+    "bytes": 1077,
+    "sha256": "7FBD82F5069D72811FE40E9492334165AA1C1D315C31E4BE8AB45EB7C5597967"
+  },
+  {
+    "path": "src/Unlimotion.iOS/Assets.xcassets/AppIcon.appiconset/icon-40.png",
+    "bytes": 1623,
+    "sha256": "392740DEE9E438872AB0651C38098C150ABF3C9D4ED889794AEC03C01C6AB5F9"
+  },
+  {
+    "path": "src/Unlimotion.iOS/Assets.xcassets/AppIcon.appiconset/icon-58.png",
+    "bytes": 2397,
+    "sha256": "78999D36F41D80096132ABD8A5BEAE51CD1876F03F2149DF45ACFEE8197DA307"
+  },
+  {
+    "path": "src/Unlimotion.iOS/Assets.xcassets/AppIcon.appiconset/icon-60.png",
+    "bytes": 2515,
+    "sha256": "2695A762B3FD32EBB3A47AECCFEB4939C28B2A1F6AA5F66AC17E11A57F6391BA"
+  },
+  {
+    "path": "src/Unlimotion.iOS/Assets.xcassets/AppIcon.appiconset/icon-76.png",
+    "bytes": 3520,
+    "sha256": "D98970AC362EB26945E84140DDA5E8A5274B35603D18DDB34EAD5AF266F64BCB"
+  },
+  {
+    "path": "src/Unlimotion.iOS/Assets.xcassets/AppIcon.appiconset/icon-80.png",
+    "bytes": 3783,
+    "sha256": "2E186B2660FC5F079BB4AF9FDAB4DDA7D35178EC30EDB2DAEC86AF3F32C821DC"
+  },
+  {
+    "path": "src/Unlimotion.iOS/Assets.xcassets/AppIcon.appiconset/icon-87.png",
+    "bytes": 4319,
+    "sha256": "CF138EC6554C1DB778933B75EB2AD353DD17550E5FCC0B6C273592E54E01C15A"
+  },
+  {
+    "path": "src/Unlimotion.iOS/Assets.xcassets/Contents.json",
+    "bytes": 45,
+    "sha256": "94B22D4C5A1445EC742C051AFF0E7BC009E1ADFB3BDF7AC583AEF3CB2D13586E"
+  },
+  {
+    "path": "src/Unlimotion/Assets/Unlimotion.ico",
+    "bytes": 43698,
+    "sha256": "AC3397752FB061964F37AA5AF1BB6DDC1F432791C3664883CCA0BE7D3B7AA04D"
+  }
+]

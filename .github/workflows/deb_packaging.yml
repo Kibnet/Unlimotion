@@ -96,7 +96,7 @@ jobs:
           --mainExe Unlimotion.Desktop \
           --packTitle Unlimotion \
           --packAuthors "${{ env.INSTALLER_PUBLISHER }}" \
-          --icon "${{ github.workspace }}/src/Unlimotion.Android/Icon.png"
+          --icon "${{ github.workspace }}/src/Unlimotion.Desktop/Assets/hicolor/512x512/apps/unlimotion.png"
 
     - name: Remove Existing Linux Release Assets
       if: ${{ github.event_name == 'workflow_dispatch' }}

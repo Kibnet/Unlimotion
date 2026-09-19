@@ -30,7 +30,7 @@ namespace Unlimotion.Android;
 [Activity(
     Label = "Unlimotion.Android",
     Theme = "@style/MyTheme.NoActionBar",
-    Icon = "@drawable/icon",
+    Icon = "@mipmap/ic_launcher",
     MainLauncher = true,
     LaunchMode = LaunchMode.SingleTask,
     ResizeableActivity = true,
