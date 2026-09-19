@@ -1,4 +1,9 @@
 ﻿# Unlimotion
+
+<p align="center">
+  <img src="assets/branding/png/unlimotion-512.png" alt="Unlimotion logo" width="256" height="256">
+</p>
+
 # [Перейти в русское Readme](README.RU.md)
 
 ![Desktop tab tour](media/readme/en/tab-tour.gif)

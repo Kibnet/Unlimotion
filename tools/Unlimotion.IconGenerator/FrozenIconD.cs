@@ -63,9 +63,9 @@ public sealed class FrozenIconD : Control
             context.DrawEllipse(_shadowBrush, null, new Point(240, 223), 185, 22);
             var rear = _rearGeometry ??= Geometry.Parse(
                 "M 191,48 C 223,62 239,98 242,130 C 247,157 266,184 286,196");
+            var front = _baseGeometry ??= CreateBaseGeometry();
             context.DrawGeometry(null, _edgePen, rear);
             context.DrawGeometry(null, _rearPen, rear);
-            var front = _baseGeometry ??= CreateBaseGeometry();
             context.DrawGeometry(null, _edgePen, front);
             context.DrawGeometry(null, _bodyPen, front);
             using (context.PushTransform(Matrix.CreateTranslation(0, -1.4)))
@@ -233,7 +233,16 @@ public sealed class FrozenIconD : Control
     {
         if (_bodyPen != null) return;
 
-        _edgePen = new Pen(new SolidColorBrush(Color.Parse(SmallIcon ? "#898599" : "#57545D")), 46, lineCap: PenLineCap.Flat);
+        _edgePen = new Pen(new LinearGradientBrush
+        {
+            StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+            EndPoint = new RelativePoint(0.7, 1, RelativeUnit.Relative),
+            GradientStops = new GradientStops
+            {
+                new(Color.Parse("#858CAB"), 0), new(Color.Parse("#3D435C"), 0.4),
+                new(Color.Parse("#24263A"), 0.7), new(Color.Parse("#677092"), 1)
+            }
+        }, SmallIcon ? 48 : 46, lineCap: PenLineCap.Flat);
         _rearPen = new Pen(CreateMetalBrush(), 43, lineCap: PenLineCap.Flat);
         _bodyPen = new Pen(CreateMetalBrush(), 44, lineCap: PenLineCap.Flat);
         _bevelPen = new Pen(new SolidColorBrush(Color.Parse("#40383C56")), 40, lineCap: PenLineCap.Flat);
@@ -257,14 +266,16 @@ public sealed class FrozenIconD : Control
         }
     }
 
-    private static LinearGradientBrush CreateMetalBrush() => new()
+    private LinearGradientBrush CreateMetalBrush() => new()
     {
         StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
         EndPoint = new RelativePoint(0.7, 1, RelativeUnit.Relative),
         GradientStops = new GradientStops
         {
-            new(Color.Parse("#292A30"), 0), new(Color.Parse("#13121C"), 0.4),
-            new(Color.Parse("#08090D"), 0.75), new(Color.Parse("#202027"), 1)
+            new(Color.Parse(SmallIcon ? "#727B9C" : "#555E7C"), 0),
+            new(Color.Parse(SmallIcon ? "#4C536E" : "#30354B"), 0.4),
+            new(Color.Parse(SmallIcon ? "#343A53" : "#1C2032"), 0.75),
+            new(Color.Parse(SmallIcon ? "#626B8B" : "#454E6B"), 1)
         }
     };
 
