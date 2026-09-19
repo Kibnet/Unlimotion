@@ -900,6 +900,34 @@ public class SettingsViewModelTests : IDisposable
     }
 
     [Test]
+    public async System.Threading.Tasks.Task ConnectCommand_ClearsLoading_WhenPreparationFindsConflicts()
+    {
+        var configuration = CreateConfiguration();
+        var events = new ConcurrentQueue<string>();
+        using var factory = new RecordingTaskStorageFactory(
+            Path.Combine(Path.GetTempPath(), $"connect-current-{Guid.NewGuid():N}"), events);
+        var backup = new FakeRemoteBackupService();
+        var settings = new SettingsViewModel(configuration, backup, localizationService: new FakeLocalizationService())
+        {
+            TaskStoragePath = Path.Combine(Path.GetTempPath(), $"connect-selected-{Guid.NewGuid():N}")
+        };
+        var wasLoadingDuringPull = false;
+        backup.PullExistingRepositoryAction = () =>
+        {
+            wasLoadingDuringPull = settings.IsTaskSpaceSwitching;
+            backup.ConflictStatus = new BackupConflictStatus(true, new List<BackupConflictFile>());
+        };
+        using var commands = ConfigureAppSettingsCommands(settings, configuration, backup, factory);
+        settings.ConnectCommand!.Execute(null);
+        await WaitForConditionAsync(() => backup.PullExistingRepositoryCalls > 0 && !settings.IsTaskSpaceSwitching,
+            "Connection overlay did not close after a preparation conflict.");
+        await Assert.That(wasLoadingDuringPull).IsTrue();
+        await Assert.That(settings.IsConflictResolutionMode).IsTrue();
+        await Assert.That(settings.StorageConnectionState).IsEqualTo(SettingsConnectionState.Disconnected);
+        await Assert.That(events.IsEmpty).IsTrue();
+    }
+
+    [Test]
     public async System.Threading.Tasks.Task ConnectCommand_ConnectsLocalStorage_WhenAutoPullFails()
     {
         IConfigurationRoot configuration = CreateConfiguration();
@@ -1789,7 +1817,7 @@ public class SettingsViewModelTests : IDisposable
         await Assert.That(command).Contains("StrictHostKeyChecking=accept-new");
     }
 
-    private static IDisposable ConfigureAppSettingsCommands(
+    internal static IDisposable ConfigureAppSettingsCommands(
         SettingsViewModel settings,
         IConfiguration configuration,
         IRemoteBackupService backupService,
@@ -1827,7 +1855,7 @@ public class SettingsViewModelTests : IDisposable
         throw new TimeoutException(failureMessage);
     }
 
-    private sealed class RecordingTaskStorageFactory : ITaskStorageFactory, IDisposable
+    internal sealed class RecordingTaskStorageFactory : ITaskStorageFactory, IDisposable
     {
         private readonly ConcurrentQueue<string> _events;
         private readonly List<IDisposable> _storages = new();
@@ -1880,10 +1908,12 @@ public class SettingsViewModelTests : IDisposable
             CreateFileStorage(settings?.Path);
         }
 
-        public System.Threading.Tasks.Task SwitchStorageAsync(bool isServerMode, IConfiguration configuration)
+        public Func<System.Threading.Tasks.Task>? BeforeSwitchAsync { get; set; }
+
+        public async System.Threading.Tasks.Task SwitchStorageAsync(bool isServerMode, IConfiguration configuration)
         {
+            if (BeforeSwitchAsync != null) await BeforeSwitchAsync();
             SwitchStorage(isServerMode, configuration);
-            return System.Threading.Tasks.Task.CompletedTask;
         }
 
         public void Dispose()
@@ -1920,7 +1950,7 @@ public class SettingsViewModelTests : IDisposable
         public void Dispose() => dispose();
     }
 
-    private sealed class FakeRemoteBackupService : IRemoteBackupService
+    internal sealed class FakeRemoteBackupService : IRemoteBackupService
     {
         public List<string> PublicKeys { get; set; } = new();
         public List<string> RemoteNames { get; set; } = new();

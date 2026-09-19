@@ -403,9 +403,18 @@ public class App : Application
 
         settings.ConnectCommand = ReactiveCommand.CreateFromTask(async () =>
         {
+            // A reconnect uses the same exclusive UI surface as a space switch.
+            // Do not start another operation or clear an existing operation's overlay.
+            if (settings.IsTaskSpaceSwitching)
+            {
+                return;
+            }
+
+            settings.IsTaskSpaceSwitching = true;
             settings.SetStorageConnectionState(SettingsConnectionState.Connecting);
             try
             {
+                await Task.Yield();
                 if (!settings.IsServerMode)
                 {
                     var shouldContinue = await PrepareLocalStorageConnectionAsync(
@@ -462,6 +471,10 @@ public class App : Application
                 settings.SetStorageConnectionState(SettingsConnectionState.Error);
                 var hint = OperatingSystem.IsAndroid() ? L10n.Get("AndroidAllFilesHint") : string.Empty;
                 _notificationManager?.ErrorToast(L10n.Format("ConnectStorageFailed", ex.Message, hint));
+            }
+            finally
+            {
+                settings.IsTaskSpaceSwitching = false;
             }
         });
 
