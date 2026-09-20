@@ -338,11 +338,11 @@ public sealed class TaskApplicationCommandService
         }
 
         var description = operation.DescriptionUserText ?? string.Empty;
-        if (description.Length > 100_000 || description.Any(char.IsControl) ||
+        if (description.Length > 100_000 ||
             AgentExecutionDescriptionRenderer.ContainsReservedMarker(description))
         {
             return Failed(TaskApplicationErrorKind.DescriptionMarkerConflict,
-                "Create task description contains a reserved agent execution marker.", operation, id);
+                "Create task description is too long or contains a reserved agent execution marker.", operation, id);
         }
 
         var now = DateTimeOffset.UtcNow;
@@ -400,12 +400,13 @@ public sealed class TaskApplicationCommandService
                 return null;
             case "descriptionUserText":
                 string? markerError = null;
-                if (operation.Value == null || operation.Value.Length > 100_000 || operation.Value.Any(char.IsControl) ||
+                if (operation.Value == null || operation.Value.Length > 100_000 ||
                     AgentExecutionDescriptionRenderer.ContainsReservedMarker(operation.Value) ||
                     !AgentExecutionDescriptionRenderer.TryRemove(task.Description, out _, out markerError))
                 {
                     return Failed(TaskApplicationErrorKind.DescriptionMarkerConflict,
-                        markerError ?? "Description user text is invalid.", operation, task.Id);
+                        markerError ?? "Description user text is too long or contains a reserved agent execution marker.",
+                        operation, task.Id);
                 }
 
                 if (task.AgentExecution == null)
