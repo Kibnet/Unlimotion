@@ -19,10 +19,30 @@ public sealed class AgentExecutionDescriptionRendererTests
 
         await Assert.That(success).IsTrue();
         await Assert.That(error).IsNull();
-        await Assert.That(replaced.StartsWith("prefix\n", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(replaced.StartsWith("prefix" + AgentExecutionDescriptionRenderer.MarkerStart, StringComparison.Ordinal)).IsTrue();
         await Assert.That(replaced.EndsWith("suffix", StringComparison.Ordinal)).IsTrue();
         await Assert.That(replaced.Contains("Исполнитель: agent-b", StringComparison.Ordinal)).IsTrue();
         await Assert.That(replaced.Contains("agent-a", StringComparison.Ordinal)).IsFalse();
+    }
+
+    [Test]
+    [Arguments("text")]
+    [Arguments("text\n")]
+    [Arguments("text\r\n")]
+    [Arguments("text\r")]
+    [Arguments("text\t\u0000\u0001")]
+    public async Task RenderAndRemove_PreservesUserTextExactly(string description)
+    {
+        var execution = CreateExecution("agent");
+
+        var renderSuccess = AgentExecutionDescriptionRenderer.TryRender(description, execution, out var rendered, out var renderError);
+        var removeSuccess = AgentExecutionDescriptionRenderer.TryRemove(rendered, out var restored, out var removeError);
+
+        await Assert.That(renderSuccess).IsTrue();
+        await Assert.That(renderError).IsNull();
+        await Assert.That(removeSuccess).IsTrue();
+        await Assert.That(removeError).IsNull();
+        await Assert.That(restored).IsEqualTo(description);
     }
 
     [Test]

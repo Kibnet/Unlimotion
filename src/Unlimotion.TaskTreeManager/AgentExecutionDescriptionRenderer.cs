@@ -40,9 +40,7 @@ public static class AgentExecutionDescriptionRenderer
         var block = RenderBlock(execution);
         if (start < 0)
         {
-            rendered = text.Length == 0
-                ? block
-                : text + (text.EndsWith("\n", StringComparison.Ordinal) ? string.Empty : "\n") + block;
+            rendered = text + block;
             return true;
         }
 

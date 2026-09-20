@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using Unlimotion.Domain;
+using Unlimotion.TaskTree;
 using CliProgram = global::Unlimotion.Cli.Program;
 using DomainTaskStatus = Unlimotion.Domain.TaskStatus;
 using FileTaskStorage = global::Unlimotion.Storage.FileTaskStorage;
@@ -754,7 +755,7 @@ public sealed class UnlimotionCliIntegrationTests
         var tasks = await LoadAllTasks(temp.DirectoryPath);
         var occurrence = tasks.Single(item => item.Id != task.Id && item.Title == task.Title);
         await Assert.That(occurrence.AgentExecution).IsNull();
-        await Assert.That(occurrence.Description).IsEqualTo("Постоянный контекст\n");
+        await Assert.That(occurrence.Description).IsEqualTo("Постоянный контекст");
         await Assert.That(occurrence.Description.Contains("unlimotion-agent-execution", StringComparison.Ordinal)).IsFalse();
     }
 
@@ -813,18 +814,27 @@ public sealed class UnlimotionCliIntegrationTests
     }
 
     [Test]
-    public async Task Create_ControlCharacterInDescriptionDoesNotWrite()
+    public async Task Create_DescriptionPreservesMultilineMarkdownAndControlCharacters()
     {
         using var temp = TempTaskDirectory.Create();
+        var description = "# Контекст\r\n\r\n- первый пункт\n\t- вложенный пункт\r" +
+                          "```csharp\nConsole.WriteLine(\"Привет\");\n```\n" +
+                          "C:\\Данные\\задача.md\nhttps://example.com/path?q=1\u0001";
         var result = await RunCli(
             "create", "--tasks", temp.DirectoryPath, "--title", "Дочерняя",
-            "--description", "Недопустимый\u0001контекст", "--format", "json");
+            "--description", description, "--format", "json");
 
-        await Assert.That(result.ExitCode).IsEqualTo(1);
-        await AssertJsonError(result.StdOut, "invalidArguments");
-        await Assert.That(Directory.EnumerateFiles(temp.DirectoryPath)
-            .Where(static path => !Path.GetFileName(path).StartsWith(".", StringComparison.Ordinal)))
-            .IsEmpty();
+        await Assert.That(result.ExitCode).IsEqualTo(0).Because(result.StdOut);
+        var childId = ParseJson(result.StdOut).GetProperty("task").GetProperty("id").GetString()!;
+        var child = await LoadTask(temp.DirectoryPath, childId);
+        await Assert.That(child.Description).IsEqualTo(description);
+
+        var snapshot = await RunCli(
+            "task", "--tasks", temp.DirectoryPath, "--id", childId,
+            "--include", "details", "--format", "json");
+        await Assert.That(snapshot.ExitCode).IsEqualTo(0).Because(snapshot.StdOut);
+        await Assert.That(ParseJson(snapshot.StdOut).GetProperty("details")
+            .GetProperty("descriptionUserText").GetString()).IsEqualTo(description);
     }
 
     [Test]
@@ -1161,6 +1171,101 @@ public sealed class UnlimotionCliIntegrationTests
         await Assert.That(created.ParentTasks).Contains("goal");
         await Assert.That(created.CompletionCriteria.Single().Id).IsEqualTo("answer-ready");
         await Assert.That(goalAfter.ContainsTasks).Contains("next");
+    }
+
+    [Test]
+    public async Task Apply_CreateTaskPreservesMultilineMarkdownDescription()
+    {
+        using var temp = TempTaskDirectory.Create();
+        var goal = CreateTask("goal", DomainTaskStatus.Prepared, true, "Цель");
+        await SaveTasks(temp.DirectoryPath, goal);
+        var goalSnapshot = ParseJson((await RunCli(
+            "task", "--tasks", temp.DirectoryPath, "--id", goal.Id,
+            "--include", "details", "--format", "json")).StdOut);
+        var description = "# План\r\n\r\n- шаг 1\n\t- деталь\r\n\u0000\u0001Финиш";
+        var encodedDescription = JsonSerializer.Serialize(description);
+        using var requestFile = TempRequestFile.Create();
+        await File.WriteAllTextAsync(requestFile.Path, $$"""
+        {
+          "schemaVersion": 1,
+          "applicationId": "A-create-multiline-description",
+          "proposalRefs": [{ "id": "P-create-multiline", "revision": 1 }],
+          "author": "test-agent",
+          "reason": "Сохранить Markdown без потерь",
+          "preconditions": [{ "taskId": "goal", "etag": "{{goalSnapshot.GetProperty("etag").GetString()}}" }],
+          "operations": [{
+            "operationId": "create-next",
+            "kind": "createTask",
+            "newTaskId": "next",
+            "title": "Подготовить ответ",
+            "descriptionUserText": {{encodedDescription}},
+            "parentIds": ["goal"]
+          }]
+        }
+        """);
+
+        var result = await RunCli(
+            "apply", "--tasks", temp.DirectoryPath, "--request", requestFile.Path, "--format", "json");
+
+        await Assert.That(result.ExitCode).IsEqualTo(0).Because(result.StdOut);
+        await Assert.That((await LoadTask(temp.DirectoryPath, "next")).Description).IsEqualTo(description);
+        var snapshot = ParseJson((await RunCli(
+            "task", "--tasks", temp.DirectoryPath, "--id", "next",
+            "--include", "details", "--format", "json")).StdOut);
+        await Assert.That(snapshot.GetProperty("details").GetProperty("descriptionUserText").GetString())
+            .IsEqualTo(description);
+    }
+
+    [Test]
+    public async Task Apply_SetDescriptionPreservesMultilineMarkdownAndExecutionBlock()
+    {
+        using var temp = TempTaskDirectory.Create();
+        var task = CreateTask("current", DomainTaskStatus.Prepared, true, "Текущий шаг");
+        await SaveTasks(temp.DirectoryPath, task);
+        var claim = await RunCli(
+            "claim", "--tasks", temp.DirectoryPath, "--id", task.Id,
+            "--agent", "test-agent", "--expected-status", "Prepared", "--format", "json");
+        await Assert.That(claim.ExitCode).IsEqualTo(0).Because(claim.StdOut);
+        var before = ParseJson((await RunCli(
+            "task", "--tasks", temp.DirectoryPath, "--id", task.Id,
+            "--include", "details,execution", "--format", "json")).StdOut);
+        var description = "# Обновлённый контекст\n\n> цитата\r\n\tкод\u0000\u0001";
+        var encodedDescription = JsonSerializer.Serialize(description);
+        using var requestFile = TempRequestFile.Create();
+        await File.WriteAllTextAsync(requestFile.Path, $$"""
+        {
+          "schemaVersion": 1,
+          "applicationId": "A-set-multiline-description",
+          "proposalRefs": [{ "id": "P-set-multiline", "revision": 1 }],
+          "author": "test-agent",
+          "reason": "Обогатить контекст Markdown",
+          "preconditions": [{ "taskId": "current", "etag": "{{before.GetProperty("etag").GetString()}}" }],
+          "operations": [{
+            "operationId": "set-description",
+            "kind": "setField",
+            "taskId": "current",
+            "field": "descriptionUserText",
+            "value": {{encodedDescription}}
+          }]
+        }
+        """);
+
+        var result = await RunCli(
+            "apply", "--tasks", temp.DirectoryPath, "--request", requestFile.Path, "--format", "json");
+
+        await Assert.That(result.ExitCode).IsEqualTo(0).Because(result.StdOut);
+        var persisted = await LoadTask(temp.DirectoryPath, task.Id);
+        await Assert.That(persisted.AgentExecution).IsNotNull();
+        await Assert.That(AgentExecutionDescriptionRenderer.Inspect(persisted.Description, out _))
+            .IsEqualTo(AgentExecutionMarkerState.Single);
+        await Assert.That(AgentExecutionDescriptionRenderer.TryRemove(persisted.Description, out var userText, out _)).IsTrue();
+        await Assert.That(userText).IsEqualTo(description);
+
+        var after = ParseJson((await RunCli(
+            "task", "--tasks", temp.DirectoryPath, "--id", task.Id,
+            "--include", "details,execution", "--format", "json")).StdOut);
+        await Assert.That(after.GetProperty("details").GetProperty("descriptionUserText").GetString())
+            .IsEqualTo(description);
     }
 
     [Test]

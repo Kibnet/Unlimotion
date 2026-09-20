@@ -439,7 +439,7 @@ public sealed class TaskGraphCommandService
             .ToArray();
         if (normalizedTitle.Length is 0 or > 4000 || normalizedTitle.Any(char.IsControl) ||
             AgentExecutionDescriptionRenderer.ContainsReservedMarker(normalizedTitle) ||
-            normalizedDescription.Length > 100_000 || normalizedDescription.Any(char.IsControl) ||
+            normalizedDescription.Length > 100_000 ||
             AgentExecutionDescriptionRenderer.ContainsReservedMarker(normalizedDescription) ||
             normalizedParents.Any(string.IsNullOrWhiteSpace) ||
             normalizedParents.Distinct(StringComparer.Ordinal).Count() != normalizedParents.Length)
