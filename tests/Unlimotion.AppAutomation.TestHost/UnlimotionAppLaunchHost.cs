@@ -95,7 +95,8 @@ public static class UnlimotionAppLaunchHost
         string? language = null,
         Action<MainWindowViewModel>? afterViewModelPrepared = null,
         string? currentTaskId = null,
-        string? theme = null)
+        string? theme = null,
+        Action<string>? prepareConfiguration = null)
     {
         var launchData = UnlimotionAutomationLaunchData.Create(scenario, language, currentTaskId, theme);
         var previousDefaultIsExpanded = TaskWrapperViewModel.DefaultIsExpanded;
@@ -108,6 +109,7 @@ public static class UnlimotionAppLaunchHost
             {
                 async Task PrepareViewModelAsync()
                 {
+                    prepareConfiguration?.Invoke(launchData.ConfigPath);
                     if (launchData.ExpandAllTaskTrees)
                     {
                         TaskWrapperViewModel.DefaultIsExpanded = true;

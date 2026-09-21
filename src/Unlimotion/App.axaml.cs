@@ -11,10 +11,12 @@ using System.Threading;
 using System.Threading.Tasks;
 using AutoMapper;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Data.Core.Plugins;
 using Avalonia.Input.Platform;
 using Avalonia.Markup.Xaml;
+using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using DialogHostAvalonia;
@@ -94,6 +96,8 @@ public class App : Application
     private IDisposable? _updateStateSubscription;
     private bool _isAutomaticUpdateCheckRunning;
     private TaskSpaceCatalogException? _startupTaskSpaceCatalogError;
+    private SettingsFileRecoveryResult? _startupSettingsRecovery;
+    private bool _settingsRecoveryWarningShown;
     private Exception? _lastReportedTaskSpaceSettingsPersistenceError;
     
     public override void Initialize()
@@ -1632,6 +1636,27 @@ public class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
+        if (_startupSettingsRecovery is { Status: SettingsRecoveryStatus.Blocked } blocked &&
+            ApplicationLifetime is IClassicDesktopStyleApplicationLifetime recoveryDesktop)
+        {
+            // This shell deliberately does not create MainWindow/MainWindowViewModel or task hotkeys.
+            var window = new Window
+            {
+                Title = Environment.GetEnvironmentVariable(AutomationWindowTitleEnvironmentVariable)
+                        ?? L10n.Get("SettingsRecoveryTitle"),
+                Width = 680,
+                Height = 380,
+                MinWidth = 320,
+                MinHeight = 240,
+                Content = new SettingsRecoveryView(blocked)
+            };
+            ApplyAutomationWindowSize(window);
+            ApplyAutomationWindowPlacement(window);
+            recoveryDesktop.MainWindow = window;
+            base.OnFrameworkInitializationCompleted();
+            return;
+        }
+
         LibGit2Interop.DisableOwnerValidationOnAndroid();
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
@@ -1738,8 +1763,25 @@ public class App : Application
             vm.ManagerWrapper?.ErrorToast(L10n.Format("ConnectStorageFailed", ex.Message, hint));
         }
 
+        ShowSettingsRecoveryWarning();
         _startupUpdateSettings = vm.Settings;
         RequestStartupUpdateCheck(vm.Settings);
+    }
+
+    private void ShowSettingsRecoveryWarning()
+    {
+        if (_startupSettingsRecovery?.Status != SettingsRecoveryStatus.Restored ||
+            _settingsRecoveryWarningShown || _toastNotificationManager == null)
+        {
+            return;
+        }
+
+        _settingsRecoveryWarningShown = true;
+        // Keep this warning until acknowledged: a short-lived toast could hide the loss of recent settings.
+        _toastNotificationManager.Messages.Add(new AppToastNotification(
+            L10n.Get("SettingsRecoveredWarning"), Brush.Parse("#9A6700"),
+            "SettingsRecoveredWarning", "SettingsRecoveredWarningClose",
+            notification => _toastNotificationManager.Messages.Remove(notification)));
     }
 
     private static void ApplyAutomationStartupState(MainWindowViewModel vm)
@@ -1786,7 +1828,7 @@ public class App : Application
         }
     }
 
-    private static void ApplyAutomationWindowSize(MainWindow window)
+    private static void ApplyAutomationWindowSize(Window window)
     {
         if (TryReadAutomationWindowDimension(AutomationWindowWidthEnvironmentVariable, out var width))
         {
@@ -1811,7 +1853,7 @@ public class App : Application
                dimension > 0;
     }
 
-    private static void ApplyAutomationWindowPlacement(MainWindow window)
+    private static void ApplyAutomationWindowPlacement(Window window)
     {
         var configured = Environment.GetEnvironmentVariable(AutomationDesktopMonitorEnvironmentVariable);
         if (string.IsNullOrWhiteSpace(configured))
@@ -1987,6 +2029,7 @@ public class App : Application
         ITaskStorageFactory storageFactory,
         INotificationManagerWrapper? notificationManager = null)
     {
+        _startupSettingsRecovery = null;
         _configuration = configuration;
         _backupService = backupService;
         _storageFactory = storageFactory;
@@ -2371,23 +2414,21 @@ public class App : Application
         try
         {
             _startupTaskSpaceCatalogError = null;
+            _startupSettingsRecovery = null;
+            _settingsRecoveryWarningShown = false;
             _clientOptions = clientOptions;
             _applicationUpdateService = _pendingUpdateService;
             Log($"[App.Init] Starting with configPath: {configPath}");
             _configPath = configPath;
 
-            // Create configuration
-            // This provider persists every Set via ReadAllText + File.WriteAllText.
-            // Watching its own writes can reload a transient file between the staged
-            // task-space mutation writes, so the application owns a stable in-memory
-            // view and persists changes explicitly instead.
-            _configuration = WritableJsonConfigurationFabric.Create(
-                configPath,
-                reloadOnChange: false);
+            LocalizationService.Current = new LocalizationService(new DefaultLocalizationSystemCultureProvider());
+            if (!TryLoadSettingsConfiguration(configPath))
+            {
+                return;
+            }
             Log("[App.Init] Configuration created");
 
-            LocalizationService.Current = new LocalizationService(new DefaultLocalizationSystemCultureProvider());
-            L10n.SetLanguage(_configuration
+            L10n.SetLanguage(_configuration!
                 .GetSection(AppearanceSettings.SectionName)
                 .GetSection(AppearanceSettings.LanguageKey)
                 .Get<string>());
@@ -2542,6 +2583,57 @@ public class App : Application
         {
             Log($"[App.Init] ERROR: {ex}");
             throw;
+        }
+    }
+
+    private bool TryLoadSettingsConfiguration(string configPath)
+    {
+        // The first supported atomic mode is Windows. Other hosts retain their existing bootstrap.
+        if (!OperatingSystem.IsWindows())
+        {
+            _configuration = WritableJsonConfigurationFabric.Create(configPath, reloadOnChange: false);
+            return true;
+        }
+
+        _configuration = null;
+        string? physicalPath = null;
+        try
+        {
+            var builder = new ConfigurationBuilder();
+            var source = new WritableJsonConfigurationSource
+            {
+                Path = configPath,
+                Optional = true,
+                ReloadOnChange = false,
+                UseAtomicWrites = true
+            };
+            source.ResolveFileProvider();
+            source.EnsureDefaults(builder);
+            // Resolve only once: relative configuration paths follow the provider's BaseDirectory,
+            // not the process working directory used by task-storage path resolution.
+            physicalPath = source.FileProvider?.GetFileInfo(source.Path!).PhysicalPath
+                          ?? throw new NotSupportedException("Settings require a physical file provider.");
+            // Keep _configPath unchanged: existing task-tree UI sidecars resolve it separately.
+            _startupSettingsRecovery = SettingsFileRecovery.Prepare(physicalPath);
+            if (_startupSettingsRecovery.Status == SettingsRecoveryStatus.Blocked)
+            {
+                return false;
+            }
+
+            // No reload watcher: each complete Set publishes its own in-memory snapshot.
+            _configuration = builder.Add(source).Build();
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or
+                                   NotSupportedException or ArgumentException or System.Security.SecurityException)
+        {
+            _startupSettingsRecovery = new SettingsFileRecoveryResult(
+                SettingsRecoveryStatus.Blocked, physicalPath ?? configPath,
+                ex is UnauthorizedAccessException or System.Security.SecurityException
+                    ? SettingsRecoveryError.AccessDenied : SettingsRecoveryError.IoFailure);
+            // Do not log the exception chain: configuration parser errors can include secret values.
+            Log($"[App.Init] Settings startup blocked: {_startupSettingsRecovery.Error}");
+            return false;
         }
     }
 

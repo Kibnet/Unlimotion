@@ -575,4 +575,12 @@
   <data name="TaskSpaceSettingsSaving" xml:space="preserve"><value>Настройки пространства сохраняются…</value></data>
   <data name="TaskSpaceSettingsSaveFailed" xml:space="preserve"><value>Настройки пространства не сохранены: {0}. Повторите сохранение перед переключением пространства или закрытием приложения.</value></data>
   <data name="TaskSpaceSettingsRetry" xml:space="preserve"><value>Повторить сохранение</value></data>
+  <data name="SettingsRecoveryTitle" xml:space="preserve"><value>Не удалось загрузить настройки</value></data>
+  <data name="SettingsRecoveryInvalid" xml:space="preserve"><value>Файл настроек повреждён. Подходящей резервной копии нет. Восстановите файл из своей копии и запустите приложение снова. Настройки не сброшены.</value></data>
+  <data name="SettingsRecoveryAccessDenied" xml:space="preserve"><value>Не удалось получить доступ к настройкам или резервной копии с необходимыми правами. Проверьте права доступа к файлам и запустите приложение снова. Настройки не сброшены.</value></data>
+  <data name="SettingsRecoveryIoFailure" xml:space="preserve"><value>Не удалось безопасно прочитать, сохранить копию или восстановить настройки. Проверьте свободное место и не заняты ли файлы другим приложением, затем запустите снова. Настройки не сброшены.</value></data>
+  <data name="SettingsRecoveryOpenFolder" xml:space="preserve"><value>Открыть папку</value></data>
+  <data name="SettingsRecoveryClose" xml:space="preserve"><value>Закрыть</value></data>
+  <data name="SettingsRecoveryOpenFolderFailed" xml:space="preserve"><value>Не удалось открыть папку. Скопируйте путь выше и откройте её вручную.</value></data>
+  <data name="SettingsRecoveredWarning" xml:space="preserve"><value>Настройки восстановлены из резервной копии. Последние изменения настроек могли не сохраниться.</value></data>
 </root>
