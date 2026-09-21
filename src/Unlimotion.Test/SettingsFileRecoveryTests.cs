@@ -229,6 +229,20 @@ public sealed class SettingsFileRecoveryTests
         await Assert.That(SettingsFileRecovery.IsReadableConfiguration(Encoding.UTF8.GetBytes(json))).IsTrue();
     }
 
+    [Test]
+    public async System.Threading.Tasks.Task Access_comparison_normalizes_only_file_irrelevant_acl_variants()
+    {
+        var duplicateExplicitAndInherited = Security("D:AI(A;;FR;;;SY)(A;ID;FR;;;SY)");
+        var inherited = Security("D:(A;ID;FR;;;SY)");
+        await Assert.That(SettingsFileRecovery.HaveEquivalentAccess(duplicateExplicitAndInherited, inherited)).IsTrue();
+        await Assert.That(SettingsFileRecovery.HaveEquivalentAccess(
+            Security("D:P(A;OICINP;FR;;;SY)"), Security("D:P(A;;FR;;;SY)"))).IsTrue();
+        await Assert.That(SettingsFileRecovery.HaveEquivalentAccess(
+            Security("D:P(A;IO;FR;;;SY)"), Security("D:P(A;;FR;;;SY)"))).IsFalse();
+        await Assert.That(SettingsFileRecovery.HaveEquivalentAccess(
+            Security("D:P(A;;FR;;;SY)"), Security("D:P(A;;FA;;;SY)"))).IsFalse();
+    }
+
     private static void RestrictToCurrentUser(string path)
     {
         var permissions = new FileSecurity();
@@ -240,6 +254,13 @@ public sealed class SettingsFileRecoveryTests
 
     private static string GetDacl(string path) => new FileInfo(path).GetAccessControl(AccessControlSections.Access)
         .GetSecurityDescriptorSddlForm(AccessControlSections.Access);
+
+    private static FileSecurity Security(string sddl)
+    {
+        var security = new FileSecurity();
+        security.SetSecurityDescriptorSddlForm(sddl, AccessControlSections.Access);
+        return security;
+    }
 
     private sealed class Fixture : IDisposable
     {

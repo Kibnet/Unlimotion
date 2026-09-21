@@ -153,11 +153,14 @@ internal static class SettingsFileRecovery
     private static void EnsureCompatibleAccess(string source, string destination)
     {
         // Compare access rather than inherited/protected provenance; no ACL merging.
-        if (AccessFingerprint(RestrictedPermissions(source)) != AccessFingerprint(RestrictedPermissions(destination)))
+        if (!HaveEquivalentAccess(RestrictedPermissions(source), RestrictedPermissions(destination)))
         {
             throw new UnauthorizedAccessException("Settings recovery cannot preserve both files' access restrictions.");
         }
     }
+
+    internal static bool HaveEquivalentAccess(FileSecurity left, FileSecurity right) =>
+        AccessFingerprint(left) == AccessFingerprint(right);
 
     private static string AccessFingerprint(FileSecurity permissions)
     {
@@ -169,8 +172,10 @@ internal static class SettingsFileRecovery
         for (var index = 0; index < dacl.Count; index++)
         {
             var ace = dacl[index];
-            // Windows removes inherited provenance and reorders adjacent allow ACEs when
-            // persisting a protected copy. Never reorder across an allow/deny boundary.
+            // Windows removes inherited provenance and can normalize propagation flags when
+            // persisting an ACL on a file. Those flags only control inheritance by children;
+            // a file cannot have children. InheritOnly still changes access to this file and
+            // remains significant. Never reorder across an allow/deny boundary.
             var canReorder = ace is CommonAce { IsCallback: false } common &&
                              common.AceQualifier is AceQualifier.AccessAllowed or AceQualifier.AccessDenied;
             var type = canReorder ? (int)ace.AceType : 256 + index;
@@ -182,7 +187,11 @@ internal static class SettingsFileRecovery
             var bytes = new byte[ace.BinaryLength];
             ace.GetBinaryForm(bytes, 0);
             var normalized = GenericAce.CreateFromBinaryForm(bytes, 0);
-            if (canReorder) normalized.AceFlags &= ~AceFlags.Inherited;
+            if (canReorder)
+            {
+                normalized.AceFlags &= ~(AceFlags.Inherited | AceFlags.ObjectInherit |
+                                         AceFlags.ContainerInherit | AceFlags.NoPropagateInherit);
+            }
             normalized.GetBinaryForm(bytes, 0);
             group.Add(Convert.ToBase64String(bytes));
         }
@@ -194,7 +203,20 @@ internal static class SettingsFileRecovery
     {
         if (group.Count == 0) return;
         group.Sort(StringComparer.Ordinal);
-        result.Append(type).Append(':').Append(string.Join(",", group)).Append(';');
+        result.Append(type).Append(':');
+        string? previous = null;
+        var appended = false;
+        foreach (var entry in group)
+        {
+            // File.Replace can retain the same effective ACE once as explicit and once as
+            // inherited. After provenance normalization, exact duplicates do not change access.
+            if (entry == previous) continue;
+            if (appended) result.Append(',');
+            result.Append(entry);
+            previous = entry;
+            appended = true;
+        }
+        result.Append(';');
         group.Clear();
     }
 
