@@ -575,4 +575,12 @@
   <data name="TaskSpaceSettingsSaving" xml:space="preserve"><value>Saving task-space settings…</value></data>
   <data name="TaskSpaceSettingsSaveFailed" xml:space="preserve"><value>Task-space settings were not saved: {0}. Retry before switching spaces or closing the application.</value></data>
   <data name="TaskSpaceSettingsRetry" xml:space="preserve"><value>Retry saving</value></data>
+  <data name="SettingsRecoveryTitle" xml:space="preserve"><value>Unable to load settings</value></data>
+  <data name="SettingsRecoveryInvalid" xml:space="preserve"><value>The settings file is damaged and no usable backup is available. Restore the file from your own copy and restart the application. Your settings have not been reset.</value></data>
+  <data name="SettingsRecoveryAccessDenied" xml:space="preserve"><value>The settings or backup cannot be accessed with the required permissions. Check file access and restart the application. Your settings have not been reset.</value></data>
+  <data name="SettingsRecoveryIoFailure" xml:space="preserve"><value>The settings could not be read, backed up, or restored safely. Check free disk space and whether another application is using the files, then restart. Your settings have not been reset.</value></data>
+  <data name="SettingsRecoveryOpenFolder" xml:space="preserve"><value>Open folder</value></data>
+  <data name="SettingsRecoveryClose" xml:space="preserve"><value>Close</value></data>
+  <data name="SettingsRecoveryOpenFolderFailed" xml:space="preserve"><value>The folder could not be opened. Copy the path above and open it manually.</value></data>
+  <data name="SettingsRecoveredWarning" xml:space="preserve"><value>Settings were restored from a backup. Your latest settings changes may not have been saved.</value></data>
 </root>

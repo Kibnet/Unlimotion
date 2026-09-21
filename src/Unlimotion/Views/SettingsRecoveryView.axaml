@@ -1,0 +1,22 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Unlimotion.Views.SettingsRecoveryView"
+             AutomationProperties.AutomationId="SettingsRecoveryView">
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="24" Spacing="16" MaxWidth="720" HorizontalAlignment="Stretch">
+            <TextBlock x:Name="TitleText" FontSize="22" FontWeight="SemiBold" TextWrapping="Wrap" />
+            <TextBlock x:Name="MessageText" TextWrapping="Wrap"
+                       AutomationProperties.AutomationId="SettingsRecoveryMessage" />
+            <SelectableTextBlock x:Name="PathText" TextWrapping="Wrap"
+                                 AutomationProperties.AutomationId="SettingsRecoveryPath" />
+            <WrapPanel Orientation="Horizontal">
+                <Button x:Name="OpenFolderButton" Margin="0,0,12,8" Click="OpenFolderClicked"
+                        AutomationProperties.AutomationId="SettingsRecoveryOpenFolder" />
+                <Button x:Name="CloseButton" Margin="0,0,0,8" Click="CloseClicked"
+                        AutomationProperties.AutomationId="SettingsRecoveryClose" />
+            </WrapPanel>
+            <TextBlock x:Name="FolderErrorText" TextWrapping="Wrap" IsVisible="False"
+                       AutomationProperties.AutomationId="SettingsRecoveryFolderError" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>
