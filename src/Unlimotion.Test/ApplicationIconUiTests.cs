@@ -13,7 +13,7 @@ namespace Unlimotion.Test;
 public class ApplicationIconUiTests
 {
     [Test]
-    public async Task MainWindow_LoadsPackagedDIcon()
+    public async Task MainWindow_LoadsPackagedEIcon()
     {
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
@@ -31,24 +31,50 @@ public class ApplicationIconUiTests
                 var length = BitConverter.ToInt32(bytes, entry + 8);
                 var offset = BitConverter.ToInt32(bytes, entry + 12);
                 using var bitmap = SkiaSharp.SKBitmap.Decode(bytes.AsSpan(offset, length).ToArray());
-                // The approved graphite body is blue-biased, not a white outline.
-                // Inspect every embedded size, including the optical small variants.
-                var graphitePixels = 0;
+                // E combines a near-black body with a solid neutral white underlay.
+                // Both must survive in every packaged size, not just the master.
+                var darkPixels = 0;
+                var whitePixels = 0;
                 foreach (var pixel in bitmap.Pixels)
                 {
-                    if (pixel.Alpha > 200 && pixel.Red >= 28 && pixel.Red < 150 &&
-                        pixel.Blue > pixel.Red + 10)
-                        graphitePixels++;
+                    if (pixel.Alpha > 200 && pixel.Red < 65 && pixel.Green < 65 && pixel.Blue < 90)
+                        darkPixels++;
+                    if (pixel.Alpha > 200 && pixel.Red > 225 && pixel.Green > 225 && pixel.Blue > 225)
+                        whitePixels++;
                 }
-                await Assert.That(graphitePixels >= bitmap.Width / 2).IsTrue();
+                await Assert.That(darkPixels >= bitmap.Width / 2).IsTrue();
+                await Assert.That(whitePixels >= bitmap.Width / 2).IsTrue();
                 await Assert.That(bitmap.GetPixel(0, 0).Alpha).IsEqualTo((byte)0);
-                // Optical scaling shifts the bowl centre between pixels. Require
+                // Rasterization shifts the bowl centre between pixels. Require
                 // a clear interior in its central region, not one rounded coordinate.
                 var minimumAlpha = 255;
                 for (var y = (int)(bitmap.Height * 0.45); y <= (int)(bitmap.Height * 0.52); y++)
                     for (var x = (int)(bitmap.Width * 0.64); x <= (int)(bitmap.Width * 0.73); x++)
                         minimumAlpha = Math.Min(minimumAlpha, bitmap.GetPixel(x, y).Alpha);
                 await Assert.That(minimumAlpha).IsLessThanOrEqualTo(2);
+                // The wide underlay must not touch the canvas, even at 16 px.
+                for (var edge = 0; edge < bitmap.Width; edge++)
+                {
+                    await Assert.That(bitmap.GetPixel(edge, 0).Alpha).IsEqualTo((byte)0);
+                    await Assert.That(bitmap.GetPixel(edge, bitmap.Height - 1).Alpha).IsEqualTo((byte)0);
+                    // At 16 px the 9-unit margin is subpixel; antialiasing may
+                    // reach the side pixel, but no opaque silhouette is clipped.
+                    await Assert.That(bitmap.GetPixel(0, edge).Alpha).IsLessThan((byte)200);
+                    await Assert.That(bitmap.GetPixel(bitmap.Width - 1, edge).Alpha).IsLessThan((byte)200);
+                }
+                if (bitmap.Width == 256)
+                {
+                    var minX = bitmap.Width;
+                    var maxX = 0;
+                    for (var y = 0; y < bitmap.Height; y++)
+                        for (var x = 0; x < bitmap.Width; x++)
+                            if (bitmap.GetPixel(x, y).Alpha > 200)
+                            {
+                                minX = Math.Min(minX, x);
+                                maxX = Math.Max(maxX, x);
+                            }
+                    await Assert.That(maxX - minX + 1).IsGreaterThan(240);
+                }
             }
             var window = new MainWindow();
             try

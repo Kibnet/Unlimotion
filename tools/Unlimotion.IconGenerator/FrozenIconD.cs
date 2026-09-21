@@ -1,4 +1,5 @@
-// Frozen snapshot of approved D (phase 0.4375), independent of the live renderer.
+// Approved E: circular bowls and a crisp white underlay; light phase inherited from D.
+// Historical type/file name retained; independent of the live animation.
 using System;
 using Avalonia;
 using Avalonia.Controls;
@@ -25,7 +26,6 @@ public sealed class FrozenIconD : Control
     private Pen? _bevelPen;
     private IBrush? _glowBrush;
     private IBrush? _whiteGlowBrush;
-    private IBrush? _shadowBrush;
 
     public FrozenIconD()
     {
@@ -34,6 +34,8 @@ public sealed class FrozenIconD : Control
 
     private const double CurrentPhase = 0.4375;
     internal bool SmallIcon { get; set; }
+    internal bool CompactCanvas { get; set; } = true;
+    private const double Underlay = 20;
 
     protected override Size MeasureOverride(Size availableSize)
     {
@@ -46,7 +48,8 @@ public sealed class FrozenIconD : Control
     {
         base.Render(context);
 
-        var scale = Math.Min(Bounds.Width / DesignWidth, Bounds.Height / DesignHeight);
+        // B keeps the geometry intact: 426 units of silhouette plus 9 units per side.
+        var scale = Math.Min(Bounds.Width / (CompactCanvas ? 444 : DesignWidth), Bounds.Height / DesignHeight);
         if (scale <= 0)
         {
             return;
@@ -60,12 +63,20 @@ public sealed class FrozenIconD : Control
 
         using (context.PushTransform(transform))
         {
-            context.DrawEllipse(_shadowBrush, null, new Point(240, 223), 185, 22);
-            var rear = _rearGeometry ??= Geometry.Parse(
-                "M 191,48 C 223,62 239,98 242,130 C 247,157 266,184 286,196");
-            var front = _baseGeometry ??= CreateBaseGeometry();
+            // Exact circular holes; the opaque underlay closes both letter gaps.
+            var radius = 103 + Underlay;
+            Geometry outer = new CombinedGeometry(GeometryCombineMode.Union,
+                new EllipseGeometry(new Rect(150 - radius, 125 - radius, 2 * radius, 2 * radius)),
+                new EllipseGeometry(new Rect(330 - radius, 125 - radius, 2 * radius, 2 * radius)));
+            var holeRadius = 57 - Underlay;
+            foreach (var cx in new[] { 150d, 330d })
+                outer = new CombinedGeometry(GeometryCombineMode.Exclude, outer,
+                    new EllipseGeometry(new Rect(cx - holeRadius, 125 - holeRadius, 2 * holeRadius, 2 * holeRadius)));
+            context.DrawGeometry(Brushes.White, null, outer);
+            var rear = _rearGeometry ??= SamplePath(GetRearPoint);
             context.DrawGeometry(null, _edgePen, rear);
             context.DrawGeometry(null, _rearPen, rear);
+            var front = _baseGeometry ??= CreateBaseGeometry();
             context.DrawGeometry(null, _edgePen, front);
             context.DrawGeometry(null, _bodyPen, front);
             using (context.PushTransform(Matrix.CreateTranslation(0, -1.4)))
@@ -77,29 +88,36 @@ public sealed class FrozenIconD : Control
 
     }
 
-    private static Geometry CreateBaseGeometry()
+    private const double Radius = 80;
+    private static readonly double TangentAngle = Math.Acos(80d / 90) * 180 / Math.PI;
+    private static Point Circle(double cx, double degrees) =>
+        new(cx + Radius * Math.Cos(degrees * Math.PI / 180), 125 + Radius * Math.Sin(degrees * Math.PI / 180));
+    private static Point Lerp(Point a, Point b, double t) => new(a.X + (b.X - a.X) * t, a.Y + (b.Y - a.Y) * t);
+    private static Geometry SamplePath(Func<double, Point> point)
     {
-        // Coordinates trace the draft's circular bowls and diagonal cut faces.
-        return Geometry.Parse("M 123,48 C 86,68 59,120 86,162 " +
-            "C 108,200 154,214 190,190 C 232,162 236,104 268,69 " +
-            "C 298,35 338,35 369,58 C 409,88 422,151 365,195");
+        var geometry = new StreamGeometry();
+        using (var path = geometry.Open())
+        {
+            path.BeginFigure(point(0), false);
+            for (var i = 1; i <= 1536; i++) path.LineTo(point(i / 1536d));
+            path.EndFigure(false);
+        }
+        return geometry;
     }
-
+    private static Geometry CreateBaseGeometry() => SamplePath(GetRibbonPoint);
     internal static Point GetRibbonPoint(double position)
     {
-        var segment = Math.Min(4, (int)(Math.Clamp(position, 0, 1) * 5));
-        var t = Math.Clamp(position * 5 - segment, 0, 1);
-        var (a, b, c, d) = segment switch
-        {
-            0 => (new Point(123, 48), new Point(86, 68), new Point(59, 120), new Point(86, 162)),
-            1 => (new Point(86, 162), new Point(108, 200), new Point(154, 214), new Point(190, 190)),
-            2 => (new Point(190, 190), new Point(232, 162), new Point(236, 104), new Point(268, 69)),
-            3 => (new Point(268, 69), new Point(298, 35), new Point(338, 35), new Point(369, 58)),
-            _ => (new Point(369, 58), new Point(409, 88), new Point(422, 151), new Point(365, 195))
-        };
-        var u = 1 - t;
-        return new Point(u * u * u * a.X + 3 * u * u * t * b.X + 3 * u * t * t * c.X + t * t * t * d.X,
-            u * u * u * a.Y + 3 * u * u * t * b.Y + 3 * u * t * t * c.Y + t * t * t * d.Y);
+        // Circular bowls joined by their common internal tangent.
+        var p = Math.Clamp(position, 0, 1);
+        if (p < 0.44) return Circle(150, 250 - (250 - TangentAngle) * (p / 0.44));
+        if (p < 0.56) return Lerp(Circle(150, TangentAngle), Circle(330, 180 + TangentAngle), (p - 0.44) / 0.12);
+        return Circle(330, 180 + TangentAngle + (430 - 180 - TangentAngle) * ((p - 0.56) / 0.44));
+    }
+    private static Point GetRearPoint(double p)
+    {
+        if (p < 0.25) return Circle(150, -70 + (70 - TangentAngle) * (p / 0.25));
+        if (p < 0.75) return Lerp(Circle(150, -TangentAngle), Circle(330, 180 - TangentAngle), (p - 0.25) / 0.5);
+        return Circle(330, 180 - TangentAngle + (110 - 180 + TangentAngle) * ((p - 0.75) / 0.25));
     }
 
     internal static (double Length, double Width) GetStreakSize(int index) => index switch
@@ -198,16 +216,16 @@ public sealed class FrozenIconD : Control
                 using (var path = geometry.Open())
                 {
                     for (var side = 0; side < 2; side++)
-                    for (var sample = 0; sample <= RibbonSegments; sample++)
-                    {
-                        var u = (side == 0 ? sample : RibbonSegments - sample) / (double)RibbonSegments;
-                        var t = Math.Clamp(start + u * length, 0, 1);
-                        var envelope = GetStreakEnvelope((t - start) / length);
-                        var halfWidth = width * spread * envelope / 2;
-                        var point = GetFilamentPoint(t, filament, (side == 0 ? 1 : -1) * halfWidth);
-                        if (side == 0 && sample == 0) path.BeginFigure(point, true);
-                        else path.LineTo(point);
-                    }
+                        for (var sample = 0; sample <= RibbonSegments; sample++)
+                        {
+                            var u = (side == 0 ? sample : RibbonSegments - sample) / (double)RibbonSegments;
+                            var t = Math.Clamp(start + u * length, 0, 1);
+                            var envelope = GetStreakEnvelope((t - start) / length);
+                            var halfWidth = width * spread * envelope / 2;
+                            var point = GetFilamentPoint(t, filament, (side == 0 ? 1 : -1) * halfWidth);
+                            if (side == 0 && sample == 0) path.BeginFigure(point, true);
+                            else path.LineTo(point);
+                        }
                     path.EndFigure(true);
                 }
                 context.DrawGeometry(_ribbonBrushes![layer], null, geometry);
@@ -233,16 +251,7 @@ public sealed class FrozenIconD : Control
     {
         if (_bodyPen != null) return;
 
-        _edgePen = new Pen(new LinearGradientBrush
-        {
-            StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
-            EndPoint = new RelativePoint(0.7, 1, RelativeUnit.Relative),
-            GradientStops = new GradientStops
-            {
-                new(Color.Parse("#858CAB"), 0), new(Color.Parse("#3D435C"), 0.4),
-                new(Color.Parse("#24263A"), 0.7), new(Color.Parse("#677092"), 1)
-            }
-        }, SmallIcon ? 48 : 46, lineCap: PenLineCap.Flat);
+        _edgePen = new Pen(new SolidColorBrush(Color.Parse(SmallIcon ? "#898599" : "#57545D")), 46, lineCap: PenLineCap.Flat);
         _rearPen = new Pen(CreateMetalBrush(), 43, lineCap: PenLineCap.Flat);
         _bodyPen = new Pen(CreateMetalBrush(), 44, lineCap: PenLineCap.Flat);
         _bevelPen = new Pen(new SolidColorBrush(Color.Parse("#40383C56")), 40, lineCap: PenLineCap.Flat);
@@ -257,7 +266,6 @@ public sealed class FrozenIconD : Control
             }
         };
         _whiteGlowBrush = CreateGlow(Color.Parse("#FFE2E8FF"));
-        _shadowBrush = CreateGlow(Color.Parse("#4530214B"));
         _ribbonBrushes = new IBrush[9];
         for (var layer = 0; layer < _ribbonBrushes.Length; layer++)
         {
@@ -266,16 +274,14 @@ public sealed class FrozenIconD : Control
         }
     }
 
-    private LinearGradientBrush CreateMetalBrush() => new()
+    private static LinearGradientBrush CreateMetalBrush() => new()
     {
         StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
         EndPoint = new RelativePoint(0.7, 1, RelativeUnit.Relative),
         GradientStops = new GradientStops
         {
-            new(Color.Parse(SmallIcon ? "#727B9C" : "#555E7C"), 0),
-            new(Color.Parse(SmallIcon ? "#4C536E" : "#30354B"), 0.4),
-            new(Color.Parse(SmallIcon ? "#343A53" : "#1C2032"), 0.75),
-            new(Color.Parse(SmallIcon ? "#626B8B" : "#454E6B"), 1)
+            new(Color.Parse("#292A30"), 0), new(Color.Parse("#13121C"), 0.4),
+            new(Color.Parse("#08090D"), 0.75), new(Color.Parse("#202027"), 1)
         }
     };
 

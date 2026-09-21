@@ -16,10 +16,11 @@ if (!File.Exists(Path.Combine(root, "src/Unlimotion/Unlimotion.csproj")))
     throw new ArgumentException("Pass the Unlimotion repository root.");
 AppBuilder.Configure<Application>().UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
 var files = new SortedDictionary<string, byte[]>(StringComparer.Ordinal);
-byte[] Render(int size, bool opaque = false, bool adaptive = false)
+byte[] Render(int size, bool opaque = false, bool adaptive = false, bool readme = false)
 {
-    var scale = adaptive ? 0.69 : size <= 48 ? 1.1 : 1;
-    var mark = new FrozenIconD { Width = 512 * scale, Height = 512 * scale, SmallIcon = size <= 48 };
+    // Keep E's wider white silhouette inside the approved canvas at small sizes.
+    var scale = adaptive ? 0.69 : 1;
+    var mark = new FrozenIconD { Width = 512 * scale, Height = 512 * scale, SmallIcon = size <= 48, CompactCanvas = !readme };
     var control = new Border { Width = 512, Height = 512, Background = opaque ? Brushes.White : Brushes.Transparent, Child = mark };
     control.Measure(new Size(512, 512));
     control.Arrange(new Rect(0, 0, 512, 512));
@@ -39,6 +40,7 @@ void Add(string path, byte[] bytes) => files.Add(path, bytes);
 void Text(string path, string value) => Add(path, Encoding.UTF8.GetBytes(value.Replace("\r\n", "\n")));
 var sizes = new[] { 16, 24, 32, 48, 64, 96, 128, 192, 256, 512, 1024, 2048 };
 var png = sizes.ToDictionary(n => n, n => Render(n));
+Add("assets/branding/readme-logo-512.png", Render(512, readme: true));
 foreach (var size in sizes) Add($"assets/branding/png/unlimotion-{size}.png", png[size]);
 Add("assets/branding/master-D-2048.png", png[2048]);
 Add("assets/branding/master-D-opaque-2048.png", Render(2048, true));
