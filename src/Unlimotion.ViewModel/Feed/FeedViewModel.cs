@@ -2995,6 +2995,7 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
                 state,
                 coordinator.CurrentObserver,
                 dailyNoteNaming,
+                EffectiveToday,
                 ReviewQueueBuildGateAsync);
         }).WaitAsync(cancellationToken).ConfigureAwait(false);
         return request ?? ReviewQueueBuildRequest.Empty(version, ReviewQueueBuildGateAsync);
@@ -3017,7 +3018,8 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
                 request.Naming)
             .Build(
                 request.Documents.Select(static document => (document.RelativePath, document.Text)),
-                request.Observer)
+                request.Observer,
+                request.EffectiveToday)
             .ToArray();
         cancellationToken.ThrowIfCancellationRequested();
         return new ReviewQueueSnapshot(
@@ -7306,6 +7308,7 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
         ReviewStateStore State,
         CausalEnvelope Observer,
         DailyNoteNaming Naming,
+        DateOnly EffectiveToday,
         Func<CancellationToken, Task>? BuildGateAsync)
     {
         public static ReviewQueueBuildRequest Empty(
@@ -7319,6 +7322,7 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
                 1,
                 new Dictionary<string, long>(StringComparer.Ordinal)),
             DailyNoteNaming.Default,
+            DateOnly.MaxValue,
             buildGateAsync);
     }
 

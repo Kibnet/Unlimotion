@@ -130,6 +130,8 @@ namespace Unlimotion.UiTests.Authoring.Pages;
 [UiControl("FeedFinishReviewButton", UiControlType.Button, "FeedFinishReviewButton")]
 [UiControl("FeedReviewPanel", UiControlType.AutomationElement, "FeedReviewPanel")]
 [UiControl("FeedReviewSelectionText", UiControlType.Label, "FeedReviewSelectionText")]
+[UiControl("FeedReviewPreviousButton", UiControlType.Button, "FeedReviewPreviousButton")]
+[UiControl("FeedReviewNextButton", UiControlType.Button, "FeedReviewNextButton")]
 [UiControl("FeedReviewExpandUpButton", UiControlType.Button, "FeedReviewExpandUpButton")]
 [UiControl("FeedReviewExpandDownButton", UiControlType.Button, "FeedReviewExpandDownButton")]
 [UiControl("FeedReviewShrinkUpButton", UiControlType.Button, "FeedReviewShrinkUpButton")]
