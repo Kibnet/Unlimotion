@@ -1,6 +1,7 @@
 //#define LIVE
 
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
@@ -65,6 +66,8 @@ public class App : Application
     private static string? _pendingConfigPath;
     private static UnlimotionClientOptions _pendingClientOptions = new();
     private static IApplicationUpdateService? _pendingUpdateService;
+    private static ITaskDeepLinkActivationSource? _pendingTaskDeepLinkActivationSource;
+    private static TaskDeepLink? _pendingStartupTaskDeepLink;
 
     private IConfiguration? _configuration;
     private IMapper? _mapper;
@@ -103,6 +106,8 @@ public class App : Application
     private bool _settingsRecoveryWarningShown;
     private Exception? _lastReportedTaskSpaceSettingsPersistenceError;
     private bool _isTaskSpaceFeedRebindInProgress;
+    private ITaskDeepLinkActivationSource? _taskDeepLinkActivationSource;
+    private readonly Queue<TaskDeepLink> _pendingTaskDeepLinks = new();
     
     public override void Initialize()
     {
@@ -1841,6 +1846,20 @@ public class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
+        if (_pendingTaskDeepLinkActivationSource is not null)
+        {
+            var activationSource = _pendingTaskDeepLinkActivationSource;
+            _pendingTaskDeepLinkActivationSource = null;
+            AttachTaskDeepLinkActivationSource(activationSource);
+        }
+
+        if (_pendingStartupTaskDeepLink is not null)
+        {
+            var startupTaskDeepLink = _pendingStartupTaskDeepLink;
+            _pendingStartupTaskDeepLink = null;
+            QueueOrActivateTaskDeepLink(startupTaskDeepLink);
+        }
+
         if (_startupSettingsRecovery is { Status: SettingsRecoveryStatus.Blocked } blocked &&
             ApplicationLifetime is IClassicDesktopStyleApplicationLifetime recoveryDesktop)
         {
@@ -1978,6 +1997,11 @@ public class App : Application
                 ? vm.Settings.NoteVaultRootPath
                 : null);
 
+        if (vm.IsInitialized)
+        {
+            ActivatePendingTaskDeepLinks(vm);
+        }
+
         ShowSettingsRecoveryWarning();
         _startupUpdateSettings = vm.Settings;
         RequestStartupUpdateCheck(vm.Settings);
@@ -2001,6 +2025,12 @@ public class App : Application
 
     private void DisposeMainWindowViewModel()
     {
+        if (_taskDeepLinkActivationSource is not null)
+        {
+            _taskDeepLinkActivationSource.ActivationRequested -= OnTaskDeepLinkActivationRequested;
+            _taskDeepLinkActivationSource = null;
+        }
+
         _mainWindowViewModel?.Dispose();
         _mainWindowViewModel = null;
     }
@@ -2265,6 +2295,96 @@ public class App : Application
         if (Current is App app)
         {
             app.ConfigureUpdateServiceInstance(updateService);
+        }
+    }
+
+    public static void ConfigureTaskDeepLinkActivation(ITaskDeepLinkActivationSource activationSource)
+    {
+        ArgumentNullException.ThrowIfNull(activationSource);
+        if (Current is App app)
+        {
+            _pendingTaskDeepLinkActivationSource = null;
+            app.AttachTaskDeepLinkActivationSource(activationSource);
+            return;
+        }
+
+        _pendingTaskDeepLinkActivationSource = activationSource;
+    }
+
+    public static void ConfigureStartupTaskDeepLink(TaskDeepLink link)
+    {
+        ArgumentNullException.ThrowIfNull(link);
+        if (Current is App app)
+        {
+            app.QueueOrActivateTaskDeepLink(link);
+            return;
+        }
+
+        _pendingStartupTaskDeepLink = link;
+    }
+
+    private void AttachTaskDeepLinkActivationSource(ITaskDeepLinkActivationSource activationSource)
+    {
+        if (ReferenceEquals(_taskDeepLinkActivationSource, activationSource))
+        {
+            return;
+        }
+
+        if (_taskDeepLinkActivationSource is not null)
+        {
+            _taskDeepLinkActivationSource.ActivationRequested -= OnTaskDeepLinkActivationRequested;
+        }
+
+        _taskDeepLinkActivationSource = activationSource;
+        activationSource.ActivationRequested += OnTaskDeepLinkActivationRequested;
+        foreach (var link in activationSource.DrainPending())
+        {
+            QueueOrActivateTaskDeepLink(link);
+        }
+    }
+
+    private void OnTaskDeepLinkActivationRequested(object? sender, TaskDeepLinkActivationEventArgs args) =>
+        Dispatcher.UIThread.Post(() => QueueOrActivateTaskDeepLink(args.Link));
+
+    private void QueueOrActivateTaskDeepLink(TaskDeepLink link)
+    {
+        if (_mainWindowViewModel is not { IsInitialized: true } viewModel)
+        {
+            _pendingTaskDeepLinks.Enqueue(link);
+            return;
+        }
+
+        ActivateTaskDeepLink(viewModel, link);
+    }
+
+    private void ActivatePendingTaskDeepLinks(MainWindowViewModel viewModel)
+    {
+        while (_pendingTaskDeepLinks.TryDequeue(out var link))
+        {
+            ActivateTaskDeepLink(viewModel, link);
+        }
+    }
+
+    private void ActivateTaskDeepLink(MainWindowViewModel viewModel, TaskDeepLink link)
+    {
+        if (!viewModel.TryOpenTaskById(link.TaskId))
+        {
+            viewModel.ManagerWrapper?.ErrorToast(L10n.Format("TaskDeepLinkTaskNotFound", link.TaskId));
+        }
+
+        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime { MainWindow: { } window })
+        {
+            if (window.WindowState == WindowState.Minimized)
+            {
+                window.WindowState = WindowState.Normal;
+            }
+
+            if (!window.IsVisible)
+            {
+                window.Show();
+            }
+
+            window.Activate();
         }
     }
 

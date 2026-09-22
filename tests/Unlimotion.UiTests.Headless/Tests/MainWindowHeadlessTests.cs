@@ -34,6 +34,7 @@ namespace Unlimotion.UiTests.Headless.Tests;
 public sealed class MainWindowHeadlessTests
     : FeedScenariosBase<MainWindowHeadlessTests.HeadlessRuntimeSession>
 {
+    private const string TaskDeepLinkScenarioTestName = nameof(Task_deep_link_opens_existing_task_card);
     private const string UnifiedEditorUseEditorMarker = "Unified editor version chosen by UseEditor";
     private const string UnifiedDiskUseEditorMarker = "Unified disk version rejected by UseEditor";
     private const string UnifiedEditorUseDiskMarker = "Unified editor version rejected by UseDisk";
@@ -47,7 +48,10 @@ public sealed class MainWindowHeadlessTests
     protected override HeadlessRuntimeSession LaunchSession()
     {
         var isStatusContract = IsStatusContractScenarioTest;
-        var isFeed = IsFeedScenarioTest;
+        var isFeed = IsFeedScenarioTest || string.Equals(
+            TestContext.Current?.Metadata.TestName,
+            TaskDeepLinkScenarioTestName,
+            StringComparison.Ordinal);
         var isDailyNoteFilenameFormatScenario = IsDailyNoteFilenameFormatScenarioTest;
         var inner = DesktopAppSession.Launch(
                 UnlimotionAppLaunchHost.CreateHeadlessLaunchOptions(
@@ -132,6 +136,35 @@ public sealed class MainWindowHeadlessTests
     }
 
     protected override bool SupportsStatusContractScreenshotCapture => false;
+
+    [Test]
+    [NotInParallel(DesktopUiConstraint)]
+    public async Task Task_deep_link_opens_existing_task_card()
+    {
+        HeadlessRuntime.Dispatch(() =>
+        {
+            var viewModel = GetHeadlessMainWindowViewModel();
+            viewModel.IsFeedMode = true;
+            viewModel.DetailsAreOpen = false;
+            if (!viewModel.TryOpenTaskById(UnlimotionAutomationScenarioData.FeedCurrentTaskId))
+            {
+                throw new InvalidOperationException("Headless Feed fixture did not contain the deep-linked task.");
+            }
+
+            Dispatcher.UIThread.RunJobs();
+        });
+
+        WaitUntil(
+            () => Page.TasksModeButton.IsChecked == true,
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "Task deep link did not switch the shell to Tasks mode.");
+        await UiAssert.TextEqualsAsync(
+            () => Page.CurrentTaskTitleTextBox.Text,
+            UnlimotionAutomationScenarioData.FeedCurrentTaskTitle,
+            TimeSpan.FromSeconds(10));
+        await Assert.That(HeadlessRuntime.Dispatch(() => GetHeadlessMainWindowViewModel().DetailsAreOpen))
+            .IsTrue();
+    }
 
     protected override void ConfigureDailyNoteFilenameFormatSettings()
     {
