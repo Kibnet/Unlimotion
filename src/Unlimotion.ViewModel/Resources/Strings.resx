@@ -232,7 +232,7 @@
   <data name="FeedReviewMoveTodayShort" xml:space="preserve"><value>Today</value></data>
   <data name="FeedReviewDecision" xml:space="preserve"><value>Decision</value></data>
   <data name="FeedReviewChooseDecision" xml:space="preserve"><value>Choose what to do with the selected text.</value></data>
-  <data name="FeedReviewQueueOrderHint" xml:space="preserve"><value>Review order: unfinished tasks, deferred items, items without an area, then the rest in chronological order.</value></data>
+  <data name="FeedReviewQueueOrderHint" xml:space="preserve"><value>Review starts with today and moves from top to bottom, then continues through earlier days.</value></data>
   <data name="FeedReviewDefer" xml:space="preserve"><value>Defer</value></data>
   <data name="FeedReviewConfirmAndNext" xml:space="preserve"><value>Confirm and continue</value></data>
   <data name="FeedReviewAreaSavesImmediately" xml:space="preserve"><value>Area changes are saved immediately.</value></data>
@@ -857,6 +857,7 @@
   <data name="FeedLegacyVerifySource" xml:space="preserve"><value>Verify task source</value></data>
   <data name="FeedLegacySourceVerified" xml:space="preserve"><value>Task source verified. You can now finish the operation.</value></data>
   <data name="FeedLegacySourceUnverifiable" xml:space="preserve"><value>No task with the original operation metadata was found in this space. Automatic recovery is unavailable.</value></data>
+  <data name="TaskDeepLinkTaskNotFound" xml:space="preserve"><value>Task {0} was not found in the current task space.</value></data>
   <data name="FeedBlockMoveToArea" xml:space="preserve"><value>Move to area…</value></data>
   <data name="FeedDocumentMissing" xml:space="preserve"><value>The file is missing. The open text is retained; unsaved changes remain available in recovery.</value></data>
   <data name="FeedDocumentConflictPending" xml:space="preserve"><value>The file changed outside the app. Your draft is retained; resolve the conflict before saving.</value></data>

@@ -25,7 +25,36 @@ namespace Unlimotion.Desktop
         [STAThread]
         public static void Main(string[] args)
         {
-            VelopackApp.Build().Run();
+            var velopack = VelopackApp.Build();
+            if (OperatingSystem.IsWindows())
+            {
+                velopack
+                    .OnAfterInstallFastCallback(_ => WindowsTaskProtocolRegistrar.RegisterInstalledApplication())
+                    .OnAfterUpdateFastCallback(_ => WindowsTaskProtocolRegistrar.RegisterInstalledApplication())
+                    .OnBeforeUninstallFastCallback(_ => WindowsTaskProtocolRegistrar.UnregisterInstalledApplication());
+            }
+
+            velopack.Run();
+
+            var taskDeepLink = TaskDeepLink.FindInArguments(args);
+            using var activationBroker = new TaskDeepLinkActivationBroker();
+            if (taskDeepLink is not null
+                && !activationBroker.IsOwner
+                && activationBroker.TryForwardAsync(taskDeepLink).GetAwaiter().GetResult())
+            {
+                return;
+            }
+
+            if (activationBroker.IsOwner)
+            {
+                App.ConfigureTaskDeepLinkActivation(activationBroker);
+            }
+
+            if (taskDeepLink is not null)
+            {
+                App.ConfigureStartupTaskDeepLink(taskDeepLink);
+            }
+
             App.ConfigureUpdateService(new VelopackApplicationUpdateService());
 
 #if DEBUG

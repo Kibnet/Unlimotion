@@ -398,6 +398,28 @@ namespace Unlimotion.Test
         }
 
         [Test]
+        public async Task TaskDeepLink_OpensExistingTaskWithoutChangingSelectionWhenMissing()
+        {
+            var task = await TestHelpers.CreateAndReturnNewTaskItem(mainWindowVM.Create, taskRepository);
+            mainWindowVM.SelectedWorkspaceMode = WorkspaceMode.Feed;
+            mainWindowVM.DetailsAreOpen = false;
+
+            var opened = mainWindowVM.TryOpenTaskById(task.Id!);
+
+            using (Assert.Multiple())
+            {
+                await Assert.That(opened).IsTrue();
+                await Assert.That(mainWindowVM.CurrentTaskItem).IsSameReferenceAs(task);
+                await Assert.That(mainWindowVM.SelectedWorkspaceMode).IsEqualTo(WorkspaceMode.Tasks);
+                await Assert.That(mainWindowVM.DetailsAreOpen).IsTrue();
+            }
+
+            var selected = mainWindowVM.CurrentTaskItem;
+            await Assert.That(mainWindowVM.TryOpenTaskById("missing-task")).IsFalse();
+            await Assert.That(mainWindowVM.CurrentTaskItem).IsSameReferenceAs(selected);
+        }
+
+        [Test]
         public async Task CreateRootTask_ShouldRequestTitleFocusAndOpenDetails()
         {
             var focusVersionBefore = mainWindowVM.TitleFocusRequestVersion;

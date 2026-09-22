@@ -2014,6 +2014,21 @@ namespace Unlimotion.ViewModel
             }
         }
 
+        public bool TryOpenTaskById(string taskId)
+        {
+            var task = FindTaskById(taskId);
+            if (task is null)
+            {
+                return false;
+            }
+
+            CurrentTaskItem = task;
+            SelectedWorkspaceMode = WorkspaceMode.Tasks;
+            DetailsAreOpen = true;
+            SelectCurrentTask();
+            return true;
+        }
+
         public void ConfirmResetTaskFilters()
         {
             ManagerWrapper.Ask(

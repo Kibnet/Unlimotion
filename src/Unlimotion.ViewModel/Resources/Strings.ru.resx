@@ -232,7 +232,7 @@
   <data name="FeedReviewMoveTodayShort" xml:space="preserve"><value>На сегодня</value></data>
   <data name="FeedReviewDecision" xml:space="preserve"><value>Решение</value></data>
   <data name="FeedReviewChooseDecision" xml:space="preserve"><value>Выберите, что сделать с выделенным текстом.</value></data>
-  <data name="FeedReviewQueueOrderHint" xml:space="preserve"><value>Порядок разбора: незавершённые задачи, отложенные пункты, пункты без области, затем остальные по хронологии.</value></data>
+  <data name="FeedReviewQueueOrderHint" xml:space="preserve"><value>Разбор начинается с сегодняшнего дня сверху вниз, затем продолжается по предыдущим дням.</value></data>
   <data name="FeedReviewDefer" xml:space="preserve"><value>Отложить</value></data>
   <data name="FeedReviewConfirmAndNext" xml:space="preserve"><value>Подтвердить и далее</value></data>
   <data name="FeedReviewAreaSavesImmediately" xml:space="preserve"><value>Изменение области сохраняется сразу.</value></data>
@@ -857,6 +857,7 @@
   <data name="FeedLegacyVerifySource" xml:space="preserve"><value>Проверить источник</value></data>
   <data name="FeedLegacySourceVerified" xml:space="preserve"><value>Источник проверен. Теперь можно завершить операцию.</value></data>
   <data name="FeedLegacySourceUnverifiable" xml:space="preserve"><value>В этом пространстве не найдена задача с метаданными исходной операции. Автоматическое восстановление недоступно.</value></data>
+  <data name="TaskDeepLinkTaskNotFound" xml:space="preserve"><value>Задача {0} не найдена в текущем пространстве.</value></data>
   <data name="FeedBlockMoveToArea" xml:space="preserve"><value>Переместить в область…</value></data>
   <data name="FeedDocumentMissing" xml:space="preserve"><value>Файл отсутствует. Открытый текст сохранён в окне; несохранённые изменения доступны в восстановлении.</value></data>
   <data name="FeedDocumentConflictPending" xml:space="preserve"><value>Файл изменён вне приложения. Черновик сохранён; перед сохранением разрешите конфликт.</value></data>

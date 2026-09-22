@@ -54,7 +54,8 @@ public class MainScreenLoadingUiTests
             var window = CreateWindow(view);
             window.Show();
             Dispatcher.UIThread.RunJobs();
-            FindControlByAutomationId<TabItem>(view, "SettingsTabItem").IsSelected = true;
+            var settingsButton = FindControlByAutomationId<Button>(view, "GlobalSettingsButton");
+            settingsButton.Command!.Execute(settingsButton.CommandParameter);
             Dispatcher.UIThread.RunJobs();
             var connectButton = FindControlByAutomationId<Button>(view, "ConnectLocalStorageButton");
             var overlay = FindControlByAutomationId<Grid>(view, "TaskSpaceSwitchOverlay");
