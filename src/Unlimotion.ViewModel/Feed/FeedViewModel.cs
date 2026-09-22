@@ -252,6 +252,10 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
         MoveToTodayCommand = moveToTodayCommand;
         disposables.Add(moveToTodayCommand);
 
+        var confirmReviewDecisionCommand = ReactiveCommand.CreateFromTask(ConfirmReviewDecisionCoreAsync);
+        ConfirmReviewDecisionCommand = confirmReviewDecisionCommand;
+        disposables.Add(confirmReviewDecisionCommand);
+
         var continueReviewCommand = ReactiveCommand.CreateFromTask(ContinueReviewCoreAsync);
         ContinueReviewCommand = continueReviewCommand;
         disposables.Add(continueReviewCommand);
@@ -276,8 +280,11 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
         OpenFilesCommand = new FeedActionCommand(_ => OpenFilesDrawer());
         OpenAreasCommand = new FeedActionCommand(_ => OpenAreaManagement());
         CloseThematicFileCommand = new FeedActionCommand(_ => _ = CloseDocumentAsync(OpenedThematicFile));
-        ShowReviewTaskStageCommand = new FeedActionCommand(_ => ReviewDecisionStage = FeedReviewDecisionStage.Task);
-        ShowReviewNoteStageCommand = new FeedActionCommand(_ => ReviewDecisionStage = FeedReviewDecisionStage.Note);
+        ShowReviewTaskStageCommand = new FeedActionCommand(_ => SelectReviewDecision(FeedReviewDecisionStage.Task));
+        ShowReviewNoteStageCommand = new FeedActionCommand(_ => SelectReviewDecision(FeedReviewDecisionStage.Note));
+        ShowReviewLeaveStageCommand = new FeedActionCommand(_ => SelectReviewDecision(FeedReviewDecisionStage.Leave));
+        ShowReviewMoveTodayStageCommand = new FeedActionCommand(_ => SelectReviewDecision(FeedReviewDecisionStage.MoveToToday));
+        ShowReviewDeferredStageCommand = new FeedActionCommand(_ => SelectReviewDecision(FeedReviewDecisionStage.Deferred));
         DismissReviewReminderCommand = new FeedActionCommand(_ => IsReviewReminderDismissed = true);
         ResetFeedAreaFilterCommand = new FeedActionCommand(_ => ResetFeedAreaFilter());
     }
@@ -340,6 +347,8 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
 
     public ICommand MoveToTodayCommand { get; }
 
+    public ICommand ConfirmReviewDecisionCommand { get; }
+
     public ICommand ContinueReviewCommand { get; }
 
     public ICommand PreviousReviewCommand { get; }
@@ -368,13 +377,19 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
 
     public ICommand ShowReviewNoteStageCommand { get; }
 
+    public ICommand ShowReviewLeaveStageCommand { get; }
+
+    public ICommand ShowReviewMoveTodayStageCommand { get; }
+
+    public ICommand ShowReviewDeferredStageCommand { get; }
+
     public ICommand DismissReviewReminderCommand { get; }
 
     public ICommand ResetFeedAreaFilterCommand { get; }
 
     public Func<Task>? ChooseVaultAsync { get; set; }
 
-    [AlsoNotifyFor(nameof(CanCreateReviewTask), nameof(IsTaskConversionUnavailable))]
+    [AlsoNotifyFor(nameof(CanCreateReviewTask), nameof(CanConfirmReviewDecision), nameof(IsTaskConversionUnavailable))]
     public IFeedTaskCreationTarget? TaskCreationTarget { get; set; }
 
     public MainWindowViewModel? TaskOwner
@@ -641,7 +656,8 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
         nameof(IsVaultChoiceEnabled),
         nameof(CanModifyReviewSource),
         nameof(CanNavigateReviewPrevious),
-        nameof(CanNavigateReviewNext))]
+        nameof(CanNavigateReviewNext),
+        nameof(CanConfirmReviewDecision))]
     public bool IsBusy { get; private set; }
 
     [AlsoNotifyFor(nameof(HasError))]
@@ -892,18 +908,35 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
         && currentReviewIndex + 1 < reviewQueueSnapshot.Candidates.Count
         && !IsBusy;
 
-    [AlsoNotifyFor(nameof(IsReviewTaskStage), nameof(IsReviewNoteStage))]
+    [AlsoNotifyFor(
+        nameof(IsReviewTaskStage),
+        nameof(IsReviewNoteStage),
+        nameof(IsReviewLeaveStage),
+        nameof(IsReviewMoveTodayStage),
+        nameof(IsReviewDeferredStage),
+        nameof(HasReviewDecision),
+        nameof(CanConfirmReviewDecision))]
     public FeedReviewDecisionStage ReviewDecisionStage { get; private set; }
 
     public bool IsReviewTaskStage => ReviewDecisionStage == FeedReviewDecisionStage.Task;
 
     public bool IsReviewNoteStage => ReviewDecisionStage == FeedReviewDecisionStage.Note;
 
+    public bool IsReviewLeaveStage => ReviewDecisionStage == FeedReviewDecisionStage.Leave;
+
+    public bool IsReviewMoveTodayStage => ReviewDecisionStage == FeedReviewDecisionStage.MoveToToday;
+
+    public bool IsReviewDeferredStage => ReviewDecisionStage == FeedReviewDecisionStage.Deferred;
+
+    public bool HasReviewDecision => ReviewDecisionStage != FeedReviewDecisionStage.None;
+
     [AlsoNotifyFor(
         nameof(IsReviewSelectionVisible),
         nameof(CanMoveReviewToToday),
         nameof(CanCreateReviewTask),
         nameof(CanModifyReviewSource),
+        nameof(CurrentReviewFullPath),
+        nameof(CanConfirmReviewDecision),
         nameof(IsTaskConversionUnavailable))]
     public FeedReviewSelectionViewModel? CurrentReview { get; private set; }
 
@@ -913,6 +946,7 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
 
     public bool ReviewTaskIsGoal { get; set; }
 
+    [AlsoNotifyFor(nameof(CanConfirmReviewDecision))]
     public string ReviewNoteTitle { get; set; } = string.Empty;
 
     public string ReviewNoteFolder { get; set; } = string.Empty;
@@ -921,7 +955,8 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
         nameof(HasCreatedTask),
         nameof(CanCreateReviewTask),
         nameof(CanMoveReviewToToday),
-        nameof(CanModifyReviewSource))]
+        nameof(CanModifyReviewSource),
+        nameof(CanConfirmReviewDecision))]
     public FeedTaskReferenceViewModel? CreatedTaskReference
     {
         get => createdTaskReference;
@@ -975,6 +1010,23 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
         && !TaskCreationTarget.SupportsClassification;
 
     public bool CanMoveReviewToToday => CanModifyReviewSource && CurrentReview?.Date < EffectiveToday;
+
+    public string? CurrentReviewFullPath => CurrentReview is null || string.IsNullOrWhiteSpace(VaultRootPath)
+        ? null
+        : Path.GetFullPath(Path.Combine(VaultRootPath, CurrentReview.RelativePath));
+
+    public bool CanConfirmReviewDecision => IsReviewSelectionVisible
+        && !HasCreatedTask
+        && !IsBusy
+        && ReviewDecisionStage switch
+        {
+            FeedReviewDecisionStage.Task => CanCreateReviewTask,
+            FeedReviewDecisionStage.Note => !string.IsNullOrWhiteSpace(ReviewNoteTitle),
+            FeedReviewDecisionStage.Leave => true,
+            FeedReviewDecisionStage.MoveToToday => CanMoveReviewToToday,
+            FeedReviewDecisionStage.Deferred => true,
+            _ => false
+        };
 
     public async Task InitializeVaultAsync(string? rootPath)
     {
@@ -2130,6 +2182,48 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
         CreatedTaskReference = null;
         await AdvanceReviewAsync(cancellationToken);
     });
+
+    private void SelectReviewDecision(FeedReviewDecisionStage decision)
+    {
+        if (!IsReviewSelectionVisible || HasCreatedTask || IsBusy)
+        {
+            return;
+        }
+
+        ReviewDecisionStage = decision;
+    }
+
+    private async Task ConfirmReviewDecisionCoreAsync()
+    {
+        if (!CanConfirmReviewDecision)
+        {
+            return;
+        }
+
+        var decision = ReviewDecisionStage;
+        switch (decision)
+        {
+            case FeedReviewDecisionStage.Task:
+                await CreateTaskCoreAsync().ConfigureAwait(true);
+                if (!HasError && HasCreatedTask)
+                {
+                    await ContinueReviewCoreAsync().ConfigureAwait(true);
+                }
+                break;
+            case FeedReviewDecisionStage.Note:
+                await CreateNoteCoreAsync().ConfigureAwait(true);
+                break;
+            case FeedReviewDecisionStage.Leave:
+                await CompleteReviewDecisionAsync(ReviewDecision.Kept).ConfigureAwait(true);
+                break;
+            case FeedReviewDecisionStage.MoveToToday:
+                await MoveToTodayCoreAsync().ConfigureAwait(true);
+                break;
+            case FeedReviewDecisionStage.Deferred:
+                await CompleteReviewDecisionAsync(ReviewDecision.Deferred).ConfigureAwait(true);
+                break;
+        }
+    }
 
     private Task NavigateReviewAsync(int delta) => ExecuteReviewOperationAsync(async cancellationToken =>
     {
@@ -7749,7 +7843,10 @@ public enum FeedReviewDecisionStage
 {
     None,
     Task,
-    Note
+    Note,
+    Leave,
+    MoveToToday,
+    Deferred
 }
 
 public enum FeedBrokenTaskReferenceAction

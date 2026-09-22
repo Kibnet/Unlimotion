@@ -1704,6 +1704,7 @@ public class FeedControlUiTests
                     timeoutMilliseconds: 8000)).IsTrue();
 
                 InvokeButton(FindControlByAutomationId<Button>(reviewDialog, "FeedReviewMoveTodayButton"));
+                InvokeButton(FindControlByAutomationId<Button>(reviewDialog, "FeedReviewConfirmButton"));
                 await Assert.That(WaitFor(
                     () => !viewModel.IsBusy && File.Exists(directory.GetDailyPath(today)),
                     timeoutMilliseconds: 10000)).IsTrue();
@@ -1888,11 +1889,116 @@ public class FeedControlUiTests
                 await Assert.That(WaitFor(() => viewModel.CurrentReview?.SelectedMarkdown == firstMarkdown)).IsTrue();
 
                 InvokeButton(FindControlByAutomationId<Button>(dialog, "FeedReviewLeaveButton"));
+                InvokeButton(FindControlByAutomationId<Button>(dialog, "FeedReviewConfirmButton"));
                 await Assert.That(WaitFor(() =>
                     !viewModel.IsBusy
                     && viewModel.PendingReviewBlocks == 2
                     && viewModel.CurrentReview is not null
                     && viewModel.CurrentReview.SelectedMarkdown != firstMarkdown)).IsTrue();
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task Feed_ReviewDecisionSelectionWaitsForExplicitConfirmation()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var today = new DateOnly(2026, 8, 24);
+            using var directory = new FeedTempDirectory();
+            directory.WriteDaily(today.AddDays(-1), "- [ ] Первый кандидат\n\n- [ ] Второй кандидат\n");
+            using var viewModel = new FeedViewModel(() => today, reviewDeviceId: "headless-review-confirmation")
+            {
+                TaskCreationTarget = new RecordingFeedTaskTarget()
+            };
+            await viewModel.InitializeVaultAsync(directory.Path);
+            var feed = new FeedControl { DataContext = viewModel };
+            var dialog = new FeedReviewDialog { DataContext = viewModel };
+            var window = new Window { Width = 900, Height = 760, Content = new Grid { Children = { feed, dialog } } };
+            try
+            {
+                window.Show();
+                RunLayoutJobs();
+                InvokeButton(FindControlByAutomationId<Button>(feed, "FeedStartReviewButton"));
+                await Assert.That(WaitFor(() => viewModel.CurrentReview is not null && !viewModel.IsBusy)).IsTrue();
+                var firstMarkdown = viewModel.CurrentReview!.SelectedMarkdown;
+
+                foreach (var decisionId in new[]
+                {
+                    "FeedReviewTaskActionButton",
+                    "FeedReviewNoteActionButton",
+                    "FeedReviewMoveTodayButton",
+                    "FeedReviewSkipButton",
+                    "FeedReviewLeaveButton"
+                })
+                {
+                    InvokeButton(FindControlByAutomationId<Button>(dialog, decisionId));
+                    await Assert.That(await WaitForAsync(() => !viewModel.IsBusy)).IsTrue();
+                    using (Assert.Multiple())
+                    {
+                        await Assert.That(viewModel.CurrentReview!.SelectedMarkdown).IsEqualTo(firstMarkdown);
+                        await Assert.That(viewModel.PendingReviewBlocks).IsEqualTo(2);
+                    }
+                }
+
+                InvokeButton(FindControlByAutomationId<Button>(dialog, "FeedReviewConfirmButton"));
+                await Assert.That(WaitFor(() =>
+                    !viewModel.IsBusy
+                    && viewModel.PendingReviewBlocks == 1
+                    && viewModel.CurrentReview is not null
+                    && viewModel.CurrentReview.SelectedMarkdown != firstMarkdown)).IsTrue();
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task Feed_ReviewTaskConfirmationCreatesOnceAndAdvancesWithoutContinueStep()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var today = new DateOnly(2026, 8, 24);
+            using var directory = new FeedTempDirectory();
+            directory.WriteDaily(today, "- [ ] Первая задача\n\n- [ ] Вторая задача\n");
+            var target = new RecordingFeedTaskTarget();
+            using var viewModel = new FeedViewModel(() => today, reviewDeviceId: "headless-review-task-confirmation")
+            {
+                TaskCreationTarget = target
+            };
+            await viewModel.InitializeVaultAsync(directory.Path);
+            var feed = new FeedControl { DataContext = viewModel };
+            var dialog = new FeedReviewDialog { DataContext = viewModel };
+            var window = new Window { Width = 900, Height = 760, Content = new Grid { Children = { feed, dialog } } };
+            try
+            {
+                window.Show();
+                RunLayoutJobs();
+                InvokeButton(FindControlByAutomationId<Button>(feed, "FeedStartReviewButton"));
+                await Assert.That(WaitFor(() => viewModel.CurrentReview is not null && !viewModel.IsBusy)).IsTrue();
+                var firstMarkdown = viewModel.CurrentReview!.SelectedMarkdown;
+
+                InvokeButton(FindControlByAutomationId<Button>(dialog, "FeedReviewTaskActionButton"));
+                InvokeButton(FindControlByAutomationId<Button>(dialog, "FeedReviewConfirmButton"));
+                await Assert.That(WaitFor(() =>
+                    !viewModel.IsBusy
+                    && target.Tasks.Count == 1
+                    && viewModel.CurrentReview is not null
+                    && viewModel.CurrentReview.SelectedMarkdown != firstMarkdown)).IsTrue();
+                using (Assert.Multiple())
+                {
+                    await Assert.That(viewModel.HasCreatedTask).IsFalse();
+                    await Assert.That(viewModel.PendingReviewBlocks).IsEqualTo(1);
+                    await Assert.That(target.Tasks.Count).IsEqualTo(1);
+                }
             }
             finally
             {

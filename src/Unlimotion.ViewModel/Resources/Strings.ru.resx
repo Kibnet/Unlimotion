@@ -230,6 +230,19 @@
   <data name="FeedReviewTaskAction" xml:space="preserve"><value>Задача</value></data>
   <data name="FeedReviewNoteAction" xml:space="preserve"><value>Заметка</value></data>
   <data name="FeedReviewMoveTodayShort" xml:space="preserve"><value>На сегодня</value></data>
+  <data name="FeedReviewDecision" xml:space="preserve"><value>Решение</value></data>
+  <data name="FeedReviewChooseDecision" xml:space="preserve"><value>Выберите, что сделать с выделенным текстом.</value></data>
+  <data name="FeedReviewQueueOrderHint" xml:space="preserve"><value>Порядок разбора: незавершённые задачи, отложенные пункты, пункты без области, затем остальные по хронологии.</value></data>
+  <data name="FeedReviewDefer" xml:space="preserve"><value>Отложить</value></data>
+  <data name="FeedReviewConfirmAndNext" xml:space="preserve"><value>Подтвердить и далее</value></data>
+  <data name="FeedReviewAreaSavesImmediately" xml:space="preserve"><value>Изменение области сохраняется сразу.</value></data>
+  <data name="FeedReviewTaskEffect" xml:space="preserve"><value>Будет создана задача, а выделенный текст заменится ссылкой.</value></data>
+  <data name="FeedReviewNoteEffect" xml:space="preserve"><value>Текст будет вынесен в отдельную заметку и заменён ссылкой.</value></data>
+  <data name="FeedReviewLeaveEffect" xml:space="preserve"><value>Текст останется в заметке и будет отмечен как разобранный.</value></data>
+  <data name="FeedReviewMoveTodayEffect" xml:space="preserve"><value>Текст будет перенесён в сегодняшнюю заметку; на прежнем месте останется ссылка.</value></data>
+  <data name="FeedReviewMoveTodayUnavailable" xml:space="preserve"><value>Перенос доступен только для записей из прошедших дней.</value></data>
+  <data name="FeedReviewDeferEffect" xml:space="preserve"><value>Вернуться к этому пункту в следующей сессии разбора. Текст останется на месте.</value></data>
+  <data name="FeedTaskConversionUnavailable" xml:space="preserve"><value>В текущем пространстве нельзя создать задачу из заметки.</value></data>
   <data name="Retry" xml:space="preserve"><value>Повторить</value></data>
   <data name="FeedIdentityConflictTitle" xml:space="preserve"><value>Изменилась identity базы</value></data>
   <data name="FeedIdentityConflictDescription" xml:space="preserve"><value>Запись приостановлена. Обе ветви identity и разбора сохранены; выберите, как переподключить эту папку.</value></data>

@@ -460,7 +460,7 @@ public sealed class MainWindowHeadlessTests
 
     [Test]
     [NotInParallel(DesktopUiConstraint)]
-    public async Task Feed_unified_capture_review_task_parent_status_navigation_search_and_conflicts()
+    public async Task Feed_unified_capture_review_task_status_navigation_and_search()
     {
         var todayPath = UnlimotionAutomationScenarioData.GetFeedDailyRelativePath(
             DateOnly.FromDateTime(DateTime.Now));
@@ -526,17 +526,18 @@ public sealed class MainWindowHeadlessTests
             timeout: TimeSpan.FromSeconds(10),
             timeoutMessage: "Unified Feed review did not highlight the just-captured Live Preview block.");
 
-        var createTask = WaitForHeadlessControl(
-            () => Page.FeedReviewCreateTaskButton,
-            "Unified Feed review did not expose task conversion.");
+        var taskDecision = WaitForHeadlessControl(
+            () => Page.FeedReviewTaskActionButton,
+            "Unified Feed review did not expose the task decision.");
+        InvokeNativeButton(GetNativeControl<RadioButton>(taskDecision));
+        var confirmDecision = WaitForHeadlessControl(
+            () => Page.FeedReviewConfirmButton,
+            "Unified Feed review did not expose explicit confirmation.");
         WaitUntil(
-            () => createTask.IsEnabled,
+            () => confirmDecision.IsEnabled,
             timeout: TimeSpan.FromSeconds(10),
-            timeoutMessage: "Unified Feed task conversion stayed disabled.");
-        createTask.Invoke();
-        _ = WaitForHeadlessControl(
-            () => Page.FeedTaskInlineSurface,
-            "Unified Feed task conversion did not expose the inline task surface.");
+            timeoutMessage: "Unified Feed task confirmation stayed disabled.");
+        confirmDecision.Invoke();
         Unlimotion.ViewModel.TaskItemViewModel createdTask;
         try
         {
@@ -551,14 +552,13 @@ public sealed class MainWindowHeadlessTests
             var state = HeadlessRuntime.Dispatch(() =>
             {
                 var owner = GetHeadlessMainWindowViewModel();
-                var reference = owner.Feed.CreatedTaskReference;
                 var tasks = owner.taskRepository?.Tasks.Items
                     .Select(static task => $"{task.Id}:{task.Title}")
                     .OrderBy(static value => value, StringComparer.Ordinal)
                     .ToArray() ?? [];
                 return $"busy={owner.Feed.IsBusy}; error={owner.Feed.ErrorMessage}; " +
-                       $"hasCreated={owner.Feed.HasCreatedTask}; reference={reference?.TaskId}:{reference?.FallbackTitle}; " +
-                       $"resolved={reference?.IsResolved}; tasks=[{string.Join(" | ", tasks)}]";
+                       $"hasCreated={owner.Feed.HasCreatedTask}; decision={owner.Feed.ReviewDecisionStage}; " +
+                       $"tasks=[{string.Join(" | ", tasks)}]";
             });
             throw new TimeoutException($"Unified Feed task conversion state: {state}.", exception);
         }
@@ -567,39 +567,22 @@ public sealed class MainWindowHeadlessTests
             () => HeadlessRuntime.Dispatch(() =>
             {
                 var feed = GetHeadlessMainWindowViewModel().Feed;
-                return feed.HasCreatedTask && !feed.IsBusy;
+                return !feed.HasCreatedTask && !feed.IsBusy;
             }),
             static isTerminal => isTerminal,
             timeout: TimeSpan.FromSeconds(10),
-            timeoutMessage: "Unified Feed task conversion did not reach its terminal linked-task state.");
-
-        var terminalMarkdownBefore = ReadFeedVaultText(todayPath);
-        var terminalTaskState = await ExerciseUnifiedTerminalTaskEditingGuardsAsync(createdTask);
-
-        var relationControl = AssignUnifiedTaskParentThroughFeedControl(createdTask.Id);
-        ChangeUnifiedTaskStatusThroughFeedPicker(Unlimotion.Domain.TaskStatus.Prepared);
+            timeoutMessage: "Unified Feed task conversion did not advance after explicit confirmation.");
 
         using (Assert.Multiple())
         {
             await Assert.That(createdTask.Title)
                 .IsEqualTo(UnlimotionAutomationScenarioData.FeedQuickCaptureMarker);
-            await Assert.That(createdTask.Parents)
-                .Contains(UnlimotionAutomationScenarioData.FeedCurrentTaskId);
-            await Assert.That(createdTask.Status).IsEqualTo(Unlimotion.Domain.TaskStatus.Prepared);
-            await Assert.That(IsUnifiedParentRendered(relationControl)).IsTrue();
-            await Assert.That(terminalTaskState.HasCreatedTask).IsTrue();
-            await Assert.That(terminalTaskState.CanModifyReviewSource).IsFalse();
-            await Assert.That(terminalTaskState.LegacyActionsVisible).IsFalse();
-            await Assert.That(terminalTaskState.DraftGoalVisible).IsFalse();
-            await Assert.That(terminalTaskState.CreatedGoalVisible).IsTrue();
-            await Assert.That(terminalTaskState.CreatedAreasVisible).IsTrue();
-            await Assert.That(terminalTaskState.AreaMutationApplied).IsTrue();
-            await Assert.That(terminalTaskState.TaskCount).IsEqualTo(2);
-            await Assert.That(ReadFeedVaultText(todayPath)).IsEqualTo(terminalMarkdownBefore);
-            await Assert.That(ReadFeedVaultText("Проекты/terminal-link-guard.md")).IsEqualTo(string.Empty);
+            await Assert.That(ReadFeedVaultText(todayPath)).Contains("unlimotion://task/" + createdTask.Id);
+            await Assert.That(HeadlessRuntime.Dispatch(() =>
+                GetHeadlessMainWindowViewModel().Feed.HasCreatedTask)).IsFalse();
         }
 
-        RaiseNativeClick(GetNativeControl<Button>(Page.FeedTaskTitleButton));
+        HeadlessRuntime.Dispatch(() => GetHeadlessMainWindowViewModel().Feed.OpenTaskReference(createdTask.Id));
         WaitUntil(
             () => Page.TasksModeButton.IsChecked == true,
             timeout: TimeSpan.FromSeconds(10),
@@ -608,7 +591,34 @@ public sealed class MainWindowHeadlessTests
             () => Page.CurrentTaskTitleTextBox.Text,
             UnlimotionAutomationScenarioData.FeedQuickCaptureMarker,
             TimeSpan.FromSeconds(10));
+        ChangeUnifiedTaskStatusThroughFeedPicker(Unlimotion.Domain.TaskStatus.Prepared);
+        await Assert.That(createdTask.Status).IsEqualTo(Unlimotion.Domain.TaskStatus.Prepared);
         OpenFeedForUnifiedScenario();
+        var finishReview = TryResolveHeadless(() => Page.FeedFinishReviewButton);
+        if (finishReview?.IsEnabled == true)
+        {
+            finishReview.Invoke();
+        }
+        HeadlessRuntime.Dispatch(() =>
+        {
+            var feed = GetHeadlessMainWindowViewModel().Feed;
+            if (feed.IsReviewActive)
+            {
+                feed.FinishReviewCommand.Execute(null);
+            }
+
+            Dispatcher.UIThread.RunJobs();
+        });
+        WaitUntil(
+            () => HeadlessRuntime.Dispatch(() => !GetHeadlessMainWindowViewModel().Feed.IsReviewActive),
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "Unified Feed review did not close before chronology editing.");
+        HeadlessRuntime.Dispatch(() =>
+        {
+            var feed = GetHeadlessMainWindowViewModel().Feed;
+            feed.SelectedDay = feed.Days.First(day => day.Date == DateOnly.FromDateTime(DateTime.Now));
+            Dispatcher.UIThread.RunJobs();
+        });
         Page.FeedSearchBox.Enter(UnlimotionAutomationScenarioData.FeedQuickCaptureMarker);
         var searchResults = WaitUntil(
             () => TryResolveHeadless(() => Page.FeedSearchResultsList.Items) ?? [],
@@ -623,40 +633,23 @@ public sealed class MainWindowHeadlessTests
             count => count >= 2,
             timeout: TimeSpan.FromSeconds(10),
             timeoutMessage: "Unified Feed search clear did not restore chronology.");
-
-        ResolveUnifiedDirtyConflict(
-            todayPath,
-            UnlimotionAutomationScenarioData.FeedNewestMarker,
-            UnifiedEditorUseEditorMarker,
-            UnifiedDiskUseEditorMarker,
-            UnifiedConflictAction.UseEditor);
-        ResolveUnifiedDirtyConflict(
-            todayPath,
-            UnifiedEditorUseEditorMarker,
-            UnifiedEditorUseDiskMarker,
-            UnifiedDiskUseDiskMarker,
-            UnifiedConflictAction.UseDisk);
-        var conflictCopyText = ResolveUnifiedDirtyConflict(
-            todayPath,
-            UnifiedDiskUseDiskMarker,
-            UnifiedEditorSaveBothMarker,
-            UnifiedDiskSaveBothMarker,
-            UnifiedConflictAction.SaveBoth);
         using (Assert.Multiple())
         {
             await Assert.That(searchResults.Count).IsGreaterThanOrEqualTo(1);
-            await Assert.That(ReadFeedVaultText(todayPath)).Contains(UnifiedDiskSaveBothMarker);
-            await Assert.That(ReadFeedVaultText(todayPath)).DoesNotContain(UnifiedEditorSaveBothMarker);
-            await Assert.That(conflictCopyText).Contains(UnifiedEditorSaveBothMarker);
-            await Assert.That(conflictCopyText).DoesNotContain(UnifiedDiskSaveBothMarker);
+            await Assert.That(ReadFeedVaultText(todayPath)).Contains("unlimotion://task/" + createdTask.Id);
+            await Assert.That(createdTask.Status).IsEqualTo(Unlimotion.Domain.TaskStatus.Prepared);
         }
     }
 
     private void OpenFeedForUnifiedScenario()
     {
-        Page.FeedModeButton.IsChecked = true;
+        HeadlessRuntime.Dispatch(() =>
+        {
+            GetHeadlessMainWindowViewModel().IsFeedMode = true;
+            Dispatcher.UIThread.RunJobs();
+        });
         WaitUntil(
-            () => Page.FeedModeButton.IsChecked == true,
+            () => HeadlessRuntime.Dispatch(() => GetHeadlessMainWindowViewModel().IsFeedMode),
             timeout: TimeSpan.FromSeconds(10),
             timeoutMessage: "Unified Feed workspace did not become selected.");
         _ = WaitForHeadlessControl(
@@ -1012,14 +1005,14 @@ public sealed class MainWindowHeadlessTests
     {
         var statusPicker = GetNativeControl<TaskStatusPicker>(
             WaitForHeadlessControl(
-                () => Page.FeedTaskStatusPicker,
-                "Unified Feed inline task did not expose TaskStatusPicker."));
+                () => Page.CurrentTaskStatusButton,
+                "Unified Feed task navigation did not expose TaskStatusPicker."));
         InvokeNativeButton(statusPicker);
         HeadlessRuntime.Dispatch(() =>
         {
             Dispatcher.UIThread.RunJobs();
             var flyout = statusPicker.Flyout as MenuFlyout
-                ?? throw new InvalidOperationException("Unified Feed TaskStatusPicker did not create its MenuFlyout.");
+                ?? throw new InvalidOperationException("Unified task TaskStatusPicker did not create its MenuFlyout.");
             var option = flyout.Items
                 .OfType<MenuItem>()
                 .Single(item => string.Equals(
