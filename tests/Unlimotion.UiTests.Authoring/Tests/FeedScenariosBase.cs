@@ -19,7 +19,7 @@ public abstract class FeedScenariosBase<TSession> : StatusContractScenariosBase<
     public const string NarrowScenarioTestName = nameof(Feed_narrow_layout_keeps_primary_actions_available);
     public const string EditorDragScenarioTestName = "Feed_editor_pointer_drag_reorders_blocks";
     public const string DailyNoteFilenameFormatScenarioTestName = nameof(Daily_note_filename_format_settings);
-    public const string UnifiedScenarioTestName = "Feed_unified_capture_review_task_parent_status_navigation_search_and_conflicts";
+    public const string UnifiedScenarioTestName = "Feed_unified_capture_review_task_status_navigation_and_search";
     public const string ScreenshotPathEnvironmentVariable = "UNLIMOTION_FEED_SCREENSHOT_PATH";
     public const string DailyNoteFilenameFormatScreenshotPathEnvironmentVariable =
         "UNLIMOTION_DAILY_NOTE_FORMAT_SCREENSHOT_PATH";
@@ -352,8 +352,12 @@ public abstract class FeedScenariosBase<TSession> : StatusContractScenariosBase<
             await Assert.That(Page.FeedReviewPanel.AutomationId).IsEqualTo("FeedReviewPanel");
             await Assert.That(Page.FeedReviewLeaveButton.AutomationId).IsEqualTo("FeedReviewLeaveButton");
             await Assert.That(Page.FeedReviewSkipButton.AutomationId).IsEqualTo("FeedReviewSkipButton");
+            await Assert.That(Page.FeedReviewConfirmButton.AutomationId).IsEqualTo("FeedReviewConfirmButton");
+            await Assert.That(Page.FeedReviewConfirmButton.IsEnabled).IsFalse();
             await Assert.That(selection.Text).Contains(UnlimotionAutomationScenarioData.FeedPendingReviewMarker);
         }
+
+        CaptureFeedScreenshotIfRequested();
 
         var finishReview = TryResolve(() => Page.FeedFinishReviewButton);
         if (finishReview?.IsEnabled == true)

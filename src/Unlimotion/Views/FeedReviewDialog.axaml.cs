@@ -1,6 +1,5 @@
 using System;
 using Avalonia.Controls;
-using Avalonia.Interactivity;
 using Unlimotion.ViewModel.Feed;
 
 namespace Unlimotion.Views;
@@ -24,14 +23,5 @@ public partial class FeedReviewDialog : UserControl
         }
 
         viewModel.AssignReviewAreaCommand.Execute(null);
-    }
-
-    private void OnTaskReferenceClick(object? sender, RoutedEventArgs e)
-    {
-        if (DataContext is FeedViewModel { CreatedTaskReference: { } reference } viewModel)
-        {
-            viewModel.OpenTaskReference(reference.TaskId);
-            e.Handled = true;
-        }
     }
 }

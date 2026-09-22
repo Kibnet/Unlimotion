@@ -238,6 +238,19 @@
   <data name="FeedReviewTaskAction" xml:space="preserve"><value>Task</value></data>
   <data name="FeedReviewNoteAction" xml:space="preserve"><value>Note</value></data>
   <data name="FeedReviewMoveTodayShort" xml:space="preserve"><value>Today</value></data>
+  <data name="FeedReviewDecision" xml:space="preserve"><value>Decision</value></data>
+  <data name="FeedReviewChooseDecision" xml:space="preserve"><value>Choose what to do with the selected text.</value></data>
+  <data name="FeedReviewQueueOrderHint" xml:space="preserve"><value>Review order: unfinished tasks, deferred items, items without an area, then the rest in chronological order.</value></data>
+  <data name="FeedReviewDefer" xml:space="preserve"><value>Defer</value></data>
+  <data name="FeedReviewConfirmAndNext" xml:space="preserve"><value>Confirm and continue</value></data>
+  <data name="FeedReviewAreaSavesImmediately" xml:space="preserve"><value>Area changes are saved immediately.</value></data>
+  <data name="FeedReviewTaskEffect" xml:space="preserve"><value>A task will be created and the selected text will be replaced with a link.</value></data>
+  <data name="FeedReviewNoteEffect" xml:space="preserve"><value>The text will be moved to a separate note and replaced with a link.</value></data>
+  <data name="FeedReviewLeaveEffect" xml:space="preserve"><value>The text will stay in the note and be marked as reviewed.</value></data>
+  <data name="FeedReviewMoveTodayEffect" xml:space="preserve"><value>The text will move to today's note and a link will remain in its previous location.</value></data>
+  <data name="FeedReviewMoveTodayUnavailable" xml:space="preserve"><value>Moving to today is available only for entries from past days.</value></data>
+  <data name="FeedReviewDeferEffect" xml:space="preserve"><value>Return to this item in the next review session. The text will stay in place.</value></data>
+  <data name="FeedTaskConversionUnavailable" xml:space="preserve"><value>A task cannot be created from a note in the current space.</value></data>
   <data name="Retry" xml:space="preserve"><value>Retry</value></data>
   <data name="FeedIdentityConflictTitle" xml:space="preserve"><value>Vault identity changed</value></data>
   <data name="FeedIdentityConflictDescription" xml:space="preserve"><value>Writing is paused. Both identity and review branches were preserved; choose how to reconnect this root.</value></data>
