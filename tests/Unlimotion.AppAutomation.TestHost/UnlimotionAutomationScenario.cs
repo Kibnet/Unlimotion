@@ -9,5 +9,6 @@ public enum UnlimotionAutomationScenario
     CliLiveRefresh,
     TaskSpaces,
     TaskSpacesDuplicateCatalogRecovery,
-    TaskSpacesOrphanCatalogRecovery
+    TaskSpacesOrphanCatalogRecovery,
+    Feed
 }

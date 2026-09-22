@@ -94,6 +94,21 @@ One application instance can keep several named task spaces. Use the selector in
 
 Only one space is active at a time. Its task source and complete Git synchronization profile are isolated from every other space; tasks from multiple spaces are never shown together and cross-space task relations are rejected. To configure storage or Git for another space, switch to it first. Removing a space removes only its configuration and stored credentials from this application—it does not delete or move the task files or remote repository.
 
+### Daily Feed (development snapshot)
+
+The current source tree includes a desktop-first `Feed` mode for working directly with an existing Obsidian-compatible Markdown vault. It is not a claim about an already published release.
+
+- Choose the vault root in Settings. Notes stay in that folder; Unlimotion does not import them into task storage.
+- The daily-note folder and filename format are configurable, defaulting to `Ежедневные/YYYY-MM-DD.md`. The Feed's display date has a separate format setting and does not rename files; hovering a date shows the full path.
+- Quick capture appends to today's file, while block Live Preview keeps Markdown editable. Right-click, `Shift+F10`, or the menu key opens block actions. Clicking an already selected handle without modifiers clears selection across the Feed.
+- Note links open in scrollable document tabs alongside the pinned Feed. `Ctrl+Tab` switches tabs and `Ctrl+W` closes a document; a failed save keeps the document open.
+- The Feed shows daily entries newest first, supports text search and a review flow, and can turn a selected fragment into a task, goal, or permanent thematic note.
+- A task or goal can belong to several hierarchical areas. Task references keep the status control to the left of the title and open the existing task card.
+- An area's settings can specify a root task as the suggested parent for new tasks. Parents remain editable before creation; defaults are isolated by task space and note vault.
+- Thematic notes remain ordinary Markdown files in their topic folders. Portable Feed metadata is stored under `.unlimotion`; drafts and recovery copies stay in application-local storage.
+
+Direct access to an external vault currently requires the desktop application. Browser and mobile builds show that this provider is unsupported and do not open or watch an external vault until they have a verified persistent folder-access contract.
+
 ### Task states
 
 Any task can be in only one of five statuses:
@@ -265,3 +280,11 @@ On the tabs where the tasks are not displayed in a hierarchical form, all the em
 This allows you to visually immediately understand where this task comes from.
 
 Emoji filters open as a searchable multi-select dropdown: type part of a tag title or emoji, keep the list open and toggle several include or exclude filters without resetting the panel.
+
+### Desktop document docking
+
+The desktop Daily Feed document workspace integrates [Eremex Avalonia UI Controls](https://eremexcontrols.net/).
+These proprietary controls are isolated from mobile and F-Droid dependencies. A project-specific open-source
+license must be obtained before distributing the licensed desktop integration; the MIT license of Unlimotion
+does not relicense the Eremex components. For local and CI builds, set `EMX_TELEMETRY_OPTOUT=1` before building
+to disable the vendor's build-time telemetry.

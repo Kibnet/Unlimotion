@@ -1,11 +1,13 @@
 //#define LIVE
 
 using System;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reactive;
+using System.Reactive.Disposables;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
@@ -29,6 +31,7 @@ using Unlimotion.Scheduling;
 using Unlimotion.Scheduling.Jobs;
 using Unlimotion.Services;
 using Unlimotion.ViewModel;
+using Unlimotion.ViewModel.Feed;
 using Unlimotion.ViewModel.Localization;
 using Unlimotion.Views;
 using WritableJsonConfiguration;
@@ -99,6 +102,7 @@ public class App : Application
     private SettingsFileRecoveryResult? _startupSettingsRecovery;
     private bool _settingsRecoveryWarningShown;
     private Exception? _lastReportedTaskSpaceSettingsPersistenceError;
+    private bool _isTaskSpaceFeedRebindInProgress;
     
     public override void Initialize()
     {
@@ -204,6 +208,7 @@ public class App : Application
         SetupSettingsCommands(settingsViewModel);
         WireTaskSpaceSettingsPersistenceState(settingsViewModel);
         RefreshTaskSpaces(settingsViewModel);
+        WireNoteVaultFeed(settingsViewModel, _mainWindowViewModel);
         WireSettingsToActiveStorage(settingsViewModel);
         SetupAutomaticUpdateTimer(settingsViewModel);
         WireActiveTaskContext();
@@ -453,6 +458,10 @@ public class App : Application
                 }
 
                 WireSettingsToActiveStorage(settings);
+                if (_mainWindowViewModel?.Feed.IsVaultInitialized == true)
+                {
+                    await _mainWindowViewModel.Feed.RefreshAsync();
+                }
 
                 if (!settings.IsServerMode || settings.StorageConnectionState == SettingsConnectionState.Connecting)
                 {
@@ -631,6 +640,9 @@ public class App : Application
 
             await Task.CompletedTask;
         });
+
+        settings.BrowseNoteVaultRootPathCommand = ReactiveCommand.CreateFromTask(
+            () => BrowseNoteVaultRootPathAsync(settings));
 
         settings.BrowseTaskStoragePathCommand = ReactiveCommand.CreateFromTask(async param =>
         {
@@ -896,6 +908,138 @@ public class App : Application
         settings.ApplyUpdateCommand = ReactiveCommand.CreateFromTask(() => settings.ApplyUpdateAsync());
     }
 
+    private void WireNoteVaultFeed(SettingsViewModel settings, MainWindowViewModel viewModel)
+    {
+        if (!settings.IsFeedEnabled)
+        {
+            viewModel.SelectedWorkspaceMode = WorkspaceMode.Tasks;
+        }
+
+        viewModel.Feed.IsExternalVaultSupported = settings.IsExternalNoteVaultSupported;
+        viewModel.Feed.DayBoundary = settings.NoteDayBoundary;
+        viewModel.Feed.TaskOwner = viewModel;
+        Func<Unlimotion.Notes.Operations.FeedTaskSourceIdentity?> sourceIdentity = () =>
+            FeedTaskSourceIdentityFactory.Capture(_storageFactory?.SourceManager, viewModel.taskRepository);
+        viewModel.Feed.ConfigureTaskSourceParents(sourceIdentity, settings.GetAreaRootTaskId, settings.SetAreaRootTaskIdAsync);
+        viewModel.Feed.TaskCreationTarget = new TaskStorageFeedTaskCreationTarget(() => viewModel.taskRepository, sourceIdentity);
+        viewModel.Feed.TaskResolver = taskId =>
+            viewModel.taskRepository?.Tasks.Items.FirstOrDefault(task =>
+                string.Equals(task.Id, taskId, StringComparison.Ordinal));
+        viewModel.Feed.NavigateToTaskRequested = task =>
+        {
+            viewModel.CurrentTaskItem = task;
+            viewModel.SelectedWorkspaceMode = WorkspaceMode.Tasks;
+            viewModel.DetailsAreOpen = true;
+            viewModel.SelectCurrentTask();
+        };
+        viewModel.Feed.ChooseVaultAsync = () => BrowseNoteVaultRootPathAsync(settings);
+        settings.ConfigureNoteDailyFileNameFormatBridge(
+            viewModel.Feed.ValidateDailyNoteFileNameFormat,
+            viewModel.Feed.ApplyDailyNoteFileNameFormatAsync,
+            viewModel.Feed.ReloadDailyNoteFileNameFormatAsync,
+            viewModel.Feed.PreviewDailyNoteFileNameFormatAsync);
+        settings.ConfirmNoteDailyFileNameFormatCommand = ReactiveCommand.CreateFromTask(settings.ConfirmNoteDailyFileNameFormatAsync);
+        settings.CancelNoteDailyFileNameFormatCommand = ReactiveCommand.Create(settings.CancelNoteDailyFileNameFormatPreview);
+        settings.ApplyNoteDailyFileNameFormatCommand = ReactiveCommand.CreateFromTask(
+            settings.ApplyNoteDailyFileNameFormatAsync);
+        settings.ReloadExternalNoteDailyFileNameFormatCommand = ReactiveCommand.CreateFromTask(
+            settings.ReloadExternalNoteDailyFileNameFormatAsync);
+
+        void RefreshDailyNoteFileNameFormatAvailabilityOnUiThread()
+        {
+            settings.SetNoteDailyFileNameFormatFeedAvailability(
+                viewModel.Feed.IsVaultInitialized,
+                viewModel.Feed.IsBusy || viewModel.Feed.IsIdentityFrozen,
+                viewModel.Feed.VaultRootPath);
+        }
+
+        void RefreshDailyNoteFileNameFormatAvailability() =>
+            _ = RunOnUiThreadAsync(RefreshDailyNoteFileNameFormatAvailabilityOnUiThread);
+
+        EventHandler<NoteDailyFileNameFormatState> dailyNoteFileNameFormatChanged = (_, state) =>
+            _ = RunOnUiThreadAsync(() =>
+            {
+                // Feed initialization and watcher work may finish off the UI thread. Read
+                // its settled lifecycle state only after dispatching, then accept the applied
+                // sidecar state in that same UI turn so Settings cannot retain a stale
+                // unavailable snapshot while the Feed surface is already usable.
+                RefreshDailyNoteFileNameFormatAvailabilityOnUiThread();
+                settings.ApplyNoteDailyFileNameFormatState(state);
+            });
+        viewModel.Feed.DailyNoteFileNameFormatChanged += dailyNoteFileNameFormatChanged;
+        Disposable.Create(() =>
+                viewModel.Feed.DailyNoteFileNameFormatChanged -= dailyNoteFileNameFormatChanged)
+            .AddToDispose(viewModel);
+        RefreshDailyNoteFileNameFormatAvailability();
+        PropertyChangedEventHandler feedLifecycleChanged = (_, args) =>
+        {
+            if (args.PropertyName is nameof(FeedViewModel.IsVaultInitialized)
+                or nameof(FeedViewModel.IsBusy)
+                or nameof(FeedViewModel.IsIdentityFrozen)
+                or nameof(FeedViewModel.VaultRootPath))
+            {
+                RefreshDailyNoteFileNameFormatAvailability();
+            }
+        };
+        viewModel.Feed.PropertyChanged += feedLifecycleChanged;
+        Disposable.Create(() => viewModel.Feed.PropertyChanged -= feedLifecycleChanged)
+            .AddToDispose(viewModel);
+        settings
+            .ObservableForProperty(model => model.NoteVaultRootPath, false, true)
+            .Subscribe(change =>
+            {
+                if (!_isTaskSpaceFeedRebindInProgress)
+                {
+                    _ = viewModel.Feed.InitializeVaultAsync(
+                        settings.IsFeedEnabled ? change.Value : null);
+                }
+            })
+            .AddToDispose(viewModel);
+        settings
+            .ObservableForProperty(model => model.NoteDayBoundary, false, true)
+            .Subscribe(change => viewModel.Feed.DayBoundary = change.Value)
+            .AddToDispose(viewModel);
+        settings
+            .ObservableForProperty(model => model.IsFeedEnabled, false, true)
+            .Subscribe(change =>
+            {
+                if (!change.Value)
+                {
+                    viewModel.SelectedWorkspaceMode = WorkspaceMode.Tasks;
+                }
+
+                if (!_isTaskSpaceFeedRebindInProgress)
+                {
+                    _ = viewModel.Feed.InitializeVaultAsync(
+                        change.Value ? settings.NoteVaultRootPath : null);
+                }
+            })
+            .AddToDispose(viewModel);
+    }
+
+    private async Task BrowseNoteVaultRootPathAsync(SettingsViewModel settings)
+    {
+        if (_dialogs == null || !settings.IsExternalNoteVaultSupported)
+        {
+            return;
+        }
+
+        try
+        {
+            var path = await _dialogs.ShowOpenFolderDialogAsync(
+                L10n.Get("FolderPickerNoteVaultRoot"),
+                settings.NoteVaultRootPath);
+            if (!string.IsNullOrWhiteSpace(path))
+            {
+                settings.NoteVaultRootPath = path;
+            }
+        }
+        catch (Exception ex)
+        {
+            _notificationManager?.ErrorToast(L10n.Format("NoteVaultFolderPickerFailed", ex.Message));
+        }
+    }
+
     private void EnterConflictResolutionMode(SettingsViewModel settings)
     {
         PauseBackupScheduler(settings);
@@ -1119,13 +1263,25 @@ public class App : Application
             return false;
         }
 
+        var previousSourceId = manager.ActiveSource?.Descriptor.Id
+            ?? throw new InvalidOperationException("There is no active task space to restore.");
+        var previousVaultRoot = settings.IsFeedEnabled && settings.IsExternalNoteVaultSupported
+            ? settings.NoteVaultRootPath
+            : null;
+        var taskSourceSwitched = false;
         settings.IsTaskSpaceSwitching = true;
+        _isTaskSpaceFeedRebindInProgress = true;
         try
         {
             var evidenceDelay = GetAutomationTaskSpaceSwitchDelay();
             if (evidenceDelay > TimeSpan.Zero)
             {
                 await Task.Delay(evidenceDelay).ConfigureAwait(true);
+            }
+
+            if (_mainWindowViewModel is not null)
+            {
+                await _mainWindowViewModel.Feed.CommitActiveEditorsAsync().ConfigureAwait(true);
             }
 
             var descriptor = manager.ConfiguredSources.FirstOrDefault(source =>
@@ -1141,10 +1297,10 @@ public class App : Application
             }
 
             await _taskSpaceCoordinator.SwitchAsync(sourceId).ConfigureAwait(true);
+            taskSourceSwitched = true;
             settings.IsTaskSpaceRecoveryRequired = false;
             settings.TaskSpaceRecoveryMessage = string.Empty;
-            settings.ReloadActiveTaskSpaceSettings();
-            WireSettingsToActiveStorage(settings);
+            await RebindFeedToActiveTaskSpaceAsync(settings).ConfigureAwait(true);
             settings.SetStorageConnectionState(SettingsConnectionState.Connected);
             RefreshTaskSpaces(settings);
             return true;
@@ -1163,12 +1319,40 @@ public class App : Application
         }
         catch (Exception ex)
         {
+            if (taskSourceSwitched)
+            {
+                try
+                {
+                    await _taskSpaceCoordinator!.SwitchAsync(previousSourceId).ConfigureAwait(true);
+                    settings.ReloadActiveTaskSpaceSettings();
+                    WireSettingsToActiveStorage(settings);
+                    if (_mainWindowViewModel is not null)
+                    {
+                        await _mainWindowViewModel.Feed.InitializeVaultAsync(previousVaultRoot)
+                            .ConfigureAwait(true);
+                        if (!_mainWindowViewModel.Feed.IsBoundToVaultRoot(previousVaultRoot))
+                        {
+                            throw new InvalidOperationException(
+                                _mainWindowViewModel.Feed.ErrorMessage
+                                ?? L10n.Get("TaskSpaceNoteVaultActivationFailed"));
+                        }
+                    }
+                }
+                catch (Exception rollbackError)
+                {
+                    SetTaskSpaceRecoveryState(settings, new TaskSpaceRecoveryException(ex, rollbackError));
+                    RefreshTaskSpaces(settings);
+                    return false;
+                }
+            }
+
             RefreshTaskSpaces(settings);
             _notificationManager?.ErrorToast(L10n.Format("ConnectStorageFailed", ex.Message, string.Empty));
             return false;
         }
         finally
         {
+            _isTaskSpaceFeedRebindInProgress = false;
             settings.IsTaskSpaceSwitching = false;
         }
     }
@@ -1181,6 +1365,27 @@ public class App : Application
                milliseconds is >= 0 and <= 10_000
             ? TimeSpan.FromMilliseconds(milliseconds)
             : TimeSpan.Zero;
+    }
+
+    private async Task RebindFeedToActiveTaskSpaceAsync(SettingsViewModel settings)
+    {
+        settings.ReloadActiveTaskSpaceSettings();
+        WireSettingsToActiveStorage(settings);
+        if (_mainWindowViewModel is null)
+        {
+            return;
+        }
+
+        var expectedRoot = settings.IsFeedEnabled && settings.IsExternalNoteVaultSupported
+            ? settings.NoteVaultRootPath
+            : null;
+        await _mainWindowViewModel.Feed.InitializeVaultAsync(expectedRoot).ConfigureAwait(true);
+        if (!_mainWindowViewModel.Feed.IsBoundToVaultRoot(expectedRoot))
+        {
+            throw new InvalidOperationException(
+                _mainWindowViewModel.Feed.ErrorMessage
+                ?? L10n.Get("TaskSpaceNoteVaultActivationFailed"));
+        }
     }
 
     private async Task AddTaskSpaceAsync(SettingsViewModel settings)
@@ -1724,6 +1929,11 @@ public class App : Application
             _ = InitializeStartupViewModelAsync(vm);
         }
 
+        if (ApplicationLifetime is IControlledApplicationLifetime controlledLifetime)
+        {
+            controlledLifetime.Exit += (_, __) => DisposeMainWindowViewModel();
+        }
+
         base.OnFrameworkInitializationCompleted();
     }
 
@@ -1763,6 +1973,11 @@ public class App : Application
             vm.ManagerWrapper?.ErrorToast(L10n.Format("ConnectStorageFailed", ex.Message, hint));
         }
 
+        await vm.Feed.InitializeVaultAsync(
+            vm.Settings.IsFeedEnabled && vm.Settings.IsExternalNoteVaultSupported
+                ? vm.Settings.NoteVaultRootPath
+                : null);
+
         ShowSettingsRecoveryWarning();
         _startupUpdateSettings = vm.Settings;
         RequestStartupUpdateCheck(vm.Settings);
@@ -1782,6 +1997,12 @@ public class App : Application
             L10n.Get("SettingsRecoveredWarning"), Brush.Parse("#9A6700"),
             "SettingsRecoveredWarning", "SettingsRecoveredWarningClose",
             notification => _toastNotificationManager.Messages.Remove(notification)));
+    }
+
+    private void DisposeMainWindowViewModel()
+    {
+        _mainWindowViewModel?.Dispose();
+        _mainWindowViewModel = null;
     }
 
     private static void ApplyAutomationStartupState(MainWindowViewModel vm)

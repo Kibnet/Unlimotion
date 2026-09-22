@@ -18,6 +18,7 @@ namespace Unlimotion.Server.ServiceModel.Molds.Tasks
             ParentTasks = new List<string>();
             BlocksTasks = new List<string>();
             BlockedByTasks = new List<string>();
+            AreaIds = new List<string>();
             Repeater = new RepeaterPatternMold();
         }
 
@@ -64,6 +65,10 @@ namespace Unlimotion.Server.ServiceModel.Molds.Tasks
         public int Importance { get; set; }
         [Description("Желаемость")]
         public bool Wanted { get; set; }
+        [Description("Является целью")]
+        public bool IsGoal { get; set; }
+        [Description("Области")]
+        public List<string> AreaIds { get; set; }
         [Description("Создан в предыдущей версии приложения")]
         public int Version { get; set; } = 0;
         [Description("Порядок изменения тасков")]
