@@ -28,12 +28,18 @@ public sealed class FeedReviewQueue(
 
     public IReadOnlyList<FeedReviewCandidate> Build(
         IEnumerable<(string RelativePath, string Raw)> dailyFiles,
-        CausalEnvelope currentSessionCausality)
+        CausalEnvelope currentSessionCausality,
+        DateOnly? throughDay = null)
     {
         var unresolved = new List<(BlockLocator Locator, MarkdownBlock Block, DateOnly Day)>();
         foreach (var (relativePath, raw) in dailyFiles)
         {
             if (!dailyNaming.TryParseRelativePath(relativePath, out var day))
+            {
+                continue;
+            }
+
+            if (throughDay is { } lastIncludedDay && day > lastIncludedDay)
             {
                 continue;
             }
@@ -99,8 +105,7 @@ public sealed class FeedReviewQueue(
         }
 
         return candidates
-            .OrderBy(static candidate => candidate.Priority)
-            .ThenBy(static candidate => candidate.Day)
+            .OrderByDescending(static candidate => candidate.Day)
             .ThenBy(static candidate => candidate.Block.Start)
             .ToArray();
     }

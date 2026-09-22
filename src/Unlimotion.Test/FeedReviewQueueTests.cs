@@ -96,6 +96,46 @@ public class FeedReviewQueueTests
     }
 
     [Test]
+    public async Task Queue_TraversesNewestDayFirstAndEachDayTopToBottomRegardlessOfPriority()
+    {
+        var queue = new FeedReviewQueue(new MarkdownDocumentParser(), new ReviewStateStore());
+
+        var candidates = queue.Build(
+        [
+            ("Ежедневные/2026-09-21.md", "- [ ] Вчера сверху\n\nОбычная вчера снизу\n"),
+            ("Ежедневные/2026-09-22.md", "Обычная сегодня сверху\n\n- [ ] Сегодня ниже\n")
+        ],
+        Envelope("device", 1));
+
+        await Assert.That(string.Join('|', candidates.Select(candidate => candidate.Block.Raw.Trim())))
+            .IsEqualTo(string.Join('|',
+            [
+                "Обычная сегодня сверху",
+                "- [ ] Сегодня ниже",
+                "- [ ] Вчера сверху",
+                "Обычная вчера снизу"
+            ]));
+    }
+
+    [Test]
+    public async Task Queue_StartsAtEffectiveTodayAndExcludesFutureDailyNotes()
+    {
+        var queue = new FeedReviewQueue(new MarkdownDocumentParser(), new ReviewStateStore());
+
+        var candidates = queue.Build(
+        [
+            ("Ежедневные/2026-09-23.md", "Будущий блок\n"),
+            ("Ежедневные/2026-09-21.md", "Вчерашний блок\n"),
+            ("Ежедневные/2026-09-22.md", "Сегодняшний блок\n")
+        ],
+        Envelope("device", 1),
+        new DateOnly(2026, 9, 22));
+
+        await Assert.That(string.Join('|', candidates.Select(candidate => candidate.Block.Raw.Trim())))
+            .IsEqualTo("Сегодняшний блок|Вчерашний блок");
+    }
+
+    [Test]
     public async Task Queue_IncludesNestedUnfinishedItemsButExcludesCompletedItems()
     {
         const string raw = "## Работа <!-- unlimotion-area:a1 -->\n- [x] Родитель\n  - [ ] Ребёнок\n  - [x] Готово\n- [ ] Сосед\nОбычная мысль\n";
@@ -163,13 +203,17 @@ public class FeedReviewQueueTests
             Envelope("first", 3, new Dictionary<string, long> { ["first"] = 2 }), DateTimeOffset.UtcNow));
         var withoutObservation = queue.Build([(path, raw)], Envelope("second", 2));
         var afterObservation = queue.Build(
-            [(path, raw)],
+            [
+                ("Ежедневные/2026-08-24.md", "Сегодняшняя мысль\n"),
+                (path, raw)
+            ],
             Envelope("second", 3, new Dictionary<string, long> { ["first"] = 3 }));
 
         await Assert.That(beforeClose).IsEmpty();
         await Assert.That(withoutObservation).IsEmpty();
-        await Assert.That(afterObservation).HasSingleItem();
-        await Assert.That(afterObservation[0].Priority).IsEqualTo(FeedReviewPriority.Deferred);
+        await Assert.That(afterObservation.Count).IsEqualTo(2);
+        await Assert.That(afterObservation[0].Block.Raw).Contains("Сегодняшняя");
+        await Assert.That(afterObservation[1].Priority).IsEqualTo(FeedReviewPriority.Deferred);
     }
 
     [Test]

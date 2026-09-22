@@ -515,6 +515,42 @@ public sealed class MainWindowHeadlessTests
         _ = WaitForHeadlessControl(
             () => Page.FeedReviewPanel,
             "Unified Feed flow did not expose its inline review panel.");
+        for (var attempt = 0; attempt < 10; attempt++)
+        {
+            var state = ObserveUnifiedReviewState();
+            if (state.SelectedMarkdown?.Contains(
+                    UnlimotionAutomationScenarioData.FeedQuickCaptureMarker,
+                    StringComparison.Ordinal) == true)
+            {
+                break;
+            }
+
+            var nextReview = WaitForHeadlessControl(
+                () => Page.FeedReviewNextButton,
+                "Unified Feed review did not expose navigation to the captured block.");
+            if (!nextReview.IsEnabled)
+            {
+                throw new InvalidOperationException(
+                    "Unified Feed review reached the end before selecting the captured block.");
+            }
+
+            var previousMarkdown = state.SelectedMarkdown;
+            nextReview.Invoke();
+            WaitUntil(
+                ObserveUnifiedReviewState,
+                next => !string.Equals(next.SelectedMarkdown, previousMarkdown, StringComparison.Ordinal),
+                timeout: TimeSpan.FromSeconds(10),
+                timeoutMessage: "Unified Feed review did not advance to the next chronological block.");
+        }
+
+        if (ObserveUnifiedReviewState().SelectedMarkdown?.Contains(
+                UnlimotionAutomationScenarioData.FeedQuickCaptureMarker,
+                StringComparison.Ordinal) != true)
+        {
+            throw new InvalidOperationException(
+                "Unified Feed review did not reach the just-captured block in chronological order.");
+        }
+
         WaitUntil(
             () => HeadlessRuntime.Dispatch(() =>
                 GetHeadlessMainWindowViewModel().Feed.Days

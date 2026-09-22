@@ -1961,6 +1961,61 @@ public class FeedControlUiTests
     }
 
     [Test]
+    public async Task Feed_ReviewStartsTodayTopToBottomThenMovesToPreviousDay()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var today = new DateOnly(2026, 8, 24);
+            using var directory = new FeedTempDirectory();
+            directory.WriteDaily(today, "- [ ] Сегодня сверху\n\n- [ ] Сегодня ниже\n");
+            directory.WriteDaily(today.AddDays(-1), "- [ ] Вчера сверху\n\n- [ ] Вчера ниже\n");
+            using var viewModel = new FeedViewModel(
+                () => today,
+                reviewDeviceId: "headless-review-day-order");
+            await viewModel.InitializeVaultAsync(directory.Path);
+            var feed = new FeedControl { DataContext = viewModel };
+            var dialog = new FeedReviewDialog { DataContext = viewModel };
+            var window = new Window
+            {
+                Width = 900,
+                Height = 760,
+                Content = new Grid { Children = { feed, dialog } }
+            };
+            try
+            {
+                window.Show();
+                RunLayoutJobs();
+                await Assert.That(WaitFor(() => viewModel.PendingReviewBlocks == 4 && !viewModel.IsBusy)).IsTrue();
+                InvokeButton(FindControlByAutomationId<Button>(feed, "FeedStartReviewButton"));
+                await Assert.That(WaitFor(() => viewModel.CurrentReview is not null && !viewModel.IsBusy)).IsTrue();
+
+                using (Assert.Multiple())
+                {
+                    await Assert.That(viewModel.CurrentReview!.Date).IsEqualTo(today);
+                    await Assert.That(viewModel.CurrentReview.SelectedMarkdown).Contains("Сегодня сверху");
+                }
+
+                ConfirmLeaveDecision(dialog);
+                await Assert.That(WaitFor(() =>
+                    !viewModel.IsBusy
+                    && viewModel.CurrentReview?.SelectedMarkdown.Contains("Сегодня ниже", StringComparison.Ordinal) == true)).IsTrue();
+                await Assert.That(viewModel.CurrentReview!.Date).IsEqualTo(today);
+
+                ConfirmLeaveDecision(dialog);
+                await Assert.That(WaitFor(() =>
+                    !viewModel.IsBusy
+                    && viewModel.CurrentReview?.SelectedMarkdown.Contains("Вчера сверху", StringComparison.Ordinal) == true)).IsTrue();
+                await Assert.That(viewModel.CurrentReview!.Date).IsEqualTo(today.AddDays(-1));
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
     public async Task Feed_ReviewTaskConfirmationCreatesOnceAndAdvancesWithoutContinueStep()
     {
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
@@ -2205,6 +2260,12 @@ public class FeedControlUiTests
         }
 
         RunLayoutJobs();
+    }
+
+    private static void ConfirmLeaveDecision(FeedReviewDialog dialog)
+    {
+        InvokeButton(FindControlByAutomationId<Button>(dialog, "FeedReviewLeaveButton"));
+        InvokeButton(FindControlByAutomationId<Button>(dialog, "FeedReviewConfirmButton"));
     }
 
     private static async Task<MenuFlyout> OpenStatusFlyoutAsync(global::Unlimotion.TaskStatusPicker statusPicker)
