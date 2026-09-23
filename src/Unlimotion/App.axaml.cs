@@ -107,6 +107,7 @@ public class App : Application
     private Exception? _lastReportedTaskSpaceSettingsPersistenceError;
     private bool _isTaskSpaceFeedRebindInProgress;
     private ITaskDeepLinkActivationSource? _taskDeepLinkActivationSource;
+    private AvaloniaTaskDeepLinkActivationSource? _platformTaskDeepLinkActivationSource;
     private readonly Queue<TaskDeepLink> _pendingTaskDeepLinks = new();
     
     public override void Initialize()
@@ -1846,6 +1847,8 @@ public class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
+        AttachPlatformTaskDeepLinkActivation();
+
         if (_pendingTaskDeepLinkActivationSource is not null)
         {
             var activationSource = _pendingTaskDeepLinkActivationSource;
@@ -2030,6 +2033,9 @@ public class App : Application
             _taskDeepLinkActivationSource.ActivationRequested -= OnTaskDeepLinkActivationRequested;
             _taskDeepLinkActivationSource = null;
         }
+
+        _platformTaskDeepLinkActivationSource?.Dispose();
+        _platformTaskDeepLinkActivationSource = null;
 
         _mainWindowViewModel?.Dispose();
         _mainWindowViewModel = null;
@@ -2341,6 +2347,23 @@ public class App : Application
         {
             QueueOrActivateTaskDeepLink(link);
         }
+    }
+
+    private void AttachPlatformTaskDeepLinkActivation()
+    {
+        if (!OperatingSystem.IsMacOS() && !OperatingSystem.IsAndroid())
+        {
+            return;
+        }
+
+        if (this.TryGetFeature<IActivatableLifetime>() is not { } activatableLifetime)
+        {
+            return;
+        }
+
+        _platformTaskDeepLinkActivationSource?.Dispose();
+        _platformTaskDeepLinkActivationSource = new AvaloniaTaskDeepLinkActivationSource(activatableLifetime);
+        AttachTaskDeepLinkActivationSource(_platformTaskDeepLinkActivationSource);
     }
 
     private void OnTaskDeepLinkActivationRequested(object? sender, TaskDeepLinkActivationEventArgs args) =>
