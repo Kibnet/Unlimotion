@@ -34,7 +34,7 @@ public sealed class TaskDeepLinkActivationBroker : ITaskDeepLinkActivationSource
         {
             try
             {
-                HoldOwnership($@"Local\{resolvedChannelName}", ownershipReady, value => isOwner = value);
+                HoldOwnership(GetOwnershipName(resolvedChannelName, OperatingSystem.IsWindows()), ownershipReady, value => isOwner = value);
             }
             catch (Exception exception)
             {
@@ -63,6 +63,9 @@ public sealed class TaskDeepLinkActivationBroker : ITaskDeepLinkActivationSource
     }
 
     public bool IsOwner { get; }
+
+    internal static string GetOwnershipName(string channelName, bool useWindowsNamespace) =>
+        useWindowsNamespace ? $@"Local\{channelName}" : channelName;
 
     private void HoldOwnership(string mutexName, ManualResetEventSlim ready, Action<bool> reportOwnership)
     {

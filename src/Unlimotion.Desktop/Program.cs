@@ -36,16 +36,17 @@ namespace Unlimotion.Desktop
 
             velopack.Run();
 
-            var taskDeepLink = TaskDeepLink.FindInArguments(args);
-            using var activationBroker = new TaskDeepLinkActivationBroker();
+            var usesArgumentTaskDeepLinks = !OperatingSystem.IsMacOS();
+            var taskDeepLink = usesArgumentTaskDeepLinks ? TaskDeepLink.FindInArguments(args) : null;
+            using var activationBroker = usesArgumentTaskDeepLinks ? new TaskDeepLinkActivationBroker() : null;
             if (taskDeepLink is not null
-                && !activationBroker.IsOwner
+                && activationBroker is { IsOwner: false }
                 && activationBroker.TryForwardAsync(taskDeepLink).GetAwaiter().GetResult())
             {
                 return;
             }
 
-            if (activationBroker.IsOwner)
+            if (activationBroker is { IsOwner: true })
             {
                 App.ConfigureTaskDeepLinkActivation(activationBroker);
             }
