@@ -19,6 +19,96 @@ namespace Unlimotion.Test;
 public sealed class UnlimotionCliIntegrationTests
 {
     [Test]
+    public async Task Status_UsesTasksEnvironmentWithoutExplicitPath()
+    {
+        using var temp = TempTaskDirectory.Create();
+
+        var result = await RunCliWithEnvironment(
+            temp.DirectoryPath,
+            null,
+            "status", "--format", "json");
+
+        await Assert.That(result.ExitCode).IsEqualTo(0);
+        await Assert.That(ParseJson(result.StdOut).GetProperty("taskCount").GetInt32()).IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task Create_UsesTasksEnvironmentAndExplicitPathTakesPrecedence()
+    {
+        using var environmentTasks = TempTaskDirectory.Create();
+        using var explicitTasks = TempTaskDirectory.Create();
+
+        var environmentCreate = await RunCliWithEnvironment(
+            environmentTasks.DirectoryPath, null, "create", "--title", "Environment task", "--format", "json");
+        var explicitCreate = await RunCliWithEnvironment(
+            environmentTasks.DirectoryPath, null, "create", "--tasks", explicitTasks.DirectoryPath,
+            "--title", "Explicit task", "--format", "json");
+        var environmentStatus = await RunCliWithEnvironment(
+            environmentTasks.DirectoryPath, null, "status", "--format", "json");
+        var explicitStatus = await RunCliWithEnvironment(
+            environmentTasks.DirectoryPath, null, "status", "--tasks", explicitTasks.DirectoryPath,
+            "--format", "json");
+
+        await Assert.That(environmentCreate.ExitCode).IsEqualTo(0);
+        await Assert.That(explicitCreate.ExitCode).IsEqualTo(0);
+        await Assert.That(ParseJson(environmentStatus.StdOut).GetProperty("taskCount").GetInt32()).IsEqualTo(1);
+        await Assert.That(ParseJson(explicitStatus.StdOut).GetProperty("taskCount").GetInt32()).IsEqualTo(1);
+        var environmentTaskId = ParseJson(environmentCreate.StdOut).GetProperty("task").GetProperty("id").GetString();
+        var explicitTaskId = ParseJson(explicitCreate.StdOut).GetProperty("task").GetProperty("id").GetString();
+        await Assert.That(environmentTaskId).IsNotEqualTo(explicitTaskId);
+    }
+
+    [Test]
+    public async Task MissingTasksEnvironmentFailsWithoutDesktopFallback()
+    {
+        using var temp = TempTaskDirectory.Create();
+        var missing = Path.Combine(temp.DirectoryPath, "MissingTasks");
+
+        var result = await RunCliWithEnvironment(missing, null, "status", "--format", "json");
+
+        await Assert.That(result.ExitCode).IsEqualTo(2);
+        await AssertJsonError(result.StdOut, "invalidArguments");
+    }
+
+    [Test]
+    public async Task FileTasksEnvironmentFailsWithoutDesktopFallback()
+    {
+        using var temp = TempTaskDirectory.Create();
+        var filePath = Path.Combine(temp.DirectoryPath, "not-a-directory.txt");
+        await File.WriteAllTextAsync(filePath, "test");
+
+        var result = await RunCliWithEnvironment(filePath, null, "status", "--format", "json");
+
+        await Assert.That(result.ExitCode).IsEqualTo(2);
+        await AssertJsonError(result.StdOut, "invalidArguments");
+    }
+
+    [Test]
+    public async Task RelativeTasksEnvironmentUsesProcessWorkingDirectory()
+    {
+        using var temp = TempTaskDirectory.Create();
+        var relativeTasksPath = Path.Combine(temp.DirectoryPath, "Задачи с пробелами");
+        Directory.CreateDirectory(relativeTasksPath);
+
+        var result = await RunCliWithEnvironment("Задачи с пробелами", temp.DirectoryPath,
+            "status", "--format", "json");
+
+        await Assert.That(result.ExitCode).IsEqualTo(0);
+        await Assert.That(ParseJson(result.StdOut).GetProperty("taskCount").GetInt32()).IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task ExplicitEmptyPathDoesNotUseTasksEnvironment()
+    {
+        using var temp = TempTaskDirectory.Create();
+
+        var result = await RunCliWithEnvironment(temp.DirectoryPath, null,
+            "status", "--tasks", "", "--format", "json");
+
+        await Assert.That(result.ExitCode).IsEqualTo(2);
+    }
+
+    [Test]
     public async Task Complete_BlockerUnlocksBlockedTaskAndSetsUnlockedDate()
     {
         using var temp = TempTaskDirectory.Create();
@@ -285,6 +375,7 @@ public sealed class UnlimotionCliIntegrationTests
         await Assert.That(result.StdOut.Contains("execution question", StringComparison.Ordinal)).IsTrue();
         await Assert.That(result.StdOut.Contains("--question-id <question-id>", StringComparison.Ordinal)).IsTrue();
         await Assert.That(result.StdOut.Contains("--link <absolute-uri>", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(result.StdOut.Contains("UNLIMOTION_TASKS", StringComparison.Ordinal)).IsTrue();
         await Assert.That(result.StdOut.Contains("--explain", StringComparison.Ordinal)).IsFalse();
     }
 
@@ -1388,7 +1479,12 @@ public sealed class UnlimotionCliIntegrationTests
         await File.WriteAllTextAsync(System.IO.Path.Combine(directory, fileName), json);
     }
 
-    private static async Task<CliRunResult> RunCli(params string[] args)
+    private static Task<CliRunResult> RunCli(params string[] args) => RunCliWithEnvironment(null, null, args);
+
+    private static async Task<CliRunResult> RunCliWithEnvironment(
+        string? tasksEnvironmentPath,
+        string? workingDirectory,
+        params string[] args)
     {
         using var process = new Process();
         process.StartInfo = new ProcessStartInfo
@@ -1398,8 +1494,13 @@ public sealed class UnlimotionCliIntegrationTests
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             CreateNoWindow = true,
-            WorkingDirectory = AppContext.BaseDirectory
+            WorkingDirectory = workingDirectory ?? AppContext.BaseDirectory
         };
+        process.StartInfo.Environment.Remove("UNLIMOTION_TASKS");
+        if (tasksEnvironmentPath != null)
+        {
+            process.StartInfo.Environment["UNLIMOTION_TASKS"] = tasksEnvironmentPath;
+        }
         process.StartInfo.ArgumentList.Add(typeof(CliProgram).Assembly.Location);
         foreach (var arg in args)
         {

@@ -8,6 +8,39 @@ namespace Unlimotion.Test;
 public sealed class TaskDirectoryResolverTests
 {
     [Test]
+    public async Task Resolve_UsesEnvironmentBeforeDesktopAndPreservesExplicitOverride()
+    {
+        using var temp = TemporarySettingsDirectory.Create();
+        var missingSettings = Path.Combine(temp.Path, "MissingSettings.json");
+        var environmentTasksPath = Path.Combine(temp.Path, "EnvironmentTasks");
+        var explicitTasksPath = Path.Combine(temp.Path, "ExplicitTasks");
+
+        await Assert.That(global::Unlimotion.Cli.TaskDirectoryResolver.Resolve(
+            null, environmentTasksPath, missingSettings)).IsEqualTo(environmentTasksPath);
+        await Assert.That(global::Unlimotion.Cli.TaskDirectoryResolver.Resolve(
+            explicitTasksPath, environmentTasksPath, missingSettings)).IsEqualTo(explicitTasksPath);
+        await Assert.That(() => global::Unlimotion.Cli.TaskDirectoryResolver.Resolve(
+            null, "  ", missingSettings)).Throws<global::Unlimotion.Cli.CliException>();
+    }
+
+    [Test]
+    public async Task Resolve_EmptyEnvironmentPreservesDesktopSettingsPath()
+    {
+        using var temp = TemporarySettingsDirectory.Create();
+        var settingsPath = Path.Combine(temp.Path, "Settings.json");
+        var configuredTasksPath = Path.Combine(temp.Path, "DesktopTasks");
+        await File.WriteAllTextAsync(settingsPath,
+            JsonSerializer.Serialize(new { TaskStorage = new { Path = configuredTasksPath } }));
+
+        foreach (var environmentPath in new string?[] { null, string.Empty, "  " })
+        {
+            var result = global::Unlimotion.Cli.TaskDirectoryResolver.Resolve(
+                null, environmentPath, settingsPath);
+            await Assert.That(result).IsEqualTo(configuredTasksPath);
+        }
+    }
+
+    [Test]
     public async Task Resolve_UsesConfiguredLocalPathAndExplicitOverride()
     {
         using var temp = TemporarySettingsDirectory.Create();
