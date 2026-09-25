@@ -837,7 +837,7 @@ public static class Program
         writer ??= Console.Out;
         writer.WriteLine("Usage:");
         writer.WriteLine("  unlimotion-cli status --tasks <path> [--format text|json]");
-        writer.WriteLine("  --tasks <path> is optional; without it the active local desktop task-space path is used.");
+        writer.WriteLine("  Task directory: --tasks <path>, then UNLIMOTION_TASKS, then active local desktop settings.");
         writer.WriteLine("  unlimotion-cli unlocked --tasks <path> [--format text|json]");
         writer.WriteLine("  unlimotion-cli unlocked [--root <task-id>]... --tasks <path> [--format text|json]");
         writer.WriteLine("  unlimotion-cli candidates --tasks <path> --limit <1..100> [--status <status>] [--startable true|false] [--sort default] [--format text|json]");

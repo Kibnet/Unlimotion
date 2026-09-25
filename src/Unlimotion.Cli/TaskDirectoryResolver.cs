@@ -4,11 +4,21 @@ namespace Unlimotion.Cli;
 
 public static class TaskDirectoryResolver
 {
-    public static string Resolve(string? explicitTasksPath, string settingsPath)
+    public const string TasksEnvironmentVariable = "UNLIMOTION_TASKS";
+
+    public static string Resolve(string? explicitTasksPath, string settingsPath) =>
+        Resolve(explicitTasksPath, null, settingsPath);
+
+    public static string Resolve(string? explicitTasksPath, string? environmentTasksPath, string settingsPath)
     {
         if (!string.IsNullOrWhiteSpace(explicitTasksPath))
         {
             return explicitTasksPath;
+        }
+
+        if (!string.IsNullOrWhiteSpace(environmentTasksPath))
+        {
+            return environmentTasksPath;
         }
 
         if (string.IsNullOrWhiteSpace(settingsPath) || !File.Exists(settingsPath))
@@ -75,9 +85,11 @@ public static class TaskDirectoryResolver
 
     public static string Resolve(string? explicitTasksPath) => Resolve(
         explicitTasksPath,
+        Environment.GetEnvironmentVariable(TasksEnvironmentVariable),
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Personal), "Unlimotion", "Settings.json"));
 
-    private static CliException SettingsError(string kind, string message) => new(message, exitCode: 1, kind);
+    private static CliException SettingsError(string kind, string message) =>
+        new($"{message} Alternatively, set {TasksEnvironmentVariable}.", exitCode: 1, kind);
 
     private static bool TryGetProperty(JsonElement element, string name, out JsonElement value)
     {
