@@ -18,7 +18,26 @@ internal sealed class TaskApplicationReceiptStore
     {
         var path = GetPath(applicationId);
         if (!File.Exists(path)) return null;
-        return JsonSerializer.Deserialize<TaskApplicationReceipt>(await File.ReadAllTextAsync(path));
+        TaskApplicationReceipt? receipt;
+        try
+        {
+            receipt = JsonSerializer.Deserialize<TaskApplicationReceipt>(await File.ReadAllTextAsync(path));
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidDataException("Application receipt is not valid JSON.", ex);
+        }
+        if (receipt == null || receipt.ApplicationId != applicationId ||
+            receipt.RequestHash is not { Length: 71 } ||
+            !receipt.RequestHash.StartsWith("sha256:", StringComparison.Ordinal) ||
+            !receipt.RequestHash.AsSpan(7).ToArray().All(Uri.IsHexDigit) ||
+            receipt.AppliedAt == default ||
+            receipt.ProposalRefs is not { Count: > 0 } ||
+            receipt.ProposalRefs.Any(reference => reference == null || string.IsNullOrWhiteSpace(reference.Id) || reference.Revision < 1) ||
+            receipt.OperationIds is not { Count: > 0 } || receipt.OperationIds.Any(string.IsNullOrWhiteSpace) ||
+            receipt.ChangedTaskIds == null || receipt.CreatedTaskIds == null)
+            throw new InvalidDataException("Application receipt is incomplete or belongs to another application.");
+        return receipt;
     }
 
     public async Task WriteAsync(TaskApplicationReceipt receipt)

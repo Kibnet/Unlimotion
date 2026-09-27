@@ -1,6 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <UnlimotionBuildKind Condition="'$(PackageVersion)' == ''">local</UnlimotionBuildKind>
+    <UnlimotionBuildKind Condition="'$(PackageVersion)' != ''">package</UnlimotionBuildKind>
+    <Version Condition="'$(UnlimotionBuildKind)' == 'package'">$(PackageVersion)</Version>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -20,6 +23,14 @@
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
   </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>UnlimotionBuildKind</_Parameter1>
+      <_Parameter2>$(UnlimotionBuildKind)</_Parameter2>
+    </AssemblyAttribute>
+    <EmbeddedResource Include="apply-request-v1.schema.json" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" />

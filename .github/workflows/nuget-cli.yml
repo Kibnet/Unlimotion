@@ -142,7 +142,41 @@ jobs:
         $toolPath = Join-Path $env:RUNNER_TEMP 'unlimotion-cli-local-tool'
         $source = Split-Path -Parent '${{ steps.pack.outputs.package }}'
         dotnet tool install --tool-path $toolPath --add-source $source Unlimotion.Cli --version '${{ steps.release.outputs.version }}'
-        & (Join-Path $toolPath 'unlimotion-cli.exe') --help
+        $cli = Join-Path $toolPath 'unlimotion-cli.exe'
+        & $cli --help
+        $version = & $cli version --format json | ConvertFrom-Json
+        if ($version.packageVersion -ne '${{ steps.release.outputs.version }}' -or $version.buildKind -ne 'package') {
+          throw "Installed CLI version does not match the package: $($version.packageVersion) / $($version.buildKind)"
+        }
+        $help = & $cli help apply --format json | ConvertFrom-Json
+        if ($help.command -ne 'apply' -or $help.requiredOptions -notcontains '--request') {
+          throw 'Installed CLI apply help is missing its request contract.'
+        }
+        $schemaPath = Join-Path $env:RUNNER_TEMP 'unlimotion-apply-v1.schema.json'
+        $schemaText = (& $cli apply schema --format json) -join "`n"
+        Set-Content -LiteralPath $schemaPath -Value $schemaText -Encoding utf8
+        foreach ($kind in @('set-field', 'add-relation', 'create-task')) {
+          $example = (& $cli apply example $kind --format json) -join "`n"
+          if (-not (Test-Json -Json $example -SchemaFile $schemaPath)) {
+            throw "Installed CLI apply example '$kind' fails its embedded schema."
+          }
+        }
+        $invalidField = (& $cli apply example set-field --format json) -join "`n" | ConvertFrom-Json
+        $invalidField.operations[0].field = 'importance'
+        if (Test-Json -Json ($invalidField | ConvertTo-Json -Depth 20) -SchemaFile $schemaPath -ErrorAction SilentlyContinue) {
+          throw 'Apply schema accepted a non-writable field.'
+        }
+        $invalidRelation = (& $cli apply example add-relation --format json) -join "`n" | ConvertFrom-Json
+        $invalidRelation.operations[0].relation = 'parents'
+        if (Test-Json -Json ($invalidRelation | ConvertTo-Json -Depth 20) -SchemaFile $schemaPath -ErrorAction SilentlyContinue) {
+          throw 'Apply schema accepted an unsupported relation.'
+        }
+        $taskPath = Join-Path $env:RUNNER_TEMP 'unlimotion-cli-empty-tasks'
+        New-Item -ItemType Directory -Path $taskPath -Force | Out-Null
+        $context = & $cli context --tasks $taskPath --format json | ConvertFrom-Json
+        if ($context.tasksPath -ne $taskPath -or $context.sourceKind -ne 'explicitTasks') {
+          throw 'Installed CLI context did not resolve the explicit temporary task directory.'
+        }
 
     - name: Publish package to NuGet.org
       shell: pwsh
