@@ -369,14 +369,188 @@ public sealed class UnlimotionCliIntegrationTests
         var result = await RunCli("--help");
 
         await Assert.That(result.ExitCode).IsEqualTo(0);
-        await Assert.That(result.StdOut.Contains("unlimotion-cli task --tasks", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(result.StdOut.Contains("unlimotion-cli task --id", StringComparison.Ordinal)).IsTrue();
         await Assert.That(result.StdOut.Contains("--status <status>", StringComparison.Ordinal)).IsTrue();
         await Assert.That(result.StdOut.Contains("--startable true|false", StringComparison.Ordinal)).IsTrue();
         await Assert.That(result.StdOut.Contains("execution question", StringComparison.Ordinal)).IsTrue();
-        await Assert.That(result.StdOut.Contains("--question-id <question-id>", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(result.StdOut.Contains("--question-id <id>", StringComparison.Ordinal)).IsTrue();
         await Assert.That(result.StdOut.Contains("--link <absolute-uri>", StringComparison.Ordinal)).IsTrue();
         await Assert.That(result.StdOut.Contains("UNLIMOTION_TASKS", StringComparison.Ordinal)).IsTrue();
         await Assert.That(result.StdOut.Contains("--explain", StringComparison.Ordinal)).IsFalse();
+    }
+
+    [Test]
+    public async Task Introspection_WorksWithoutTaskSettingsAndCoversApplyContract()
+    {
+        var version = ParseJson((await RunCli("version", "--format", "json")).StdOut);
+        await Assert.That(version.GetProperty("packageVersion").GetString()).IsNotNull();
+        await Assert.That(version.GetProperty("buildKind").GetString()).IsNotNull();
+        var help = ParseJson((await RunCli("help", "apply", "--format", "json")).StdOut);
+        await Assert.That(help.GetProperty("effect").GetString()).Contains("write");
+        await Assert.That(help.GetProperty("requiredOptions").EnumerateArray().Any(item => item.GetString() == "--request")).IsTrue();
+        var commandHelp = ParseJson((await RunCli("search", "--help", "--format", "json")).StdOut);
+        await Assert.That(commandHelp.GetProperty("command").GetString()).IsEqualTo("search");
+        var schemaHelp = ParseJson((await RunCli("apply", "schema", "--help", "--format", "json")).StdOut);
+        await Assert.That(schemaHelp.GetProperty("command").GetString()).IsEqualTo("apply schema");
+        var versionHelp = ParseJson((await RunCli("help", "version", "--format", "json")).StdOut);
+        await Assert.That(versionHelp.GetProperty("command").GetString()).IsEqualTo("version");
+        var noArgs = await RunCli();
+        await Assert.That(noArgs.ExitCode).IsEqualTo(0);
+        await Assert.That(noArgs.StdOut.Contains("apply inspect", StringComparison.Ordinal)).IsTrue();
+        var schema = ParseJson((await RunCli("apply", "schema", "--format", "json")).StdOut);
+        var kinds = schema.GetProperty("$defs").EnumerateObject().Select(property => property.Name).ToHashSet(StringComparer.Ordinal);
+        foreach (var kind in new[] { "setField", "clearField", "addCriterion", "replaceCriterion", "removeCriterion",
+                     "setCriterionSatisfied", "addRelation", "removeRelation", "createTask", "setStatus" })
+            await Assert.That(kinds.Contains(kind)).IsTrue();
+        foreach (var kind in new[] { "set-field", "add-relation", "create-task" })
+        {
+            var example = ParseJson((await RunCli("apply", "example", kind, "--format", "json")).StdOut);
+            await Assert.That(example.GetProperty("schemaVersion").GetInt32()).IsEqualTo(1);
+            await Assert.That(example.GetProperty("operations").GetArrayLength()).IsEqualTo(1);
+        }
+    }
+
+    [Test]
+    public async Task Help_EveryCommandAndSubcommandExposesMachineReadableContract()
+    {
+        var names = new[] { "version", "status", "context", "search", "unlocked", "candidates", "task", "validate",
+            "apply", "apply inspect", "apply schema", "apply example", "create", "claim", "execution",
+            "execution question", "execution answer", "execution result", "execution complete", "release",
+            "set-status", "complete", "set-criterion", "satisfy-criterion" };
+        foreach (var name in names)
+        {
+            var arguments = new[] { "help" }.Concat(name.Split(' ')).Concat(["--format", "json"]).ToArray();
+            var result = await RunCli(arguments);
+            await Assert.That(result.ExitCode).IsEqualTo(0).Because(name + ": " + result.StdOut);
+            var help = ParseJson(result.StdOut);
+            await Assert.That(help.GetProperty("command").GetString()).IsEqualTo(name);
+            await Assert.That(help.GetProperty("usage").GetString()).IsNotNull();
+            await Assert.That(help.GetProperty("description").GetString()).IsNotNull();
+            await Assert.That(help.GetProperty("defaults").GetString()).IsNotNull();
+            await Assert.That(help.GetProperty("effect").GetString()).IsNotNull();
+            await Assert.That(help.GetProperty("example").GetString()).IsNotNull();
+            await Assert.That(help.GetProperty("exitCodes").GetString()).Contains("0 success");
+            await Assert.That(help.GetProperty("errorKinds").ValueKind).IsEqualTo(JsonValueKind.Array);
+        }
+    }
+
+    [Test]
+    public async Task Context_ReportsEnvironmentSourceAndExplicitOverride()
+    {
+        using var environmentTasks = TempTaskDirectory.Create();
+        using var explicitTasks = TempTaskDirectory.Create();
+        var fromEnvironment = await RunCliWithEnvironment(environmentTasks.DirectoryPath, null,
+            "context", "--format", "json");
+        var fromExplicit = await RunCliWithEnvironment(environmentTasks.DirectoryPath, null,
+            "context", "--tasks", explicitTasks.DirectoryPath, "--format", "json");
+        await Assert.That(fromEnvironment.ExitCode).IsEqualTo(0);
+        await Assert.That(fromExplicit.ExitCode).IsEqualTo(0);
+        var environmentContext = ParseJson(fromEnvironment.StdOut);
+        var explicitContext = ParseJson(fromExplicit.StdOut);
+        await Assert.That(environmentContext.GetProperty("tasksPath").GetString()).IsEqualTo(Path.GetFullPath(environmentTasks.DirectoryPath));
+        await Assert.That(environmentContext.GetProperty("sourceKind").GetString()).IsEqualTo("environmentTasks");
+        await Assert.That(explicitContext.GetProperty("tasksPath").GetString()).IsEqualTo(Path.GetFullPath(explicitTasks.DirectoryPath));
+        await Assert.That(explicitContext.GetProperty("sourceKind").GetString()).IsEqualTo("explicitTasks");
+    }
+
+    [Test]
+    public async Task ContextAndSearch_PinSourceAndPageAcrossAllStatuses()
+    {
+        using var first = TempTaskDirectory.Create();
+        using var second = TempTaskDirectory.Create();
+        var tasks = Enumerable.Range(0, 121).Select(index =>
+            CreateTask($"item-{index:D3}", (index % 4) switch
+            {
+                0 => DomainTaskStatus.Prepared, 1 => DomainTaskStatus.NotReady,
+                2 => DomainTaskStatus.Completed, _ => DomainTaskStatus.Archived
+            }, true, $"Задача {index:D3}")).ToArray();
+        tasks[0].ContainsTasks.Add(tasks[1].Id);
+        tasks[1].ParentTasks.Add(tasks[0].Id);
+        await SaveTasks(first.DirectoryPath, tasks);
+        await SaveTasks(second.DirectoryPath, CreateTask("other", DomainTaskStatus.Prepared, true));
+        var context = ParseJson((await RunCli("context", "--tasks", first.DirectoryPath, "--format", "json")).StdOut);
+        await Assert.That(context.GetProperty("tasksPath").GetString()).IsEqualTo(Path.GetFullPath(first.DirectoryPath));
+        await Assert.That(context.GetProperty("sourceKind").GetString()).IsEqualTo("explicitTasks");
+        var missing = await RunCli("context", "--tasks", Path.Combine(first.DirectoryPath, "missing"), "--format", "json");
+        await Assert.That(missing.ExitCode).IsEqualTo(2);
+        var ids = new HashSet<string>(StringComparer.Ordinal);
+        string? cursor = null;
+        do
+        {
+            var args = new List<string> { "search", "--tasks", first.DirectoryPath, "--query", "задача", "--limit", "37", "--format", "json" };
+            if (cursor != null) { args.Add("--cursor"); args.Add(cursor); }
+            var page = ParseJson((await RunCli(args.ToArray())).StdOut);
+            await Assert.That(page.GetProperty("totalCount").GetInt32()).IsEqualTo(121);
+            foreach (var item in page.GetProperty("items").EnumerateArray())
+                await Assert.That(ids.Add(item.GetProperty("id").GetString()!)).IsTrue();
+            cursor = page.GetProperty("nextCursor").GetString();
+        } while (cursor != null);
+        await Assert.That(ids.Count).IsEqualTo(121);
+        var byId = ParseJson((await RunCli("search", "--tasks", first.DirectoryPath, "--query", "item-042",
+            "--format", "json")).StdOut);
+        await Assert.That(byId.GetProperty("totalCount").GetInt32()).IsEqualTo(1);
+        await Assert.That(byId.GetProperty("items").EnumerateArray().Single().GetProperty("status").GetString()).IsEqualTo("Completed");
+        var archived = ParseJson((await RunCli("search", "--tasks", first.DirectoryPath, "--status", "Archived",
+            "--format", "json")).StdOut);
+        await Assert.That(archived.GetProperty("totalCount").GetInt32()).IsEqualTo(30);
+        await Assert.That(archived.GetProperty("items").GetArrayLength()).IsEqualTo(20);
+        var scoped = ParseJson((await RunCli("search", "--tasks", first.DirectoryPath, "--root", "item-000",
+            "--format", "json")).StdOut);
+        await Assert.That(scoped.GetProperty("totalCount").GetInt32()).IsEqualTo(2);
+        var union = ParseJson((await RunCli("search", "--tasks", first.DirectoryPath, "--root", "item-000",
+            "--root", "item-002", "--format", "json")).StdOut);
+        await Assert.That(union.GetProperty("totalCount").GetInt32()).IsEqualTo(3);
+        var empty = ParseJson((await RunCli("search", "--tasks", first.DirectoryPath, "--query", "no-such-task",
+            "--format", "json")).StdOut);
+        await Assert.That(empty.GetProperty("items").GetArrayLength()).IsEqualTo(0);
+        await Assert.That(empty.GetProperty("nextCursor").ValueKind).IsEqualTo(JsonValueKind.Null);
+        var missingRoot = await RunCli("search", "--tasks", first.DirectoryPath, "--root", "missing",
+            "--format", "json");
+        await Assert.That(missingRoot.ExitCode).IsEqualTo(1);
+        await AssertJsonError(missingRoot.StdOut, "notFound");
+        var malformedCursor = await RunCli("search", "--tasks", first.DirectoryPath, "--cursor", "broken!",
+            "--format", "json");
+        await Assert.That(malformedCursor.ExitCode).IsEqualTo(2);
+        await AssertJsonError(malformedCursor.StdOut, "invalidArguments");
+        var firstPage = ParseJson((await RunCli("search", "--tasks", first.DirectoryPath, "--limit", "1", "--format", "json")).StdOut);
+        var wrongSpace = await RunCli("search", "--tasks", second.DirectoryPath, "--limit", "1", "--cursor",
+            firstPage.GetProperty("nextCursor").GetString()!, "--format", "json");
+        await Assert.That(wrongSpace.ExitCode).IsEqualTo(2);
+        await AssertJsonError(wrongSpace.StdOut, "invalidArguments");
+        var wrongFilter = await RunCli("search", "--tasks", first.DirectoryPath, "--limit", "1", "--query", "different",
+            "--cursor", firstPage.GetProperty("nextCursor").GetString()!, "--format", "json");
+        await Assert.That(wrongFilter.ExitCode).IsEqualTo(2);
+        await AssertJsonError(wrongFilter.StdOut, "invalidArguments");
+    }
+
+    [Test]
+    public async Task TaskExpandedSnapshot_ExposesRepeaterExtensionsAndRequestedTextSections()
+    {
+        using var temp = TempTaskDirectory.Create();
+        var repeating = CreateTask("repeating", DomainTaskStatus.Prepared, true, "Repeater");
+        repeating.Repeater = new RepeaterPattern
+        {
+            Type = RepeaterType.Daily, Period = 2, AfterComplete = true, Pattern = [1, 3],
+            ExtensionData = new Dictionary<string, JToken> { ["custom"] = JObject.Parse("{\"enabled\":true,\"count\":3}") }
+        };
+        var plain = CreateTask("plain", DomainTaskStatus.Prepared, true);
+        await SaveTasks(temp.DirectoryPath, repeating, plain);
+        var json = ParseJson((await RunCli("task", "--tasks", temp.DirectoryPath, "--id", "repeating",
+            "--include", "details", "--format", "json")).StdOut);
+        var repeater = json.GetProperty("details").GetProperty("repeater");
+        await Assert.That(repeater.GetProperty("type").GetString()).IsEqualTo("Daily");
+        await Assert.That(repeater.GetProperty("period").GetInt32()).IsEqualTo(2);
+        await Assert.That(repeater.GetProperty("afterComplete").GetBoolean()).IsTrue();
+        await Assert.That(repeater.GetProperty("pattern").GetArrayLength()).IsEqualTo(2);
+        await Assert.That(repeater.GetProperty("custom").GetProperty("enabled").GetBoolean()).IsTrue();
+        var plainJson = ParseJson((await RunCli("task", "--tasks", temp.DirectoryPath, "--id", "plain",
+            "--include", "details", "--format", "json")).StdOut);
+        await Assert.That(plainJson.GetProperty("details").GetProperty("repeater").ValueKind).IsEqualTo(JsonValueKind.Null);
+        var text = await RunCli("task", "--tasks", temp.DirectoryPath, "--id", "repeating",
+            "--include", "details,criteria", "--format", "text");
+        await Assert.That(text.StdOut.Contains("ETag: sha256:", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(text.StdOut.Contains("details:", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(text.StdOut.Contains("criteria:", StringComparison.Ordinal)).IsTrue();
     }
 
     [Test]
@@ -1113,6 +1287,107 @@ public sealed class UnlimotionCliIntegrationTests
     }
 
     [Test]
+    public async Task ApplyInspect_ComposedCreateAndNoOpRetryUseFinalState()
+    {
+        using var temp = TempTaskDirectory.Create();
+        using var requestFile = TempRequestFile.Create();
+        await File.WriteAllTextAsync(requestFile.Path, """
+        {
+          "schemaVersion": 1, "applicationId": "composed-create", "proposalRefs": [{"id":"P-composed","revision":1}],
+          "author":"test-agent", "reason":"Approved composed create", "preconditions":[],
+          "operations":[
+            {"operationId":"create","kind":"createTask","newTaskId":"created","title":"Before"},
+            {"operationId":"rename","kind":"setField","taskId":"created","field":"title","value":"After"}
+          ]
+        }
+        """);
+        var before = ParseJson((await RunCli("apply", "inspect", "--tasks", temp.DirectoryPath,
+            "--request", requestFile.Path, "--format", "json")).StdOut);
+        await Assert.That(before.GetProperty("assessment").GetString()).IsEqualTo("readyForPreview");
+        var applied = await RunCli("apply", "--tasks", temp.DirectoryPath, "--request", requestFile.Path, "--format", "json");
+        await Assert.That(applied.ExitCode).IsEqualTo(0).Because(applied.StdOut);
+        var matching = ParseJson((await RunCli("apply", "inspect", "--tasks", temp.DirectoryPath,
+            "--request", requestFile.Path, "--format", "json")).StdOut);
+        await Assert.That(matching.GetProperty("assessment").GetString()).IsEqualTo("receiptMatched");
+        await Assert.That(matching.GetProperty("postconditionsMatch").GetString()).IsEqualTo("all");
+        using var reformattedFile = TempRequestFile.Create();
+        await File.WriteAllTextAsync(reformattedFile.Path, (await File.ReadAllTextAsync(requestFile.Path)) + "\n");
+        var conflicting = ParseJson((await RunCli("apply", "inspect", "--tasks", temp.DirectoryPath,
+            "--request", reformattedFile.Path, "--format", "json")).StdOut);
+        await Assert.That(conflicting.GetProperty("receiptState").GetString()).IsEqualTo("conflicting");
+        await Assert.That(conflicting.GetProperty("assessment").GetString()).IsEqualTo("needsReconciliation");
+        await Assert.That(conflicting.GetProperty("requestHash").GetString()).IsNotEqualTo(matching.GetProperty("requestHash").GetString());
+        var receipt = Directory.GetFiles(Path.Combine(temp.DirectoryPath, ".unlimotion.applies", "v1"), "*.json").Single();
+        File.Delete(receipt);
+        var taskFile = Path.Combine(temp.DirectoryPath, "created");
+        var taskBeforeRetry = await File.ReadAllTextAsync(taskFile);
+        var absentReceipt = ParseJson((await RunCli("apply", "inspect", "--tasks", temp.DirectoryPath,
+            "--request", requestFile.Path, "--format", "json")).StdOut);
+        await Assert.That(absentReceipt.GetProperty("assessment").GetString()).IsEqualTo("desiredStatePresent");
+        var retry = await RunCli("apply", "--tasks", temp.DirectoryPath, "--request", requestFile.Path, "--format", "json");
+        await Assert.That(retry.ExitCode).IsEqualTo(0).Because(retry.StdOut);
+        await Assert.That(ParseJson(retry.StdOut).GetProperty("mode").GetString()).IsEqualTo("alreadyApplied");
+        await Assert.That(await File.ReadAllTextAsync(taskFile)).IsEqualTo(taskBeforeRetry);
+        using var bomFile = TempRequestFile.Create();
+        await File.WriteAllTextAsync(bomFile.Path, await File.ReadAllTextAsync(requestFile.Path), new System.Text.UTF8Encoding(true));
+        var bomInspection = ParseJson((await RunCli("apply", "inspect", "--tasks", temp.DirectoryPath,
+            "--request", bomFile.Path, "--format", "json")).StdOut);
+        await Assert.That(bomInspection.GetProperty("requestHash").GetString()).IsEqualTo(absentReceipt.GetProperty("requestHash").GetString());
+        await Assert.That(await File.ReadAllTextAsync(taskFile)).IsEqualTo(taskBeforeRetry);
+        var changed = await LoadTask(temp.DirectoryPath, "created");
+        changed.Importance = 5;
+        await SaveTasks(temp.DirectoryPath, changed);
+        var drifted = ParseJson((await RunCli("apply", "inspect", "--tasks", temp.DirectoryPath,
+            "--request", requestFile.Path, "--format", "json")).StdOut);
+        await Assert.That(drifted.GetProperty("assessment").GetString()).IsEqualTo("receiptMatched");
+        await Assert.That(drifted.GetProperty("postconditionsMatch").GetString()).IsEqualTo("partial");
+        File.Delete(Directory.GetFiles(Path.Combine(temp.DirectoryPath, ".unlimotion.applies", "v1"), "*.json").Single());
+        var mixed = ParseJson((await RunCli("apply", "inspect", "--tasks", temp.DirectoryPath,
+            "--request", requestFile.Path, "--format", "json")).StdOut);
+        await Assert.That(mixed.GetProperty("assessment").GetString()).IsEqualTo("needsReconciliation");
+        await Assert.That(mixed.GetProperty("postconditionsMatch").GetString()).IsEqualTo("partial");
+        await File.WriteAllTextAsync(receipt, "null");
+        var corruptReceipt = await RunCli("apply", "inspect", "--tasks", temp.DirectoryPath,
+            "--request", requestFile.Path, "--format", "json");
+        await Assert.That(corruptReceipt.ExitCode).IsEqualTo(1);
+        await AssertJsonError(corruptReceipt.StdOut, "operationFailed");
+        await File.WriteAllTextAsync(receipt, "{}");
+        var incompleteReceipt = await RunCli("apply", "inspect", "--tasks", temp.DirectoryPath,
+            "--request", requestFile.Path, "--format", "json");
+        await Assert.That(incompleteReceipt.ExitCode).IsEqualTo(1);
+        await AssertJsonError(incompleteReceipt.StdOut, "operationFailed");
+    }
+
+    [Test]
+    public async Task ApplyInspect_PreexistingNoOpCanStillPreviewAndApply()
+    {
+        using var temp = TempTaskDirectory.Create();
+        var first = CreateTask("first", DomainTaskStatus.Prepared, true, "Already");
+        var second = CreateTask("second", DomainTaskStatus.Prepared, true, "Old");
+        await SaveTasks(temp.DirectoryPath, first, second);
+        var firstSnapshot = ParseJson((await RunCli("task", "--tasks", temp.DirectoryPath, "--id", "first", "--include", "details", "--format", "json")).StdOut);
+        var secondSnapshot = ParseJson((await RunCli("task", "--tasks", temp.DirectoryPath, "--id", "second", "--include", "details", "--format", "json")).StdOut);
+        using var requestFile = TempRequestFile.Create();
+        await File.WriteAllTextAsync(requestFile.Path, $$"""
+        {"schemaVersion":1,"applicationId":"noop-and-change","proposalRefs":[{"id":"P-noop","revision":1}],
+         "author":"test-agent","reason":"Approved", "preconditions":[
+           {"taskId":"first","etag":"{{firstSnapshot.GetProperty("etag").GetString()}}"},
+           {"taskId":"second","etag":"{{secondSnapshot.GetProperty("etag").GetString()}}"}],
+         "operations":[
+           {"operationId":"same","kind":"setField","taskId":"first","field":"title","value":"Already"},
+           {"operationId":"new","kind":"setField","taskId":"second","field":"title","value":"New"}]}
+        """);
+        var inspect = ParseJson((await RunCli("apply", "inspect", "--tasks", temp.DirectoryPath,
+            "--request", requestFile.Path, "--format", "json")).StdOut);
+        await Assert.That(inspect.GetProperty("assessment").GetString()).IsEqualTo("readyForPreview");
+        var preview = await RunCli("apply", "--tasks", temp.DirectoryPath, "--request", requestFile.Path, "--dry-run", "--format", "json");
+        await Assert.That(preview.ExitCode).IsEqualTo(0).Because(preview.StdOut);
+        var apply = await RunCli("apply", "--tasks", temp.DirectoryPath, "--request", requestFile.Path, "--format", "json");
+        await Assert.That(apply.ExitCode).IsEqualTo(0).Because(apply.StdOut);
+        await Assert.That((await LoadTask(temp.DirectoryPath, "second")).Title).IsEqualTo("New");
+    }
+
+    [Test]
     public async Task Apply_RejectsDependencyCycleBeforeWriting()
     {
         using var temp = TempTaskDirectory.Create();
@@ -1408,6 +1683,17 @@ public sealed class UnlimotionCliIntegrationTests
         await Assert.That(currentAfter.BlocksTasks).Contains("next");
         await Assert.That(nextAfter.BlockedByTasks).Contains("current");
         await Assert.That(nextAfter.ParentTasks).Contains("goal");
+        File.Delete(Directory.GetFiles(Path.Combine(temp.DirectoryPath, ".unlimotion.applies", "v1"), "*.json").Single());
+        var nextFile = Path.Combine(temp.DirectoryPath, "next");
+        var nextBeforeRetry = await File.ReadAllTextAsync(nextFile);
+        var inspected = ParseJson((await RunCli("apply", "inspect", "--tasks", temp.DirectoryPath,
+            "--request", requestFile.Path, "--format", "json")).StdOut);
+        await Assert.That(inspected.GetProperty("assessment").GetString()).IsEqualTo("desiredStatePresent");
+        await Assert.That(inspected.GetProperty("postconditionsMatch").GetString()).IsEqualTo("all");
+        var repeated = await RunCli("apply", "--tasks", temp.DirectoryPath, "--request", requestFile.Path, "--format", "json");
+        await Assert.That(repeated.ExitCode).IsEqualTo(0).Because(repeated.StdOut);
+        await Assert.That(ParseJson(repeated.StdOut).GetProperty("mode").GetString()).IsEqualTo("alreadyApplied");
+        await Assert.That(await File.ReadAllTextAsync(nextFile)).IsEqualTo(nextBeforeRetry);
     }
 
     private static TaskItem CreateTask(

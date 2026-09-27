@@ -7,6 +7,8 @@
 ```powershell
 dotnet tool install --global Unlimotion.Cli
 unlimotion-cli status --format json
+unlimotion-cli version --format json
+unlimotion-cli help search --format json
 ```
 
 Обновление установленного инструмента:
@@ -35,6 +37,10 @@ unset UNLIMOTION_TASKS
 
 Для постоянной настройки используй абсолютный путь. Относительный путь в переменной отсчитывается от текущего каталога CLI; значение не обрезается и `~` внутри него не раскрывается. Пустая переменная возвращает обычный поиск desktop-настроек. На Windows конфиг находится в системной папке документов пользователя, обычно `%USERPROFILE%\Documents\Unlimotion\Settings.json`; на Linux используется папка документов XDG, на macOS — `~/Documents/Unlimotion/Settings.json`. На Android каталог приложения закрыт для Termux: выбери папку задач, доступную обоим приложениям, и укажи её в переменной. Переменная фиксирует путь и не меняется автоматически при переключении пространства в приложении.
 
+Начните с `unlimotion-cli --version`, `unlimotion-cli help <command>` или `<command> --help`. Справка и `apply schema/example` доступны даже без настроенного пространства. `version --format json` сообщает `packageVersion`, `applicationVersion` и `buildKind`; у локальной сборки без заданного `PackageVersion` значение `buildKind=local`.
+
+Перед связанной серией чтений и записей запросите `unlimotion-cli context --format json`. Ответ содержит абсолютный `tasksPath`, `sourceKind` (`explicitTasks`, `environmentTasks` или `desktopSettings`) и `storageKind=file`. Передавайте полученный путь как явный `--tasks` **в каждый** `search`, `task`, `apply --dry-run`, `apply`, `apply inspect` и read-back: переменная окружения и desktop settings могут смениться между отдельными процессами. `context` проверяет существование каталога, но не валидность графа и не будущую возможность записи.
+
 Для локальной сборки рекомендуется отдельный каталог инструмента, чтобы агент не изменял глобальную установку пользователя:
 
 ```powershell
@@ -49,6 +55,8 @@ dotnet tool install --tool-path C:\tmp\unlimotion-cli-tool --add-source artifact
 
 ```powershell
 unlimotion-cli status [--tasks <task-dir>] [--format text|json]
+unlimotion-cli context [--tasks <task-dir>] [--format text|json]
+unlimotion-cli search [--query <text>] [--status <status>] [--root <task-id>]... [--limit <1..100>] [--cursor <token>] [--tasks <task-dir>] [--format text|json]
 unlimotion-cli unlocked [--tasks <task-dir>] [--format text|json]
 unlimotion-cli candidates --limit <1..100> [--status Prepared] [--startable true] [--sort default] [--tasks <task-dir>] [--format text|json]
 unlimotion-cli task --id <task-id> [--include details,relations,criteria,history,execution] [--tasks <task-dir>] [--format text|json]
@@ -64,9 +72,33 @@ unlimotion-cli set-status --id <task-id> --status <status> [--author <name>] [--
 unlimotion-cli complete --id <task-id> [--author <name>] [--tasks <task-dir>] [--format text|json]
 unlimotion-cli set-criterion --id <task-id> --criterion <criterion-id> --satisfied true|false [--tasks <task-dir>] [--format text|json]
 unlimotion-cli satisfy-criterion --id <task-id> --criterion <criterion-id> [--tasks <task-dir>] [--format text|json]
+unlimotion-cli apply --request <path|-> [--dry-run] [--tasks <task-dir>] [--format text|json]
+unlimotion-cli apply inspect --request <path|-> [--tasks <task-dir>] [--format text|json]
+unlimotion-cli apply schema --format json
+unlimotion-cli apply example set-field|add-relation|create-task --format json
 ```
 
 `--include`, `--link` и `--parent` можно указывать несколько раз. В `--include` также принимается список через запятую. `task` без `--include` сохраняет прежний JSON-контракт анализа доступности.
+
+`search` ищет подстроку в title или ID по всем статусам, включая недоступные и архивные задачи. По умолчанию возвращает 20 элементов, максимум 100 за вызов. JSON содержит `items`, `totalCount`, `nextCursor`; передавайте `nextCursor` с теми же фильтрами и тем же `--tasks`, пока он не станет `null`. Порядок: title без учёта регистра, затем точный title и ID. Между страницами граф может меняться: для важной работы дедуплицируйте ID и при необходимости начните поиск заново. `--root` повторяем и включает корни и их потомков.
+
+`task --include details,relations,criteria,history,execution` возвращает ETag и выбранные секции. В `details.repeater` видны тип, период, флаг `afterComplete`, pattern и неизвестные расширенные поля, если они есть; без повторителя значение `null`. В текстовом режиме запрошенные секции и ETag также печатаются. Старый ответ без `--include` сохранён.
+
+## Декларативное изменение и проверка исхода
+
+`apply schema --format json` отдаёт JSON Schema request v1 из установленного пакета. `apply example set-field|add-relation|create-task --format json` печатает полноценные шаблоны; все `example-*` ID и ETag замените реальными значениями перед preview. Схема проверяет синтаксис; графовые правила, ETag, статусные ограничения и защищённые маркеры описаны в `help apply` и проверяются `--dry-run`.
+
+Для создания с заранее выбранным ID используйте шаблон `create-task`, задайте уникальные `applicationId`, `newTaskId`, ссылку `proposalRefs` на согласованное поручение и точный `--tasks`:
+
+```powershell
+unlimotion-cli apply example create-task --format json > request.json
+# Отредактируйте примерные ID, текст, author и reason.
+unlimotion-cli apply --tasks $tasksPath --request request.json --dry-run --format json
+unlimotion-cli apply --tasks $tasksPath --request request.json --format json
+unlimotion-cli task --tasks $tasksPath --id $newTaskId --include details,relations,criteria --format json
+```
+
+Отправляйте запись только после успешного preview с тем же файлом запроса. При потере ответа или `outcomeUnknown` сначала выполните `apply inspect --request request.json --tasks $tasksPath --format json`, затем read-back затронутых ID. `receiptMatched` подтверждает receipt для точного `applicationId + requestHash`, но текущее состояние может уже отличаться. `desiredStatePresent` без receipt подтверждает только наблюдаемое конечное состояние, а не историю применения. `readyForPreview` означает, что исходные preconditions совпали и обычный preview проходит. `needsReconciliation` требует ручной сверки; не повторяйте запись автоматически. Хешируется декодированный текст JSON, включая пробелы и переносы, так что не форматируйте исходный request между отправкой и inspection. `inspect` не выполняет новую application mutation; при доступе storage может восстановить ранее незавершённый журнал.
 
 ### Многострочное описание
 

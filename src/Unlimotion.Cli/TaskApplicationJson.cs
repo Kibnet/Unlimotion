@@ -20,6 +20,10 @@ internal sealed record ApplicationRequestInput
 
     public TaskApplicationRequest ToDomain()
     {
+        if (ProposalRefs == null || Preconditions == null || Operations == null ||
+            ProposalRefs.Any(item => item == null) || Preconditions.Any(item => item == null) ||
+            Operations.Any(item => item == null))
+            throw new CliException("Application request arrays must not be null and cannot contain null entries.");
         return new TaskApplicationRequest
         {
             SchemaVersion = SchemaVersion,

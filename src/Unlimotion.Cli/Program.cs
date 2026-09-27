@@ -1,5 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Security.Cryptography;
+using System.Text;
 using Unlimotion.Domain;
 using Unlimotion.Storage;
 using Unlimotion.TaskTree;
@@ -15,6 +17,7 @@ public static class Program
     {
         try
         {
+            if (CliIntrospection.TryRun(args, out var introspectionCode)) return introspectionCode;
             var options = CliOptions.Parse(args);
             if (options.ShowHelp)
             {
@@ -32,6 +35,15 @@ public static class Program
                 throw new CliException($"Task directory '{options.TasksPath}' does not exist.");
             }
 
+            if (options.Command == "context")
+            {
+                var context = new ContextOutput(Path.GetFullPath(options.TasksPath), options.TasksSourceKind,
+                    "file", CliIntrospection.PackageVersion, CliIntrospection.ApplicationVersion);
+                if (options.Format == OutputFormat.Json) WriteJson(context);
+                else Console.WriteLine($"{context.TasksPath} ({context.SourceKind}, {context.StorageKind})");
+                return 0;
+            }
+
             var storage = new FileTaskStorage(new FileTaskStorageOptions
             {
                 Path = options.TasksPath,
@@ -44,6 +56,7 @@ public static class Program
                 "status" => await RunReadCommand(options, storage, RunStatus),
                 "unlocked" => await RunReadCommand(options, storage, RunUnlocked),
                 "candidates" => await RunReadCommand(options, storage, RunCandidates),
+                "search" => await RunReadCommand(options, storage, RunSearch),
                 "apply" => await RunApply(options, storage),
                 "claim" => await RunClaim(options, storage),
                 "execution" => await RunExecution(options, storage),
@@ -63,7 +76,7 @@ public static class Program
             WriteError(args, ex.Kind, ex.Message, ex.ExitCode);
             return ex.ExitCode;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or InvalidOperationException)
         {
             WriteError(args, "operationFailed", ex.Message, exitCode: 1);
             return 1;
@@ -239,6 +252,74 @@ public static class Program
         return 0;
     }
 
+    private static int RunSearch(CliOptions options, FileTaskStorageDirectoryReadResult loadResult, TaskAvailabilityAnalyzer analyzer)
+    {
+        if (loadResult.LoadErrors.Count > 0)
+        {
+            WriteLoadErrors(options, loadResult.LoadErrors);
+            return 1;
+        }
+        var scope = ResolveUnlockedScope(options.RootIds, analyzer);
+        var query = options.Query ?? string.Empty;
+        var roots = options.RootIds.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal);
+        var normalizedPath = Path.GetFullPath(options.TasksPath!).TrimEnd(Path.DirectorySeparatorChar);
+        if (OperatingSystem.IsWindows()) normalizedPath = normalizedPath.ToUpperInvariant();
+        var fingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(
+            JsonSerializer.Serialize(new { path = normalizedPath, query, status = options.Status?.ToString(), roots })))).ToLowerInvariant();
+        SearchCursor? cursor = null;
+        if (options.Cursor != null)
+        {
+            try
+            {
+                cursor = JsonSerializer.Deserialize<SearchCursor>(Convert.FromBase64String(options.Cursor), JsonOptions);
+            }
+            catch (Exception ex) when (ex is FormatException or JsonException)
+            {
+                throw new CliException("Search cursor is malformed.");
+            }
+            if (cursor is not { Version: 1 } || cursor.Fingerprint != fingerprint || cursor.Id == null || cursor.Title == null)
+                throw new CliException("Search cursor does not match the task space or filters.");
+        }
+
+        var matches = analyzer.AnalyzeAll()
+            .Where(item => scope == null || scope.Contains(item.TaskId))
+            .Where(item => options.Status == null || item.Status == options.Status)
+            .Where(item => item.TaskId.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                           (item.Title?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false))
+            .Select(item =>
+            {
+                analyzer.TryGetTask(item.TaskId, out var task);
+                return new SearchItem(item.TaskId, item.Title ?? string.Empty, item.Status,
+                    task?.Importance ?? 0, item.CanStart, item.CanComplete);
+            })
+            .OrderBy(item => item.Title, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(item => item.Title, StringComparer.Ordinal)
+            .ThenBy(item => item.Id, StringComparer.Ordinal)
+            .ToArray();
+        var remaining = cursor == null ? matches : matches.Where(item => CompareSearchKey(item, cursor) > 0).ToArray();
+        var limit = options.Limit ?? 20;
+        var page = remaining.Take(limit).ToArray();
+        string? next = remaining.Length > page.Length
+            ? Convert.ToBase64String(JsonSerializer.SerializeToUtf8Bytes(new SearchCursor(1, fingerprint, page[^1].Title, page[^1].Id), JsonOptions))
+            : null;
+        var output = new SearchOutput(page, matches.Length, next);
+        if (options.Format == OutputFormat.Json) WriteJson(output);
+        else
+        {
+            foreach (var item in page) Console.WriteLine($"{item.Id}\t{item.Status}\t{item.Title}");
+            Console.WriteLine($"Total: {output.TotalCount}; nextCursor: {next ?? "none"}");
+        }
+        return 0;
+    }
+
+    private static int CompareSearchKey(SearchItem item, SearchCursor cursor)
+    {
+        var comparison = StringComparer.OrdinalIgnoreCase.Compare(item.Title, cursor.Title);
+        if (comparison != 0) return comparison;
+        comparison = StringComparer.Ordinal.Compare(item.Title, cursor.Title);
+        return comparison != 0 ? comparison : StringComparer.Ordinal.Compare(item.Id, cursor.Id);
+    }
+
     private static int RunTask(CliOptions options, FileTaskStorageDirectoryReadResult loadResult, TaskAvailabilityAnalyzer analyzer)
     {
         if (loadResult.LoadErrors.Count > 0)
@@ -263,6 +344,23 @@ public static class Program
         }
 
         WriteAnalysisText(analysis);
+        if (options.IncludeSections.Count > 0)
+        {
+            var snapshot = TaskSnapshotOutput.Create(task!, analysis, analyzer, options.IncludeSections);
+            Console.WriteLine($"ETag: {snapshot.Etag}");
+            foreach (var section in options.IncludeSections.Order(StringComparer.Ordinal))
+            {
+                Console.WriteLine($"{section}: {JsonSerializer.Serialize(section switch
+                {
+                    "details" => (object?)snapshot.Details,
+                    "relations" => snapshot.Relations,
+                    "criteria" => snapshot.Criteria,
+                    "history" => snapshot.History,
+                    "execution" => snapshot.Execution,
+                    _ => null
+                }, JsonOptions)}");
+            }
+        }
         return 0;
     }
 
@@ -426,33 +524,9 @@ public static class Program
 
     private static async Task<int> RunApply(CliOptions options, FileTaskStorage storage)
     {
-        var requestPath = string.IsNullOrWhiteSpace(options.RequestPath)
-            ? throw new CliException("Command 'apply' requires --request <path|->.")
-            : options.RequestPath;
-        var json = requestPath == "-"
-            ? await Console.In.ReadToEndAsync()
-            : await File.ReadAllTextAsync(requestPath);
-        if (System.Text.Encoding.UTF8.GetByteCount(json) > 4 * 1024 * 1024)
-        {
-            throw new CliException("Application request exceeds the 4 MiB limit.");
-        }
-        ApplicationRequestInput? input;
-        try
-        {
-            input = JsonSerializer.Deserialize<ApplicationRequestInput>(json, JsonOptions);
-        }
-        catch (JsonException ex)
-        {
-            throw new CliException($"Application request JSON is invalid: {ex.Message}");
-        }
-
-        if (input == null)
-        {
-            throw new CliException("Application request JSON is empty.");
-        }
-
-        var request = input.ToDomain();
+        var (request, json) = await ReadApplicationRequest(options);
         var requestHash = RequestHash(json);
+        if (options.ApplyCommand == "inspect") return await RunApplyInspect(options, storage, request, requestHash);
         TaskApplicationResult result;
         var receiptWritten = false;
         if (!options.DryRun)
@@ -523,6 +597,61 @@ public static class Program
 
     private static string RequestHash(string json) =>
         "sha256:" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(json))).ToLowerInvariant();
+
+    private static async Task<(TaskApplicationRequest Request, string Json)> ReadApplicationRequest(CliOptions options)
+    {
+        var requestPath = string.IsNullOrWhiteSpace(options.RequestPath)
+            ? throw new CliException("Command 'apply' requires --request <path|->.")
+            : options.RequestPath;
+        var json = requestPath == "-" ? await Console.In.ReadToEndAsync() : await File.ReadAllTextAsync(requestPath);
+        if (json.Length > 0 && json[0] == '\uFEFF') json = json[1..];
+        if (Encoding.UTF8.GetByteCount(json) > 4 * 1024 * 1024)
+            throw new CliException("Application request exceeds the 4 MiB limit.");
+        try
+        {
+            var input = JsonSerializer.Deserialize<ApplicationRequestInput>(json, JsonOptions)
+                ?? throw new CliException("Application request JSON is empty.");
+            return (input.ToDomain(), json);
+        }
+        catch (JsonException ex)
+        {
+            throw new CliException($"Application request JSON is invalid: {ex.Message}");
+        }
+    }
+
+    private static async Task<int> RunApplyInspect(CliOptions options, FileTaskStorage storage,
+        TaskApplicationRequest request, string requestHash)
+    {
+        var receipt = await new TaskApplicationReceiptStore(storage.Path).ReadAsync(request.ApplicationId);
+        var receiptState = receipt == null ? "missing" : receipt.RequestHash == requestHash ? "matching" : "conflicting";
+        var state = await new TaskApplicationCommandService(storage, TaskEtag.Create).InspectAsync(request);
+        if (state.Error != null)
+        {
+            var error = new { success = false, didMutate = false, applicationId = request.ApplicationId,
+                requestHash, error = new { kind = char.ToLowerInvariant(state.Error.Kind.ToString()[0]) + state.Error.Kind.ToString()[1..], message = state.Error.Message } };
+            if (options.Format == OutputFormat.Json) WriteJson(error);
+            else Console.Error.WriteLine(state.Error.Message);
+            return 1;
+        }
+        var previewPossible = false;
+        if (receiptState == "missing" && state.PreconditionsMatch && state.PostconditionsMatch != "all")
+            previewPossible = (await new TaskApplicationCommandService(storage, TaskEtag.Create).PreviewAsync(request)).Success;
+        var assessment = receiptState == "matching" ? "receiptMatched"
+            : receiptState == "conflicting" ? "needsReconciliation"
+            : state.PostconditionsMatch == "all" ? "desiredStatePresent"
+            : previewPossible ? "readyForPreview"
+            : "needsReconciliation";
+        var output = new { success = true, didMutate = false, applicationId = request.ApplicationId,
+            requestHash, receiptState, postconditionsMatch = state.PostconditionsMatch,
+            preconditionsMatch = state.PreconditionsMatch,
+            changedTaskIds = receipt?.ChangedTaskIds ?? [],
+            createdTaskIds = receipt?.CreatedTaskIds ?? [],
+            affectedTaskIds = state.AffectedTaskIds,
+            requestedCreateTaskIds = state.RequestedCreateTaskIds, assessment };
+        if (options.Format == OutputFormat.Json) WriteJson(output);
+        else Console.WriteLine($"{assessment}: receipt={receiptState}, postconditions={state.PostconditionsMatch}, preconditions={state.PreconditionsMatch}");
+        return 0;
+    }
 
     private static int RenderExecutionResult(
         CliOptions options,
@@ -834,26 +963,7 @@ public static class Program
 
     private static void PrintUsage(TextWriter? writer = null)
     {
-        writer ??= Console.Out;
-        writer.WriteLine("Usage:");
-        writer.WriteLine("  unlimotion-cli status --tasks <path> [--format text|json]");
-        writer.WriteLine("  Task directory: --tasks <path>, then UNLIMOTION_TASKS, then active local desktop settings.");
-        writer.WriteLine("  unlimotion-cli unlocked --tasks <path> [--format text|json]");
-        writer.WriteLine("  unlimotion-cli unlocked [--root <task-id>]... --tasks <path> [--format text|json]");
-        writer.WriteLine("  unlimotion-cli candidates --tasks <path> --limit <1..100> [--status <status>] [--startable true|false] [--sort default] [--format text|json]");
-        writer.WriteLine("  unlimotion-cli claim --tasks <path> --id <task-id> --agent <agent-id> --expected-status Prepared [--format text|json]");
-        writer.WriteLine("  unlimotion-cli execution question --tasks <path> --id <task-id> --agent <agent-id> --lease <lease-id> --text <text> [--format text|json]");
-        writer.WriteLine("  unlimotion-cli execution answer --tasks <path> --id <task-id> --agent <agent-id> --lease <lease-id> --question-id <question-id> --text <text> [--format text|json]");
-        writer.WriteLine("  unlimotion-cli execution result|complete --tasks <path> --id <task-id> --agent <agent-id> --lease <lease-id> --summary <text> [--link <absolute-uri>] [--format text|json]");
-        writer.WriteLine("  unlimotion-cli release --tasks <path> --id <task-id> --agent <agent-id> --lease <lease-id> --reason <text> [--format text|json]");
-        writer.WriteLine("  unlimotion-cli create --tasks <path> --title <text> [--description <text>] [--parent <task-id>] [--format text|json]");
-        writer.WriteLine("  unlimotion-cli apply --tasks <path> --request <path|-> [--dry-run] [--format text|json]");
-        writer.WriteLine("  unlimotion-cli task --tasks <path> --id <task-id> [--include details,relations,criteria,history,execution] [--format text|json]");
-        writer.WriteLine("  unlimotion-cli validate --tasks <path> [--format text|json]");
-        writer.WriteLine("  unlimotion-cli set-status --tasks <path> --id <task-id> --status <status> [--author <name>] [--format text|json]");
-        writer.WriteLine("  unlimotion-cli complete --tasks <path> --id <task-id> [--author <name>] [--format text|json]");
-        writer.WriteLine("  unlimotion-cli set-criterion --tasks <path> --id <task-id> --criterion <criterion-id> --satisfied true|false [--format text|json]");
-        writer.WriteLine("  unlimotion-cli satisfy-criterion --tasks <path> --id <task-id> --criterion <criterion-id> [--format text|json]");
+        CliIntrospection.PrintGeneral(writer ?? Console.Out);
     }
 }
 
@@ -864,6 +974,8 @@ public sealed record CliOptions
         "status",
         "unlocked",
         "candidates",
+        "search",
+        "context",
         "apply",
         "claim",
         "execution",
@@ -879,7 +991,9 @@ public sealed record CliOptions
 
     public string Command { get; init; } = string.Empty;
     public string? ExecutionCommand { get; init; }
+    public string? ApplyCommand { get; init; }
     public string? TasksPath { get; init; }
+    public string TasksSourceKind { get; init; } = "desktopSettings";
     public string? TaskId { get; init; }
     public string? CriterionId { get; init; }
     public string? AgentId { get; init; }
@@ -894,6 +1008,8 @@ public sealed record CliOptions
     public IReadOnlyList<string> ParentIds { get; init; } = Array.Empty<string>();
     public IReadOnlyList<string> RootIds { get; init; } = Array.Empty<string>();
     public string? RequestPath { get; init; }
+    public string? Query { get; init; }
+    public string? Cursor { get; init; }
     public bool DryRun { get; init; }
     public IReadOnlySet<string> IncludeSections { get; init; } = new HashSet<string>(StringComparer.Ordinal);
     public DomainTaskStatus? ExpectedStatus { get; init; }
@@ -920,6 +1036,7 @@ public sealed record CliOptions
         }
 
         string? executionCommand = null;
+        string? applyCommand = null;
         var firstOptionIndex = 1;
         if (command == "execution")
         {
@@ -934,6 +1051,12 @@ public sealed record CliOptions
                 throw new CliException($"Unknown execution command '{executionCommand}'.");
             }
 
+            firstOptionIndex = 2;
+        }
+        else if (command == "apply" && args.Length > 1 && !args[1].StartsWith('-'))
+        {
+            applyCommand = args[1].ToLowerInvariant();
+            if (applyCommand != "inspect") throw new CliException($"Unknown apply subcommand '{applyCommand}'.");
             firstOptionIndex = 2;
         }
 
@@ -952,6 +1075,8 @@ public sealed record CliOptions
         var parentIds = new List<string>();
         var rootIds = new List<string>();
         string? requestPath = null;
+        string? query = null;
+        string? cursor = null;
         var dryRun = false;
         var includeSections = new HashSet<string>(StringComparer.Ordinal);
         DomainTaskStatus? expectedStatus = null;
@@ -1034,6 +1159,14 @@ public sealed record CliOptions
                     suppliedOptions.Add(arg);
                     requestPath = RequireValue(args, ref i, arg);
                     break;
+                case "--query":
+                    suppliedOptions.Add(arg);
+                    query = RequireValue(args, ref i, arg);
+                    break;
+                case "--cursor":
+                    suppliedOptions.Add(arg);
+                    cursor = RequireValue(args, ref i, arg);
+                    break;
                 case "--dry-run":
                     suppliedOptions.Add(arg);
                     dryRun = true;
@@ -1081,17 +1214,24 @@ public sealed record CliOptions
         }
 
         ValidateOptions(command, executionCommand, suppliedOptions);
+        if (command == "apply" && applyCommand == "inspect" && dryRun)
+            throw new CliException("apply inspect is read-only and does not accept --dry-run.");
+        if (suppliedOptions.Contains("--tasks") && string.IsNullOrWhiteSpace(tasksPath))
+            throw new CliException("--tasks requires a non-empty path.");
 
         if (parentIds.Count != parentIds.Distinct(StringComparer.Ordinal).Count())
         {
             throw new CliException("--parent values must be unique.");
         }
 
+        var resolution = TaskDirectoryResolver.ResolveWithSource(tasksPath);
         return new CliOptions
         {
             Command = command,
             ExecutionCommand = executionCommand,
-            TasksPath = tasksPath ?? TaskDirectoryResolver.Resolve(null),
+            ApplyCommand = applyCommand,
+            TasksPath = resolution.TasksPath,
+            TasksSourceKind = resolution.SourceKind,
             TaskId = taskId,
             CriterionId = criterionId,
             AgentId = agentId,
@@ -1106,6 +1246,8 @@ public sealed record CliOptions
             ParentIds = parentIds,
             RootIds = rootIds,
             RequestPath = requestPath,
+            Query = query,
+            Cursor = cursor,
             DryRun = dryRun,
             IncludeSections = includeSections,
             ExpectedStatus = expectedStatus,
@@ -1178,8 +1320,10 @@ public sealed record CliOptions
         var allowedOptions = (command, executionCommand) switch
         {
             ("status" or "validate", _) => new[] { "--tasks", "--format" },
+            ("context", _) => new[] { "--tasks", "--format" },
+            ("search", _) => new[] { "--tasks", "--query", "--status", "--root", "--limit", "--cursor", "--format" },
             ("unlocked", _) => new[] { "--tasks", "--root", "--format" },
-            ("apply", _) => new[] { "--tasks", "--request", "--dry-run", "--format" },
+            ("apply", _) when executionCommand == null => new[] { "--tasks", "--request", "--dry-run", "--format" },
             ("candidates", _) => new[] { "--tasks", "--limit", "--status", "--startable", "--sort", "--format" },
             ("claim", _) => new[] { "--tasks", "--id", "--agent", "--expected-status", "--format" },
             ("task", _) => new[] { "--tasks", "--id", "--include", "--format" },
@@ -1260,6 +1404,13 @@ public sealed record StatusOutput
     public int CompletedCount { get; init; }
     public int ArchivedCount { get; init; }
 }
+
+public sealed record ContextOutput(string TasksPath, string SourceKind, string StorageKind,
+    string PackageVersion, string ApplicationVersion);
+public sealed record SearchItem(string Id, string Title, DomainTaskStatus Status, int Importance,
+    bool CanStart, bool CanComplete);
+public sealed record SearchOutput(IReadOnlyList<SearchItem> Items, int TotalCount, string? NextCursor);
+internal sealed record SearchCursor(int Version, string Fingerprint, string Title, string Id);
 
 public sealed record TaskSummary
 {
@@ -1581,6 +1732,7 @@ public sealed record TaskDetailsOutput
     public DateTimeOffset? PlannedBeginDateTime { get; init; }
     public DateTimeOffset? PlannedEndDateTime { get; init; }
     public TimeSpan? PlannedDuration { get; init; }
+    public RepeaterOutput? Repeater { get; init; }
 
     public static TaskDetailsOutput From(TaskItem task)
     {
@@ -1595,9 +1747,31 @@ public sealed record TaskDetailsOutput
         UpdatedDateTime = task.UpdatedDateTime,
         PlannedBeginDateTime = task.PlannedBeginDateTime,
         PlannedEndDateTime = task.PlannedEndDateTime,
-        PlannedDuration = task.PlannedDuration
+        PlannedDuration = task.PlannedDuration,
+        Repeater = task.Repeater == null ? null : RepeaterOutput.From(task.Repeater)
         };
     }
+}
+
+public sealed record RepeaterOutput
+{
+    public RepeaterType Type { get; init; }
+    public int Period { get; init; }
+    public bool AfterComplete { get; init; }
+    public IReadOnlyList<int>? Pattern { get; init; }
+    [JsonExtensionData] public IDictionary<string, JsonElement>? ExtensionData { get; init; }
+
+    public static RepeaterOutput From(RepeaterPattern repeater) => new()
+    {
+        Type = repeater.Type,
+        Period = repeater.Period,
+        AfterComplete = repeater.AfterComplete,
+        Pattern = repeater.Pattern,
+        ExtensionData = repeater.ExtensionData?.ToDictionary(
+            static pair => pair.Key,
+            static pair => JsonDocument.Parse(pair.Value.ToString(Newtonsoft.Json.Formatting.None)).RootElement.Clone(),
+            StringComparer.Ordinal)
+    };
 }
 
 public sealed record ApplicationCommandOutput

@@ -9,6 +9,22 @@ public static class TaskDirectoryResolver
     public static string Resolve(string? explicitTasksPath, string settingsPath) =>
         Resolve(explicitTasksPath, null, settingsPath);
 
+    public static TaskDirectoryResolution ResolveWithSource(string? explicitTasksPath, string settingsPath) =>
+        ResolveWithSource(explicitTasksPath, null, settingsPath);
+
+    public static TaskDirectoryResolution ResolveWithSource(
+        string? explicitTasksPath, string? environmentTasksPath, string settingsPath) =>
+        !string.IsNullOrWhiteSpace(explicitTasksPath)
+            ? new TaskDirectoryResolution(explicitTasksPath, "explicitTasks")
+            : !string.IsNullOrWhiteSpace(environmentTasksPath)
+                ? new TaskDirectoryResolution(environmentTasksPath, "environmentTasks")
+                : new TaskDirectoryResolution(Resolve(null, null, settingsPath), "desktopSettings");
+
+    public static TaskDirectoryResolution ResolveWithSource(string? explicitTasksPath) => ResolveWithSource(
+        explicitTasksPath,
+        Environment.GetEnvironmentVariable(TasksEnvironmentVariable),
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Personal), "Unlimotion", "Settings.json"));
+
     public static string Resolve(string? explicitTasksPath, string? environmentTasksPath, string settingsPath)
     {
         if (!string.IsNullOrWhiteSpace(explicitTasksPath))
@@ -106,3 +122,5 @@ public static class TaskDirectoryResolver
         return false;
     }
 }
+
+public sealed record TaskDirectoryResolution(string TasksPath, string SourceKind);

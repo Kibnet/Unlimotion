@@ -26,6 +26,29 @@ public sealed class TaskApplicationCommandService
     public Task<TaskApplicationResult> TryApplyAsync(TaskApplicationRequest request) =>
         ExecuteAsync(request, dryRun: false);
 
+    public async Task<TaskApplicationStateInspection> InspectAsync(TaskApplicationRequest request)
+    {
+        if (_storage is not ITaskGraphDiagnosticStorage diagnostics)
+            return new TaskApplicationStateInspection("unknown", false, [], [],
+                new TaskApplicationError { Kind = TaskApplicationErrorKind.OperationFailed, Message = "Storage does not support graph reads." });
+        var requestError = ValidateRequest(request);
+        if (requestError?.Error != null)
+            return new TaskApplicationStateInspection("unknown", false, [], [], requestError.Error);
+        var graph = await diagnostics.ReadGraphAsync();
+        var validation = TaskGraphValidationReport.From(graph);
+        if (!validation.IsWriteSafe)
+            return new TaskApplicationStateInspection("unknown", false,
+                request.Operations.SelectMany(AffectedTaskIds).Distinct(StringComparer.Ordinal).ToArray(),
+                request.Operations.Where(operation => operation.Kind == TaskApplicationOperationKind.CreateTask)
+                    .Select(operation => operation.NewTaskId!).ToArray(), null);
+        var tasks = graph.TasksById;
+        var match = EvaluatePostconditions(request, tasks);
+        var created = request.Operations.Where(operation => operation.Kind == TaskApplicationOperationKind.CreateTask)
+            .Select(operation => operation.NewTaskId!).Distinct(StringComparer.Ordinal).ToArray();
+        var affected = request.Operations.SelectMany(AffectedTaskIds).Distinct(StringComparer.Ordinal).ToArray();
+        return new TaskApplicationStateInspection(match, PreconditionsMatch(request, tasks), affected, created, null);
+    }
+
     private async Task<TaskApplicationResult> ExecuteAsync(TaskApplicationRequest request, bool dryRun)
     {
         if (_storage is not ITaskGraphDiagnosticStorage diagnostics)
@@ -68,7 +91,7 @@ public sealed class TaskApplicationCommandService
                 // deterministic create id as a second, conflicting create.
                 if (!dryRun)
                 {
-                    var reconciliation = ReconcilePreviouslyAppliedRequest(request, original);
+                    var reconciliation = ReconcilePreviouslyAppliedRequest(request, original, EtagProvider);
                     if (reconciliation != null)
                     {
                         return reconciliation;
@@ -161,14 +184,13 @@ public sealed class TaskApplicationCommandService
                 await recoverableScope.CommitAsync();
                 var afterGraph = await diagnostics.ReadGraphAsync();
                 var afterValidation = TaskGraphValidationReport.From(afterGraph);
-                var verificationFailure = request.Operations.FirstOrDefault(operation =>
-                    !IsOperationAlreadyApplied(operation, afterGraph.TasksById));
-                if (!afterValidation.IsValid || verificationFailure != null)
+                var postconditionsMatch = EvaluatePostconditions(request, afterGraph.TasksById);
+                if (!afterValidation.IsValid || postconditionsMatch != "all")
                 {
                     return Failed(TaskApplicationErrorKind.OutcomeUnknown,
-                        verificationFailure == null
+                        postconditionsMatch == "all"
                             ? "Application writes were committed but the resulting graph is invalid."
-                            : $"Application operation '{verificationFailure.OperationId}' was committed but its authoritative postcondition could not be verified.",
+                            : "Application writes were committed but their final postconditions could not be verified.",
                         validation: afterValidation,
                         operationResults: operationResults,
                         authoritativeTasks: ToAuthoritativeTasks(afterGraph.TasksById, changed.Select(static task => task.Id)));
@@ -598,16 +620,20 @@ public sealed class TaskApplicationCommandService
 
     private static TaskApplicationResult? ReconcilePreviouslyAppliedRequest(
         TaskApplicationRequest request,
-        IReadOnlyDictionary<string, TaskItem> tasks)
+        IReadOnlyDictionary<string, TaskItem> tasks,
+        Func<TaskItem, string> etagProvider)
     {
-        var appliedCount = request.Operations.Count(operation => IsOperationAlreadyApplied(operation, tasks));
-        if (appliedCount == 0)
+        // A pre-existing no-op can match one operation before this request ever runs.
+        // Matching original ETags mean normal planning remains authoritative.
+        if (PreconditionsMatch(request, tasks, etagProvider))
         {
             return null;
         }
 
         var taskIds = request.Operations.SelectMany(AffectedTaskIds).Distinct(StringComparer.Ordinal).ToArray();
-        if (appliedCount != request.Operations.Count)
+        var match = EvaluatePostconditions(request, tasks);
+        if (match == "none") return null;
+        if (match != "all")
         {
             return Failed(TaskApplicationErrorKind.ReconciliationRequired,
                 "Some operations already match the task graph but the application is incomplete; inspect authoritative state before retrying.",
@@ -630,6 +656,129 @@ public sealed class TaskApplicationCommandService
             }).ToArray(),
             AuthoritativeTasks = ToAuthoritativeTasks(tasks, taskIds)
         };
+    }
+
+    private static bool PreconditionsMatch(TaskApplicationRequest request,
+        IReadOnlyDictionary<string, TaskItem> tasks, Func<TaskItem, string> etagProvider)
+    {
+        var createdIds = request.Operations.Where(operation => operation.Kind == TaskApplicationOperationKind.CreateTask)
+            .Select(operation => operation.NewTaskId).ToHashSet(StringComparer.Ordinal);
+        if (createdIds.Any(id => id != null && tasks.ContainsKey(id))) return false;
+        foreach (var id in request.Operations.SelectMany(AffectedTaskIds).Distinct(StringComparer.Ordinal))
+        {
+            if (createdIds.Contains(id)) continue;
+            var precondition = request.Preconditions.SingleOrDefault(item => item.TaskId == id);
+            if (precondition == null || !tasks.TryGetValue(id, out var task) ||
+                precondition.Etag != etagProvider(task) ||
+                (precondition.Status.HasValue && precondition.Status != task.Status)) return false;
+        }
+        return true;
+    }
+
+    private bool PreconditionsMatch(TaskApplicationRequest request, IReadOnlyDictionary<string, TaskItem> tasks) =>
+        PreconditionsMatch(request, tasks, EtagProvider);
+
+    private static string EvaluatePostconditions(TaskApplicationRequest request, IReadOnlyDictionary<string, TaskItem> tasks)
+    {
+        var matched = 0;
+        foreach (var operation in request.Operations)
+        {
+            var isMatch = operation.Kind == TaskApplicationOperationKind.CreateTask
+                ? CreatedTaskMatches(operation, request.Operations, request.Author, tasks)
+                : IsOperationAlreadyApplied(operation, tasks);
+            if (isMatch) matched++;
+        }
+        return matched == request.Operations.Count ? "all" : matched == 0 ? "none" : "partial";
+    }
+
+    private static bool CreatedTaskMatches(TaskApplicationOperation create,
+        IReadOnlyList<TaskApplicationOperation> operations, string author, IReadOnlyDictionary<string, TaskItem> tasks)
+    {
+        if (create.NewTaskId == null || !tasks.TryGetValue(create.NewTaskId, out var task)) return false;
+        var title = create.Title?.Trim();
+        var description = create.DescriptionUserText ?? string.Empty;
+        var duration = create.PlannedDuration;
+        var begin = create.PlannedBeginDateTime;
+        var end = create.PlannedEndDateTime;
+        var status = DomainTaskStatus.Prepared;
+        var parents = (create.ParentIds ?? Array.Empty<string>()).ToHashSet(StringComparer.Ordinal);
+        var children = new HashSet<string>(StringComparer.Ordinal);
+        var blocks = new HashSet<string>(StringComparer.Ordinal);
+        var blockedBy = new HashSet<string>(StringComparer.Ordinal);
+        var criteria = (create.Criteria ?? Array.Empty<TaskApplicationCriterion>())
+            .ToDictionary(item => item.CriterionId,
+                item => (item.Text, item.IsSatisfied), StringComparer.Ordinal);
+        foreach (var operation in operations.SkipWhile(item => !ReferenceEquals(item, create)).Skip(1))
+        {
+            if (operation.TaskId == create.NewTaskId)
+            {
+                if (operation.Kind == TaskApplicationOperationKind.SetField)
+                {
+                    switch (operation.Field)
+                    {
+                        case "title": title = operation.Value?.Trim(); break;
+                        case "descriptionUserText": description = operation.Value ?? string.Empty; break;
+                        case "plannedDuration": if (TryParseDuration(operation.Value, out var parsedDuration)) duration = parsedDuration; break;
+                        case "plannedBeginDateTime": if (TryParseDate(operation.Value, out var parsedBegin)) begin = parsedBegin; break;
+                        case "plannedEndDateTime": if (TryParseDate(operation.Value, out var parsedEnd)) end = parsedEnd; break;
+                    }
+                }
+                if (operation.Kind == TaskApplicationOperationKind.ClearField)
+                {
+                    switch (operation.Field)
+                    {
+                        case "descriptionUserText": description = string.Empty; break;
+                        case "plannedDuration": duration = null; break;
+                        case "plannedBeginDateTime": begin = null; break;
+                        case "plannedEndDateTime": end = null; break;
+                    }
+                }
+                switch (operation.Kind)
+                {
+                    case TaskApplicationOperationKind.AddCriterion when operation.CriterionId != null:
+                        criteria[operation.CriterionId] = (operation.Text ?? string.Empty, operation.IsSatisfied ?? false); break;
+                    case TaskApplicationOperationKind.ReplaceCriterion when operation.CriterionId != null && criteria.TryGetValue(operation.CriterionId, out var old):
+                        criteria[operation.CriterionId] = (operation.Text ?? string.Empty, old.IsSatisfied); break;
+                    case TaskApplicationOperationKind.RemoveCriterion when operation.CriterionId != null:
+                        criteria.Remove(operation.CriterionId); break;
+                    case TaskApplicationOperationKind.SetCriterionSatisfied when operation.CriterionId != null && criteria.TryGetValue(operation.CriterionId, out var existing):
+                        criteria[operation.CriterionId] = (existing.Text, operation.IsSatisfied ?? false); break;
+                    case TaskApplicationOperationKind.SetStatus when operation.Status.HasValue:
+                        status = operation.Status.Value; break;
+                }
+            }
+            if (operation.Kind is TaskApplicationOperationKind.AddRelation or TaskApplicationOperationKind.RemoveRelation)
+            {
+                var add = operation.Kind == TaskApplicationOperationKind.AddRelation;
+                if (operation.FromTaskId == create.NewTaskId && operation.ToTaskId != null)
+                {
+                    var set = operation.Relation == "contains" ? children : blocks;
+                    if (add) set.Add(operation.ToTaskId); else set.Remove(operation.ToTaskId);
+                }
+                if (operation.ToTaskId == create.NewTaskId && operation.FromTaskId != null)
+                {
+                    var set = operation.Relation == "contains" ? parents : blockedBy;
+                    if (add) set.Add(operation.FromTaskId); else set.Remove(operation.FromTaskId);
+                }
+            }
+        }
+        var expectedHistory = status == DomainTaskStatus.Prepared
+            ? new[] { DomainTaskStatus.Prepared }
+            : new[] { DomainTaskStatus.Prepared, status };
+        return task.Title == title && task.Description == description && task.PlannedDuration == duration &&
+            task.PlannedBeginDateTime == begin && task.PlannedEndDateTime == end && task.Status == status &&
+            task.ParentTasks.ToHashSet(StringComparer.Ordinal).SetEquals(parents) &&
+            task.ContainsTasks.ToHashSet(StringComparer.Ordinal).SetEquals(children) &&
+            task.BlocksTasks.ToHashSet(StringComparer.Ordinal).SetEquals(blocks) &&
+            task.BlockedByTasks.ToHashSet(StringComparer.Ordinal).SetEquals(blockedBy) &&
+            task.CompletionCriteria.Count == criteria.Count && task.CompletionCriteria.All(item =>
+                criteria.TryGetValue(item.Id, out var expected) && item.Text == expected.Text && item.IsSatisfied == expected.IsSatisfied) &&
+            task.Importance == 0 && !task.Wanted && task.Version == 1 &&
+            task.UserId == TaskItem.NormalizeAuthor(author) && task.AgentExecution == null &&
+            task.Repeater == null &&
+            (task.ExtensionData == null || task.ExtensionData.Count == 0) &&
+            task.StatusHistory.Select(item => item.Status).SequenceEqual(expectedHistory) &&
+            task.StatusHistory.All(item => item.Author == TaskItem.NormalizeAuthor(author));
     }
 
     private static bool IsOperationAlreadyApplied(TaskApplicationOperation operation, IReadOnlyDictionary<string, TaskItem> tasks)
@@ -677,11 +826,13 @@ public sealed class TaskApplicationCommandService
 
     private static bool RelationMatches(IReadOnlyDictionary<string, TaskItem> tasks, TaskApplicationOperation operation, bool expected) =>
         tasks.TryGetValue(operation.FromTaskId ?? string.Empty, out var from) &&
-        tasks.ContainsKey(operation.ToTaskId ?? string.Empty) &&
+        tasks.TryGetValue(operation.ToTaskId ?? string.Empty, out var to) &&
         operation.Relation switch
         {
-            "contains" => from.ContainsTasks.Contains(operation.ToTaskId, StringComparer.Ordinal) == expected,
-            "blocks" => from.BlocksTasks.Contains(operation.ToTaskId, StringComparer.Ordinal) == expected,
+            "contains" => from.ContainsTasks.Contains(operation.ToTaskId, StringComparer.Ordinal) == expected &&
+                to.ParentTasks.Contains(operation.FromTaskId, StringComparer.Ordinal) == expected,
+            "blocks" => from.BlocksTasks.Contains(operation.ToTaskId, StringComparer.Ordinal) == expected &&
+                to.BlockedByTasks.Contains(operation.FromTaskId, StringComparer.Ordinal) == expected,
             _ => false
         };
 
@@ -781,3 +932,5 @@ public enum TaskApplicationErrorKind { InvalidArguments, NotFound, PreconditionF
 public sealed record TaskApplicationError { public TaskApplicationErrorKind Kind { get; init; } public string Message { get; init; } = string.Empty; public string? OperationId { get; init; } public string? TaskId { get; init; } public string? ExpectedEtag { get; init; } public string? ActualEtag { get; init; } }
 public sealed record TaskApplicationOperationResult { public string OperationId { get; init; } = string.Empty; public string? TaskId { get; init; } public string Outcome { get; init; } = string.Empty; }
 public sealed record TaskApplicationResult { public bool Success { get; init; } public string Mode { get; init; } = string.Empty; public bool DidMutate { get; init; } public IReadOnlyList<string> ChangedTaskIds { get; init; } = Array.Empty<string>(); public IReadOnlyList<string> CreatedTaskIds { get; init; } = Array.Empty<string>(); public IReadOnlyList<TaskApplicationOperationResult> OperationResults { get; init; } = Array.Empty<TaskApplicationOperationResult>(); public TaskApplicationError? Error { get; init; } public TaskGraphValidationReport? Validation { get; init; } public IReadOnlyList<TaskItem> AuthoritativeTasks { get; init; } = Array.Empty<TaskItem>(); }
+public sealed record TaskApplicationStateInspection(string PostconditionsMatch, bool PreconditionsMatch,
+    IReadOnlyList<string> AffectedTaskIds, IReadOnlyList<string> RequestedCreateTaskIds, TaskApplicationError? Error);

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Kibnet/Unlimotion/blob/main/src/Unlimotion.Cli/apply-request-v1.schema.json",
+  "title": "Unlimotion application request v1",
+  "description": "Syntax contract. Preview also checks ETags, graph relationships, business rules, protected description markers and terminal-status evidence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "applicationId", "proposalRefs", "author", "reason", "preconditions", "operations"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "applicationId": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "proposalRefs": { "type": "array", "minItems": 1, "items": { "type": "object", "required": ["id", "revision"], "properties": { "id": { "type": "string", "minLength": 1 }, "revision": { "type": "integer", "minimum": 1 } }, "additionalProperties": false } },
+    "author": { "type": "string", "minLength": 1 },
+    "reason": { "type": "string", "minLength": 1 },
+    "preconditions": { "type": "array", "maxItems": 512, "items": { "type": "object", "required": ["taskId", "etag"], "properties": { "taskId": { "$ref": "#/$defs/id" }, "etag": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }, "status": { "$ref": "#/$defs/status" } }, "additionalProperties": false } },
+    "operations": { "type": "array", "minItems": 1, "maxItems": 256, "items": { "oneOf": [
+      { "$ref": "#/$defs/setField" }, { "$ref": "#/$defs/clearField" },
+      { "$ref": "#/$defs/addCriterion" }, { "$ref": "#/$defs/replaceCriterion" },
+      { "$ref": "#/$defs/removeCriterion" }, { "$ref": "#/$defs/setCriterionSatisfied" },
+      { "$ref": "#/$defs/addRelation" }, { "$ref": "#/$defs/removeRelation" },
+      { "$ref": "#/$defs/createTask" }, { "$ref": "#/$defs/setStatus" }
+    ] } }
+  },
+  "$defs": {
+    "id": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["NotReady", "Prepared", "InProgress", "Completed", "Archived"] },
+    "base": { "type": "object", "required": ["operationId", "kind"], "properties": { "operationId": { "$ref": "#/$defs/id" } } },
+    "setField": { "type": "object", "additionalProperties": false, "required": ["operationId", "kind", "taskId", "field", "value"], "properties": { "operationId": { "$ref": "#/$defs/id" }, "kind": { "const": "setField" }, "taskId": { "$ref": "#/$defs/id" }, "field": { "enum": ["title", "descriptionUserText", "plannedDuration", "plannedBeginDateTime", "plannedEndDateTime"] }, "value": { "type": "string" } } },
+    "clearField": { "type": "object", "additionalProperties": false, "required": ["operationId", "kind", "taskId", "field"], "properties": { "operationId": { "$ref": "#/$defs/id" }, "kind": { "const": "clearField" }, "taskId": { "$ref": "#/$defs/id" }, "field": { "enum": ["descriptionUserText", "plannedDuration", "plannedBeginDateTime", "plannedEndDateTime"] } } },
+    "criterion": { "type": "object", "required": ["operationId", "taskId", "criterionId"], "properties": { "operationId": { "$ref": "#/$defs/id" }, "taskId": { "$ref": "#/$defs/id" }, "criterionId": { "$ref": "#/$defs/id" }, "text": { "type": "string", "minLength": 1 }, "isSatisfied": { "type": "boolean" } } },
+    "addCriterion": { "allOf": [ { "$ref": "#/$defs/criterion" }, { "type": "object", "required": ["kind", "text"], "properties": { "kind": { "const": "addCriterion" } } } ] },
+    "replaceCriterion": { "allOf": [ { "$ref": "#/$defs/criterion" }, { "type": "object", "required": ["kind", "text"], "properties": { "kind": { "const": "replaceCriterion" } } } ] },
+    "removeCriterion": { "allOf": [ { "$ref": "#/$defs/criterion" }, { "type": "object", "required": ["kind"], "properties": { "kind": { "const": "removeCriterion" } } } ] },
+    "setCriterionSatisfied": { "allOf": [ { "$ref": "#/$defs/criterion" }, { "type": "object", "required": ["kind", "isSatisfied"], "properties": { "kind": { "const": "setCriterionSatisfied" } } } ] },
+    "relation": { "type": "object", "required": ["operationId", "relation", "fromTaskId", "toTaskId"], "properties": { "operationId": { "$ref": "#/$defs/id" }, "relation": { "enum": ["contains", "blocks"] }, "fromTaskId": { "$ref": "#/$defs/id" }, "toTaskId": { "$ref": "#/$defs/id" } } },
+    "addRelation": { "allOf": [ { "$ref": "#/$defs/relation" }, { "type": "object", "required": ["kind"], "properties": { "kind": { "const": "addRelation" } } } ] },
+    "removeRelation": { "allOf": [ { "$ref": "#/$defs/relation" }, { "type": "object", "required": ["kind"], "properties": { "kind": { "const": "removeRelation" } } } ] },
+    "createTask": { "type": "object", "additionalProperties": false, "required": ["operationId", "kind", "newTaskId", "title"], "properties": { "operationId": { "$ref": "#/$defs/id" }, "kind": { "const": "createTask" }, "newTaskId": { "$ref": "#/$defs/id" }, "title": { "type": "string", "minLength": 1, "maxLength": 4000 }, "descriptionUserText": { "type": "string", "maxLength": 100000 }, "plannedDuration": { "type": "string" }, "plannedBeginDateTime": { "type": "string", "format": "date-time" }, "plannedEndDateTime": { "type": "string", "format": "date-time" }, "parentIds": { "type": "array", "items": { "$ref": "#/$defs/id" }, "uniqueItems": true }, "criteria": { "type": "array", "items": { "type": "object", "required": ["criterionId", "text"], "properties": { "criterionId": { "$ref": "#/$defs/id" }, "text": { "type": "string", "minLength": 1 }, "isSatisfied": { "type": "boolean" } } } } } },
+    "setStatus": { "type": "object", "additionalProperties": false, "required": ["operationId", "kind", "taskId", "status"], "properties": { "operationId": { "$ref": "#/$defs/id" }, "kind": { "const": "setStatus" }, "taskId": { "$ref": "#/$defs/id" }, "status": { "enum": ["NotReady", "Prepared", "Completed", "Archived"] }, "justification": { "type": "string" }, "evidenceLinks": { "type": "array", "items": { "type": "string", "format": "uri" } } } }
+  }
+}
