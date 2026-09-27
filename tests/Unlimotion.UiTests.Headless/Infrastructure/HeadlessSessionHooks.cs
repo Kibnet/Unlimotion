@@ -19,7 +19,17 @@ public static class HeadlessSessionHooks
     [Before(TestSession)]
     public static void SetupSession()
     {
-        _session = HeadlessSessionFactory.StartNew(UnlimotionAppLaunchHost.AvaloniaAppType);
+        // Keep regular interaction tests on the fast semantic backend. Skia is opt-in
+        // for screenshot runs because legacy tests synchronously dispatch to the UI thread.
+        var renderedScreenshots = string.Equals(
+            Environment.GetEnvironmentVariable("UNLIMOTION_RENDERED_HEADLESS_SCREENSHOTS"),
+            "1",
+            StringComparison.Ordinal);
+        _session = HeadlessSessionFactory.StartNew(
+            renderedScreenshots
+                ? typeof(RenderedHeadlessAppBuilder)
+                : UnlimotionAppLaunchHost.AvaloniaAppType,
+            AvaloniaTestIsolationLevel.PerAssembly);
         HeadlessRuntime.SetSession(_session);
     }
 

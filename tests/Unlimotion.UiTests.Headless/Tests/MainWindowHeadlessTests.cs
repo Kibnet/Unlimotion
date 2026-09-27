@@ -27,6 +27,7 @@ using Unlimotion.UiTests.Authoring.Pages;
 using Unlimotion.UiTests.Authoring.Tests;
 using Unlimotion.UiTests.Headless.Infrastructure;
 using Unlimotion.ViewModel;
+using Unlimotion.ViewModel.Workspace;
 
 namespace Unlimotion.UiTests.Headless.Tests;
 
@@ -35,6 +36,8 @@ public sealed class MainWindowHeadlessTests
     : FeedScenariosBase<MainWindowHeadlessTests.HeadlessRuntimeSession>
 {
     private const string TaskDeepLinkScenarioTestName = nameof(Task_deep_link_opens_existing_task_card);
+    private const string WorkspaceScreenshotsTestName = nameof(Capture_workspace_feed_and_task_screenshots);
+    private const string WorkspaceScreenshotDirectoryVariable = "UNLIMOTION_WORKSPACE_SCREENSHOT_DIR";
     private const string UnifiedEditorUseEditorMarker = "Unified editor version chosen by UseEditor";
     private const string UnifiedDiskUseEditorMarker = "Unified disk version rejected by UseEditor";
     private const string UnifiedEditorUseDiskMarker = "Unified editor version rejected by UseDisk";
@@ -51,6 +54,9 @@ public sealed class MainWindowHeadlessTests
         var isFeed = IsFeedScenarioTest || string.Equals(
             TestContext.Current?.Metadata.TestName,
             TaskDeepLinkScenarioTestName,
+            StringComparison.Ordinal) || string.Equals(
+            TestContext.Current?.Metadata.TestName,
+            WorkspaceScreenshotsTestName,
             StringComparison.Ordinal);
         var isDailyNoteFilenameFormatScenario = IsDailyNoteFilenameFormatScenarioTest;
         var inner = DesktopAppSession.Launch(
@@ -118,6 +124,75 @@ public sealed class MainWindowHeadlessTests
     protected override MainWindowPage CreatePage(HeadlessRuntimeSession session)
     {
         return new MainWindowPage(new HeadlessControlResolver(session.Inner.MainWindow));
+    }
+
+    [Test]
+    [NotInParallel(DesktopUiConstraint)]
+    public async Task Capture_workspace_feed_and_task_screenshots()
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable("UNLIMOTION_RENDERED_HEADLESS_SCREENSHOTS"),
+                "1", StringComparison.Ordinal))
+        {
+            throw new TUnit.Core.Exceptions.SkipTestException(
+                "Rendered screenshots require UNLIMOTION_RENDERED_HEADLESS_SCREENSHOTS=1.");
+        }
+
+        var screenshotDirectory = Environment.GetEnvironmentVariable(WorkspaceScreenshotDirectoryVariable);
+        if (string.IsNullOrWhiteSpace(screenshotDirectory))
+        {
+            screenshotDirectory = Path.Combine(AppContext.BaseDirectory, "artifacts",
+                "headless-screenshots");
+        }
+
+        screenshotDirectory = Path.Combine(screenshotDirectory, Guid.NewGuid().ToString("N"));
+
+        await HeadlessRuntime.Session.Dispatch<bool>(async () =>
+        {
+            var window = Session.Inner.MainWindow;
+            window.Width = 1280;
+            window.Height = 800;
+            window.Show();
+            var owner = GetHeadlessMainWindowViewModel();
+            await owner.OpenWorkspaceRootAsync(WorkspaceMode.Feed);
+            Dispatcher.UIThread.RunJobs();
+            window.UpdateLayout();
+            return true;
+        }, CancellationToken.None).ConfigureAwait(false);
+        var feedPath = await Task.Run(() =>
+        {
+            WaitUntil(
+                () => HeadlessRuntime.Dispatch(() => GetHeadlessMainWindowViewModel().Feed.VisibleDays.Count),
+                count => count > 0,
+                timeout: TimeSpan.FromSeconds(10),
+                timeoutMessage: "The seeded Feed days did not appear before the screenshot.");
+            return Session.Inner.CaptureScreenshot(Path.Combine(screenshotDirectory, "workspace-feed.png"));
+        }).ConfigureAwait(false);
+        Console.WriteLine($"Headless screenshot: {feedPath}");
+
+        await HeadlessRuntime.Session.Dispatch<bool>(async () =>
+        {
+            var owner = GetHeadlessMainWindowViewModel();
+            await owner.OpenWorkspaceLocationAsync(
+                WorkspaceLocation.ForTask(UnlimotionAutomationScenarioData.FeedCurrentTaskId,
+                    UnlimotionAutomationScenarioData.FeedCurrentTaskTitle),
+                WorkspaceOpenDisposition.AdjacentPane);
+            Dispatcher.UIThread.RunJobs();
+            Session.Inner.MainWindow.UpdateLayout();
+            return true;
+        }, CancellationToken.None).ConfigureAwait(false);
+        var splitPath = await Task.Run(() =>
+        {
+            WaitUntil(
+                () => HeadlessRuntime.Dispatch(() => GetHeadlessMainWindowViewModel()
+                    .WorkspaceNavigation.HasSecondaryPane),
+                timeout: TimeSpan.FromSeconds(10),
+                timeoutMessage: "The task pane did not appear beside Feed before the screenshot.");
+            return Session.Inner.CaptureScreenshot(Path.Combine(screenshotDirectory, "workspace-feed-and-task.png"));
+        }).ConfigureAwait(false);
+        Console.WriteLine($"Headless screenshot: {splitPath}");
+
+        await Assert.That(File.Exists(feedPath)).IsTrue();
+        await Assert.That(File.Exists(splitPath)).IsTrue();
     }
 
     protected override StatusContractWindowSnapshot GetStatusContractWindowSnapshot()
