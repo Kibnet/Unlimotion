@@ -303,7 +303,11 @@ To update:
 dotnet tool update --global Unlimotion.Cli
 ```
 
-Without `--tasks`, the CLI uses the active local space from the installed app's standard settings file. Explicit `--tasks <directory>` takes precedence and is also needed when using a custom configuration location. The CLI resolves relative task paths from the directory containing `Settings.json`.
+The CLI selects a task directory in this order: explicit `--tasks <directory>`, a nonempty `UNLIMOTION_TASKS` environment variable, then the active local space from the installed app's standard settings file. Explicit `--tasks` also supports a custom configuration location. The CLI resolves relative task paths from the directory containing `Settings.json`.
+
+### Codex skill
+
+The repository includes an [Unlimotion CLI skill](.agents/skills/unlimotion-cli/SKILL.md) that Codex discovers when started in this checkout. It guides an agent using an already installed CLI; it does not install the .NET tool. To use the skill in another project, follow the [GitHub installation instructions](src/Unlimotion.Cli/README.md#скилл-для-codex). An existing personal copy with the same name may also appear in Codex.
 
 The agent lifecycle is `candidates` → `task` → `claim` → questions/answers and results through `execution` → `execution complete` or `release`. Execution commands check the agent and lease identifiers; completion also checks task availability and criteria.
 

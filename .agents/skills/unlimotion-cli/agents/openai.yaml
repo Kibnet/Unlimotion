@@ -1,0 +1,4 @@
+interface:
+  display_name: "Unlimotion CLI"
+  short_description: "Просмотр и безопасное изменение задач Unlimotion"
+  default_prompt: "Используй $unlimotion-cli, чтобы найти мои доступные задачи и показать их текущее состояние."
