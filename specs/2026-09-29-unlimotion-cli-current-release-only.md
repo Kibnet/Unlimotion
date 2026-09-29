@@ -196,7 +196,8 @@ Rubric: 30/30, готово к автономному EXEC только посл
 - B до: narrow legacy commands допускались при наличии безопасного пути. После: stop before editing, no legacy fallback, no auto-update; предложить отдельное обновление CLI. PASS нового контракта.
 - C до/после: no blind retry, lock wait, exact request `apply inspect`, receipt/state различаются, read-back ID; ordinary create с потерянным ID остаётся unknown без однозначного read-back. PASS без регрессии.
 - Fresh Codex discovery: тот же runtime, без tools; repo skill найден по абсолютному пути `.agents/skills/unlimotion-cli/SKILL.md`, exit 0.
-- Remote install/no-overwrite и CI: ожидаются после публикации ветки; до их результата AC3/AC4 не объявляются завершёнными.
+- Remote install AC3 PASS: штатный `install-skill-from-github.py --repo Kibnet/Unlimotion --path .agents/skills/unlimotion-cli --ref 4f515c81d9552a98a05b1ee65824c4a63e73691f --dest <isolated temp>` скачал ровно два файла. SHA256 local/remote совпадают: SKILL.md `2B228287E1EEB063E9D809EAA52E058645D17FA85D6A402D85F9B07225096AEA`, agents/openai.yaml `F733D9D8CD5F13688F717D25674D161044EB888A7DB261880F9D631A84B9FF1A`. Повтор с тем же destination: `Destination already exists`, exit 1; последующая hash-сверка подтверждает отсутствие изменений. Personal skill/tool/live tasks не менялись. В последующем evidence-only коммите skill bytes не меняются.
+- AC4: published head `4f515c81`, PR #310 base `main`, allowlist из семи файлов, unrelated SPEC отсутствует. Required checks `android-build`, `All tests`, `CodeQL` проверены через branch protection API; CI ожидается. Исправлен единственный trailing blank line evidence artifact, final `git diff --check` PASS. Последующий evidence-only commit требует нового CI read-back; до этого delivery PASS не объявлять.
 
 ## Approval
 
@@ -212,3 +213,4 @@ Exact approval получено 2026-09-29: «Спеку подтверждаю�
 | EXEC / approval и preflight | Exact approval получено; main/release повторно сверены, drift нет | v1.32.0 / d1e6702f; чужая SPEC сохранена | реализовать один current route | «Спеку подтверждаю» | skill, README, эта SPEC |
 | EXEC / implementation и smoke | Удалены legacy route/reference/прежняя SPEC; README актуализированы | static, одинаковые before/after A–C и fresh discovery PASS; live tasks/personal skill/tool не менялись | post-EXEC review, commit/push, remote install, CI | в рамках approval | эта SPEC |
 | EXEC / review closure | HIGH evidence gap закрыт raw artifact и матрицей A–C | targeted re-review AC2 PASS; artifact явно включается в commit; общий delivery pending | commit/push, remote install, CI | не требовалось | эта SPEC, behavior evidence |
+| EXEC / publication и install | Commit 4f515c81 отправлен в ту же ветку PR #310; remote install подтверждён | два matching SHA256; occupied dest отказ без перезаписи; PR title/body актуализированы, unrelated file исключён | evidence-only commit и final head CI | в рамках исходной PR-доставки | PR #310 |

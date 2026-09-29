@@ -45,4 +45,3 @@ If ordinary `create` lost its generated ID, absence from a limited search is not
 | A | Explicit task-space, pinned identity, preview, once, read-back | Preserved safe sequence | Preserved safe sequence | PASS, no regression |
 | B | Stop before editing, separate update, no legacy fallback | Documented legacy route permitted | Stop; no fallback or auto-update | PASS, requested behavior change |
 | C | Inspect exact request + read-back; lost ordinary create remains unknown | Safe reconciliation/no retry | Safe reconciliation/no retry | PASS, no regression |
-
