@@ -19,7 +19,7 @@ dotnet tool update --global Unlimotion.Cli
 
 ## Скилл для Codex
 
-Операционный [скилл `unlimotion-cli`](../../.agents/skills/unlimotion-cli/SKILL.md) помогает агенту читать и изменять задачи через **уже установленный** CLI. Скилл не устанавливает `Unlimotion.Cli` и не заменяет команды `dotnet tool` выше. Перед работой агент проверяет версию и возможности фактически запущенного бинарника; инструкция сохраняет отдельный маршрут для 1.31.1 и проверенный контракт 1.32.0.
+Операционный [скилл `unlimotion-cli`](../../.agents/skills/unlimotion-cli/SKILL.md) помогает агенту читать и изменять задачи через **уже установленный актуальный** CLI; проверенный контракт — 1.32.0. Перед работой агент проверяет версию и возможности фактически запущенного бинарника. При несовместимом CLI он останавливается до изменения задач и предлагает отдельно обновить инструмент командой выше. Установка скилла не устанавливает и не обновляет `Unlimotion.Cli`.
 
 При запуске Codex из клона Unlimotion (в том числе из его подпапок) скилл обнаруживается автоматически из `.agents/skills/unlimotion-cli/` в корне репозитория. Для другого проекта установите его из GitHub в личный каталог навыков Codex. После слияния изменений в `main` команда PowerShell выглядит так:
 
@@ -59,7 +59,7 @@ unset UNLIMOTION_TASKS
 Для локальной сборки рекомендуется отдельный каталог инструмента, чтобы агент не изменял глобальную установку пользователя:
 
 ```powershell
-$packageVersion = "1.31.0-local.1"
+$packageVersion = "1.32.0-local.1"
 dotnet pack src\Unlimotion.Cli\Unlimotion.Cli.csproj -c Release -p:PackageVersion=$packageVersion -o artifacts\tools
 dotnet tool install --tool-path C:\tmp\unlimotion-cli-tool --add-source artifacts\tools Unlimotion.Cli --version $packageVersion
 ```

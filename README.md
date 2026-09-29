@@ -19,7 +19,7 @@ Unlimotion is a task planner built around a graph: a task can belong to several 
 
 ![Unlimotion tab tour](media/readme/en/tab-tour.gif)
 
-> Images show a demo build of the current branch with fictional tasks. It may differ from the latest stable release: for example, the current icon and settings recovery were added after 1.31.1. The version shown in the test build is not a published release number.
+> Images show a demo build of the current branch with fictional tasks. The version shown in the test build is not a published release number.
 
 ## Download and install
 
