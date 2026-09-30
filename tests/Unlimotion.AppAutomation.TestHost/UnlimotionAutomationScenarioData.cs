@@ -280,14 +280,14 @@ public static class UnlimotionAutomationScenarioData
 
         File.WriteAllText(
             todayPath,
-            $"---\nid: feed-day-{today:yyyyMMdd}\n---\n# {today:yyyy-MM-dd}\n\n" +
+            $"---\nunlimotion-id: feed-day-{today:yyyyMMdd}\n---\n# {today:yyyy-MM-dd}\n\n" +
             "## Unlimotion <!-- unlimotion-area:area-unlimotion -->\n" +
             $"{FeedNewestMarker}\n\n" +
             $"[{FeedCurrentTaskTitle}](unlimotion://task/{FeedCurrentTaskId})\n",
             new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
         File.WriteAllText(
             yesterdayPath,
-            $"---\nid: feed-day-{yesterday:yyyyMMdd}\n---\n# {yesterday:yyyy-MM-dd}\n\n" +
+            $"---\nunlimotion-id: feed-day-{yesterday:yyyyMMdd}\n---\n# {yesterday:yyyy-MM-dd}\n\n" +
             "## Unlimotion <!-- unlimotion-area:area-unlimotion -->\n" +
             $"{FeedOlderMarker}\n\n" +
             $"- [ ] {FeedPendingReviewMarker}\n",
@@ -765,6 +765,74 @@ public static class UnlimotionAutomationScenarioData
         };
 
         WriteStatusContractTaskJson(Path.Combine(tasksPath, task.Id), task);
+    }
+
+    public static void SeedWorkspaceStoryTasks(string tasksPath)
+    {
+        var now = DateTimeOffset.Now;
+        var today = new DateTimeOffset(DateTime.Today, now.Offset);
+        var definitions = new (string Id, string Title, Domain.TaskStatus Status, TimeSpan? Duration,
+            DateTimeOffset? Begin, DateTimeOffset? End, string Description, bool Goal, string[] Parents,
+            string[] Blockers)[]
+        {
+            ("ux08-active", "UX08 Continue active work", Domain.TaskStatus.InProgress,
+                TimeSpan.FromMinutes(25), null, null, "The next step is to check the latest draft.", false, [], []),
+            ("ux08-finished", "UX08 Already finished in reality", Domain.TaskStatus.InProgress,
+                TimeSpan.FromMinutes(10), null, null, "The result is already delivered.", false, [], []),
+            ("ux08-short", "UX08 Five-minute action", Domain.TaskStatus.Prepared,
+                TimeSpan.FromMinutes(5), today.AddHours(8), today.AddHours(20), "One action completes this task.", false, [], []),
+            ("ux08-urgent", "UX08 Due today", Domain.TaskStatus.Prepared,
+                TimeSpan.FromMinutes(20), null, today.AddHours(20), "Several actions are needed.", false, [], []),
+            ("ux08-overdue", "UX08 Overdue action", Domain.TaskStatus.Prepared,
+                TimeSpan.FromMinutes(10), null, today.AddDays(-1).AddHours(20), "Past deadline.", false, [], []),
+            ("ux08-long", "UX08 Long available task", Domain.TaskStatus.Prepared,
+                TimeSpan.FromMinutes(55), null, null, "Longer work for later.", false, [], []),
+            ("ux08-blocked", "UX08 Blocked task", Domain.TaskStatus.Prepared,
+                TimeSpan.FromMinutes(5), null, null, "Requires an unfinished blocker.", false, [], ["ux08-active"]),
+            ("ux08-future", "UX08 Future task", Domain.TaskStatus.Prepared,
+                TimeSpan.FromMinutes(5), today.AddDays(1).AddHours(8), null, "Starts tomorrow.", false, [], []),
+            ("ux13-unprepared", "UX13 Needs planning", Domain.TaskStatus.NotReady,
+                null, null, null, string.Empty, false, [], []),
+            ("ux13-stale", "UX13 Obsolete task", Domain.TaskStatus.NotReady,
+                null, null, null, "No longer relevant.", false, [], []),
+            ("ux07-goal", "UX07 Launch site", Domain.TaskStatus.Prepared,
+                null, null, null, "Plan the site launch.", true, [], []),
+            ("ux07-second-goal", "UX07 Publish product", Domain.TaskStatus.Prepared,
+                null, null, null, "Second planning context.", true, [], []),
+            ("ux07-shared", "UX07 Product description", Domain.TaskStatus.Prepared,
+                TimeSpan.FromMinutes(20), null, null, "Shared project material.", false, ["ux07-goal"], []),
+            ("ux07-structure", "UX07 Agree site structure", Domain.TaskStatus.Prepared,
+                TimeSpan.FromMinutes(30), null, null, "First site step.", false, ["ux07-goal"], []),
+            ("ux07-prototype", "UX07 Build prototype", Domain.TaskStatus.Prepared,
+                TimeSpan.FromMinutes(60), null, null, "Depends on the structure.", false, ["ux07-goal"], [])
+        };
+        foreach (var definition in definitions)
+        {
+            var task = new TaskItem
+            {
+                Id = definition.Id,
+                Title = definition.Title,
+                Description = definition.Description,
+                Status = definition.Status,
+                StatusHistory = [CreateStatusHistoryEntry(definition.Status, now.AddMinutes(-1))],
+                PlannedDuration = definition.Duration,
+                PlannedBeginDateTime = definition.Begin,
+                PlannedEndDateTime = definition.End,
+                ParentTasks = [.. definition.Parents],
+                ContainsTasks = definitions.Where(candidate => candidate.Parents.Contains(definition.Id))
+                    .Select(candidate => candidate.Id).ToList(),
+                BlockedByTasks = [.. definition.Blockers],
+                BlocksTasks = definitions.Where(candidate => candidate.Blockers.Contains(definition.Id))
+                    .Select(candidate => candidate.Id).ToList(),
+                IsGoal = definition.Goal,
+                IsCanBeCompleted = definition.Blockers.Length == 0,
+                AreaIds = ["area-unlimotion"],
+                CreatedDateTime = now.AddMinutes(-2),
+                UpdatedDateTime = now.AddMinutes(-1),
+                Version = 1
+            };
+            WriteStatusContractTaskJson(Path.Combine(tasksPath, task.Id), task);
+        }
     }
 
     private static void SeedStatusContractTasks(string tasksPath)

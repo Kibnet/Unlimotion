@@ -58,8 +58,13 @@ public class FeedBlockContextMenuUiTests
             await Assert.That(headers.Contains(L10n.Get(key))).IsTrue();
         await Assert.That(menu.Items.OfType<Separator>().Any()).IsTrue();
         menu.Close();
+        Dispatcher.UIThread.RunJobs();
+        await Assert.That(menu.IsOpen).IsFalse();
         previous.Owner.SelectMoveBlock(previous, true, false);
+        await Assert.That(block.Owner.SelectionCoordinator?.SpansDocuments).IsTrue();
+        await Assert.That(block.Owner.CanOpenSelectionActions).IsFalse();
         Click(window, preview, MouseButton.Right);
+        await Assert.That(row.ContextMenu!.IsOpen).IsTrue();
         await Assert.That(block.IsMoveSelected).IsTrue();
         await Assert.That(previous.IsMoveSelected).IsTrue();
         menu = row.ContextMenu!;

@@ -21,6 +21,12 @@ public partial class MarkdownBlockLivePreviewEditor
             control.DataContext is MarkdownLiveBlockViewModel block
             && Avalonia.Automation.AutomationProperties.GetAutomationId(control) == block.BlockAutomationId);
         if (row?.DataContext is not MarkdownLiveBlockViewModel block) return;
+        // A link owns its navigation menu, but the row's block menu is rebuilt on
+        // every request so its commands reflect the current cross-day selection.
+        if (source?.GetVisualAncestors().OfType<Control>().Prepend(source)
+            .TakeWhile(control => !ReferenceEquals(control, row))
+            .Any(control => control.ContextMenu is not null) == true)
+            return;
         var text = e.Source as TextBox ?? (e.Source as Avalonia.Visual)?.GetVisualAncestors().OfType<TextBox>().FirstOrDefault();
         OpenBlockContextMenu(row, block, text);
         e.Handled = true;

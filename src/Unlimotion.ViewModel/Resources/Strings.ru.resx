@@ -211,6 +211,18 @@
   <data name="FeedSearchWatermark" xml:space="preserve"><value>Поиск по заметкам</value></data>
   <data name="FeedSearchIndexing" xml:space="preserve"><value>Индексирование заметок</value></data>
   <data name="FeedTitle" xml:space="preserve"><value>Лента</value></data>
+  <data name="WorkspaceBack" xml:space="preserve"><value>Назад</value></data>
+  <data name="WorkspaceForward" xml:space="preserve"><value>Вперёд</value></data>
+  <data name="WorkspaceHistory" xml:space="preserve"><value>История переходов</value></data>
+  <data name="WorkspaceNewTab" xml:space="preserve"><value>Новая вкладка</value></data>
+  <data name="WorkspaceClosePane" xml:space="preserve"><value>Закрыть панель</value></data>
+  <data name="WorkspaceOpenInNewTab" xml:space="preserve"><value>Открыть в новой вкладке</value></data>
+  <data name="WorkspaceOpenActions" xml:space="preserve"><value>Действия с результатом</value></data>
+  <data name="WorkspaceOpenBeside" xml:space="preserve"><value>Открыть рядом</value></data>
+  <data name="WorkspaceCloseTab" xml:space="preserve"><value>Закрыть вкладку</value></data>
+  <data name="WorkspacePrimaryPane" xml:space="preserve"><value>Основная панель</value></data>
+  <data name="WorkspaceSecondaryPane" xml:space="preserve"><value>Соседняя панель</value></data>
+  <data name="WorkspaceFeedInOtherPane" xml:space="preserve"><value>Лента использует общий редактор. Переключитесь на панель с активной лентой.</value></data>
   <data name="FeedExternalVaultUnsupported" xml:space="preserve"><value>На этой платформе выбор внешней базы заметок не поддерживается.</value></data>
   <data name="FeedBootstrapIndexedFiles" xml:space="preserve"><value>Проиндексировано файлов:</value></data>
   <data name="FeedBootstrapPendingCheckboxes" xml:space="preserve"><value>Незавершённых пунктов:</value></data>

@@ -43,8 +43,8 @@ public partial class FeedControl
     private bool IsChronologyAvailable => IsFeedSurfaceAvailable && observedViewModel?.IsSearchActive == false;
 
     private FeedDayViewModel? ReturnTarget => observedViewModel is { } feed
-        ? feed.VisibleDays.FirstOrDefault(day => day.Date == feed.EffectiveToday)
-          ?? feed.VisibleDays.FirstOrDefault()
+        ? (UseWorkspaceTabs ? DisplayDays : feed.VisibleDays)?.FirstOrDefault(day => day.Date == feed.EffectiveToday)
+          ?? (UseWorkspaceTabs ? DisplayDays : feed.VisibleDays)?.FirstOrDefault()
         : null;
 
     private void ObserveContextSources()
@@ -88,12 +88,15 @@ public partial class FeedControl
 
         if (ReturnToCurrentDayButton is null) return;
         var feed = observedViewModel;
-        var chronology = IsChronologyAvailable && feed?.HasOpenedThematicFile == false;
+        var chronology = IsChronologyAvailable && (UseWorkspaceTabs
+            ? ShowChronology
+            : feed?.HasOpenedThematicFile == false);
         FeedAreaFilterButton.IsVisible = chronology;
-        SearchFilters.IsVisible = IsFeedSurfaceAvailable && feed is { IsSearchActive: true, HasOpenedThematicFile: false };
+        SearchFilters.IsVisible = IsFeedSurfaceAvailable && feed?.IsSearchActive == true
+            && (UseWorkspaceTabs ? ShowChronology : feed.HasOpenedThematicFile == false);
         ThematicTitle.IsVisible = !MarkdownReadingPresentation.HasMatchingThematicHeading(
-            feed?.OpenedThematicFile?.MarkdownEditor.GetSnapshotWithActiveDraft()?.Raw,
-            feed?.OpenedThematicFile?.DisplayName);
+            DisplayedDocument?.MarkdownEditor.GetSnapshotWithActiveDraft()?.Raw,
+            DisplayedDocument?.DisplayName);
         var target = ReturnTarget;
         var header = target is null ? null : ChronologyList.GetVisualDescendants().OfType<TextBlock>()
             .FirstOrDefault(control => AutomationProperties.GetAutomationId(control) == target.HeaderAutomationId);
@@ -102,8 +105,9 @@ public partial class FeedControl
         // target before the first realized day is also above the viewport.
         var firstRealized = ChronologyList.GetRealizedContainers().Select(control => control.DataContext)
             .OfType<FeedDayViewModel>().FirstOrDefault();
+        var displayedDays = UseWorkspaceTabs ? DisplayDays : feed?.VisibleDays;
         var above = y is { } top ? top < -1 : target is not null && firstRealized is not null
-            && feed!.VisibleDays.IndexOf(target) < feed.VisibleDays.IndexOf(firstRealized);
+            && displayedDays?.IndexOf(target) < displayedDays?.IndexOf(firstRealized);
         ReturnToCurrentDayButton.IsVisible = chronology && target is not null && above;
         ReturnToCurrentDayButton.IsEnabled = chronology && feed?.IsBusy == false && !returningToCurrentDay;
         if (target is not null)
@@ -127,7 +131,8 @@ public partial class FeedControl
     }
 
     public bool CanReturnToCurrentDay => IsChronologyAvailable
-        && observedViewModel is { IsBusy: false, HasOpenedThematicFile: false }
+        && observedViewModel is { IsBusy: false }
+        && (UseWorkspaceTabs ? ShowChronology : observedViewModel.HasOpenedThematicFile == false)
         && ReturnTarget is not null && !returningToCurrentDay;
 
     public async Task ReturnToCurrentDayAsync()
@@ -153,7 +158,8 @@ public partial class FeedControl
                 .FirstOrDefault(control => AutomationProperties.GetAutomationId(control) == target.HeaderAutomationId);
             if (heading?.TranslatePoint(default, ChronologyScroller) is { } point)
                 ChronologyScroller.Offset = new Vector(0, Math.Max(0, ChronologyScroller.Offset.Y + point.Y - 10));
-            else if (feed.VisibleDays.IndexOf(target) == 0) ChronologyScroller.Offset = default;
+            else if ((UseWorkspaceTabs ? DisplayDays : feed.VisibleDays)?.IndexOf(target) == 0)
+                ChronologyScroller.Offset = default;
         }
         catch (Exception exception)
         {

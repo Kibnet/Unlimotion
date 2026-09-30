@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
@@ -364,6 +365,12 @@ public sealed class FeedAuxiliaryUiTests
 
                 var goal = FindControl<CheckBox>(view, "FeedTaskClassificationGoalCheckBox");
                 var chips = FindControl<ItemsControl>(view, "FeedTaskClassificationSelectedAreaChips");
+                var areaPicker = FindControl<ToggleButton>(view, "FeedTaskClassificationAreaPickerToggle");
+                var areaOptions = FindControl<ListBox>(view, "FeedTaskClassificationAreaOptionsList", requireEnabled: false);
+                await Assert.That(areaOptions.IsEffectivelyVisible).IsFalse();
+                areaPicker.IsChecked = true;
+                RunLayoutJobs();
+                await Assert.That(areaOptions.IsEffectivelyVisible).IsTrue();
                 using (Assert.Multiple())
                 {
                     await Assert.That(task.IsGoal).IsTrue();
@@ -412,7 +419,7 @@ public sealed class FeedAuxiliaryUiTests
                 window.Show();
                 RunLayoutJobs();
                 var goal = FindControl<CheckBox>(view, "FeedTaskClassificationGoalCheckBox", requireEnabled: false);
-                var areas = FindControl<Expander>(view, "FeedTaskClassificationAreaPickerExpander", requireEnabled: false);
+                var areas = FindControl<ToggleButton>(view, "FeedTaskClassificationAreaPickerToggle", requireEnabled: false);
                 var explanation = FindControl<TextBlock>(view, "FeedTaskClassificationBlockedExplanation", requireEnabled: false);
 
                 using (Assert.Multiple())

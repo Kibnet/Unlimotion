@@ -34,6 +34,80 @@
         <Style Selector="Button.GlobalCreateButton:pointerover">
             <Setter Property="Background" Value="{DynamicResource ThemeControlMidBrush}" />
         </Style>
+        <Style Selector="Border.WorkspacePaneHeader">
+            <Setter Property="Background" Value="{DynamicResource ThemeControlLowBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource ThemeBorderLowBrush}" />
+            <Setter Property="BorderThickness" Value="0,0,0,1" />
+        </Style>
+        <Style Selector="Border.WorkspacePaneHeader.WorkspacePaneActive">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentButtonBackground}" />
+        </Style>
+        <Style Selector="Border.WorkspaceTabShell">
+            <Setter Property="BorderThickness" Value="1,1,1,0" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="CornerRadius" Value="7,7,0,0" />
+            <Setter Property="Margin" Value="0,3,0,0" />
+        </Style>
+        <Style Selector="Border.WorkspaceTabShell.WorkspaceTabActive">
+            <Setter Property="Background" Value="{DynamicResource SystemControlBackgroundAltHighBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource ThemeBorderLowBrush}" />
+        </Style>
+        <Style Selector="Button.WorkspaceChromeButton">
+            <Setter Property="Background" Value="{DynamicResource ThemeControlLowBrush}" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="5" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.WorkspaceNavButton">
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Background="Transparent" CornerRadius="5">
+                        <ContentPresenter Content="{TemplateBinding Content}"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center" />
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Button.WorkspaceTabButton">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="5" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.WorkspaceChromeButton:pointerover, Button.WorkspaceTabButton:pointerover">
+            <Setter Property="Background" Value="{DynamicResource ThemeControlMidBrush}" />
+        </Style>
+        <Style Selector="Button.WorkspaceChromeButton:focus-visible">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentButtonBackground}" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+        <Style Selector="Button.WorkspaceChromeButton:disabled">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Opacity" Value="0.4" />
+        </Style>
+        <Style Selector="Button.WorkspaceTabButton.WorkspaceTabActive">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Background" Value="{DynamicResource SystemControlBackgroundAltHighBrush}" />
+        </Style>
+        <Style Selector="Button.WorkspaceRailButton">
+            <Setter Property="MinHeight" Value="42" />
+            <Setter Property="Padding" Value="10,6" />
+            <Setter Property="Margin" Value="4,2" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="6" />
+        </Style>
+        <Style Selector="Button.WorkspaceRailButton:pointerover">
+            <Setter Property="Background" Value="{DynamicResource ThemeControlMidBrush}" />
+        </Style>
+        <Style Selector="Button.WorkspaceRailButton.WorkspaceRailActive">
+            <Setter Property="Background" Value="{DynamicResource ThemeControlMidBrush}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
     </UserControl.Styles>
     <Panel>
         <dialogHostAvalonia:DialogHost CloseOnClickAway="True" Identifier="Ask">
@@ -83,7 +157,7 @@
                         AutomationProperties.AutomationId="ShellAppBar">
                     <Grid x:Name="ShellAppBarGrid"
                           RowDefinitions="Auto,Auto"
-                          ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto"
+                          ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto,Auto,Auto"
                           ColumnSpacing="10">
                         <Button x:Name="GlobalCreateMenuButton"
                                 Classes="GlobalCreateButton"
@@ -157,18 +231,44 @@
                                     Spacing="6"
                                     AutomationProperties.AutomationId="ShellModeSelector">
                             <RadioButton GroupName="WorkspaceMode"
-                                         IsChecked="{Binding IsFeedMode, Mode=TwoWay}"
+                                         IsChecked="{Binding IsFeedMode, Mode=OneWay}"
                                          IsVisible="{Binding Settings.IsFeedEnabled}"
                                          IsEnabled="{Binding Settings.IsFeedEnabled}"
+                                         Click="OnFeedRootClick"
                                          Content="{DynamicResource FeedMode}"
                                          AutomationProperties.AutomationId="FeedModeButton" />
                             <RadioButton GroupName="WorkspaceMode"
                                          IsChecked="{Binding IsTasksMode, Mode=OneWay}"
+                                         Click="OnTasksRootClick"
                                          Content="{DynamicResource TasksMode}"
                                          AutomationProperties.AutomationId="TasksModeButton" />
                         </StackPanel>
 
-                        <Grid x:Name="GlobalSearchHost" Grid.Column="3" RowDefinitions="Auto,Auto">
+                        <StackPanel x:Name="WorkspaceGlobalNavigation"
+                                    Grid.Column="3"
+                                    Orientation="Horizontal"
+                                    Spacing="0">
+                            <Button x:Name="WorkspaceGlobalBackButton"
+                                    Classes="WorkspaceChromeButton WorkspaceNavButton"
+                                    Content="←"
+                                    MinWidth="44" MinHeight="44"
+                                    Click="OnWorkspaceGlobalBackClick"
+                                    AutomationProperties.AutomationId="WorkspaceGlobalBackButton" />
+                            <Button x:Name="WorkspaceGlobalForwardButton"
+                                    Classes="WorkspaceChromeButton WorkspaceNavButton"
+                                    Content="→"
+                                    MinWidth="44" MinHeight="44"
+                                    Click="OnWorkspaceGlobalForwardClick"
+                                    AutomationProperties.AutomationId="WorkspaceGlobalForwardButton" />
+                            <Button x:Name="WorkspaceGlobalHistoryButton"
+                                    Classes="WorkspaceChromeButton"
+                                    Content="⌄"
+                                    MinWidth="44" MinHeight="44"
+                                    Click="OnWorkspaceGlobalHistoryClick"
+                                    AutomationProperties.AutomationId="WorkspaceGlobalHistoryButton" />
+                        </StackPanel>
+
+                        <Grid x:Name="GlobalSearchHost" Grid.Column="4" RowDefinitions="Auto,Auto">
                             <views:SafeClipboardTextBox x:Name="GlobalSearchBox"
                                      MinWidth="0"
                                      HorizontalAlignment="Stretch"
@@ -214,20 +314,30 @@
                                                      AutomationProperties.AutomationId="GlobalSearchResultsList">
                                                 <ListBox.ItemTemplate>
                                                     <DataTemplate>
-                                                        <Button Margin="0,0,0,6"
-                                                                Padding="10"
-                                                                HorizontalContentAlignment="Stretch"
-                                                                Background="Transparent"
-                                                                BorderThickness="0"
-                                                                Click="OnGlobalSearchResultClick"
-                                                                AutomationProperties.AutomationId="{Binding AutomationId}"
-                                                                AutomationProperties.Name="{Binding AutomationName}">
-                                                            <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                                                                <TextBlock FontWeight="SemiBold" Text="{Binding TypeDisplayName}" />
-                                                                <TextBlock Grid.Column="1" Text="{Binding Text}" TextTrimming="CharacterEllipsis" />
-                                                                <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Opacity="0.7" Text="{Binding DisplaySource}" />
-                                                            </Grid>
-                                                        </Button>
+                                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4" Margin="0,0,0,6">
+                                                            <Button Padding="10"
+                                                                    HorizontalContentAlignment="Stretch"
+                                                                    Background="Transparent"
+                                                                    BorderThickness="0"
+                                                                    PointerPressed="OnGlobalSearchResultPointerPressed"
+                                                                    Click="OnGlobalSearchResultClick"
+                                                                    AutomationProperties.AutomationId="{Binding AutomationId}"
+                                                                    AutomationProperties.Name="{Binding AutomationName}">
+                                                                <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                                                    <TextBlock FontWeight="SemiBold" Text="{Binding TypeDisplayName}" />
+                                                                    <TextBlock Grid.Column="1" Text="{Binding Text}" TextTrimming="CharacterEllipsis" />
+                                                                    <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Opacity="0.7" Text="{Binding DisplaySource}" />
+                                                                </Grid>
+                                                            </Button>
+                                                            <DropDownButton Grid.Column="1"
+                                                                            Padding="6"
+                                                                            MinWidth="44"
+                                                                            MinHeight="44"
+                                                                            Content="⋯"
+                                                                            Loaded="OnGlobalSearchResultActionsLoaded"
+                                                                            AutomationProperties.Name="{DynamicResource WorkspaceOpenActions}"
+                                                                            AutomationProperties.AutomationId="{Binding ActionsAutomationId}" />
+                                                        </Grid>
                                                     </DataTemplate>
                                                 </ListBox.ItemTemplate>
                                             </ListBox>
@@ -238,7 +348,7 @@
                         </Grid>
 
                         <Button x:Name="GlobalReviewButton"
-                                Grid.Column="4"
+                                Grid.Column="5"
                                 Command="{Binding OpenReviewCommand}"
                                 AutomationProperties.AutomationId="GlobalReviewButton">
                             <StackPanel Orientation="Horizontal" Spacing="5">
@@ -249,7 +359,7 @@
                         </Button>
 
                         <Button x:Name="GlobalSettingsButton"
-                                Grid.Column="5"
+                                Grid.Column="6"
                                 Padding="10,4"
                                 Content="⚙"
                                 Command="{Binding OpenSettingsCommand}"
@@ -257,7 +367,7 @@
                                 AutomationProperties.AutomationId="GlobalSettingsButton" />
 
                         <DropDownButton x:Name="GlobalOverflowMenuButton"
-                                        Grid.Column="6"
+                                        Grid.Column="7"
                                         Padding="10,4"
                                         Content="⋯"
                                         AutomationProperties.AutomationId="GlobalOverflowMenuButton">
@@ -295,46 +405,68 @@
                     </Grid>
                 </Border>
 
-                <Grid Grid.Row="1"
-                      IsVisible="{Binding IsTasksMode}"
-                      AutomationProperties.ControlTypeOverride="Group"
-                      AutomationProperties.IsControlElementOverride="True"
-                      AutomationProperties.AutomationId="TasksModeRoot">
-                    <views:MainControl Name="MainControl" />
-                    <Grid x:Name="TasksLoadingOverlay"
-                          IsVisible="{Binding IsTasksLoading}"
-                          AutomationProperties.AutomationId="TasksLoadingOverlay">
-                        <Border Background="#66000000" />
-                        <Border MaxWidth="260"
-                                Padding="20"
-                                CornerRadius="14"
-                                Background="#F2FFFFFF"
-                                HorizontalAlignment="Center"
-                                VerticalAlignment="Center">
-                            <StackPanel Spacing="12">
-                                <unlimotion:SeamlessLoadingIndicator Width="160"
-                                                                      Height="72"
-                                                                      IsVisible="{Binding IsTasksLoading}"
-                                                                      HorizontalAlignment="Center"
-                                                                      AutomationProperties.AutomationId="TasksLoadingSpinner" />
-                                <TextBlock Text="{DynamicResource LoadingTasks}"
-                                           Foreground="Black"
-                                           FontWeight="SemiBold"
-                                           HorizontalAlignment="Center"
-                                           TextAlignment="Center" />
+                <Grid Grid.Row="1" ColumnDefinitions="Auto,*">
+                    <Border x:Name="WorkspaceNavigationRail"
+                            Grid.Column="0"
+                            Width="50"
+                            Background="{DynamicResource ThemeControlLowBrush}"
+                            BorderBrush="{DynamicResource ThemeBorderLowBrush}"
+                            BorderThickness="0,0,1,0"
+                            AutomationProperties.AutomationId="WorkspaceNavigationRail">
+                        <StackPanel Margin="0,8" Spacing="2">
+                            <Button x:Name="WorkspaceRailFeedButton" Classes="WorkspaceRailButton"
+                                    Click="OnFeedRootClick"
+                                    ToolTip.Tip="{DynamicResource FeedMode}"
+                                    AutomationProperties.Name="{DynamicResource FeedMode}"
+                                    AutomationProperties.AutomationId="WorkspaceRailFeedButton">
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <TextBlock Text="▤" FontSize="19" Width="24" TextAlignment="Center" />
+                                    <TextBlock x:Name="WorkspaceRailFeedLabel" Text="{DynamicResource FeedMode}" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                            <Button x:Name="WorkspaceRailTasksButton" Classes="WorkspaceRailButton"
+                                    Click="OnTasksRootClick"
+                                    ToolTip.Tip="{DynamicResource TasksMode}"
+                                    AutomationProperties.Name="{DynamicResource TasksMode}"
+                                    AutomationProperties.AutomationId="WorkspaceRailTasksButton">
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <TextBlock Text="☑" FontSize="19" Width="24" TextAlignment="Center" />
+                                    <TextBlock x:Name="WorkspaceRailTasksLabel" Text="{DynamicResource TasksMode}" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                            <StackPanel x:Name="WorkspaceRailTaskCategories" Margin="18,0,2,8"
+                                        IsVisible="False">
+                                <Button Classes="WorkspaceRailButton" Tag="3" Click="OnWorkspaceTaskCategoryClick"
+                                        Content="{DynamicResource Unlocked}"
+                                        AutomationProperties.AutomationId="WorkspaceRailUnlockedButton" />
+                                <Button Classes="WorkspaceRailButton" Tag="4" Click="OnWorkspaceTaskCategoryClick"
+                                        Content="{DynamicResource InProgress}"
+                                        AutomationProperties.AutomationId="WorkspaceRailInProgressButton" />
+                                <Button Classes="WorkspaceRailButton" Tag="0" Click="OnWorkspaceTaskCategoryClick"
+                                        Content="{DynamicResource AllTasks}"
+                                        AutomationProperties.AutomationId="WorkspaceRailAllTasksButton" />
+                                <Button Classes="WorkspaceRailButton" Tag="5" Click="OnWorkspaceTaskCategoryClick"
+                                        Content="{DynamicResource Completed}"
+                                        AutomationProperties.AutomationId="WorkspaceRailCompletedButton" />
                             </StackPanel>
-                        </Border>
-                    </Grid>
-                </Grid>
-
-                <Grid Grid.Row="1"
-                      IsVisible="{Binding Settings.IsFeedEnabled}">
-                    <Grid IsVisible="{Binding IsFeedMode}"
+                            <Button x:Name="WorkspaceRailReviewButton" Classes="WorkspaceRailButton"
+                                    Command="{Binding OpenReviewCommand}"
+                                    ToolTip.Tip="{DynamicResource GlobalReview}"
+                                    AutomationProperties.Name="{DynamicResource GlobalReview}"
+                                    AutomationProperties.AutomationId="WorkspaceRailReviewButton">
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <TextBlock Text="◎" FontSize="19" Width="24" TextAlignment="Center" />
+                                    <TextBlock x:Name="WorkspaceRailReviewLabel" Text="{DynamicResource GlobalReview}" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </Border>
+                    <Grid Grid.Column="1"
+                          x:Name="WorkspacePanesHost"
+                          ColumnDefinitions="*"
                           AutomationProperties.ControlTypeOverride="Group"
                           AutomationProperties.IsControlElementOverride="True"
-                          AutomationProperties.AutomationId="FeedModeRoot">
-                        <views:FeedControl x:Name="FeedView" DataContext="{Binding Feed}" />
-                    </Grid>
+                          AutomationProperties.AutomationId="WorkspacePanesHost" />
                 </Grid>
 
                 <ItemsControl Grid.Row="1"

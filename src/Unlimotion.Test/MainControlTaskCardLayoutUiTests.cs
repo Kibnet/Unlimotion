@@ -29,6 +29,7 @@ using Newtonsoft.Json.Linq;
 using Unlimotion.Domain;
 using Unlimotion.ViewModel;
 using Unlimotion.ViewModel.Localization;
+using Unlimotion.ViewModel.Workspace;
 using Unlimotion.Views;
 using DomainTaskStatus = Unlimotion.Domain.TaskStatus;
 
@@ -97,7 +98,8 @@ public class MainControlTaskCardLayoutUiTests
                 var (view, createdWindow) = await CreateArrangedMainControlAsync(fixture, 1400, 900);
                 window = createdWindow;
 
-                foreach (var automationId in SectionAutomationIds.Concat(KeyControlAutomationIds))
+                foreach (var automationId in SectionAutomationIds.Concat(KeyControlAutomationIds)
+                             .Where(static id => id != "CurrentTaskIdTextBlock"))
                 {
                     var control = FindControlByAutomationId<Control>(view, automationId);
                     AssertVisibleAndArranged(control, automationId);
@@ -114,7 +116,9 @@ public class MainControlTaskCardLayoutUiTests
                 var setDurationButton = FindControlByAutomationId<DropDownButton>(view, "CurrentTaskSetDurationButton");
                 var setEndButton = FindControlByAutomationId<DropDownButton>(view, "CurrentTaskSetEndButton");
 
-                AssertTaskDetailsPanelFrameUsesVisibleBorder(detailsPanelFrame);
+                AssertVisibleAndArranged(detailsPanelFrame, "CurrentTaskDetailsPanelFrame");
+                await Assert.That(detailsPanelFrame.Classes.Contains("WorkspaceTaskRoute")).IsTrue();
+                await Assert.That(detailsPanelFrame.BorderThickness).IsEqualTo(new Thickness(0));
                 AssertTaskCardIsContentContainer(card);
                 AssertHasClass(createMenuButton, "GlobalCreateButton");
                 AssertIconOnlyButton(createMenuButton, "➕", 42);
@@ -134,7 +138,7 @@ public class MainControlTaskCardLayoutUiTests
                 AssertIconOnlyDropDownButton(setDurationButton, "⏱", 40);
                 AssertIconOnlyDropDownButton(setEndButton, "🏁", 40);
 
-                AssertTaskActionsMenuSitsAfterIdBelowTitle(view);
+                AssertTaskActionsMenuSitsBelowTitle(view);
                 AssertDesktopPlanningGroupsStayCompactRow(view);
                 AssertDesktopRepeaterControlsStayCompact(view);
                 AssertStatusHistoryLivesAtTaskCardBottomAndExpandsDown(view);
@@ -528,7 +532,9 @@ public class MainControlTaskCardLayoutUiTests
                 ];
                 var globalCreateButton = FindControlByAutomationId<Button>(view, "GlobalCreateMenuButton");
 
-                AssertTaskDetailsPanelFrameUsesVisibleBorder(detailsPanelFrame);
+                AssertVisibleAndArranged(detailsPanelFrame, "CurrentTaskDetailsPanelFrame");
+                await Assert.That(detailsPanelFrame.Classes.Contains("WorkspaceTaskRoute")).IsTrue();
+                await Assert.That(detailsPanelFrame.BorderThickness).IsEqualTo(new Thickness(0));
                 AssertTaskCardIsContentContainer(card);
                 foreach (var button in accentOutlineButtons)
                 {
@@ -946,6 +952,8 @@ public class MainControlTaskCardLayoutUiTests
                 };
                 var splitView = view.GetVisualDescendants().OfType<SplitView>().First();
 
+                await Assert.That(await vm.OpenWorkspaceRootAsync(WorkspaceMode.Tasks)).IsTrue();
+
                 vm.CurrentAllTasksItems = new ReadOnlyObservableCollection<TaskWrapperViewModel>(items);
                 vm.CurrentAllTasksItem = null;
                 vm.CurrentTaskItem = null;
@@ -961,8 +969,13 @@ public class MainControlTaskCardLayoutUiTests
                 RunLayoutJobs();
 
                 await Assert.That(handled).IsTrue();
-                await Assert.That(splitView.IsPaneOpen).IsTrue();
+                await Assert.That(WaitFor(() => splitView.IsPaneOpen
+                    && vm.WorkspaceNavigation.ActiveTab.CurrentLocation?.Id == task.Id)).IsTrue();
                 await Assert.That(vm.CurrentTaskItem).IsEqualTo(task);
+
+                await Assert.That(vm.TryHandleTaskCardBackGesture()).IsTrue();
+                await Assert.That(WaitFor(() => !splitView.IsPaneOpen
+                    && vm.WorkspaceNavigation.ActiveTab.CurrentLocation?.Kind == WorkspaceLocationKind.Tasks)).IsTrue();
             }
             finally
             {
@@ -1150,7 +1163,7 @@ public class MainControlTaskCardLayoutUiTests
                 AssertActionsMenuContainsTaskCommands(actionsMenuButton);
                 await Assert.That(IsVisibleAndArranged(actionsMenuButton)).IsTrue();
 
-                foreach (var automationId in KeyControlAutomationIds)
+                foreach (var automationId in KeyControlAutomationIds.Where(static id => id != "CurrentTaskIdTextBlock"))
                 {
                     var control = FindControlByAutomationId<Control>(card, automationId);
                     await Assert.That(control.Bounds.Width).IsGreaterThan(0);
@@ -2288,6 +2301,12 @@ public class MainControlTaskCardLayoutUiTests
         RunLayoutJobs();
     }
 
+    private static bool WaitFor(Func<bool> predicate) => SpinWait.SpinUntil(() =>
+    {
+        Dispatcher.UIThread.RunJobs();
+        return predicate();
+    }, TimeSpan.FromSeconds(3));
+
     private static void EnsureDetailsPaneArranged(Window window, MainControl view, double width, double height)
     {
         var splitView = view.GetVisualDescendants()
@@ -2875,16 +2894,13 @@ public class MainControlTaskCardLayoutUiTests
         return ReferenceEquals(window?.FocusManager?.GetFocusedElement(), control) || control.IsFocused;
     }
 
-    private static void AssertTaskActionsMenuSitsAfterIdBelowTitle(Control root)
+    private static void AssertTaskActionsMenuSitsBelowTitle(Control root)
     {
         var title = FindControlByAutomationId<Control>(root, "CurrentTaskTitleTextBox");
-        var idText = FindControlByAutomationId<Control>(root, "CurrentTaskIdTextBlock");
         var actionsMenuButton = FindControlByAutomationId<Control>(root, "CurrentTaskActionsMenuButton");
 
         var titleBottom = GetBottomEdge(root, title);
-        var idRight = GetRightEdge(root, idText);
         var actionsTop = GetTopEdge(root, actionsMenuButton);
-        var actionsLeft = GetLeftEdge(root, actionsMenuButton);
 
         if (actionsTop < titleBottom - 1)
         {
@@ -2893,12 +2909,6 @@ public class MainControlTaskCardLayoutUiTests
                 $"titleBottom={titleBottom:F1}; actionsTop={actionsTop:F1}.");
         }
 
-        if (actionsLeft <= idRight)
-        {
-            throw new InvalidOperationException(
-                $"Task actions menu should sit to the right of the task identifier: " +
-                $"idRight={idRight:F1}; actionsLeft={actionsLeft:F1}.");
-        }
     }
 
     private static void AssertStatusHistoryLivesAtTaskCardBottomAndExpandsDown(Control root)

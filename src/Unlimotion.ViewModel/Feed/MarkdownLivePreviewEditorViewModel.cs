@@ -25,6 +25,26 @@ public sealed record MarkdownBlockTextRange(int Start, int Length);
 
 public sealed record FeedAreaFilterSelection(string Identity, string? AreaName);
 
+public static class FeedAreaPresentationFilter
+{
+    public static bool IsVisible(MarkdownBlock block,
+        IReadOnlyCollection<FeedAreaFilterSelection> selectedAreas, bool showAll)
+    {
+        if (showAll) return true;
+        var belongsToArea = selectedAreas.Any(selection => MatchesArea(block, selection));
+        return belongsToArea && (block.IsContent || block.Kind == MarkdownBlockKind.AreaHeading);
+    }
+
+    public static bool MatchesArea(MarkdownBlock block, FeedAreaFilterSelection selection)
+    {
+        if (string.IsNullOrEmpty(selection.Identity))
+            return string.IsNullOrWhiteSpace(block.AreaId) && string.IsNullOrWhiteSpace(block.AreaName);
+        return string.Equals(block.AreaId, selection.Identity, StringComparison.OrdinalIgnoreCase)
+            || string.IsNullOrWhiteSpace(block.AreaId)
+            && string.Equals(block.AreaName, selection.AreaName, StringComparison.CurrentCultureIgnoreCase);
+    }
+}
+
 public sealed record MarkdownBlockPatch(
     string RelativePath,
     string ExpectedRevisionHash,
@@ -390,13 +410,7 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
         var filteringBlocks = Blocks.ToArray();
         foreach (var block in filteringBlocks)
         {
-            var belongsToArea = showAll || selectedAreas.Any(selection => MatchesArea(
-                block.Block,
-                selection.Identity,
-                selection.AreaName));
-            var isVisible = showAll
-                || block.Block.IsContent && belongsToArea
-                || block.Block.Kind == MarkdownBlockKind.AreaHeading && belongsToArea;
+            var isVisible = FeedAreaPresentationFilter.IsVisible(block.Block, selectedAreas, showAll);
             block.SetFeedFilterVisible(isVisible);
             // Hiding the focused editor can synchronously close it and reload Blocks.
             // Do not enumerate a live collection or leave its replacement unfiltered.
@@ -410,18 +424,6 @@ public sealed class MarkdownLivePreviewEditorViewModel : ReactiveObject, IDispos
 
         RaiseStructuralUndoChanged();
         return showAll ? Blocks.Any(static block => block.Block.IsContent) : hasVisibleContent;
-    }
-
-    private static bool MatchesArea(MarkdownBlock block, string? areaIdentity, string? areaName)
-    {
-        if (string.IsNullOrEmpty(areaIdentity))
-        {
-            return string.IsNullOrWhiteSpace(block.AreaId) && string.IsNullOrWhiteSpace(block.AreaName);
-        }
-
-        return string.Equals(block.AreaId, areaIdentity, StringComparison.OrdinalIgnoreCase)
-            || string.IsNullOrWhiteSpace(block.AreaId)
-            && string.Equals(block.AreaName, areaName, StringComparison.CurrentCultureIgnoreCase);
     }
 
     public event EventHandler? DirtyStateChanged;

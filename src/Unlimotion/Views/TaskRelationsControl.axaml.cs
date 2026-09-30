@@ -216,11 +216,21 @@ public partial class TaskRelationsControl : UserControl
 
     private void RelationEditor_OnPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        RefreshEditorState();
-        if (e.PropertyName == nameof(TaskRelationEditorViewModel.FocusRequestVersion))
+        var requestFocus = e.PropertyName == nameof(TaskRelationEditorViewModel.FocusRequestVersion);
+        if (!Dispatcher.UIThread.CheckAccess())
         {
-            QueueInputFocus(MaxFocusRetries);
+            Dispatcher.UIThread.Post(() => ApplyRelationEditorChange(sender, requestFocus));
+            return;
         }
+
+        ApplyRelationEditorChange(sender, requestFocus);
+    }
+
+    private void ApplyRelationEditorChange(object? sender, bool requestFocus)
+    {
+        if (!_isAttached || !ReferenceEquals(sender, _subscribedEditor)) return;
+        RefreshEditorState();
+        if (requestFocus) QueueInputFocus(MaxFocusRetries);
     }
 
     private void RefreshEditorState()

@@ -7,10 +7,15 @@ namespace Unlimotion.ViewModel.Feed;
 public sealed partial class FeedViewModel
 {
     private FeedBlockSelectionCoordinator? selectionCoordinator;
+    public Func<System.Collections.Generic.IEnumerable<MarkdownLiveBlockViewModel>>? ActivePresentationVisibleBlocks { get; set; }
     public FeedBlockSelectionCoordinator BlockSelection => selectionCoordinator ??= new(
         () => Days.Select(day => day.MarkdownEditor).Concat(DocumentWorkspace.Documents.Select(document => document.MarkdownEditor)),
         () => HasOpenedThematicFile ? [OpenedThematicFile!.MarkdownEditor] :
-            VisibleDays.Where(day => !day.IsCollapsed).Select(day => day.MarkdownEditor));
+            VisibleDays.Where(day => !day.IsCollapsed).Select(day => day.MarkdownEditor),
+        () => ActivePresentationVisibleBlocks?.Invoke() ??
+            (HasOpenedThematicFile ? [OpenedThematicFile!.MarkdownEditor] :
+                VisibleDays.Where(day => !day.IsCollapsed).Select(day => day.MarkdownEditor).ToArray())
+            .SelectMany(editor => editor.Blocks));
 
     public void AttachPresentation()
     {

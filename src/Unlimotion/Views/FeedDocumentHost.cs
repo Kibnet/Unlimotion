@@ -12,6 +12,19 @@ public sealed class FeedDocumentHost : UserControl
     private Control? viewport;
     private FeedViewModel? owner;
     private Control? host;
+    private bool showDocumentTabs = true;
+
+    public bool ShowDocumentTabs
+    {
+        get => showDocumentTabs;
+        set
+        {
+            if (showDocumentTabs == value) return;
+            showDocumentTabs = value;
+            owner = null;
+            BuildHost();
+        }
+    }
 
     public Control? Viewport
     {
@@ -32,6 +45,12 @@ public sealed class FeedDocumentHost : UserControl
         if (host is IDisposable disposable) disposable.Dispose();
         if (viewport.Parent is Panel oldPanel) oldPanel.Children.Remove(viewport);
         owner = feed;
+        if (!ShowDocumentTabs)
+        {
+            host = viewport;
+            Content = host;
+            return;
+        }
         if (DesktopHostFactory is { } factory) host = factory(feed, viewport);
         else
         {

@@ -211,6 +211,18 @@
   <data name="FeedSearchWatermark" xml:space="preserve"><value>Search notes</value></data>
   <data name="FeedSearchIndexing" xml:space="preserve"><value>Indexing notes</value></data>
   <data name="FeedTitle" xml:space="preserve"><value>Feed</value></data>
+  <data name="WorkspaceBack" xml:space="preserve"><value>Back</value></data>
+  <data name="WorkspaceForward" xml:space="preserve"><value>Forward</value></data>
+  <data name="WorkspaceHistory" xml:space="preserve"><value>Navigation history</value></data>
+  <data name="WorkspaceNewTab" xml:space="preserve"><value>New tab</value></data>
+  <data name="WorkspaceClosePane" xml:space="preserve"><value>Close pane</value></data>
+  <data name="WorkspaceOpenInNewTab" xml:space="preserve"><value>Open in new tab</value></data>
+  <data name="WorkspaceOpenActions" xml:space="preserve"><value>Open actions</value></data>
+  <data name="WorkspaceOpenBeside" xml:space="preserve"><value>Open beside</value></data>
+  <data name="WorkspaceCloseTab" xml:space="preserve"><value>Close tab</value></data>
+  <data name="WorkspacePrimaryPane" xml:space="preserve"><value>Primary pane</value></data>
+  <data name="WorkspaceSecondaryPane" xml:space="preserve"><value>Adjacent pane</value></data>
+  <data name="WorkspaceFeedInOtherPane" xml:space="preserve"><value>Feed uses a shared editor. Switch to the pane with the active feed.</value></data>
   <data name="FeedExternalVaultUnsupported" xml:space="preserve"><value>Choosing an external note vault is not supported on this platform.</value></data>
   <data name="FeedBootstrapIndexedFiles" xml:space="preserve"><value>Files indexed:</value></data>
   <data name="FeedBootstrapPendingCheckboxes" xml:space="preserve"><value>Unfinished items:</value></data>

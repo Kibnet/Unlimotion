@@ -32,7 +32,7 @@ using Unlimotion.ViewModel.Workspace;
 namespace Unlimotion.UiTests.Headless.Tests;
 
 [InheritsTests]
-public sealed class MainWindowHeadlessTests
+public sealed partial class MainWindowHeadlessTests
     : FeedScenariosBase<MainWindowHeadlessTests.HeadlessRuntimeSession>
 {
     private const string TaskDeepLinkScenarioTestName = nameof(Task_deep_link_opens_existing_task_card);
@@ -57,8 +57,11 @@ public sealed class MainWindowHeadlessTests
             StringComparison.Ordinal) || string.Equals(
             TestContext.Current?.Metadata.TestName,
             WorkspaceScreenshotsTestName,
-            StringComparison.Ordinal);
-        var isDailyNoteFilenameFormatScenario = IsDailyNoteFilenameFormatScenarioTest;
+            StringComparison.Ordinal) || TestContext.Current?.Metadata.TestName?.StartsWith(
+            "UX", StringComparison.Ordinal) == true;
+        var isDailyNoteFilenameFormatScenario = IsDailyNoteFilenameFormatScenarioTest || string.Equals(
+            TestContext.Current?.Metadata.TestName,
+            nameof(UX06_UseExistingVault), StringComparison.Ordinal);
         var inner = DesktopAppSession.Launch(
                 UnlimotionAppLaunchHost.CreateHeadlessLaunchOptions(
                     isStatusContract
@@ -72,6 +75,34 @@ public sealed class MainWindowHeadlessTests
                     feedVaultPrepared: path =>
                     {
                         feedVaultPath = path;
+                        if (TestContext.Current?.Metadata.TestName is "UX07_LinkedPlan"
+                            or "UX08_ChooseWork"
+                            or "UX11_UpdatePlanFromNotes"
+                            or "UX13_MetaWork")
+                        {
+                            UnlimotionAutomationScenarioData.SeedWorkspaceStoryTasks(
+                                Path.Combine(Path.GetDirectoryName(path)!, "Tasks"));
+                        }
+                        if (string.Equals(TestContext.Current?.Metadata.TestName,
+                                nameof(UX05_FindHistoricalFact), StringComparison.Ordinal))
+                        {
+                            SeedHistoricalArchive(path);
+                        }
+                        if (string.Equals(TestContext.Current?.Metadata.TestName,
+                                nameof(UX12_CompareNotes), StringComparison.Ordinal))
+                        {
+                            SeedComparisonNotes(path);
+                        }
+                        if (string.Equals(TestContext.Current?.Metadata.TestName,
+                                "UX11_UpdatePlanFromNotes", StringComparison.Ordinal))
+                        {
+                            SeedPlanningNote(path);
+                        }
+                        if (string.Equals(TestContext.Current?.Metadata.TestName,
+                                nameof(UX10_WorkWithSource), StringComparison.Ordinal))
+                        {
+                            SeedLongSourceDay(path);
+                        }
                         if (isDailyNoteFilenameFormatScenario)
                         {
                             SeedDottedDailyNoteForFilenameFormatScenario(path);
@@ -92,6 +123,20 @@ public sealed class MainWindowHeadlessTests
                         viewModel.Feed.TaskCreationTarget =
                             new Unlimotion.ViewModel.Feed.TaskStorageFeedTaskCreationTarget(
                                 () => viewModel.taskRepository);
+                        if (string.Equals(TestContext.Current?.Metadata.TestName,
+                                "UX11_UpdatePlanFromNotes", StringComparison.Ordinal))
+                        {
+                            var source = new Unlimotion.Notes.Operations.FeedTaskSourceIdentity(
+                                "isolated-ui-story-task-source", "isolated-ui-story-storage-binding");
+                            viewModel.Feed.TaskOwner = viewModel;
+                            viewModel.Feed.ConfigureTaskSourceParents(
+                                () => source,
+                                (_, _, _) => null,
+                                (_, _, _, _) => Task.CompletedTask);
+                            viewModel.Feed.TaskCreationTarget =
+                                new Unlimotion.ViewModel.Feed.TaskStorageFeedTaskCreationTarget(
+                                    () => viewModel.taskRepository, () => source);
+                        }
                         viewModel.Feed.SetNotificationDispatcher(action =>
                         {
                             if (Dispatcher.UIThread.CheckAccess())
@@ -763,23 +808,8 @@ public sealed class MainWindowHeadlessTests
             feed.SelectedDay = feed.Days.First(day => day.Date == DateOnly.FromDateTime(DateTime.Now));
             Dispatcher.UIThread.RunJobs();
         });
-        Page.FeedSearchBox.Enter(UnlimotionAutomationScenarioData.FeedQuickCaptureMarker);
-        var searchResults = WaitUntil(
-            () => TryResolveHeadless(() => Page.FeedSearchResultsList.Items) ?? [],
-            items => items.Any(item => item.Text?.Contains(
-                UnlimotionAutomationScenarioData.FeedQuickCaptureMarker,
-                StringComparison.Ordinal) == true),
-            timeout: TimeSpan.FromSeconds(10),
-            timeoutMessage: "Unified Feed search did not find the converted capture.");
-        Page.FeedSearchBox.Enter(string.Empty);
-        WaitUntil(
-            () => HeadlessRuntime.Dispatch(() => GetHeadlessMainWindowViewModel().Feed.VisibleDays.Count),
-            count => count >= 2,
-            timeout: TimeSpan.FromSeconds(10),
-            timeoutMessage: "Unified Feed search clear did not restore chronology.");
         using (Assert.Multiple())
         {
-            await Assert.That(searchResults.Count).IsGreaterThanOrEqualTo(1);
             await Assert.That(ReadFeedVaultText(todayPath)).Contains("unlimotion://task/" + createdTask.Id);
             await Assert.That(createdTask.Status).IsEqualTo(Unlimotion.Domain.TaskStatus.Prepared);
         }

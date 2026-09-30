@@ -5,6 +5,7 @@
              xmlns:feed="clr-namespace:Unlimotion.ViewModel.Feed;assembly=Unlimotion.ViewModel"
              xmlns:views="clr-namespace:Unlimotion.Views"
              x:Class="Unlimotion.Views.MarkdownBlockLivePreviewEditor"
+             x:Name="markdownBlockEditor"
              x:DataType="feed:MarkdownLivePreviewEditorViewModel"
              mc:Ignorable="d"
              d:DesignWidth="720"
@@ -165,7 +166,7 @@
                    AutomationProperties.AutomationId="{Binding DraftPersistenceErrorAutomationId}" />
 
         <ItemsControl Grid.Row="2"
-                       ItemsSource="{Binding Blocks}"
+                       ItemsSource="{Binding #markdownBlockEditor.DisplayedBlocks}"
                        AutomationProperties.AutomationId="{Binding BlocksAutomationId}">
         <ItemsControl.Styles>
             <Style Selector="ContentPresenter">

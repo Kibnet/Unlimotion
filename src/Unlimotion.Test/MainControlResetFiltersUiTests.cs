@@ -248,19 +248,20 @@ public class MainControlResetFiltersUiTests
                     view,
                     "RoadmapFiltersButton",
                     "RoadmapWantedFilterComboBox");
+                await AssertWantedFilterComboBox(roadmapWantedFilter, vm, expectedShowWanted: null);
+                vm.Graph.ShowWanted = true;
+                Dispatcher.UIThread.RunJobs();
                 await AssertWantedFilterComboBox(roadmapWantedFilter, vm, expectedShowWanted: true);
-                vm.ShowWanted = null;
+                vm.Graph.ShowWanted = null;
                 Dispatcher.UIThread.RunJobs();
                 await AssertWantedFilterComboBox(roadmapWantedFilter, vm, expectedShowWanted: null);
-                vm.ShowWanted = true;
-                Dispatcher.UIThread.RunJobs();
-                await AssertWantedFilterComboBox(roadmapWantedFilter, vm, expectedShowWanted: true);
                 roadmapWantedFilter.SelectedItem = vm.WantedFilterDefinitions.Single(option => option.Value == false);
                 Dispatcher.UIThread.RunJobs();
-                await Assert.That(vm.ShowWanted).IsFalse();
+                await Assert.That(vm.Graph.ShowWanted).IsFalse();
+                await Assert.That(vm.ShowWanted).IsTrue();
                 roadmapWantedFilter.SelectedItem = vm.WantedFilterDefinitions.Single(option => option.Value == null);
                 Dispatcher.UIThread.RunJobs();
-                await Assert.That(vm.ShowWanted).IsNull();
+                await Assert.That(vm.Graph.ShowWanted).IsNull();
             }
             finally
             {
@@ -358,6 +359,7 @@ public class MainControlResetFiltersUiTests
                     view,
                     "AllTasksFiltersButton",
                     "AllTasksResetFiltersButton");
+                await Assert.That(resetButton.CommandParameter?.ToString()).IsEqualTo("0");
                 await ClickControlAsync(window, resetButton);
                 Dispatcher.UIThread.RunJobs();
 
@@ -412,6 +414,7 @@ public class MainControlResetFiltersUiTests
 
                 await Assert.That(notificationManager.AskCount).IsEqualTo(1);
                 await Assert.That(vm.Search.SearchText).IsEqualTo(string.Empty);
+                await Assert.That(vm.LastCreatedFilter.Search.SearchText).IsEqualTo("Task");
                 await Assert.That(vm.ShowCompleted).IsEqualTo(defaultShowCompleted);
                 await Assert.That(vm.ShowArchived).IsEqualTo(defaultShowArchived);
                 await AssertStatusFiltersReset(
@@ -476,7 +479,8 @@ public class MainControlResetFiltersUiTests
                 Dispatcher.UIThread.RunJobs();
 
                 await Assert.That(notificationManager.AskCount).IsEqualTo(1);
-                await Assert.That(vm.Search.SearchText).IsEqualTo(string.Empty);
+                await Assert.That(vm.LastCreatedFilter.Search.SearchText).IsEqualTo(string.Empty);
+                await Assert.That(vm.Search.SearchText).IsEqualTo("Task");
                 await Assert.That(vm.ShowCompleted).IsTrue();
                 await Assert.That(vm.ShowArchived).IsTrue();
                 await AssertStatusFiltersReset(
@@ -486,8 +490,8 @@ public class MainControlResetFiltersUiTests
                     forcedVisibleStatus: null);
                 await Assert.That(vm.ShowWanted).IsTrue();
                 await Assert.That(vm.Graph.OnlyUnlocked).IsTrue();
-                await AssertToggleFiltersReset(vm.EmojiFilters);
-                await AssertToggleFiltersReset(vm.EmojiExcludeFilters);
+                await AssertToggleFiltersReset(vm.LastCreatedFilter.EmojiFilters);
+                await AssertToggleFiltersReset(vm.LastCreatedFilter.EmojiExcludeFilters);
                 await AssertDateFilterDefault(vm.LastCreatedDateFilter);
                 await AssertCustomDateFilter(vm.CompletedDateFilter);
                 await AssertCustomDateFilter(vm.ArchivedDateFilter);
@@ -541,7 +545,8 @@ public class MainControlResetFiltersUiTests
                 Dispatcher.UIThread.RunJobs();
 
                 await Assert.That(notificationManager.AskCount).IsEqualTo(1);
-                await Assert.That(vm.Search.SearchText).IsEqualTo(string.Empty);
+                await Assert.That(vm.Graph.Search.SearchText).IsEqualTo(string.Empty);
+                await Assert.That(vm.Search.SearchText).IsEqualTo("Task");
                 await Assert.That(vm.ShowCompleted).IsTrue();
                 await Assert.That(vm.ShowArchived).IsTrue();
                 await AssertStatusFiltersReset(
@@ -551,8 +556,9 @@ public class MainControlResetFiltersUiTests
                     forcedVisibleStatus: null);
                 await Assert.That(vm.ShowWanted).IsTrue();
                 await Assert.That(vm.Graph.OnlyUnlocked).IsFalse();
-                await AssertToggleFiltersReset(vm.EmojiFilters);
-                await AssertToggleFiltersReset(vm.EmojiExcludeFilters);
+                await Assert.That(vm.Graph.ShowWanted).IsTrue();
+                await AssertToggleFiltersReset(vm.RoadmapFilter.EmojiFilters);
+                await AssertToggleFiltersReset(vm.RoadmapFilter.EmojiExcludeFilters);
                 await AssertFirstFilterActive(vm.UnlockedTimeFilters);
                 await AssertFirstFilterActive(vm.DurationFilters);
                 await AssertCustomDateFilter(vm.CompletedDateFilter);
@@ -602,13 +608,15 @@ public class MainControlResetFiltersUiTests
                 Dispatcher.UIThread.RunJobs();
 
                 await Assert.That(notificationManager.AskCount).IsEqualTo(1);
-                await Assert.That(vm.Search.SearchText).IsEqualTo(string.Empty);
+                await Assert.That(vm.Graph.Search.SearchText).IsEqualTo(string.Empty);
+                await Assert.That(vm.Search.SearchText).IsEqualTo("Task");
                 await Assert.That(vm.ShowCompleted).IsTrue();
                 await Assert.That(vm.ShowArchived).IsTrue();
-                await Assert.That(vm.ShowWanted).IsNull();
+                await Assert.That(vm.ShowWanted).IsTrue();
+                await Assert.That(vm.Graph.ShowWanted).IsNull();
                 await Assert.That(vm.Graph.OnlyUnlocked).IsFalse();
-                await AssertToggleFiltersReset(vm.EmojiFilters);
-                await AssertToggleFiltersReset(vm.EmojiExcludeFilters);
+                await AssertToggleFiltersReset(vm.RoadmapFilter.EmojiFilters);
+                await AssertToggleFiltersReset(vm.RoadmapFilter.EmojiExcludeFilters);
                 await AssertFirstFilterActive(vm.UnlockedTimeFilters);
                 await AssertFirstFilterActive(vm.DurationFilters);
                 await AssertCustomDateFilter(vm.CompletedDateFilter);
@@ -628,13 +636,20 @@ public class MainControlResetFiltersUiTests
     private static void SetActiveFilters(MainWindowViewModel vm)
     {
         vm.Search.SearchText = "Task";
+        vm.LastCreatedFilter.Search.SearchText = "Task";
+        vm.Graph.Search.SearchText = "Task";
         vm.ShowCompleted = true;
         vm.ShowArchived = true;
         vm.ShowWanted = true;
+        vm.Graph.ShowWanted = true;
         vm.Graph.OnlyUnlocked = true;
 
         SetFirstFilter(vm.EmojiFilters);
         SetFirstFilter(vm.EmojiExcludeFilters);
+        SetFirstFilter(vm.LastCreatedFilter.EmojiFilters);
+        SetFirstFilter(vm.LastCreatedFilter.EmojiExcludeFilters);
+        SetFirstFilter(vm.RoadmapFilter.EmojiFilters);
+        SetFirstFilter(vm.RoadmapFilter.EmojiExcludeFilters);
         SetFirstFilter(vm.UnlockedTimeFilters);
         SetFirstFilter(vm.DurationFilters);
 

@@ -2,6 +2,7 @@ using AppAutomation.Abstractions;
 using AppAutomation.Avalonia.Headless.Automation;
 using AppAutomation.Avalonia.Headless.Session;
 using AppAutomation.TUnit;
+using Avalonia.Threading;
 using ReactiveUI;
 using TUnit.Assertions;
 using TUnit.Core;
@@ -36,6 +37,11 @@ public sealed class SettingsRemoteTypeHeadlessTests
 
     protected override MainWindowPage CreatePage(MainWindowHeadlessTests.HeadlessRuntimeSession session)
     {
+        HeadlessRuntime.Dispatch(() =>
+        {
+            session.Inner.MainWindow.Show();
+            Dispatcher.UIThread.RunJobs();
+        });
         return new MainWindowPage(new HeadlessControlResolver(session.Inner.MainWindow));
     }
 

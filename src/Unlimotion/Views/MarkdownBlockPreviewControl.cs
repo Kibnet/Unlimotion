@@ -6,10 +6,12 @@ using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using Avalonia.Controls.Primitives;
 using Avalonia.Data;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.VisualTree;
 using Unlimotion.ViewModel.Feed;
+using Unlimotion.ViewModel.Workspace;
 using L10n = Unlimotion.ViewModel.Localization.Localization;
 
 namespace Unlimotion.Views;
@@ -17,13 +19,16 @@ namespace Unlimotion.Views;
 public sealed class MarkdownLinkInvokedEventArgs(
     int blockIndex,
     MarkdownInlineTokenKind kind,
-    string target) : EventArgs
+    string target,
+    WorkspaceOpenDisposition disposition = WorkspaceOpenDisposition.CurrentTab) : EventArgs
 {
     public int BlockIndex { get; } = blockIndex;
 
     public MarkdownInlineTokenKind Kind { get; } = kind;
 
     public string Target { get; } = target;
+
+    public WorkspaceOpenDisposition Disposition { get; } = disposition;
 }
 
 public sealed class BrokenTaskReferenceActionEventArgs(
@@ -349,7 +354,8 @@ public sealed class MarkdownBlockPreviewControl : ContentControl
             AutomationProperties.SetHelpText(button, target);
             button.Click += (_, _) => LinkInvoked?.Invoke(
                 this,
-                new MarkdownLinkInvokedEventArgs(block.Index, token.Kind, target));
+                new MarkdownLinkInvokedEventArgs(block.Index, token.Kind, target, button.TakeDisposition()));
+            button.ContextMenu = CreateLinkContextMenu(block.Index, token.Kind, target);
             return button;
         }
 
@@ -409,7 +415,8 @@ public sealed class MarkdownBlockPreviewControl : ContentControl
         AutomationProperties.SetHelpText(title, target);
         title.Click += (_, _) => LinkInvoked?.Invoke(
             this,
-            new MarkdownLinkInvokedEventArgs(block.Index, token.Kind, target));
+            new MarkdownLinkInvokedEventArgs(block.Index, token.Kind, target, title.TakeDisposition()));
+        title.ContextMenu = CreateLinkContextMenu(block.Index, token.Kind, target);
 
         var grid = new Grid
         {
@@ -420,6 +427,23 @@ public sealed class MarkdownBlockPreviewControl : ContentControl
         grid.Children.Add(status);
         grid.Children.Add(title);
         return grid;
+    }
+
+    private ContextMenu CreateLinkContextMenu(int blockIndex, MarkdownInlineTokenKind kind, string target)
+    {
+        var menu = new ContextMenu();
+        Add("WorkspaceOpenInNewTab", WorkspaceOpenDisposition.NewTab);
+        Add("WorkspaceOpenBeside", WorkspaceOpenDisposition.AdjacentPane);
+        return menu;
+
+        void Add(string key, WorkspaceOpenDisposition disposition)
+        {
+            var item = new MenuItem { Header = L10n.Get(key), MinHeight = 40 };
+            item.Click += (_, _) => LinkInvoked?.Invoke(
+                this,
+                new MarkdownLinkInvokedEventArgs(blockIndex, kind, target, disposition));
+            menu.Items.Add(item);
+        }
     }
 
     private Control CreateBrokenTaskReference(
@@ -507,7 +531,24 @@ public sealed class MarkdownBlockPreviewControl : ContentControl
     // its baseline, expanding the line and lifting neighboring text above links.
     private sealed class InlineLinkButton : Button
     {
+        private WorkspaceOpenDisposition pendingDisposition = WorkspaceOpenDisposition.CurrentTab;
+
         protected override Type StyleKeyOverride => typeof(Button);
+
+        protected override void OnPointerPressed(PointerPressedEventArgs e)
+        {
+            pendingDisposition = (e.KeyModifiers & KeyModifiers.Control) != 0
+                ? WorkspaceOpenDisposition.NewTab
+                : WorkspaceOpenDisposition.CurrentTab;
+            base.OnPointerPressed(e);
+        }
+
+        public WorkspaceOpenDisposition TakeDisposition()
+        {
+            var disposition = pendingDisposition;
+            pendingDisposition = WorkspaceOpenDisposition.CurrentTab;
+            return disposition;
+        }
 
         protected override Size MeasureOverride(Size availableSize)
         {

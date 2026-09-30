@@ -245,7 +245,7 @@ public partial class TaskClassificationControl : UserControl
         AutomationProperties.SetAutomationId(GoalCheckBox, $"{prefix}GoalCheckBox");
         AutomationProperties.SetAutomationId(BlockedExplanation, $"{prefix}BlockedExplanation");
         AutomationProperties.SetAutomationId(SelectedAreaChips, $"{prefix}SelectedAreaChips");
-        AutomationProperties.SetAutomationId(AreaPickerExpander, $"{prefix}AreaPickerExpander");
+        AutomationProperties.SetAutomationId(AreaPickerToggle, $"{prefix}AreaPickerToggle");
         AutomationProperties.SetAutomationId(AreaOptionsList, $"{prefix}AreaOptionsList");
     }
 }

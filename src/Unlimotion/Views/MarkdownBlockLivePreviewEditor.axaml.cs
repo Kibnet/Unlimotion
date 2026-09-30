@@ -36,6 +36,7 @@ public partial class MarkdownBlockLivePreviewEditor : UserControl
     public MarkdownBlockLivePreviewEditor()
     {
         InitializeComponent();
+        InitializeWorkspaceAreaFiltering();
         AddHandler(ContextRequestedEvent, OnAnyBlockContextRequested, RoutingStrategies.Tunnel, handledEventsToo: true);
         SizeChanged += (_, _) => UpdateReadingColumn();
         AttachedToVisualTree += (_, _) => UpdateReadingColumn();
@@ -848,8 +849,8 @@ public partial class MarkdownBlockLivePreviewEditor : UserControl
         keyEvent.Handled = true;
 
         var targetBeforeCommit = movingPrevious
-            ? editor.Blocks.LastOrDefault(candidate => candidate.Index < block.Index && candidate.IsEditable && candidate.IsPresentationVisible)
-            : editor.Blocks.FirstOrDefault(candidate => candidate.Index > block.Index && candidate.IsEditable && candidate.IsPresentationVisible);
+            ? editor.Blocks.LastOrDefault(candidate => candidate.Index < block.Index && candidate.IsEditable && IsBlockVisibleInThisView(candidate))
+            : editor.Blocks.FirstOrDefault(candidate => candidate.Index > block.Index && candidate.IsEditable && IsBlockVisibleInThisView(candidate));
         if (targetBeforeCommit is null)
         {
             return true;
@@ -877,8 +878,8 @@ public partial class MarkdownBlockLivePreviewEditor : UserControl
 
             var target = ResolveBlock(editor, targetLocator)
                 ?? (movingPrevious
-                    ? editor.Blocks.LastOrDefault(candidate => candidate.Index < sourceIndex && candidate.IsEditable && candidate.IsPresentationVisible)
-                    : editor.Blocks.FirstOrDefault(candidate => candidate.Index > sourceIndex && candidate.IsEditable && candidate.IsPresentationVisible));
+                    ? editor.Blocks.LastOrDefault(candidate => candidate.Index < sourceIndex && candidate.IsEditable && IsBlockVisibleInThisView(candidate))
+                    : editor.Blocks.FirstOrDefault(candidate => candidate.Index > sourceIndex && candidate.IsEditable && IsBlockVisibleInThisView(candidate)));
             if (target is null || !editor.BeginEdit(target))
             {
                 return false;

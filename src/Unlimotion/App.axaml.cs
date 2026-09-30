@@ -203,7 +203,11 @@ public class App : Application
                 {
                     runtime.TaskContext.MainWindow = _mainWindowViewModel;
                     await RunOnUiThreadAsync(
-                        () => _mainWindowViewModel.BindInitializedStorage(runtime.Storage));
+                        async () =>
+                        {
+                            await _mainWindowViewModel.CommitWorkspaceEditorsAsync();
+                            await _mainWindowViewModel.BindInitializedStorage(runtime.Storage);
+                        });
                 },
                 () => RunOnUiThreadAsync(_mainWindowViewModel.ClearTaskSpaceSurface),
                 PauseTaskSpaceSchedulerAsync,
@@ -931,13 +935,9 @@ public class App : Application
         viewModel.Feed.TaskResolver = taskId =>
             viewModel.taskRepository?.Tasks.Items.FirstOrDefault(task =>
                 string.Equals(task.Id, taskId, StringComparison.Ordinal));
-        viewModel.Feed.NavigateToTaskRequested = task =>
-        {
-            viewModel.CurrentTaskItem = task;
-            viewModel.SelectedWorkspaceMode = WorkspaceMode.Tasks;
-            viewModel.DetailsAreOpen = true;
-            viewModel.SelectCurrentTask();
-        };
+        viewModel.Feed.NavigateToTaskRequested = task => _ = viewModel.OpenWorkspaceTaskAsync(task);
+        viewModel.Feed.NavigateToTaskWithDispositionRequested = (task, disposition) =>
+            _ = viewModel.OpenWorkspaceTaskAsync(task, disposition);
         viewModel.Feed.ChooseVaultAsync = () => BrowseNoteVaultRootPathAsync(settings);
         settings.ConfigureNoteDailyFileNameFormatBridge(
             viewModel.Feed.ValidateDailyNoteFileNameFormat,
@@ -1011,7 +1011,7 @@ public class App : Application
             {
                 if (!change.Value)
                 {
-                    viewModel.SelectedWorkspaceMode = WorkspaceMode.Tasks;
+                    _ = viewModel.OpenWorkspaceRootAsync(WorkspaceMode.Tasks);
                 }
 
                 if (!_isTaskSpaceFeedRebindInProgress)
@@ -2388,9 +2388,9 @@ public class App : Application
         }
     }
 
-    private void ActivateTaskDeepLink(MainWindowViewModel viewModel, TaskDeepLink link)
+    private async void ActivateTaskDeepLink(MainWindowViewModel viewModel, TaskDeepLink link)
     {
-        if (!viewModel.TryOpenTaskById(link.TaskId))
+        if (!await viewModel.TryOpenTaskByIdAsync(link.TaskId))
         {
             viewModel.ManagerWrapper?.ErrorToast(L10n.Format("TaskDeepLinkTaskNotFound", link.TaskId));
         }

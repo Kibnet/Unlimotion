@@ -21,6 +21,7 @@ public class GraphViewModel
 
     private MainWindowViewModel? _mainWindowViewModel;
     private INotifyPropertyChanged? _mainWindowPropertyChangedSource;
+    private bool? _showWanted;
 
     public GraphViewModel()
     {
@@ -71,27 +72,18 @@ public class GraphViewModel
 
     public WantedFilterOption CurrentWantedFilter
     {
-        get => _mainWindowViewModel?.CurrentWantedFilter ?? WantedFilterOption.Find(null);
+        get => WantedFilterOption.Find(ShowWanted);
         set
         {
-            if (_mainWindowViewModel != null && value != null)
-            {
-                ShowWanted = value.Value;
-            }
+            if (value != null) ShowWanted = value.Value;
         }
     }
 
     [AlsoNotifyFor(nameof(CurrentWantedFilter))]
     public bool? ShowWanted
     {
-        get => _mainWindowViewModel?.ShowWanted;
-        set
-        {
-            if (_mainWindowViewModel != null)
-            {
-                _mainWindowViewModel.ShowWanted = value;
-            }
-        }
+        get => _showWanted;
+        set => _showWanted = value;
     }
 
     public bool ShowCompleted
@@ -124,13 +116,6 @@ public class GraphViewModel
 
     private void HandleMainWindowViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (string.IsNullOrEmpty(e.PropertyName) ||
-            e.PropertyName is nameof(MainWindowViewModel.ShowWanted)
-                or nameof(MainWindowViewModel.CurrentWantedFilter))
-        {
-            NotifyWantedFilterProxyChanged();
-        }
-
         if (string.IsNullOrEmpty(e.PropertyName) ||
             e.PropertyName == nameof(MainWindowViewModel.RoadmapStatusFilters))
         {

@@ -52,12 +52,20 @@
             </ItemsControl.ItemTemplate>
         </ItemsControl>
 
-        <Expander Header="{DynamicResource TaskAreas}"
-                  IsEnabled="{Binding IsEditingSupported}"
-                  x:Name="AreaPickerExpander">
-            <ListBox ItemsSource="{Binding Areas}"
-                     MaxHeight="220"
-                     x:Name="AreaOptionsList">
+        <ToggleButton IsEnabled="{Binding IsEditingSupported}"
+                      HorizontalAlignment="Left"
+                      MinHeight="34"
+                      Padding="10,5"
+                      x:Name="AreaPickerToggle">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="{DynamicResource TaskAreas}" />
+                <TextBlock Text="⌄" Opacity="0.72" />
+            </StackPanel>
+        </ToggleButton>
+        <ListBox ItemsSource="{Binding Areas}"
+                 IsVisible="{Binding IsChecked, ElementName=AreaPickerToggle}"
+                 MaxHeight="220"
+                 x:Name="AreaOptionsList">
                 <ListBox.ItemTemplate>
                     <DataTemplate x:DataType="feed:TaskClassificationAreaOptionViewModel">
                         <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
@@ -67,7 +75,6 @@
                                   AutomationProperties.AutomationId="TaskClassificationAreaCheckBox" />
                     </DataTemplate>
                 </ListBox.ItemTemplate>
-            </ListBox>
-        </Expander>
+        </ListBox>
     </StackPanel>
 </UserControl>

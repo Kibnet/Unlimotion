@@ -29,6 +29,7 @@ using Unlimotion.Notes.Review;
 using Unlimotion.Notes.Search;
 using Unlimotion.Notes.Vault;
 using Unlimotion.Notes.Watching;
+using Unlimotion.ViewModel.Workspace;
 using L10n = Unlimotion.ViewModel.Localization.Localization;
 
 namespace Unlimotion.ViewModel.Feed;
@@ -110,6 +111,7 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
     private FeedSearchTypeOptionViewModel? selectedSearchType;
     private FeedAreaFilterOptionViewModel? selectedFeedAreaFilter;
     private bool isUpdatingFeedAreaFilter;
+    private bool useWorkspaceAreaPresentation;
     private DateTimeOffset? searchFromDate;
     private DateTimeOffset? searchToDate;
     private string searchQuery = string.Empty;
@@ -423,6 +425,16 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
     }
 
     public Action<TaskItemViewModel>? NavigateToTaskRequested { get; set; }
+
+    public Action<TaskItemViewModel, WorkspaceOpenDisposition>? NavigateToTaskWithDispositionRequested { get; set; }
+
+    public Action<WorkspaceLocation>? NavigationLocationOpened { get; set; }
+
+    public Func<WorkspaceLocation, WorkspaceOpenDisposition, Task<bool>>? NavigateToWorkspaceLocationRequested { get; set; }
+
+    public Action? WorkspaceScopeChanged { get; set; }
+
+    public double ChronologyScrollOffset { get; set; }
 
     public Func<string, TaskItemViewModel?>? TaskResolver
     {
@@ -1030,6 +1042,8 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
 
     public async Task InitializeVaultAsync(string? rootPath)
     {
+        var previousRoot = vault?.RootPath;
+        var previousVaultId = vaultId;
         try { await CommitActiveEditorsAsync(GetSessionToken()); }
         catch (Exception exception) { ErrorMessage = exception.Message; return; }
         var request = BeginRootReconfigureRequest();
@@ -1041,6 +1055,11 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
                 request: request,
                 expectedSession: null)
             .ConfigureAwait(true);
+        if (result.Succeeded && (previousRoot is null
+                ? vault?.RootPath is not null
+                : vault?.RootPath is null || !AreEquivalentVaultRoots(previousRoot, vault.RootPath)
+            || !string.Equals(previousVaultId, vaultId, StringComparison.Ordinal)))
+            WorkspaceScopeChanged?.Invoke();
     }
 
     /// <summary>
@@ -1755,7 +1774,8 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
         }
     }
 
-    public void OpenTaskReference(string taskId)
+    public void OpenTaskReference(string taskId,
+        WorkspaceOpenDisposition disposition = WorkspaceOpenDisposition.CurrentTab)
     {
         ThrowIfDisposed();
         if (string.IsNullOrWhiteSpace(taskId))
@@ -1763,7 +1783,14 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
             return;
         }
 
-        NavigateToTask(TaskResolver?.Invoke(taskId));
+        var task = TaskResolver?.Invoke(taskId);
+        if (task is null) return;
+        if (NavigateToTaskWithDispositionRequested is not null)
+        {
+            NavigateToTaskWithDispositionRequested(task, disposition);
+            return;
+        }
+        NavigateToTask(task);
     }
 
     public async Task HandleBrokenTaskReferenceAsync(
@@ -4678,7 +4705,8 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
     private void ApplyFeedAreaFilter()
     {
         selectionCoordinator?.Clear();
-        var allSelected = FeedAreaFilterOptions.FirstOrDefault(static option => option.IsAll)?.IsSelected != false;
+        var allSelected = useWorkspaceAreaPresentation
+            || FeedAreaFilterOptions.FirstOrDefault(static option => option.IsAll)?.IsSelected != false;
         var selectedAreas = FeedAreaFilterOptions
             .Where(static option => !option.IsAll && option.IsSelected)
             .Select(static option => new FeedAreaFilterSelection(option.Identity ?? string.Empty, option.AreaName))
@@ -4692,6 +4720,13 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
         SetMoveUndoEditor(Days.Select(day => day.MarkdownEditor).FirstOrDefault(editor => editor.HasHiddenMovedBlocks));
         HasVisibleDays = VisibleDays.Count > 0;
         this.RaisePropertyChanged(nameof(ChronologyAutomationName));
+    }
+
+    public void EnableWorkspaceAreaPresentation()
+    {
+        if (useWorkspaceAreaPresentation) return;
+        useWorkspaceAreaPresentation = true;
+        ApplyFeedAreaFilter();
     }
 
     private void RebuildSearchAreaOptions(string? selectedIdentity, bool selectedAll)
@@ -4909,7 +4944,8 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
         _ = AreaManagement.LoadAsync();
     }
 
-    public async Task OpenVaultLinkAsync(string target, string? sourcePath, bool wikiLink = true)
+    public async Task OpenVaultLinkAsync(string target, string? sourcePath, bool wikiLink = true,
+        WorkspaceOpenDisposition disposition = WorkspaceOpenDisposition.CurrentTab)
     {
         var navigation = ++noteNavigationGeneration;
         var sourceVault = vault;
@@ -4958,6 +4994,14 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
                 var index = anchor.StartsWith('^') ? editor.Blocks.LastOrDefault(block => block.Index < targetBlock.Index && block.Block.IsContent)?.Index ?? targetBlock.Index : targetBlock.Index;
                 SearchNavigationRequested?.Invoke(this, new FeedSearchNavigationRequestedEventArgs(path, editor, index, null));
             }
+            var location = WorkspaceLocation.ForNote(
+                path,
+                Path.GetFileNameWithoutExtension(path),
+                parts.Length == 2 ? parts[1] : null);
+            if (NavigateToWorkspaceLocationRequested is { } navigate)
+                await navigate(location, disposition).ConfigureAwait(true);
+            else
+                NavigationLocationOpened?.Invoke(location);
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { }
         catch (Exception exception)
@@ -5657,14 +5701,21 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
         return new FeedSearchAreaResolution(SelectedSearchArea?.AreaIdentity, uniqueNames);
     }
 
-    public Task OpenSearchResultAsync(FeedSearchResultViewModel result)
+    public Task OpenSearchResultAsync(
+        FeedSearchResultViewModel result,
+        WorkspaceOpenDisposition disposition = WorkspaceOpenDisposition.CurrentTab)
     {
         ThrowIfDisposed();
         ArgumentNullException.ThrowIfNull(result);
-        return OpenSearchResultCoreAsync(result);
+        return OpenSearchResultCoreAsync(result, disposition);
     }
 
-    private async Task OpenSearchResultCoreAsync(FeedSearchResultViewModel? result)
+    private Task OpenSearchResultCoreAsync(FeedSearchResultViewModel? result) =>
+        OpenSearchResultCoreAsync(result, WorkspaceOpenDisposition.CurrentTab);
+
+    private async Task OpenSearchResultCoreAsync(
+        FeedSearchResultViewModel? result,
+        WorkspaceOpenDisposition disposition)
     {
         if (result is null)
         {
@@ -5685,7 +5736,10 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
                     ?? (taskOwner?.taskRepository?.Tasks.Lookup(result.TaskId) is { HasValue: true } lookup
                         ? lookup.Value
                         : null);
-                NavigateToTask(task);
+                if (task is not null && NavigateToTaskWithDispositionRequested is { } navigateTask)
+                    navigateTask(task, disposition);
+                else
+                    NavigateToTask(task);
                 return;
             }
 
@@ -5747,13 +5801,21 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
                 SearchNavigationStarting?.Invoke(this, EventArgs.Empty);
                 SearchQuery = string.Empty;
                 SelectedDay = day;
+                var location = WorkspaceLocation.ForFeedDay(
+                    current.RelativePath,
+                    day.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                    current.BlockIndex.ToString(CultureInfo.InvariantCulture),
+                    CaptureFeedAreaFilterKey(),
+                    ChronologyScrollOffset);
+                await NavigateSearchLocationAsync(location, disposition).ConfigureAwait(true);
                 SearchNavigationRequested?.Invoke(
                     this,
                     new FeedSearchNavigationRequestedEventArgs(
                         current.RelativePath,
                         day.MarkdownEditor,
                         current.BlockIndex,
-                        day));
+                        day,
+                        query.Text));
                 return;
             }
 
@@ -5770,13 +5832,19 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
 
             SearchNavigationStarting?.Invoke(this, EventArgs.Empty);
             SearchQuery = string.Empty;
+            var noteLocation = WorkspaceLocation.ForNote(
+                current.RelativePath,
+                Path.GetFileNameWithoutExtension(current.RelativePath),
+                current.BlockIndex.ToString(CultureInfo.InvariantCulture));
+            await NavigateSearchLocationAsync(noteLocation, disposition).ConfigureAwait(true);
             SearchNavigationRequested?.Invoke(
                 this,
                 new FeedSearchNavigationRequestedEventArgs(
                     current.RelativePath,
                     thematic.MarkdownEditor,
                     current.BlockIndex,
-                    null));
+                    null,
+                    query.Text));
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -5786,6 +5854,21 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
             if (IsCurrent()) ErrorMessage = exception.Message;
         }
     }
+
+    private async Task NavigateSearchLocationAsync(
+        WorkspaceLocation location,
+        WorkspaceOpenDisposition disposition)
+    {
+        if (NavigateToWorkspaceLocationRequested is { } navigate)
+            await navigate(location, disposition).ConfigureAwait(true);
+        else
+            NavigationLocationOpened?.Invoke(location);
+    }
+
+    public string CaptureFeedAreaFilterKey() => JsonSerializer.Serialize(FeedAreaFilterOptions
+        .Where(static option => !option.IsAll && option.IsSelected)
+        .Select(static option => option.Identity ?? string.Empty)
+        .ToArray());
 
     private async Task LoadThroughSearchDayAsync(
         string relativePath,
@@ -7646,7 +7729,7 @@ public sealed class FeedAreaFilterOptionViewModel : ReactiveObject
         set => SetSelected(value == true, notifyOwner: true);
     }
 
-    internal void SetSelected(bool value, bool notifyOwner)
+    public void SetSelected(bool value, bool notifyOwner)
     {
         if (isSelected == value && isChecked == value)
         {
@@ -7661,7 +7744,7 @@ public sealed class FeedAreaFilterOptionViewModel : ReactiveObject
         }
     }
 
-    internal void SetChecked(bool? value) =>
+    public void SetChecked(bool? value) =>
         this.RaiseAndSetIfChanged(ref isChecked, value, nameof(IsChecked));
 }
 
@@ -7686,6 +7769,8 @@ public sealed class FeedSearchResultViewModel
     public FeedSearchEntry Entry { get; }
 
     public string AutomationId { get; }
+
+    public string ActionsAutomationId => AutomationId + "-OpenActions";
 
     public string RelativePath => Entry.RelativePath;
 
@@ -7768,7 +7853,8 @@ public sealed class FeedSearchNavigationRequestedEventArgs(
     string relativePath,
     MarkdownLivePreviewEditorViewModel editor,
     int blockIndex,
-    FeedDayViewModel? day) : EventArgs
+    FeedDayViewModel? day,
+    string? searchText = null) : EventArgs
 {
     public string RelativePath { get; } = relativePath;
 
@@ -7777,6 +7863,8 @@ public sealed class FeedSearchNavigationRequestedEventArgs(
     public int BlockIndex { get; } = blockIndex;
 
     public FeedDayViewModel? Day { get; } = day;
+
+    public string? SearchText { get; } = searchText;
 }
 
 [AddINotifyPropertyChangedInterface]

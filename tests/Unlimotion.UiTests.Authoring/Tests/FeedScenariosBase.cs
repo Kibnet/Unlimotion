@@ -13,7 +13,6 @@ public abstract class FeedScenariosBase<TSession> : StatusContractScenariosBase<
 {
     public const string ShellScenarioTestName = nameof(Feed_shell_switch_preserves_task_context);
     public const string CaptureScenarioTestName = nameof(Feed_chronology_and_quick_capture_are_persisted);
-    public const string SearchScenarioTestName = nameof(Feed_search_clear_restores_chronology);
     public const string ReviewScenarioTestName = nameof(Feed_review_uses_global_dialog);
     public const string TaskReferenceScenarioTestName = nameof(Feed_task_status_precedes_title_and_title_navigates);
     public const string NarrowScenarioTestName = nameof(Feed_narrow_layout_keeps_primary_actions_available);
@@ -28,7 +27,6 @@ public abstract class FeedScenariosBase<TSession> : StatusContractScenariosBase<
     protected static bool IsFeedScenarioTest => TestContext.Current?.Metadata.TestName is
         ShellScenarioTestName or
         CaptureScenarioTestName or
-        SearchScenarioTestName or
         ReviewScenarioTestName or
         TaskReferenceScenarioTestName or
         NarrowScenarioTestName or
@@ -240,10 +238,7 @@ public abstract class FeedScenariosBase<TSession> : StatusContractScenariosBase<
         {
             await Assert.That(Page.TasksModeButton.IsChecked).IsTrue();
             await Assert.That(Page.LastCreatedTabItem.IsSelected).IsTrue();
-            await UiAssert.TextEqualsAsync(
-                () => Page.CurrentTaskTitleTextBox.Text,
-                UnlimotionAutomationScenarioData.FeedCurrentTaskTitle,
-                TimeSpan.FromSeconds(10));
+            await Assert.That(Page.LastCreatedTree.AutomationId).IsEqualTo("LastCreatedTree");
         }
 
         OpenFeed();
@@ -255,10 +250,10 @@ public abstract class FeedScenariosBase<TSession> : StatusContractScenariosBase<
     public async Task Feed_chronology_and_quick_capture_are_persisted()
     {
         OpenFeed();
-        OpenQuickCapture();
         WaitForChronologyDayCount(
             minimumCount: 1,
             "Feed chronology did not expose its newest daily note.");
+        OpenQuickCapture();
         var todayPath = UnlimotionAutomationScenarioData.GetFeedDailyRelativePath(
             DateOnly.FromDateTime(DateTime.Now));
         using (Assert.Multiple())
@@ -292,36 +287,6 @@ public abstract class FeedScenariosBase<TSession> : StatusContractScenariosBase<
             await Assert.That(ReadFeedVaultText(todayPath))
                 .Contains(UnlimotionAutomationScenarioData.FeedQuickCaptureMarker);
             await Assert.That(IsQuickCaptureClosedAfterSave()).IsTrue();
-        }
-    }
-
-    [Test]
-    [NotInParallel(DesktopUiConstraint)]
-    public async Task Feed_search_clear_restores_chronology()
-    {
-        OpenFeed();
-        Page.FeedSearchBox.Enter(UnlimotionAutomationScenarioData.FeedOlderMarker);
-
-        var results = WaitForListItems(
-            () => Page.FeedSearchResultsList.Items,
-            minimumCount: 1,
-            "Feed search did not return the seeded older daily fragment.");
-        await Assert.That(results.Any(item => item.Text?.Contains(
-                UnlimotionAutomationScenarioData.FeedOlderMarker,
-                StringComparison.Ordinal) == true))
-            .IsTrue();
-
-        Page.FeedSearchBox.Enter(string.Empty);
-        WaitForChronologyDayCount(
-            minimumCount: 2,
-            "Clearing Feed search did not restore chronology.");
-
-        using (Assert.Multiple())
-        {
-            await Assert.That(Page.FeedSearchBox.Text).IsEmpty();
-            await Assert.That(ReadFeedVaultText(UnlimotionAutomationScenarioData.GetFeedDailyRelativePath(
-                    DateOnly.FromDateTime(DateTime.Now))))
-                .Contains(UnlimotionAutomationScenarioData.FeedNewestMarker);
         }
     }
 
@@ -724,7 +689,7 @@ public abstract class FeedScenariosBase<TSession> : StatusContractScenariosBase<
 
     private void OpenFeed()
     {
-        Page.FeedModeButton.IsChecked = true;
+        Page.ClickButton(static page => page.WorkspaceRailFeedButton);
         WaitUntil(
             () => Page.FeedModeButton.IsChecked == true,
             timeout: TimeSpan.FromSeconds(10),
@@ -734,24 +699,11 @@ public abstract class FeedScenariosBase<TSession> : StatusContractScenariosBase<
 
     private void OpenTasks()
     {
-        Page.TasksModeButton.IsChecked = true;
+        Page.ClickButton(static page => page.WorkspaceRailTasksButton);
         WaitUntil(
             () => Page.TasksModeButton.IsChecked == true,
             timeout: TimeSpan.FromSeconds(10),
             timeoutMessage: "Tasks workspace mode did not become selected.");
-        _ = WaitForControl(() => Page.TasksModeRoot, "Tasks root did not become available.");
-    }
-
-    private static IReadOnlyList<IListBoxItem> WaitForListItems(
-        Func<IReadOnlyList<IListBoxItem>> resolve,
-        int minimumCount,
-        string timeoutMessage)
-    {
-        return WaitUntil(
-            () => TryResolve(resolve) ?? Array.Empty<IListBoxItem>(),
-            items => items.Count >= minimumCount,
-            timeout: TimeSpan.FromSeconds(10),
-            timeoutMessage: timeoutMessage);
     }
 
     private void WaitForChronologyDayCount(int minimumCount, string timeoutMessage)

@@ -112,6 +112,7 @@ public abstract class StatusContractScenariosBase<TSession> : MainWindowScenario
 
     protected virtual void OpenArchivedTab()
     {
+        Page.ClickButton(static page => page.WorkspaceRailTasksButton);
         Page.SelectTabItem(static page => page.ArchivedTabItem, timeoutMs: 10_000);
     }
 

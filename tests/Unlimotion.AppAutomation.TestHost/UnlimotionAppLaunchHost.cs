@@ -399,8 +399,11 @@ public static class UnlimotionAppLaunchHost
         async Task BindRuntime(TaskSourceRuntime runtime)
         {
             runtime.TaskContext.MainWindow = vm;
-            await Dispatcher.UIThread.InvokeAsync(
-                () => vm.BindInitializedStorage(runtime.Storage));
+            await Dispatcher.UIThread.InvokeAsync(async () =>
+            {
+                await vm.CommitWorkspaceEditorsAsync();
+                await vm.BindInitializedStorage(runtime.Storage);
+            });
         }
 
         var coordinator = new TaskSpaceCoordinator(

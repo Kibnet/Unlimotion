@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using L10n = Unlimotion.ViewModel.Localization.Localization;
+using Unlimotion.ViewModel.Workspace;
 
 namespace Unlimotion.ViewModel.Feed;
 
@@ -106,6 +107,46 @@ public sealed partial class FeedViewModel
         catch (Exception exception)
         {
             if (!session.IsCancellationRequested && !isDisposed) ErrorMessage = exception.Message;
+        }
+    }
+
+    public async Task RestoreWorkspaceLocationAsync(WorkspaceLocation location)
+    {
+        if (location.Kind != WorkspaceLocationKind.Feed || location.Id == "feed") return;
+
+        var day = FindDay(location.Id);
+        if (day is null)
+        {
+            await LoadThroughSearchDayAsync(location.Id, GetSessionToken()).ConfigureAwait(true);
+            day = FindDay(location.Id);
+        }
+        if (day is null) return;
+
+        SelectedDay = day;
+        if (!useWorkspaceAreaPresentation && location.StateKey is not null)
+        {
+            string[] selectedValues;
+            try
+            {
+                selectedValues = System.Text.Json.JsonSerializer.Deserialize<string[]>(location.StateKey) ?? [];
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                selectedValues = location.StateKey.Split('|', StringSplitOptions.None);
+            }
+            var selected = selectedValues.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var selectAll = selected.Count == 0;
+            foreach (var option in FeedAreaFilterOptions)
+                option.IsSelected = option.IsAll ? selectAll : selected.Contains(option.Identity ?? string.Empty);
+        }
+        if (location.ScrollOffset is { } offset)
+            ChronologyScrollOffset = Math.Max(0, offset);
+        if (int.TryParse(location.Anchor, System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture, out var blockIndex))
+        {
+            SearchNavigationStarting?.Invoke(this, EventArgs.Empty);
+            SearchNavigationRequested?.Invoke(this, new FeedSearchNavigationRequestedEventArgs(
+                location.Id, day.MarkdownEditor, blockIndex, day));
         }
     }
 }

@@ -1,3 +1,4 @@
+using AppAutomation.Abstractions;
 using AppAutomation.Avalonia.Headless.Automation;
 using AppAutomation.Avalonia.Headless.Session;
 using AppAutomation.TUnit;
@@ -22,8 +23,15 @@ public sealed class TaskSpacesHeadlessTests
                 UnlimotionAppLaunchHost.CreateHeadlessLaunchOptions(
                     UnlimotionAutomationScenario.TaskSpaces)));
 
-    protected override MainWindowPage CreatePage(MainWindowHeadlessTests.HeadlessRuntimeSession session) =>
-        new(new HeadlessControlResolver(session.Inner.MainWindow));
+    protected override MainWindowPage CreatePage(MainWindowHeadlessTests.HeadlessRuntimeSession session)
+    {
+        HeadlessRuntime.Dispatch(() =>
+        {
+            session.Inner.MainWindow.Show();
+            Dispatcher.UIThread.RunJobs();
+        });
+        return new MainWindowPage(new HeadlessControlResolver(session.Inner.MainWindow));
+    }
 
     [Test]
     [NotInParallel(DesktopUiConstraint)]
@@ -37,7 +45,13 @@ public sealed class TaskSpacesHeadlessTests
         await Assert.That(GetOnlyTaskTitle(vm)).IsEqualTo(
             UnlimotionAutomationScenarioData.TaskSpacesSpaceATitle);
 
-        Page.SelectTabItem(static page => page.SettingsTabItem, timeoutMs: 10_000);
+        Page.ClickButton(static page => page.GlobalSettingsButton);
+        await Assert.That(vm.IsSettingsOpen).IsTrue();
+        HeadlessRuntime.Dispatch(() =>
+        {
+            Dispatcher.UIThread.RunJobs();
+            Session.Inner.MainWindow.UpdateLayout();
+        });
         await Assert.That(Page.TaskSpacesSection.AutomationId).IsEqualTo("TaskSpacesSection");
         await Assert.That(Page.TaskSpacesList.AutomationId).IsEqualTo("TaskSpacesList");
         await Assert.That(Page.AddTaskSpaceButton.AutomationId).IsEqualTo("AddTaskSpaceButton");

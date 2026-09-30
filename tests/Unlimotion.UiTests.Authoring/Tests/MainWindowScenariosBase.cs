@@ -74,17 +74,17 @@ public abstract partial class MainWindowScenariosBase<TSession> : UiTestBase<TSe
         await UiAssert.TextEqualsAsync(
             () => Page.CurrentTaskTitleTextBox.Text,
             ExpectedCurrentTaskTitle);
-        await Assert.That(Page.DetailsPaneToggleButton.IsToggled).IsFalse();
+        await Assert.That(Page.DetailsPaneToggleButton.IsToggled).IsTrue();
 
         Page.DetailsPaneToggleButton.Toggle();
         WaitUntil(
-            () => Page.DetailsPaneToggleButton.IsToggled,
+            () => !Page.DetailsPaneToggleButton.IsToggled,
             timeout: TimeSpan.FromSeconds(10),
             timeoutMessage: "Details pane toggle did not switch to the closed state.");
 
         Page.DetailsPaneToggleButton.Toggle();
         WaitUntil(
-            () => !Page.DetailsPaneToggleButton.IsToggled,
+            () => Page.DetailsPaneToggleButton.IsToggled,
             timeout: TimeSpan.FromSeconds(10),
             timeoutMessage: "Details pane toggle did not switch to the open state.");
         var detailsPane = WaitUntil(

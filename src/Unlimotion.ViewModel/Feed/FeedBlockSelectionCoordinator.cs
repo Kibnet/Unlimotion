@@ -6,7 +6,8 @@ namespace Unlimotion.ViewModel.Feed;
 
 /// <summary>Owns selection across editors, independently of recycled day views.</summary>
 public sealed class FeedBlockSelectionCoordinator(Func<IEnumerable<MarkdownLivePreviewEditorViewModel>> editors,
-    Func<IEnumerable<MarkdownLivePreviewEditorViewModel>>? visibleEditors = null)
+    Func<IEnumerable<MarkdownLivePreviewEditorViewModel>>? visibleEditors = null,
+    Func<IEnumerable<MarkdownLiveBlockViewModel>>? visibleBlocks = null)
 {
     private MarkdownLiveBlockViewModel? anchor;
     private bool updating;
@@ -26,7 +27,8 @@ public sealed class FeedBlockSelectionCoordinator(Func<IEnumerable<MarkdownLiveP
             if (!toggle) foreach (var editor in all) editor.ClearMoveSelection();
             if (extend && anchor is not null)
             {
-                var visible = (visibleEditors?.Invoke() ?? all).SelectMany(editor => editor.Blocks)
+                var visible = (visibleBlocks?.Invoke() ??
+                    (visibleEditors?.Invoke() ?? all).SelectMany(editor => editor.Blocks))
                     .Where(candidate => candidate.IsMovable && candidate.IsPresentationVisible).ToArray();
                 var start = Array.IndexOf(visible, anchor);
                 var end = Array.IndexOf(visible, block);
