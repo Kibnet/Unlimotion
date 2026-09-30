@@ -17,6 +17,21 @@ unlimotion-cli help search --format json
 dotnet tool update --global Unlimotion.Cli
 ```
 
+## Скилл для Codex
+
+Операционный [скилл `unlimotion-cli`](../../.agents/skills/unlimotion-cli/SKILL.md) помогает агенту читать и изменять задачи через **уже установленный актуальный** CLI; проверенный контракт — 1.32.0. Перед работой агент проверяет версию и возможности фактически запущенного бинарника. При несовместимом CLI он останавливается до изменения задач и предлагает отдельно обновить инструмент командой выше. Установка скилла не устанавливает и не обновляет `Unlimotion.Cli`.
+
+При запуске Codex из клона Unlimotion (в том числе из его подпапок) скилл обнаруживается автоматически из `.agents/skills/unlimotion-cli/` в корне репозитория. Для другого проекта установите его из GitHub в личный каталог навыков Codex. После слияния изменений в `main` команда PowerShell выглядит так:
+
+```powershell
+$codexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:USERPROFILE '.codex' }
+$installer = Join-Path $codexHome 'skills\.system\skill-installer\scripts\install-skill-from-github.py'
+$personalSkills = Join-Path $env:USERPROFILE '.agents\skills'
+python $installer --repo Kibnet/Unlimotion --path .agents/skills/unlimotion-cli --dest $personalSkills
+```
+
+Команда использует штатный `skill-installer`, но явно задаёт `--dest`: без него этот helper устанавливает в `$CODEX_HOME/skills`, а документированный личный путь Codex — `$HOME/.agents/skills`. Для версии из ещё не слитой ветки добавьте `--ref <имя-ветки-или-коммит>`. Установщик откажется перезаписать существующий каталог `unlimotion-cli`; сначала проверьте действующую копию и не удаляйте её автоматически. Если одноимённый скилл уже есть в личном каталоге, при работе в клоне могут отображаться обе копии. Новые скиллы Codex обычно обнаруживает автоматически; если копия не появилась, перезапустите Codex. Вне клона проверьте наличие скилла в новой сессии. Эти шаги устанавливают только инструкции агента: для выполнения команд CLI по-прежнему нужен совместимый `Unlimotion.Cli`.
+
 CLI требует совместимый .NET 10 SDK/runtime. Каталог задач выбирается в порядке: явный `--tasks`, непустая переменная окружения `UNLIMOTION_TASKS`, затем путь активного локального пространства из `Settings.json` установленного desktop-приложения. Если выбранный каталог недоступен, CLI выдаёт ошибку и не переключается на другой источник.
 
 Для постоянного пути без `--tasks` задай переменную в окружении процесса. В PowerShell:
@@ -44,7 +59,7 @@ unset UNLIMOTION_TASKS
 Для локальной сборки рекомендуется отдельный каталог инструмента, чтобы агент не изменял глобальную установку пользователя:
 
 ```powershell
-$packageVersion = "1.31.0-local.1"
+$packageVersion = "1.32.0-local.1"
 dotnet pack src\Unlimotion.Cli\Unlimotion.Cli.csproj -c Release -p:PackageVersion=$packageVersion -o artifacts\tools
 dotnet tool install --tool-path C:\tmp\unlimotion-cli-tool --add-source artifacts\tools Unlimotion.Cli --version $packageVersion
 ```
