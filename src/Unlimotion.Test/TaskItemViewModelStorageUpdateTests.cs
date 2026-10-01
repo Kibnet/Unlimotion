@@ -69,11 +69,13 @@ public sealed class TaskItemViewModelStorageUpdateTests
     [Arguments(nameof(TaskItemViewModel.Wanted))]
     [Arguments(nameof(TaskItemViewModel.Repeater))]
     [Arguments(nameof(TaskItemViewModel.CompletionCriteria))]
+    [Arguments(nameof(TaskItemViewModel.IsGoal))]
+    [Arguments(nameof(TaskItemViewModel.AreaIds))]
     public async Task StorageUpdate_PreservesOnlyTheLocallyChangedEditableField(string changedField)
     {
         using var storage = new TestTaskStorage();
         TaskCompletionSource? releaseCompletionCriteriaSave = null;
-        if (changedField == nameof(TaskItemViewModel.CompletionCriteria))
+        if (changedField is nameof(TaskItemViewModel.CompletionCriteria) or nameof(TaskItemViewModel.AreaIds))
         {
             releaseCompletionCriteriaSave = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             storage.UpdateHandler = _ => releaseCompletionCriteriaSave.Task;
@@ -94,6 +96,8 @@ public sealed class TaskItemViewModelStorageUpdateTests
             PlannedDuration = TimeSpan.FromHours(6),
             Importance = 2,
             Wanted = false,
+            IsGoal = false,
+            AreaIds = ["storage-area"],
             Repeater = new RepeaterPattern { Type = RepeaterType.Monthly, Period = 3 },
             CompletionCriteria = [new TaskCompletionCriterion { Id = "storage", Text = "storage criterion" }],
             Status = DomainTaskStatus.Prepared
@@ -116,6 +120,9 @@ public sealed class TaskItemViewModelStorageUpdateTests
             changedField == nameof(TaskItemViewModel.Importance) ? 9 : 2);
         await Assert.That(viewModel.Wanted).IsEqualTo(
             changedField == nameof(TaskItemViewModel.Wanted));
+        await Assert.That(viewModel.IsGoal).IsEqualTo(changedField == nameof(TaskItemViewModel.IsGoal));
+        await Assert.That(viewModel.AreaIds).IsEquivalentTo(
+            new[] { changedField == nameof(TaskItemViewModel.AreaIds) ? "local-area" : "storage-area" });
         await Assert.That(viewModel.Repeater!.Type).IsEqualTo(
             changedField == nameof(TaskItemViewModel.Repeater) ? RepeaterType.Daily : RepeaterType.Monthly);
         await Assert.That(viewModel.CompletionCriteria.Single().Text).IsEqualTo(
@@ -137,6 +144,12 @@ public sealed class TaskItemViewModelStorageUpdateTests
                 break;
             case nameof(TaskItemViewModel.Wanted):
                 await Assert.That(viewModel.Wanted).IsTrue();
+                break;
+            case nameof(TaskItemViewModel.IsGoal):
+                await Assert.That(viewModel.IsGoal).IsTrue();
+                break;
+            case nameof(TaskItemViewModel.AreaIds):
+                await Assert.That(viewModel.AreaIds.Single()).IsEqualTo("local-area");
                 break;
             case nameof(TaskItemViewModel.Repeater):
                 await Assert.That(viewModel.Repeater!.Type).IsEqualTo(RepeaterType.Daily);
@@ -311,6 +324,12 @@ public sealed class TaskItemViewModelStorageUpdateTests
                 break;
             case nameof(TaskItemViewModel.Wanted):
                 viewModel.Wanted = true;
+                break;
+            case nameof(TaskItemViewModel.IsGoal):
+                viewModel.IsGoal = true;
+                break;
+            case nameof(TaskItemViewModel.AreaIds):
+                viewModel.AreaIds.Add("local-area");
                 break;
             case nameof(TaskItemViewModel.Repeater):
                 viewModel.Repeater = new RepeaterPatternViewModel(new RepeaterPattern

@@ -6,7 +6,9 @@ using Avalonia.Logging;
 using ServiceStack;
 using ReactiveUI.Avalonia;
 using Unlimotion.Desktop.Services;
+using Unlimotion.Desktop.Views;
 using Unlimotion.Services;
+using Unlimotion.Views;
 using Velopack;
 
 namespace Unlimotion.Desktop
@@ -23,7 +25,37 @@ namespace Unlimotion.Desktop
         [STAThread]
         public static void Main(string[] args)
         {
-            VelopackApp.Build().Run();
+            var velopack = VelopackApp.Build();
+            if (OperatingSystem.IsWindows())
+            {
+                velopack
+                    .OnAfterInstallFastCallback(_ => WindowsTaskProtocolRegistrar.RegisterInstalledApplication())
+                    .OnAfterUpdateFastCallback(_ => WindowsTaskProtocolRegistrar.RegisterInstalledApplication())
+                    .OnBeforeUninstallFastCallback(_ => WindowsTaskProtocolRegistrar.UnregisterInstalledApplication());
+            }
+
+            velopack.Run();
+
+            var usesArgumentTaskDeepLinks = !OperatingSystem.IsMacOS();
+            var taskDeepLink = usesArgumentTaskDeepLinks ? TaskDeepLink.FindInArguments(args) : null;
+            using var activationBroker = usesArgumentTaskDeepLinks ? new TaskDeepLinkActivationBroker() : null;
+            if (taskDeepLink is not null
+                && activationBroker is { IsOwner: false }
+                && activationBroker.TryForwardAsync(taskDeepLink).GetAwaiter().GetResult())
+            {
+                return;
+            }
+
+            if (activationBroker is { IsOwner: true })
+            {
+                App.ConfigureTaskDeepLinkActivation(activationBroker);
+            }
+
+            if (taskDeepLink is not null)
+            {
+                App.ConfigureStartupTaskDeepLink(taskDeepLink);
+            }
+
             App.ConfigureUpdateService(new VelopackApplicationUpdateService());
 
 #if DEBUG
@@ -72,6 +104,7 @@ namespace Unlimotion.Desktop
         // Avalonia configuration, don't remove; also used by visual designer.
         public static AppBuilder BuildAvaloniaApp()
         {
+            FeedDocumentHost.DesktopHostFactory = static (feed, viewport) => new EremexFeedDocumentHost(feed, viewport);
             var builder = AppBuilder.Configure<App>()
                 .UsePlatformDetect()
                 .WithCustomFont();

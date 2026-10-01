@@ -20,6 +20,19 @@
     <string>Unlimotion.icns</string>
     <key>CFBundleShortVersionString</key>
     <string>CFBundleShortVersionStringExample</string>
+    <key>CFBundleURLTypes</key>
+    <array>
+      <dict>
+        <key>CFBundleTypeRole</key>
+        <string>Viewer</string>
+        <key>CFBundleURLName</key>
+        <string>com.Unlimotion.task</string>
+        <key>CFBundleURLSchemes</key>
+        <array>
+          <string>unlimotion</string>
+        </array>
+      </dict>
+    </array>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
     <key>NSHighResolutionCapable</key>

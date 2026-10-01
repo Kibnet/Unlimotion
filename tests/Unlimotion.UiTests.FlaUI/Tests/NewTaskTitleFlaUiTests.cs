@@ -35,7 +35,7 @@ public sealed class NewTaskTitleFlaUiTests
         using var session = DesktopAppSession.Launch(options);
         session.MainWindow.Focus();
 
-        (FindInMainWindow(session, "GlobalTaskCreateMenuButton")
+        (FindInMainWindow(session, "GlobalCreateMenuButton")
             ?? throw new InvalidOperationException("The global task-create menu button was not exposed."))
             .Click();
         var createTask = await WaitUntil(

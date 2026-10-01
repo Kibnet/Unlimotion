@@ -7,6 +7,7 @@ using TUnit.Core;
 using Unlimotion.AppAutomation.TestHost;
 using Unlimotion.UiTests.Authoring.Pages;
 using Unlimotion.ViewModel;
+using Unlimotion.ViewModel.Feed;
 
 namespace Unlimotion.UiTests.Headless.Tests;
 
@@ -50,10 +51,116 @@ public sealed class TaskSpacesHeadlessTests
         await Assert.That(vm.Settings.RemoveTaskSpaceCommand).IsNotNull();
     }
 
+    [Test]
+    [NotInParallel(DesktopUiConstraint)]
+    public async Task Space_switch_rebinds_tasks_and_note_vault_as_one_context()
+    {
+        var vm = GetViewModel();
+        InitializeFeed(vm);
+        WaitUntil(
+            () => HeadlessRuntime.Dispatch(() =>
+            {
+                Dispatcher.UIThread.RunJobs();
+                return vm.Feed.IsVaultInitialized
+                       && vm.Feed.Days.SelectMany(static day => day.MarkdownEditor.Blocks)
+                           .Any(static block => block.PreviewText.Contains("Space A note", StringComparison.Ordinal));
+            }),
+            static ready => ready,
+            timeout: TimeSpan.FromSeconds(40),
+            timeoutMessage: "Space A note vault did not initialize.");
+        var spaceARoot = HeadlessRuntime.Dispatch(() => vm.Feed.VaultRootPath);
+        var spaceB = vm.Settings.TaskSpaces.Single(space => space.DisplayName == "Space B");
+
+        HeadlessRuntime.Dispatch(() => vm.Settings.HeaderTaskSpace = spaceB);
+
+        WaitUntil(
+            () => HeadlessRuntime.Dispatch(() =>
+            {
+                Dispatcher.UIThread.RunJobs();
+                return !vm.Settings.IsTaskSpaceSwitching
+                       && vm.Settings.TaskSpaces.Single(space => space.DisplayName == "Space B").IsActive
+                       && vm.Feed.IsVaultInitialized
+                       && vm.Feed.Days.SelectMany(static day => day.MarkdownEditor.Blocks)
+                           .Any(static block => block.PreviewText.Contains("Space B note", StringComparison.Ordinal));
+            }),
+            static ready => ready,
+            timeout: TimeSpan.FromSeconds(40),
+            timeoutMessage: "Space B tasks and notes did not become active together.");
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(GetOnlyTaskTitle(vm)).IsEqualTo(
+                UnlimotionAutomationScenarioData.TaskSpacesSpaceBTitle);
+            await Assert.That(vm.Feed.VaultRootPath).IsNotEqualTo(spaceARoot);
+            await Assert.That(vm.Feed.IsBoundToVaultRoot(vm.Settings.NoteVaultRootPath)).IsTrue();
+        }
+    }
+
+    [Test]
+    [NotInParallel(DesktopUiConstraint)]
+    public async Task Space_switch_stays_on_current_context_when_dirty_feed_editor_cannot_commit()
+    {
+        var vm = GetViewModel();
+        InitializeFeed(vm);
+        WaitUntil(
+            () => HeadlessRuntime.Dispatch(() =>
+            {
+                Dispatcher.UIThread.RunJobs();
+                return vm.Feed.IsVaultInitialized && vm.Feed.Days.Count > 0;
+            }),
+            static ready => ready,
+            timeout: TimeSpan.FromSeconds(40),
+            timeoutMessage: "Space A note vault did not initialize.");
+        var originalRoot = HeadlessRuntime.Dispatch(() => vm.Feed.VaultRootPath);
+        var editor = HeadlessRuntime.Dispatch(() => vm.Feed.Days[0].MarkdownEditor);
+        HeadlessRuntime.Dispatch(() =>
+        {
+            var block = editor.Blocks.First(candidate => candidate.PreviewText.Contains("Space A note", StringComparison.Ordinal));
+            editor.BeginEdit(block);
+            block.EditorText += " unsaved";
+            editor.CommitBlockAsync = (_, _) => Task.FromResult(
+                MarkdownBlockCommitResult.Rejected("Synthetic commit failure"));
+            vm.Settings.HeaderTaskSpace = vm.Settings.TaskSpaces.Single(space => space.DisplayName == "Space B");
+        });
+
+        WaitUntil(
+            () => HeadlessRuntime.Dispatch(() =>
+            {
+                Dispatcher.UIThread.RunJobs();
+                return !vm.Settings.IsTaskSpaceSwitching;
+            }),
+            static ready => ready,
+            timeout: TimeSpan.FromSeconds(20),
+            timeoutMessage: "Rejected task-space switch did not settle.");
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(vm.Settings.TaskSpaces.Single(space => space.DisplayName == "Space A").IsActive).IsTrue();
+            await Assert.That(GetOnlyTaskTitle(vm)).IsEqualTo(
+                UnlimotionAutomationScenarioData.TaskSpacesSpaceATitle);
+            await Assert.That(vm.Feed.VaultRootPath).IsEqualTo(originalRoot);
+            await Assert.That(editor.ActiveBlock).IsNotNull();
+            await Assert.That(editor.ActiveBlock!.EditorText).Contains("unsaved");
+            await Assert.That(editor.ActiveBlock.ErrorMessage).Contains("Synthetic commit failure");
+        }
+    }
+
     private MainWindowViewModel GetViewModel() =>
         HeadlessRuntime.Dispatch(() =>
             Session.Inner.MainWindow.DataContext as MainWindowViewModel
             ?? throw new InvalidOperationException("Task-spaces window did not expose MainWindowViewModel."));
+
+    private static void InitializeFeed(MainWindowViewModel vm)
+    {
+        HeadlessRuntime.Dispatch(() =>
+        {
+            vm.Feed.IsExternalVaultSupported = true;
+            vm.Feed.TaskOwner = vm;
+            vm.Feed.TaskResolver = taskId => vm.taskRepository?.Tasks.Items.FirstOrDefault(
+                task => string.Equals(task.Id, taskId, StringComparison.Ordinal));
+            _ = vm.Feed.InitializeVaultAsync(vm.Settings.NoteVaultRootPath);
+        });
+    }
 
     private static string GetOnlyTaskTitle(MainWindowViewModel vm) =>
         HeadlessRuntime.Dispatch(() =>

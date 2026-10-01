@@ -1,6 +1,8 @@
 using System.Threading.Tasks;
 using AppAutomation.Avalonia.Headless.Session;
+using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Threading;
 using TUnit.Core;
 using Unlimotion.AppAutomation.TestHost;
 
@@ -13,8 +15,49 @@ public static class HeadlessSessionHooks
     [Before(TestSession)]
     public static void SetupSession()
     {
-        _session = HeadlessUnitTestSession.StartNew(UnlimotionAppLaunchHost.AvaloniaAppType);
+        // Keep regular interaction tests on the fast semantic backend. Skia is opt-in
+        // for screenshot runs because legacy tests synchronously dispatch to the UI thread.
+        var renderedScreenshots = string.Equals(
+            Environment.GetEnvironmentVariable("UNLIMOTION_RENDERED_HEADLESS_SCREENSHOTS"),
+            "1",
+            StringComparison.Ordinal);
+        _session = HeadlessUnitTestSession.StartNew(
+            renderedScreenshots
+                ? typeof(RenderedHeadlessAppBuilder)
+                : UnlimotionAppLaunchHost.AvaloniaAppType,
+            AvaloniaTestIsolationLevel.PerAssembly);
         HeadlessRuntime.SetSession(_session);
+    }
+
+    public static void CloseWindow(Window window)
+    {
+        ArgumentNullException.ThrowIfNull(window);
+        void CloseCore()
+        {
+            window.DataContext = null;
+            window.Content = null;
+            window.Close();
+            Dispatcher.UIThread.RunJobs();
+        }
+
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            CloseCore();
+        }
+        else
+        {
+            HeadlessRuntime.Dispatch(CloseCore);
+        }
+    }
+
+    public static async Task PrepareAsync(Func<Task> action)
+    {
+        // Keep the headless dispatcher pumping while storage publishes to its captured UI context.
+        await HeadlessRuntime.Session.Dispatch<bool>(async () =>
+        {
+            await action();
+            return true;
+        }, CancellationToken.None).ConfigureAwait(false);
     }
 
     [After(TestSession)]
