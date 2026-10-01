@@ -123,11 +123,20 @@ public sealed class TaskApplicationCommandService
 
                 var now = DateTimeOffset.UtcNow;
                 NormalizeAvailability(staged.Values, now, request.Author);
-                if (staged.Values.Any(task => task.PlannedBeginDateTime.HasValue && task.PlannedEndDateTime.HasValue &&
-                                              task.PlannedEndDateTime < task.PlannedBeginDateTime))
+                var invalidPlannedDates = staged.Values
+                    .Where(task => task.PlannedBeginDateTime.HasValue && task.PlannedEndDateTime.HasValue &&
+                                   task.PlannedEndDateTime < task.PlannedBeginDateTime)
+                    .Where(task => !original.TryGetValue(task.Id, out var before) ||
+                                   !DatesEqualExactly(task.PlannedBeginDateTime, before.PlannedBeginDateTime) ||
+                                   !DatesEqualExactly(task.PlannedEndDateTime, before.PlannedEndDateTime))
+                    .OrderBy(static task => task.Id, StringComparer.Ordinal)
+                    .FirstOrDefault();
+                if (invalidPlannedDates != null)
                 {
                     return Failed(TaskApplicationErrorKind.ValidationFailed,
-                        "Planned end date cannot be earlier than planned begin date.", operationResults: operationResults);
+                        $"Task '{invalidPlannedDates.Id}': planned end date '{invalidPlannedDates.PlannedEndDateTime:O}' cannot be earlier than planned begin date '{invalidPlannedDates.PlannedBeginDateTime:O}'.",
+                        taskId: invalidPlannedDates.Id, operationResults: operationResults,
+                        authoritativeTasks: ToAuthoritativeTasks(original, invalidPlannedDates.Id));
                 }
                 var finalGraph = CreateGraph(staged.Values);
                 var finalValidation = TaskGraphValidationReport.From(finalGraph);
@@ -863,6 +872,9 @@ public sealed class TaskApplicationCommandService
             return false;
         }
     }
+
+    private static bool DatesEqualExactly(DateTimeOffset? left, DateTimeOffset? right) =>
+        left.HasValue ? right.HasValue && left.Value.EqualsExact(right.Value) : !right.HasValue;
 
     private static bool TryParseDate(string? text, out DateTimeOffset value) =>
         DateTimeOffset.TryParse(text, null, System.Globalization.DateTimeStyles.RoundtripKind, out value) &&

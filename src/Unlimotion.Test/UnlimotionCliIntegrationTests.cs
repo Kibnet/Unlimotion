@@ -1696,6 +1696,231 @@ public sealed class UnlimotionCliIntegrationTests
         await Assert.That(await File.ReadAllTextAsync(nextFile)).IsEqualTo(nextBeforeRetry);
     }
 
+    [Test]
+    [Arguments("create")]
+    [Arguments("title")]
+    [Arguments("description")]
+    [Arguments("archive")]
+    [Arguments("legacy-title")]
+    [Arguments("legacy-archive")]
+    [Arguments("legacy-noop")]
+    public async Task Apply_LegacyInvalidDatesDoNotBlockIndependentChanges(string change)
+    {
+        using var temp = TempTaskDirectory.Create();
+        var legacy = CreateTask("legacy", DomainTaskStatus.Prepared, true);
+        legacy.PlannedBeginDateTime = DateTimeOffset.Parse("2026-10-02T10:00:00+03:00");
+        legacy.PlannedEndDateTime = DateTimeOffset.Parse("2026-10-01T10:00:00+03:00");
+        var current = CreateTask("current", DomainTaskStatus.Prepared, true);
+        await SaveTasks(temp.DirectoryPath, legacy, current);
+        legacy = await LoadTask(temp.DirectoryPath, legacy.Id);
+        var originals = new[] { legacy.Id, current.Id }.ToDictionary(
+            id => id, id => File.ReadAllText(Path.Combine(temp.DirectoryPath, id)));
+        var targetId = change.StartsWith("legacy-", StringComparison.Ordinal) ? legacy.Id : current.Id;
+        var snapshot = ParseJson((await RunCli("task", "--tasks", temp.DirectoryPath,
+            "--id", targetId, "--include", "details", "--format", "json")).StdOut);
+        var etag = snapshot.GetProperty("etag").GetString();
+        var operation = change switch
+        {
+            "create" => """{"operationId":"change","kind":"createTask","newTaskId":"new-task","title":"New without dates"}""",
+            "description" => $$"""{"operationId":"change","kind":"setField","taskId":"{{targetId}}","field":"descriptionUserText","value":"Updated context"}""",
+            "archive" or "legacy-archive" => $$"""{"operationId":"change","kind":"setStatus","taskId":"{{targetId}}","status":"Archived","justification":"Approved archive in isolated test","evidenceLinks":["https://example.com/approved"]}""",
+            "legacy-noop" => $$"""{"operationId":"change","kind":"setField","taskId":"{{targetId}}","field":"plannedBeginDateTime","value":"{{legacy.PlannedBeginDateTime:O}}"}""",
+            _ => $$"""{"operationId":"change","kind":"setField","taskId":"{{targetId}}","field":"title","value":"Renamed"}"""
+        };
+        using var requestFile = TempRequestFile.Create();
+        await File.WriteAllTextAsync(requestFile.Path, DateApplicationRequest(operation,
+            change == "create" ? "[]" : $$"""[{"taskId":"{{targetId}}","etag":"{{etag}}","status":"Prepared"}]"""));
+
+        var preview = await RunCli("apply", "--tasks", temp.DirectoryPath,
+            "--request", requestFile.Path, "--dry-run", "--format", "json");
+        await Assert.That(preview.ExitCode).IsEqualTo(0).Because(preview.StdOut);
+        await Assert.That(ParseJson(preview.StdOut).GetProperty("didMutate").GetBoolean()).IsFalse();
+        foreach (var (id, content) in originals)
+            await Assert.That(File.ReadAllText(Path.Combine(temp.DirectoryPath, id))).IsEqualTo(content);
+        await Assert.That(File.Exists(Path.Combine(temp.DirectoryPath, "new-task"))).IsFalse();
+
+        var applied = await RunCli("apply", "--tasks", temp.DirectoryPath,
+            "--request", requestFile.Path, "--format", "json");
+        await Assert.That(applied.ExitCode).IsEqualTo(0).Because(applied.StdOut);
+        var after = await LoadTask(temp.DirectoryPath, targetId);
+        if (change == "create")
+        {
+            var created = await LoadTask(temp.DirectoryPath, "new-task");
+            await Assert.That(created.Title).IsEqualTo("New without dates");
+            await Assert.That(created.PlannedBeginDateTime).IsNull();
+            await Assert.That(created.PlannedEndDateTime).IsNull();
+        }
+        else if (change == "description")
+            await Assert.That(after.Description).IsEqualTo("Updated context");
+        else if (change is "archive" or "legacy-archive")
+            await Assert.That(after.Status).IsEqualTo(DomainTaskStatus.Archived);
+        else if (change is "title" or "legacy-title")
+            await Assert.That(after.Title).IsEqualTo("Renamed");
+        var legacyAfter = await LoadTask(temp.DirectoryPath, legacy.Id);
+        await Assert.That(legacyAfter.PlannedBeginDateTime!.Value.EqualsExact(legacy.PlannedBeginDateTime!.Value)).IsTrue();
+        await Assert.That(legacyAfter.PlannedEndDateTime!.Value.EqualsExact(legacy.PlannedEndDateTime!.Value)).IsTrue();
+        var inspect = await RunCli("apply", "inspect", "--tasks", temp.DirectoryPath,
+            "--request", requestFile.Path, "--format", "json");
+        await Assert.That(inspect.ExitCode).IsEqualTo(0).Because(inspect.StdOut);
+        await Assert.That(ParseJson(inspect.StdOut).GetProperty("receiptState").GetString()).IsEqualTo("matching");
+        var repeat = await RunCli("apply", "--tasks", temp.DirectoryPath,
+            "--request", requestFile.Path, "--format", "json");
+        await Assert.That(repeat.ExitCode).IsEqualTo(0).Because(repeat.StdOut);
+        await Assert.That(ParseJson(repeat.StdOut).GetProperty("mode").GetString()).IsEqualTo("alreadyApplied");
+    }
+
+    [Test]
+    [Arguments("new")]
+    [Arguments("valid")]
+    [Arguments("legacy")]
+    [Arguments("offset")]
+    public async Task Apply_NewOrChangedInvalidDatesRejectAtomicallyWithTaskId(string change)
+    {
+        using var temp = TempTaskDirectory.Create();
+        var legacy = CreateTask("legacy", DomainTaskStatus.Prepared, true);
+        legacy.PlannedBeginDateTime = DateTimeOffset.Parse("2026-10-02T10:00:00+03:00");
+        legacy.PlannedEndDateTime = DateTimeOffset.Parse("2026-10-01T10:00:00+03:00");
+        var current = CreateTask("current", DomainTaskStatus.Prepared, true);
+        current.PlannedBeginDateTime = DateTimeOffset.Parse("2026-10-01T10:00:00+03:00");
+        current.PlannedEndDateTime = DateTimeOffset.Parse("2026-10-02T10:00:00+03:00");
+        await SaveTasks(temp.DirectoryPath, legacy, current);
+        legacy = await LoadTask(temp.DirectoryPath, legacy.Id);
+        current = await LoadTask(temp.DirectoryPath, current.Id);
+        var alternateOffset = legacy.PlannedBeginDateTime!.Value.Offset == TimeSpan.FromHours(1)
+            ? TimeSpan.FromHours(2) : TimeSpan.FromHours(1);
+        var offsetBegin = legacy.PlannedBeginDateTime.Value.ToOffset(alternateOffset);
+        var originals = new[] { legacy.Id, current.Id }.ToDictionary(
+            id => id, id => File.ReadAllText(Path.Combine(temp.DirectoryPath, id)));
+        var preconditions = new List<object>();
+        foreach (var id in originals.Keys)
+        {
+            var snapshot = ParseJson((await RunCli("task", "--tasks", temp.DirectoryPath,
+                "--id", id, "--include", "details", "--format", "json")).StdOut);
+            preconditions.Add(new { taskId = id, etag = snapshot.GetProperty("etag").GetString() });
+        }
+        var badId = change == "new" ? "new-task" : change == "valid" ? current.Id : legacy.Id;
+        var badOperation = change switch
+        {
+            "new" => """{"operationId":"invalid","kind":"createTask","newTaskId":"new-task","title":"Invalid new task","plannedBeginDateTime":"2026-10-02T10:00:00+03:00","plannedEndDateTime":"2026-10-01T10:00:00+03:00"}""",
+            "offset" => $$"""{"operationId":"invalid","kind":"setField","taskId":"legacy","field":"plannedBeginDateTime","value":"{{offsetBegin:O}}"}""",
+            _ => $$"""{"operationId":"invalid","kind":"setField","taskId":"{{badId}}","field":"plannedEndDateTime","value":"2026-09-30T10:00:00+03:00"}"""
+        };
+        using var requestFile = TempRequestFile.Create();
+        await File.WriteAllTextAsync(requestFile.Path, DateApplicationRequest(
+            """{"operationId":"rename","kind":"setField","taskId":"current","field":"title","value":"Must not persist"},""" + badOperation,
+            JsonSerializer.Serialize(preconditions)));
+        foreach (var preview in new[] { true, false })
+        {
+            var args = new List<string> { "apply", "--tasks", temp.DirectoryPath, "--request", requestFile.Path, "--format", "json" };
+            if (preview) args.Add("--dry-run");
+            var result = await RunCli(args.ToArray());
+            await Assert.That(result.ExitCode).IsEqualTo(1).Because(result.StdOut);
+            var json = ParseJson(result.StdOut);
+            await Assert.That(json.GetProperty("didMutate").GetBoolean()).IsFalse();
+            await Assert.That(json.GetProperty("error").GetProperty("kind").GetString()).IsEqualTo("validationFailed");
+            await Assert.That(json.GetProperty("error").GetProperty("taskId").GetString()).IsEqualTo(badId);
+            await Assert.That(json.GetProperty("error").GetProperty("message").GetString()).Contains(badId);
+            var expectedBegin = change switch
+            {
+                "new" => DateTimeOffset.Parse("2026-10-02T10:00:00+03:00"),
+                "offset" => offsetBegin,
+                "valid" => current.PlannedBeginDateTime!.Value,
+                _ => legacy.PlannedBeginDateTime!.Value
+            };
+            var expectedEnd = change switch
+            {
+                "new" => DateTimeOffset.Parse("2026-10-01T10:00:00+03:00"),
+                "offset" => legacy.PlannedEndDateTime!.Value,
+                _ => DateTimeOffset.Parse("2026-09-30T10:00:00+03:00")
+            };
+            await Assert.That(json.GetProperty("error").GetProperty("message").GetString()).Contains(expectedBegin.ToString("O"));
+            await Assert.That(json.GetProperty("error").GetProperty("message").GetString()).Contains(expectedEnd.ToString("O"));
+            await Assert.That(json.GetProperty("authoritativeTasks").GetArrayLength()).IsEqualTo(change == "new" ? 0 : 1);
+            if (change != "new")
+            {
+                var authoritative = json.GetProperty("authoritativeTasks")[0];
+                var before = change == "valid" ? current : legacy;
+                await Assert.That(authoritative.GetProperty("id").GetString()).IsEqualTo(badId);
+                await Assert.That(DateTimeOffset.Parse(authoritative.GetProperty("details").GetProperty("plannedBeginDateTime").GetString()!)).IsEqualTo(before.PlannedBeginDateTime!.Value);
+                await Assert.That(DateTimeOffset.Parse(authoritative.GetProperty("details").GetProperty("plannedEndDateTime").GetString()!)).IsEqualTo(before.PlannedEndDateTime!.Value);
+            }
+            foreach (var (id, content) in originals)
+                await Assert.That(File.ReadAllText(Path.Combine(temp.DirectoryPath, id))).IsEqualTo(content);
+            await Assert.That(File.Exists(Path.Combine(temp.DirectoryPath, "new-task"))).IsFalse();
+            await Assert.That(Directory.Exists(Path.Combine(temp.DirectoryPath, ".unlimotion.applies", "v1"))).IsFalse();
+        }
+    }
+
+    [Test]
+    [Arguments("repair")]
+    [Arguments("clear-begin")]
+    [Arguments("clear-end")]
+    [Arguments("equal")]
+    [Arguments("move")]
+    public async Task Apply_ValidFinalDatesAllowRepairsClearsAndAtomicMoves(string change)
+    {
+        using var temp = TempTaskDirectory.Create();
+        var task = CreateTask("target", DomainTaskStatus.Prepared, true);
+        task.PlannedBeginDateTime = DateTimeOffset.Parse("2026-10-02T10:00:00+03:00");
+        task.PlannedEndDateTime = DateTimeOffset.Parse(change == "move" ? "2026-10-03T10:00:00+03:00" : "2026-10-01T10:00:00+03:00");
+        await SaveTasks(temp.DirectoryPath, task);
+        var snapshot = ParseJson((await RunCli("task", "--tasks", temp.DirectoryPath,
+            "--id", task.Id, "--include", "details", "--format", "json")).StdOut);
+        var operations = change switch
+        {
+            "clear-begin" => """{"operationId":"clear","kind":"clearField","taskId":"target","field":"plannedBeginDateTime"}""",
+            "clear-end" => """{"operationId":"clear","kind":"clearField","taskId":"target","field":"plannedEndDateTime"}""",
+            "move" => """{"operationId":"begin","kind":"setField","taskId":"target","field":"plannedBeginDateTime","value":"2026-10-04T10:00:00+03:00"},{"operationId":"end","kind":"setField","taskId":"target","field":"plannedEndDateTime","value":"2026-10-05T10:00:00+03:00"}""",
+            "equal" => """{"operationId":"end","kind":"setField","taskId":"target","field":"plannedEndDateTime","value":"2026-10-02T07:00:00Z"}""",
+            _ => """{"operationId":"end","kind":"setField","taskId":"target","field":"plannedEndDateTime","value":"2026-10-03T10:00:00+03:00"}"""
+        };
+        using var requestFile = TempRequestFile.Create();
+        await File.WriteAllTextAsync(requestFile.Path, DateApplicationRequest(operations,
+            JsonSerializer.Serialize(new[] { new { taskId = task.Id, etag = snapshot.GetProperty("etag").GetString() } })));
+        var preview = await RunCli("apply", "--tasks", temp.DirectoryPath,
+            "--request", requestFile.Path, "--dry-run", "--format", "json");
+        await Assert.That(preview.ExitCode).IsEqualTo(0).Because(preview.StdOut);
+        var result = await RunCli("apply", "--tasks", temp.DirectoryPath,
+            "--request", requestFile.Path, "--format", "json");
+        await Assert.That(result.ExitCode).IsEqualTo(0).Because(result.StdOut);
+        var after = await LoadTask(temp.DirectoryPath, task.Id);
+        if (change == "clear-begin") await Assert.That(after.PlannedBeginDateTime).IsNull();
+        else if (change == "clear-end") await Assert.That(after.PlannedEndDateTime).IsNull();
+        else
+        {
+            var expectedBegin = DateTimeOffset.Parse(change == "move" ? "2026-10-04T10:00:00+03:00" : "2026-10-02T10:00:00+03:00");
+            var expectedEnd = DateTimeOffset.Parse(change switch
+            {
+                "move" => "2026-10-05T10:00:00+03:00",
+                "equal" => "2026-10-02T07:00:00Z",
+                _ => "2026-10-03T10:00:00+03:00"
+            });
+            // Storage normalizes offsets to the host zone; compare persisted instants.
+            await Assert.That(after.PlannedBeginDateTime!.Value).IsEqualTo(expectedBegin);
+            await Assert.That(after.PlannedEndDateTime!.Value).IsEqualTo(expectedEnd);
+        }
+    }
+
+    [Test]
+    public async Task Apply_InvalidDatesReportOrdinalFirstTask()
+    {
+        using var temp = TempTaskDirectory.Create();
+        using var requestFile = TempRequestFile.Create();
+        var operations = string.Join(",", new[] { "z-task", "a-task" }.Select(id =>
+            $$"""{"operationId":"{{id}}","kind":"createTask","newTaskId":"{{id}}","title":"Invalid","plannedBeginDateTime":"2026-10-02T10:00:00+03:00","plannedEndDateTime":"2026-10-01T10:00:00+03:00"}"""));
+        await File.WriteAllTextAsync(requestFile.Path, DateApplicationRequest(operations, "[]"));
+        var result = await RunCli("apply", "--tasks", temp.DirectoryPath, "--request", requestFile.Path, "--dry-run", "--format", "json");
+        await Assert.That(result.ExitCode).IsEqualTo(1);
+        await Assert.That(ParseJson(result.StdOut).GetProperty("error").GetProperty("taskId").GetString()).IsEqualTo("a-task");
+        await Assert.That(File.Exists(Path.Combine(temp.DirectoryPath, "a-task"))).IsFalse();
+        await Assert.That(File.Exists(Path.Combine(temp.DirectoryPath, "z-task"))).IsFalse();
+    }
+
+    private static string DateApplicationRequest(string operations, string preconditions) => $$"""
+    {"schemaVersion":1,"applicationId":"date-regression","proposalRefs":[{"id":"date-regression","revision":1}],
+     "author":"test-agent","reason":"Approved isolated regression test","preconditions":{{preconditions}},"operations":[{{operations}}]}
+    """;
+
     private static TaskItem CreateTask(
         string id,
         DomainTaskStatus status,
