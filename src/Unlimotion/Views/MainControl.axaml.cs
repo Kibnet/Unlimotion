@@ -641,6 +641,51 @@ namespace Unlimotion.Views
                 ?? (!_isWorkspaceHosted ? (DataContext as MainWindowViewModel)?.CurrentTaskItem : null);
             IsRouteDetailsOpen = RouteTaskItem is not null
                 || !_isWorkspaceHosted && DataContext is MainWindowViewModel { DetailsAreOpen: true };
+            _ = RefreshTaskSourcesAsync();
+        }
+
+        private System.Collections.Generic.IReadOnlyList<WorkspaceLocation> taskSourceLocations = [];
+        private string? taskSourceLookupKey;
+        private async System.Threading.Tasks.Task RefreshTaskSourcesAsync()
+        {
+            if (CurrentTaskSourceButton is null) return;
+            var task = CardTaskItem;
+            var key = task?.Id + "\n" + (DataContext as MainWindowViewModel)?.Feed.WorkspaceScopeKey;
+            if (key == taskSourceLookupKey) return;
+            taskSourceLookupKey = key;
+            CurrentTaskSourceButton.IsVisible = false;
+            if (task is null || DataContext is not MainWindowViewModel owner) return;
+            var scope = owner.Feed.WorkspaceScopeKey;
+            try
+            {
+                var locations = await owner.Feed.FindTaskSourceLocationsAsync(task.Id);
+                if (!ReferenceEquals(task, CardTaskItem) || scope != owner.Feed.WorkspaceScopeKey) return;
+                taskSourceLocations = locations;
+                CurrentTaskSourceButton.IsVisible = locations.Count > 0;
+            }
+            catch (Exception) { taskSourceLocations = []; }
+        }
+
+        private void OnAddNextStepClick(object? sender, RoutedEventArgs e)
+        {
+            if (CardTaskItem is { } task && DataContext is MainWindowViewModel owner) owner.OpenNextStep(task);
+        }
+
+        private async void OnTaskSourceClick(object? sender, RoutedEventArgs e)
+        {
+            if (DataContext is not MainWindowViewModel owner || CardTaskItem is not { } task) return;
+            if (taskSourceLocations.Count == 1) await owner.Feed.OpenTaskSourceAsync(task.Id, taskSourceLocations[0]);
+            else
+            {
+                var menu = new ContextMenu();
+                foreach (var location in taskSourceLocations)
+                {
+                    var item = new MenuItem { Header = location.Title + " · " + location.Anchor };
+                    item.Click += async (_, _) => await owner.Feed.OpenTaskSourceAsync(task.Id, location);
+                    menu.Items.Add(item);
+                }
+                menu.Open(CurrentTaskSourceButton);
+            }
         }
 
         private static int ParseWorkspaceTaskCategory(string? stateKey)

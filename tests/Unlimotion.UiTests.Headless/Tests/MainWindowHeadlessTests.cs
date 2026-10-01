@@ -46,6 +46,7 @@ public sealed partial class MainWindowHeadlessTests
     private const string UnifiedDiskSaveBothMarker = "Unified disk version preserved by SaveBoth";
     private static readonly UTF8Encoding Utf8WithoutBom = new(encoderShouldEmitUTF8Identifier: false);
     private string? feedVaultPath;
+    private string? parityConfigurationPath;
     private bool isDailyNoteFilenameFormatSettingsWired;
 
     protected override HeadlessRuntimeSession LaunchSession()
@@ -70,6 +71,7 @@ public sealed partial class MainWindowHeadlessTests
                             ? UnlimotionAutomationScenario.Feed
                         : UnlimotionAutomationScenario.Smoke,
                     language: isStatusContract ? StatusContractLanguage : null,
+                    prepareConfiguration: path => parityConfigurationPath = path,
                     currentTaskId: isStatusContract ? StatusContractCurrentTaskId : null,
                     theme: isStatusContract ? StatusContractTheme : null,
                     feedVaultPrepared: path =>

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Specialized;
 using System.ComponentModel;
+using System.Linq;
 using System.Reactive.Linq;
 using Avalonia;
 using Avalonia.Automation;
@@ -42,6 +43,7 @@ public sealed class WorkspacePaneView : Border, IDisposable
     private readonly MainControl tasksView;
     private readonly FeedControl feedView;
     private readonly Grid routeContent = new();
+    private readonly ScrollViewer reviewView;
     private WorkspaceNavigationTabViewModel? observedTab;
     private readonly IDisposable[] ownerSubscriptions;
     private bool disposed;
@@ -64,6 +66,17 @@ public sealed class WorkspacePaneView : Border, IDisposable
         };
         routeContent.Children.Add(tasksView);
         routeContent.Children.Add(feedView);
+        var review = new FeedReviewDialog { DataContext = owner.Feed };
+        review.UseWorkspacePresentation();
+        var sourceButton = new Button { Content = Localization.Get("WorkspaceGoToSource"), MinHeight = 44 };
+        AutomationProperties.SetAutomationId(sourceButton, "WorkspaceReviewSourceButton");
+        sourceButton.Click += async (_, _) => await owner.ShowReviewSourceAsync();
+        reviewView = new ScrollViewer
+        {
+            Content = new StackPanel { Spacing = 8, Children = { sourceButton, review } },
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+        };
+        routeContent.Children.Add(reviewView);
 
         var tabsViewport = new ScrollViewer
         {
@@ -222,7 +235,9 @@ public sealed class WorkspacePaneView : Border, IDisposable
             tabButton.Classes.Set("WorkspaceTabActive", ReferenceEquals(tab, pane.ActiveTab));
             AutomationProperties.SetAutomationId(tabButton, "WorkspaceTab-" + tab.Id.ToString("N"));
             AutomationProperties.SetName(tabButton, label);
-            ToolTip.SetTip(tabButton, location?.Id ?? label);
+            ToolTip.SetTip(tabButton, location is { Kind: WorkspaceLocationKind.Note or WorkspaceLocationKind.Feed }
+                && location.Id is { Length: > 0 } path && owner.Feed.VaultRootPath is { } root
+                ? System.IO.Path.Combine(root, path) : location?.Id ?? label);
             tabButton.Click += async (_, _) => await owner.SelectWorkspaceTabAsync(pane, tab);
             tabButton.ContextMenu = CreateTabMenu(tab);
             var actionsButton = new Button
@@ -258,19 +273,22 @@ public sealed class WorkspacePaneView : Border, IDisposable
     private ContextMenu CreateTabMenu(WorkspaceNavigationTabViewModel tab)
     {
         var menu = new ContextMenu();
-        var openBeside = CreateMenuItem(Localization.Get("WorkspaceOpenBeside"), async () =>
-        {
-            owner.ActivateWorkspacePane(pane);
-            if (tab.CurrentLocation is { } location)
-                await owner.OpenWorkspaceLocationAsync(location, WorkspaceOpenDisposition.AdjacentPane);
-        });
-        openBeside.IsEnabled = !ReferenceEquals(tab, pane.ActiveTab);
-        menu.Items.Add(openBeside);
+        menu.Items.Add(CreateMenuItem(Localization.Get("WorkspaceMoveTab"), async () =>
+            await owner.MoveWorkspaceTabAsync(pane, tab)));
+        if (tab.CurrentLocation is { Kind: WorkspaceLocationKind.Note } note)
+            menu.Items.Add(CreateMenuItem(Localization.Get(owner.IsNotePinned(note.Id) ? "WorkspaceUnpinNote" : "WorkspacePinNote"), () =>
+            {
+                owner.ToggleNotePin(note.Id);
+                return System.Threading.Tasks.Task.CompletedTask;
+            }));
+        if (owner.WorkspaceNavigation.HasSecondaryPane)
+            menu.Items.Add(CreateMenuItem(Localization.Get("WorkspaceMergePanes"), async () =>
+                await owner.MergeWorkspacePanesAsync()));
         menu.Items.Add(new Separator());
         menu.Items.Add(CreateMenuItem(Localization.Get("WorkspaceCloseTab"), async () =>
             await owner.CloseWorkspaceTabAsync(pane, tab)));
         if (!ReferenceEquals(pane, owner.WorkspaceNavigation.PrimaryPane))
-            menu.Items.Add(CreateMenuItem(Localization.Get("WorkspaceClosePane"), async () =>
+            menu.Items.Add(CreateMenuItem(Localization.Get("WorkspaceClosePaneTabs") + $" ({pane.Tabs.Count})", async () =>
                 await owner.CloseWorkspaceSecondaryPaneAsync()));
         return menu;
     }
@@ -308,11 +326,13 @@ public sealed class WorkspacePaneView : Border, IDisposable
     private void UpdateRouteContent()
     {
         var location = pane.ActiveTab?.CurrentLocation;
+        var isReview = location?.Kind == WorkspaceLocationKind.Review;
         var isTasks = location?.Mode != WorkspaceMode.Feed;
         tasksView.IsVisible = isTasks;
         tasksView.DataContext = isTasks ? owner : null;
-        feedView.IsVisible = !isTasks;
-        feedView.DataContext = isTasks ? null : owner.Feed;
+        feedView.IsVisible = !isTasks && !isReview;
+        feedView.DataContext = isTasks || isReview ? null : owner.Feed;
+        reviewView.IsVisible = isReview;
         feedView.SetWorkspaceRoute(pane.ActiveTab?.Id ?? Guid.Empty, location, IsActivePane);
         tasksView.SetWorkspaceTaskRoute(location, IsActivePane);
         tasksView.RouteTaskItem = location?.Kind == WorkspaceLocationKind.Task

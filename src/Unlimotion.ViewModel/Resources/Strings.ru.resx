@@ -944,4 +944,19 @@ ID: {1}</value></data>
   <data name="FeedBlockMoveToArea" xml:space="preserve"><value>Переместить в область…</value></data>
   <data name="FeedDocumentMissing" xml:space="preserve"><value>Файл отсутствует. Открытый текст сохранён в окне; несохранённые изменения доступны в восстановлении.</value></data>
   <data name="FeedDocumentConflictPending" xml:space="preserve"><value>Файл изменён вне приложения. Черновик сохранён; перед сохранением разрешите конфликт.</value></data>
+  <data name="WorkspaceGoToSource" xml:space="preserve"><value>К исходной записи</value></data>
+  <data name="WorkspaceMoveTab" xml:space="preserve"><value>Переместить в другую панель</value></data>
+  <data name="WorkspaceMergePanes" xml:space="preserve"><value>Объединить панели</value></data>
+  <data name="WorkspaceClosePaneTabs" xml:space="preserve"><value>Закрыть панель и её вкладки</value></data>
+  <data name="WorkspaceNotes" xml:space="preserve"><value>Заметки</value></data>
+  <data name="WorkspacePinnedNotes" xml:space="preserve"><value>Закреплённые заметки</value></data>
+  <data name="WorkspacePinNote" xml:space="preserve"><value>Закрепить заметку</value></data>
+  <data name="WorkspaceUnpinNote" xml:space="preserve"><value>Открепить заметку</value></data>
+  <data name="WorkspaceNoteUnavailable" xml:space="preserve"><value>Исходная заметка недоступна в этом пространстве.</value></data>
+  <data name="WorkspaceTaskTitleRequired" xml:space="preserve"><value>Введите название задачи.</value></data>
+  <data name="WorkspaceAddNextStep" xml:space="preserve"><value>Добавить следующий шаг</value></data>
+  <data name="WorkspaceCreateStep" xml:space="preserve"><value>Создать шаг</value></data>
+  <data name="WorkspaceReviewComplete" xml:space="preserve"><value>Разбор завершён. Все записи разобраны.</value></data>
+  <data name="WorkspaceFinishReview" xml:space="preserve"><value>Завершить разбор</value></data>
+  <data name="WorkspaceOpenHere" xml:space="preserve"><value>Открыть в текущей вкладке</value></data>
 </root>

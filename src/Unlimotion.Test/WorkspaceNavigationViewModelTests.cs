@@ -6,6 +6,73 @@ namespace Unlimotion.Test;
 public sealed class WorkspaceNavigationViewModelTests
 {
     [Test]
+    public async Task MoveAndMergePreserveTabIdentityAndGlobalHistory()
+    {
+        var workspace = new WorkspaceNavigationViewModel(WorkspaceLocation.FeedRoot);
+        var source = workspace.ActiveTab;
+        await workspace.OpenAsync(WorkspaceLocation.ForNote("A.md", "A"), WorkspaceOpenDisposition.AdjacentPane);
+        var note = workspace.ActiveTab;
+        var originalHistory = note.History.Count;
+        await Assert.That(await workspace.MoveTabAsync(workspace.SecondaryPane!, note)).IsTrue();
+        await Assert.That(workspace.ActiveTab).IsSameReferenceAs(note);
+        await Assert.That(note.History.Count).IsEqualTo(originalHistory);
+        await Assert.That(workspace.HasSecondaryPane).IsFalse();
+        await workspace.MoveTabAsync(workspace.PrimaryPane, note);
+        await Assert.That(await workspace.MergePanesAsync()).IsTrue();
+        await Assert.That(workspace.PrimaryPane.Tabs.Contains(source)).IsTrue();
+        await Assert.That(workspace.PrimaryPane.Tabs.Contains(note)).IsTrue();
+        await workspace.GoBackAsync();
+        await Assert.That(workspace.ActiveTab).IsSameReferenceAs(note);
+        await Assert.That(workspace.HasSecondaryPane).IsFalse();
+    }
+
+    [Test]
+    public async Task MovingInactiveTabKeepsTheOtherSourceTabSelected()
+    {
+        var workspace = new WorkspaceNavigationViewModel(WorkspaceLocation.FeedRoot);
+        var source = workspace.ActiveTab;
+        await workspace.OpenAsync(WorkspaceLocation.ForNote("A.md", "A"), WorkspaceOpenDisposition.NewTab);
+        var selected = workspace.ActiveTab;
+        await workspace.MoveTabAsync(workspace.PrimaryPane, source);
+        await Assert.That(workspace.PrimaryPane.ActiveTab).IsSameReferenceAs(selected);
+    }
+
+    [Test]
+    public async Task ReviewPairReusesObjectsWithoutDiscardingOtherDocuments()
+    {
+        var workspace = new WorkspaceNavigationViewModel(WorkspaceLocation.TasksRoot);
+        var taskList = workspace.ActiveTab;
+        await workspace.OpenAsync(WorkspaceLocation.ForTask("task-a", "A"), WorkspaceOpenDisposition.AdjacentPane);
+        var task = workspace.ActiveTab;
+        await workspace.ShowPairAsync(WorkspaceLocation.ForFeedDay("Daily/A.md", "A", "3"), WorkspaceLocation.ReviewRoot);
+        await Assert.That(workspace.PrimaryPane.Tabs.Contains(taskList)).IsTrue();
+        await Assert.That(workspace.SecondaryPane!.Tabs.Contains(task)).IsTrue();
+        var review = workspace.ActiveTab;
+        await workspace.ShowPairAsync(WorkspaceLocation.ForFeedDay("Daily/B.md", "B", "4"), WorkspaceLocation.ReviewRoot);
+        await Assert.That(workspace.ActiveTab).IsSameReferenceAs(review);
+        await Assert.That(workspace.PrimaryPane.Tabs.Count).IsEqualTo(2);
+        await Assert.That(workspace.SecondaryPane.Tabs.Count).IsEqualTo(2);
+    }
+
+    [Test]
+    public async Task FailedCommitPreventsMoveMergeAndReviewPairAtomically()
+    {
+        var allow = true;
+        var workspace = new WorkspaceNavigationViewModel(WorkspaceLocation.FeedRoot, _ => Task.FromResult(allow));
+        await workspace.OpenAsync(WorkspaceLocation.ForNote("A.md", "A"), WorkspaceOpenDisposition.AdjacentPane);
+        var primary = workspace.PrimaryPane.ActiveTab;
+        var secondary = workspace.ActiveTab;
+        allow = false;
+        await Assert.That(await workspace.MoveTabAsync(workspace.SecondaryPane!, secondary)).IsFalse();
+        await Assert.That(await workspace.MergePanesAsync()).IsFalse();
+        await Assert.That(await workspace.ShowPairAsync(WorkspaceLocation.FeedRoot, WorkspaceLocation.ReviewRoot)).IsFalse();
+        await Assert.That(workspace.PrimaryPane.ActiveTab).IsSameReferenceAs(primary);
+        await Assert.That(workspace.SecondaryPane!.ActiveTab).IsSameReferenceAs(secondary);
+        await Assert.That(workspace.PrimaryPane.Tabs.Count).IsEqualTo(1);
+        await Assert.That(workspace.SecondaryPane.Tabs.Count).IsEqualTo(1);
+    }
+
+    [Test]
     public async Task CurrentTabNavigation_BackAndForwardRestoreLocations_AndNewNavigationDropsForwardBranch()
     {
         var workspace = new WorkspaceNavigationViewModel(WorkspaceLocation.FeedRoot);

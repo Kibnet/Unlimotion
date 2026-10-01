@@ -399,6 +399,11 @@
                                               Header="{DynamicResource GlobalSettings}"
                                               Command="{Binding OpenSettingsCommand}"
                                               AutomationProperties.AutomationId="GlobalSettingsMenuItem" />
+                                    <Separator />
+                                    <MenuItem Header="{DynamicResource WorkspaceNotes}" Command="{Binding OpenNotesCommand}"
+                                              AutomationProperties.AutomationId="GlobalNotesMenuItem" />
+                                    <MenuItem x:Name="GlobalPinnedNotesMenuItem" Header="{DynamicResource WorkspacePinnedNotes}"
+                                              AutomationProperties.AutomationId="GlobalPinnedNotesMenuItem" />
                                 </MenuFlyout>
                             </DropDownButton.Flyout>
                         </DropDownButton>
@@ -449,6 +454,15 @@
                                         Content="{DynamicResource Completed}"
                                         AutomationProperties.AutomationId="WorkspaceRailCompletedButton" />
                             </StackPanel>
+                            <Button x:Name="WorkspaceRailNotesButton" Classes="WorkspaceRailButton"
+                                    Command="{Binding OpenNotesCommand}" ToolTip.Tip="{DynamicResource WorkspaceNotes}"
+                                    AutomationProperties.Name="{DynamicResource WorkspaceNotes}"
+                                    AutomationProperties.AutomationId="WorkspaceRailNotesButton">
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <TextBlock Text="▱" FontSize="19" Width="24" TextAlignment="Center" />
+                                    <TextBlock x:Name="WorkspaceRailNotesLabel" Text="{DynamicResource WorkspaceNotes}" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
                             <Button x:Name="WorkspaceRailReviewButton" Classes="WorkspaceRailButton"
                                     Command="{Binding OpenReviewCommand}"
                                     ToolTip.Tip="{DynamicResource GlobalReview}"
@@ -459,6 +473,7 @@
                                     <TextBlock x:Name="WorkspaceRailReviewLabel" Text="{DynamicResource GlobalReview}" VerticalAlignment="Center" />
                                 </StackPanel>
                             </Button>
+                            <StackPanel x:Name="WorkspacePinnedNotesPanel" Spacing="4" />
                         </StackPanel>
                     </Border>
                     <Grid Grid.Column="1"
@@ -513,6 +528,33 @@
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
+
+                <Border Grid.Row="1" ZIndex="95" IsVisible="{Binding Feed.FilesDrawer.IsOpen, FallbackValue=False}">
+                    <views:FeedFilesDrawer DataContext="{Binding Feed.FilesDrawer}" />
+                </Border>
+
+                <Grid Grid.RowSpan="2" ZIndex="110" IsVisible="{Binding IsNextStepOpen}" Background="#99000000">
+                    <Border MaxWidth="620" Margin="16" Padding="20" CornerRadius="10"
+                            HorizontalAlignment="Stretch" VerticalAlignment="Center"
+                            Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
+                            AutomationProperties.AutomationId="WorkspaceNextStepDialog">
+                        <ScrollViewer MaxHeight="{Binding $parent[Grid].Bounds.Height}" VerticalScrollBarVisibility="Auto">
+                            <StackPanel Spacing="12">
+                                <TextBlock FontSize="20" Text="{DynamicResource WorkspaceAddNextStep}" />
+                                <TextBox Text="{Binding NextStepTitle}" PlaceholderText="{DynamicResource TitleWatermark}"
+                                         AutomationProperties.AutomationId="WorkspaceNextStepTitle" />
+                                <views:TaskRelationsControl Draft="{Binding NextStepParents}" AutomationIdPrefix="WorkspaceNextStepParents" />
+                                <TextBlock Text="{Binding NextStepError}" TextWrapping="Wrap" />
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                                    <Button Content="{DynamicResource GlobalClose}" Command="{Binding CloseNextStepCommand}"
+                                            AutomationProperties.AutomationId="WorkspaceNextStepCancel" />
+                                    <Button Content="{DynamicResource WorkspaceCreateStep}" Command="{Binding SaveNextStepCommand}"
+                                            AutomationProperties.AutomationId="WorkspaceNextStepSave" />
+                                </StackPanel>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
+                </Grid>
 
                 <Grid Grid.RowSpan="2"
                       Panel.ZIndex="120"
@@ -662,7 +704,7 @@
 
                 <Grid Grid.RowSpan="2"
                       Panel.ZIndex="105"
-                      IsVisible="{Binding Feed.IsReviewActive}"
+                      IsVisible="{Binding IsLegacyReviewOverlayVisible}"
                       Background="#99000000"
                       AutomationProperties.AutomationId="GlobalReviewOverlay">
                     <views:FeedReviewDialog Width="760"

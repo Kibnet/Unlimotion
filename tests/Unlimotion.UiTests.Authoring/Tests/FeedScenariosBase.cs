@@ -13,7 +13,7 @@ public abstract class FeedScenariosBase<TSession> : StatusContractScenariosBase<
 {
     public const string ShellScenarioTestName = nameof(Feed_shell_switch_preserves_task_context);
     public const string CaptureScenarioTestName = nameof(Feed_chronology_and_quick_capture_are_persisted);
-    public const string ReviewScenarioTestName = nameof(Feed_review_uses_global_dialog);
+    public const string ReviewScenarioTestName = nameof(Feed_review_keeps_source_beside_decision);
     public const string TaskReferenceScenarioTestName = nameof(Feed_task_status_precedes_title_and_title_navigates);
     public const string NarrowScenarioTestName = nameof(Feed_narrow_layout_keeps_primary_actions_available);
     public const string EditorDragScenarioTestName = "Feed_editor_pointer_drag_reorders_blocks";
@@ -292,7 +292,7 @@ public abstract class FeedScenariosBase<TSession> : StatusContractScenariosBase<
 
     [Test]
     [NotInParallel(DesktopUiConstraint)]
-    public async Task Feed_review_uses_global_dialog()
+    public async Task Feed_review_keeps_source_beside_decision()
     {
         OpenFeed();
         var startReview = WaitForControl(

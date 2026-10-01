@@ -112,6 +112,13 @@ public sealed partial class FeedViewModel
 
     public async Task RestoreWorkspaceLocationAsync(WorkspaceLocation location)
     {
+        if (location.Kind == WorkspaceLocationKind.Note)
+        {
+            if (DocumentWorkspace.Find(location.Id) is { } document && int.TryParse(location.Anchor, out var index))
+                SearchNavigationRequested?.Invoke(this,
+                    new FeedSearchNavigationRequestedEventArgs(location.Id, document.MarkdownEditor, index, null));
+            return;
+        }
         if (location.Kind != WorkspaceLocationKind.Feed || location.Id == "feed") return;
 
         var day = FindDay(location.Id);

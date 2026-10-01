@@ -5,7 +5,8 @@ public enum WorkspaceLocationKind
     Tasks,
     Task,
     Feed,
-    Note
+    Note,
+    Review
 }
 
 public enum WorkspaceOpenDisposition
@@ -32,6 +33,7 @@ public sealed record WorkspaceLocation(
         WorkspaceLocationKind.Task => $"task\n{Id}",
         WorkspaceLocationKind.Feed => "feed",
         WorkspaceLocationKind.Note => $"note\n{NormalizeNoteIdentity(Id)}",
+        WorkspaceLocationKind.Review => "review",
         _ => throw new System.ArgumentOutOfRangeException()
     };
 
@@ -44,6 +46,9 @@ public sealed record WorkspaceLocation(
 
     public static WorkspaceLocation FeedRoot { get; } =
         new(WorkspaceLocationKind.Feed, "feed", "Лента");
+
+    public static WorkspaceLocation ReviewRoot { get; } =
+        new(WorkspaceLocationKind.Review, "review", "Разбор");
 
     public static WorkspaceLocation ForTask(string id, string title) =>
         new(WorkspaceLocationKind.Task, id, title);

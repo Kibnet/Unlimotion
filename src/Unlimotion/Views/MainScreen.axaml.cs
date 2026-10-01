@@ -5,6 +5,7 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
@@ -112,10 +113,13 @@ namespace Unlimotion.Views
             UpdateWorkspaceHistoryControls();
 
             _taskSpacesNotifier.CollectionChanged += OnTaskSpacesChanged;
+            viewModel.PinnedNotes.CollectionChanged += OnPinsChanged;
         }
 
         private void DetachShellLayoutSources()
         {
+            if (_shellViewModelNotifier is MainWindowViewModel pinOwner)
+                pinOwner.PinnedNotes.CollectionChanged -= OnPinsChanged;
             if (_shellViewModelNotifier is not null)
             {
                 _shellViewModelNotifier.PropertyChanged -= OnShellLayoutSourceChanged;
@@ -280,24 +284,26 @@ namespace Unlimotion.Views
                 };
                 var primaryButton = new Button
                 {
-                    Content = L10n.Get("WorkspacePrimaryPane"),
+                    Content = PaneSelectorLabel(_workspaceOwner!.WorkspaceNavigation.PrimaryPane),
                     MinHeight = 40,
-                    MinWidth = 112,
+                    MaxWidth = Math.Max(90, (Bounds.Width - 32) / 2),
                     FontWeight = ReferenceEquals(_workspaceOwner!.WorkspaceNavigation.ActivePane,
                         _workspaceOwner.WorkspaceNavigation.PrimaryPane) ? Avalonia.Media.FontWeight.SemiBold : Avalonia.Media.FontWeight.Normal
                 };
                 AutomationProperties.SetAutomationId(primaryButton, "WorkspacePrimaryPaneSelector");
+                BindPaneSelector(primaryButton, _workspaceOwner.WorkspaceNavigation.PrimaryPane);
                 primaryButton.Click += (_, _) => _workspaceOwner.ActivateWorkspacePane(_workspaceOwner.WorkspaceNavigation.PrimaryPane);
                 selector.Children.Add(primaryButton);
                 var secondaryButton = new Button
                 {
-                    Content = L10n.Get("WorkspaceSecondaryPane"),
+                    Content = PaneSelectorLabel(_workspaceOwner.WorkspaceNavigation.SecondaryPane!),
                     MinHeight = 40,
-                    MinWidth = 112,
+                    MaxWidth = Math.Max(90, (Bounds.Width - 32) / 2),
                     FontWeight = ReferenceEquals(_workspaceOwner.WorkspaceNavigation.ActivePane,
                         _workspaceOwner.WorkspaceNavigation.SecondaryPane) ? Avalonia.Media.FontWeight.SemiBold : Avalonia.Media.FontWeight.Normal
                 };
                 AutomationProperties.SetAutomationId(secondaryButton, "WorkspaceSecondaryPaneSelector");
+                BindPaneSelector(secondaryButton, _workspaceOwner.WorkspaceNavigation.SecondaryPane!);
                 secondaryButton.Click += (_, _) => _workspaceOwner.ActivateWorkspacePane(_workspaceOwner.WorkspaceNavigation.SecondaryPane!);
                 selector.Children.Add(secondaryButton);
                 WorkspacePanesHost.Children.Add(selector);
@@ -349,8 +355,38 @@ namespace Unlimotion.Views
             WorkspaceRailFeedLabel.IsVisible = expanded;
             WorkspaceRailTasksLabel.IsVisible = expanded;
             WorkspaceRailReviewLabel.IsVisible = expanded;
+            WorkspaceRailNotesLabel.IsVisible = expanded;
             WorkspaceRailTaskCategories.IsVisible = expanded;
             if (DataContext is not MainWindowViewModel owner) return;
+            WorkspaceRailNotesButton.IsVisible = owner.Settings.IsFeedEnabled;
+            WorkspacePinnedNotesPanel.Children.Clear();
+            GlobalPinnedNotesMenuItem.Items.Clear();
+            GlobalPinnedNotesMenuItem.IsVisible = owner.PinnedNotes.Count > 0;
+            foreach (var pin in owner.PinnedNotes)
+            {
+                var button = new Button
+                {
+                    Content = expanded ? pin.Title : "▱",
+                    Command = owner.OpenPinnedNoteCommand,
+                    CommandParameter = pin,
+                    Opacity = pin.IsAvailable ? 1 : 0.5
+                };
+                button.Classes.Add("WorkspaceRailButton");
+                AutomationProperties.SetName(button, pin.Title);
+                AutomationProperties.SetAutomationId(button, "WorkspacePin-" + pin.RelativePath);
+                ToolTip.SetTip(button, pin.RelativePath);
+                var remove = new MenuItem { Header = L10n.Get("WorkspaceUnpinNote") };
+                remove.Click += (_, _) => owner.ToggleNotePin(pin.RelativePath);
+                button.ContextMenu = new ContextMenu { Items = { remove } };
+                WorkspacePinnedNotesPanel.Children.Add(button);
+                var item = new MenuItem { Header = pin.Title };
+                item.Items.Add(new MenuItem { Header = L10n.Get("WorkspaceOpenHere"), Command = owner.OpenPinnedNoteCommand, CommandParameter = pin });
+                var unpin = new MenuItem { Header = L10n.Get("WorkspaceUnpinNote"), MinHeight = 44 };
+                unpin.Click += (_, _) => owner.ToggleNotePin(pin.RelativePath);
+                item.Items.Add(unpin);
+                ToolTip.SetTip(item, pin.RelativePath);
+                GlobalPinnedNotesMenuItem.Items.Add(item);
+            }
             WorkspaceRailFeedButton.IsVisible = owner.Settings.IsFeedEnabled;
             WorkspaceRailFeedButton.Classes.Set("WorkspaceRailActive", owner.IsFeedMode);
             WorkspaceRailTasksButton.Classes.Set("WorkspaceRailActive", owner.IsTasksMode);
@@ -359,6 +395,21 @@ namespace Unlimotion.Views
         private void OnTaskSpacesChanged(object? sender, NotifyCollectionChangedEventArgs e)
         {
             ScheduleShellLayoutUpdate();
+        }
+
+        private void OnPinsChanged(object? sender, NotifyCollectionChangedEventArgs e) => UpdateWorkspaceRailLayout();
+
+        private static void BindPaneSelector(Button button, WorkspacePaneViewModel pane)
+        {
+            button.Bind(AutomationProperties.NameProperty, new Binding("CurrentLocation.Title") { Source = pane });
+            button.Bind(ToolTip.TipProperty, new Binding("CurrentLocation.Title") { Source = pane });
+        }
+
+        private static TextBlock PaneSelectorLabel(WorkspacePaneViewModel pane)
+        {
+            var label = new TextBlock { TextTrimming = Avalonia.Media.TextTrimming.CharacterEllipsis };
+            label.Bind(TextBlock.TextProperty, new Binding("CurrentLocation.Title") { Source = pane });
+            return label;
         }
 
         private void ScheduleShellLayoutUpdate()

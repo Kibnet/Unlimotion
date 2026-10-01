@@ -388,12 +388,12 @@
                         <Grid RowDefinitions="Auto,*" RowSpacing="8">
                             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                                 <StackPanel Spacing="2">
-                                    <TextBlock FontSize="18"
+                                    <TextBlock IsVisible="{Binding #feedControl.ShowStandaloneDocumentChrome}" FontSize="18"
                                                x:Name="ThematicTitle"
                                                AutomationProperties.AutomationId="FeedThematicTitle"
                                                FontWeight="SemiBold"
                                                 Text="{Binding #feedControl.DisplayedDocument.DisplayName}" />
-                                    <TextBlock Opacity="0.68"
+                                    <TextBlock IsVisible="{Binding #feedControl.ShowStandaloneDocumentChrome}" Opacity="0.68"
                                                 Text="{Binding #feedControl.DisplayedDocument.RelativePath}"
                                                TextTrimming="CharacterEllipsis" />
                                      <TextBlock Text="{Binding #feedControl.DisplayedDocument.ExternalChangeMessage}"
@@ -416,6 +416,7 @@
                                     </ToggleButton>
                                 </StackPanel>
                                  <Button Grid.Column="1"
+                                         IsVisible="{Binding #feedControl.ShowStandaloneDocumentChrome}"
                                          Click="OnDisplayedDocumentCloseClick"
                                         Content="×"
                                         ToolTip.Tip="{DynamicResource Close}"
@@ -446,7 +447,7 @@
                                            DataContext="{Binding}" />
             </Grid>
 
-            <views:FeedFilesDrawer
+            <views:FeedFilesDrawer IsVisible="{Binding #feedControl.ShowStandaloneDocumentChrome}"
                                    DataContext="{Binding FilesDrawer}" />
             <views:AreaManagement
                                   Margin="12"

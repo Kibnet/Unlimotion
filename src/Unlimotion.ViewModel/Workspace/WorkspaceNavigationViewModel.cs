@@ -455,6 +455,84 @@ public sealed class WorkspaceNavigationViewModel : ReactiveObject
         return true;
     }
 
+    public async Task<bool> MoveTabAsync(WorkspacePaneViewModel source, WorkspaceNavigationTabViewModel tab)
+    {
+        if (!Panes.Contains(source) || !source.Tabs.Contains(tab)) return false;
+        if (!await CommitAllAsync().ConfigureAwait(true)) return false;
+        var target = GetAdjacentPane(source);
+        if (!ReferenceEquals(target, PrimaryPane)) SecondaryPane = target;
+        TransferTab(source, target, tab);
+        EnsurePrimaryTab();
+        if (SecondaryPane?.Tabs.Count == 0) SecondaryPane = null;
+        target.SelectTab(tab);
+        ActivePane = target;
+        RecordCurrentLocation();
+        return true;
+    }
+
+    public async Task<bool> MergePanesAsync()
+    {
+        if (SecondaryPane is not { } secondary || !await CommitAllAsync().ConfigureAwait(true)) return false;
+        var active = ActiveTab;
+        foreach (var tab in secondary.Tabs.ToArray()) TransferTab(secondary, PrimaryPane, tab);
+        PrimaryPane.SelectTab(active);
+        ActivePane = PrimaryPane;
+        SecondaryPane = null;
+        RecordCurrentLocation();
+        return true;
+    }
+
+    /// <summary>Shows two related documents without replacing any user tab.</summary>
+    public async Task<bool> ShowPairAsync(WorkspaceLocation source, WorkspaceLocation adjacent)
+    {
+        if (source.ObjectKey == adjacent.ObjectKey || !await CommitAllAsync().ConfigureAwait(true)) return false;
+        var target = SecondaryPane ?? new WorkspacePaneViewModel();
+        SecondaryPane = target;
+        ShowInPane(source, PrimaryPane);
+        ShowInPane(adjacent, target);
+        ActivePane = target;
+        RecordCurrentLocation();
+        return true;
+    }
+
+    private void ShowInPane(WorkspaceLocation location, WorkspacePaneViewModel target)
+    {
+        if (FindOpenLocation(location.ObjectKey) is { } existing)
+        {
+            if (!ReferenceEquals(existing.Pane, target)) TransferTab(existing.Pane, target, existing.Tab);
+            existing.Tab.ReplaceCurrentLocation(location);
+            target.SelectTab(existing.Tab);
+        }
+        else target.AddTab(location);
+    }
+
+    private async Task<bool> CommitAllAsync()
+    {
+        foreach (var tab in Panes.SelectMany(pane => pane.Tabs).ToArray())
+            if (!await commitBeforeLeaving(tab).ConfigureAwait(true)) return false;
+        return true;
+    }
+
+    private static void TransferTab(WorkspacePaneViewModel source, WorkspacePaneViewModel target,
+        WorkspaceNavigationTabViewModel tab)
+    {
+        var wasActive = ReferenceEquals(source.ActiveTab, tab);
+        source.Tabs.Remove(tab);
+        if (wasActive && source.Tabs.Count > 0) source.SelectTab(source.Tabs[0]);
+        target.Tabs.Add(tab);
+        target.SelectTab(tab);
+    }
+
+    private void EnsurePrimaryTab()
+    {
+        if (PrimaryPane.Tabs.Count > 0) return;
+        var fallback = ActiveTab.CurrentLocation?.ObjectKey == WorkspaceLocation.TasksRoot.ObjectKey
+            ? WorkspaceLocation.FeedRoot : WorkspaceLocation.TasksRoot;
+        if (FindOpenLocation(fallback.ObjectKey) is { } existing)
+            TransferTab(existing.Pane, PrimaryPane, existing.Tab);
+        else PrimaryPane.AddTab(fallback);
+    }
+
     private async Task<bool> MoveHistoryAsync(bool forward)
     {
         var targetIndex = CurrentIndex + (forward ? 1 : -1);

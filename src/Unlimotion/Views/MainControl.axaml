@@ -2037,6 +2037,11 @@
                                                        AutomationProperties.ControlTypeOverride="Group"
                                                        AutomationProperties.IsControlElementOverride="True"
                                                        AutomationProperties.AutomationId="CurrentTaskCommandBar">
+                                                <Button x:Name="CurrentTaskSourceButton" IsVisible="False"
+                                                        Content="{DynamicResource WorkspaceGoToSource}" Click="OnTaskSourceClick"
+                                                        AutomationProperties.AutomationId="CurrentTaskSourceButton" />
+                                                <Button Content="{DynamicResource WorkspaceAddNextStep}" Click="OnAddNextStepClick"
+                                                        AutomationProperties.AutomationId="CurrentTaskNextStepButton" />
                                                 <DropDownButton Classes="TaskActionsMenuButton TaskAccentOutlineButton TaskIconOnlyDropDownButton"
                                                                 Content="⚙"
                                                                 ToolTip.Tip="{DynamicResource TaskActionsMenuTip}"

@@ -11,6 +11,14 @@ public partial class FeedReviewDialog : UserControl
         InitializeComponent();
     }
 
+    public void UseWorkspacePresentation()
+    {
+        ReviewFrame.BorderThickness = new Avalonia.Thickness(0);
+        ReviewFrame.Padding = new Avalonia.Thickness(16);
+        ReviewCloseButton.Content = Unlimotion.ViewModel.Localization.Localization.Get("WorkspaceFinishReview");
+        ReviewCloseButton.MinHeight = 44;
+    }
+
     private void OnReviewAreaSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
         if (e.AddedItems.Count == 0

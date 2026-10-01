@@ -344,14 +344,34 @@ public sealed partial class MainWindowHeadlessTests
                 StringComparison.Ordinal) == true,
             timeout: TimeSpan.FromSeconds(10),
             timeoutMessage: "Review did not proceed to the older day's unfinished item.");
+        WaitUntil(() => HeadlessRuntime.Dispatch(() => !GetHeadlessMainWindowViewModel().Feed.IsBusy),
+            timeout: TimeSpan.FromSeconds(10), timeoutMessage: "Review source navigation did not complete.");
         InvokeNativeButton(GetNativeControl<RadioButton>(Page.FeedReviewMoveTodayButton));
         await Assert.That(ObserveUnifiedReviewState().SelectedMarkdown).Contains(UnlimotionAutomationScenarioData.FeedPendingReviewMarker);
+        var moveConfirmButton = GetNativeControl<Button>(Page.FeedReviewConfirmButton);
+        WaitUntil(() => HeadlessRuntime.Dispatch(() =>
+                GetHeadlessMainWindowViewModel().Feed.IsReviewMoveTodayStage
+                && GetHeadlessMainWindowViewModel().Feed.CanConfirmReviewDecision
+                && moveConfirmButton.IsEffectivelyEnabled),
+            timeout: TimeSpan.FromSeconds(10), timeoutMessage: "Move to today was not ready for confirmation.");
         Page.FeedReviewConfirmButton.Invoke();
-        WaitUntil(
-            () => ReadFeedVaultText(todayPath),
-            text => text.Contains(UnlimotionAutomationScenarioData.FeedPendingReviewMarker, StringComparison.Ordinal),
-            timeout: TimeSpan.FromSeconds(10),
-            timeoutMessage: "Confirming Move to today did not preserve the older unfinished item in today's note.");
+        try
+        {
+            WaitUntil(
+                () => ReadFeedVaultText(todayPath),
+                text => text.Contains(UnlimotionAutomationScenarioData.FeedPendingReviewMarker, StringComparison.Ordinal),
+                timeout: TimeSpan.FromSeconds(10),
+                timeoutMessage: "Confirming Move to today did not preserve the older unfinished item in today's note.");
+        }
+        catch (TimeoutException error)
+        {
+            var diagnostic = HeadlessRuntime.Dispatch(() =>
+            {
+                var feed = GetHeadlessMainWindowViewModel().Feed;
+                return $"busy={feed.IsBusy}; stage={feed.ReviewDecisionStage}; error={feed.ErrorMessage}; today={feed.EffectiveToday}; current={feed.CurrentReview?.RelativePath}";
+            });
+            throw new InvalidOperationException($"{error.Message} {diagnostic}; destination={ReadFeedVaultText(todayPath)}", error);
+        }
         await Assert.That(HeadlessRuntime.Dispatch(() => GetHeadlessMainWindowViewModel().taskRepository!.Tasks.Items.Count()))
             .IsEqualTo(originalCount + 1);
         WaitUntil(() => HeadlessRuntime.Dispatch(() => !GetHeadlessMainWindowViewModel().Feed.IsBusy),
@@ -422,7 +442,9 @@ public sealed partial class MainWindowHeadlessTests
                 .IsLessThan(noteText.IndexOf(reason, StringComparison.Ordinal));
         }
         var todayPath = UnlimotionAutomationScenarioData.GetFeedDailyRelativePath(DateOnly.FromDateTime(DateTime.Now));
-        var dayText = ReadFeedVaultText(todayPath);
+        var dayText = WaitUntil(() => ReadFeedVaultText(todayPath),
+            text => text.Contains(noteTitle, StringComparison.Ordinal), timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "The source day was not replaced with the extracted note link.");
         await Assert.That(dayText).Contains(noteTitle);
         await Assert.That(dayText).DoesNotContain(opening);
         await Assert.That(dayText).DoesNotContain(decision);
@@ -851,9 +873,16 @@ public sealed partial class MainWindowHeadlessTests
             path => path == "Проекты/UX12 Second note.md",
             timeout: TimeSpan.FromSeconds(10),
             timeoutMessage: "Back did not restore the second document beside the first.");
-        var restoredOffsets = HeadlessRuntime.Dispatch(() => (
-            First: FindNoteScroller("Проекты/UX12 First note.md").Offset.Y,
-            Second: FindNoteScroller("Проекты/UX12 Second note.md").Offset.Y));
+        var restoredOffsets = WaitUntil(() => HeadlessRuntime.Dispatch(() =>
+            {
+                Dispatcher.UIThread.RunJobs();
+                Session.Inner.MainWindow.UpdateLayout();
+                return (First: FindNoteScroller("Проекты/UX12 First note.md").Offset.Y,
+                    Second: FindNoteScroller("Проекты/UX12 Second note.md").Offset.Y);
+            }),
+            offsets => Math.Abs(offsets.First - beforeNavigationOffsets.First) < 8
+                && Math.Abs(offsets.Second - beforeNavigationOffsets.Second) < 8,
+            timeout: TimeSpan.FromSeconds(10), timeoutMessage: "Back did not restore both document viewports after layout.");
         await Assert.That(Math.Abs(restoredOffsets.First - beforeNavigationOffsets.First)).IsLessThan(8);
         await Assert.That(Math.Abs(restoredOffsets.Second - beforeNavigationOffsets.Second)).IsLessThan(8);
     }

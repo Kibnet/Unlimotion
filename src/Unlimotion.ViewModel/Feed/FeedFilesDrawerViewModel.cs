@@ -34,6 +34,7 @@ public sealed class FeedFilesDrawerViewModel : ReactiveObject, IDisposable
     public ObservableCollection<FeedFileItemViewModel> Files { get; } = new();
 
     public Func<string, Task>? OpenFileCallbackAsync { get; set; }
+    public Func<string, Unlimotion.ViewModel.Workspace.WorkspaceOpenDisposition, Task>? OpenFileWithDispositionCallbackAsync { get; set; }
 
     public ReactiveCommand<Unit, Unit> RefreshCommand { get; }
 
@@ -116,7 +117,10 @@ public sealed class FeedFilesDrawerViewModel : ReactiveObject, IDisposable
         }
     }
 
-    public async Task OpenFileAsync(FeedFileItemViewModel? file)
+    public async Task OpenFileAsync(FeedFileItemViewModel? file) =>
+        await OpenFileAsync(file, Unlimotion.ViewModel.Workspace.WorkspaceOpenDisposition.CurrentTab);
+
+    public async Task OpenFileAsync(FeedFileItemViewModel? file, Unlimotion.ViewModel.Workspace.WorkspaceOpenDisposition disposition)
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref disposed) != 0, this);
         if (file is null || OpenFileCallbackAsync is null)
@@ -127,7 +131,9 @@ public sealed class FeedFilesDrawerViewModel : ReactiveObject, IDisposable
         ErrorMessage = null;
         try
         {
-            await OpenFileCallbackAsync(file.RelativePath).ConfigureAwait(true);
+            if (OpenFileWithDispositionCallbackAsync is { } open)
+                await open(file.RelativePath, disposition).ConfigureAwait(true);
+            else await OpenFileCallbackAsync(file.RelativePath).ConfigureAwait(true);
             IsOpen = false;
         }
         catch (Exception exception)

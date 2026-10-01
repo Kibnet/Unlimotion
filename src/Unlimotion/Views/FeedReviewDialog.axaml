@@ -9,7 +9,10 @@
              mc:Ignorable="d"
              d:DesignWidth="760"
              d:DesignHeight="700">
-    <Border Padding="20"
+    <Panel>
+    <TextBlock IsVisible="{Binding !IsReviewActive}" Text="{DynamicResource WorkspaceReviewComplete}"
+               Margin="20" FontSize="22" TextWrapping="Wrap" AutomationProperties.AutomationId="WorkspaceReviewComplete" />
+    <Border x:Name="ReviewFrame" Padding="20" IsVisible="{Binding IsReviewActive}"
             CornerRadius="12"
             Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
             BorderBrush="{DynamicResource SystemAccentColor}"
@@ -32,7 +35,7 @@
                            VerticalAlignment="Center"
                            Text="{Binding CurrentReviewCount, StringFormat=/ {0}}"
                            ToolTip.Tip="{DynamicResource FeedReviewQueueOrderHint}" />
-                <Button Grid.Column="3"
+                <Button x:Name="ReviewCloseButton" Grid.Column="3"
                         Padding="8,2"
                         Content="×"
                         Command="{Binding FinishReviewCommand}"
@@ -261,4 +264,5 @@
                     AutomationProperties.AutomationId="FeedReviewConfirmButton" />
         </Grid>
     </Border>
+    </Panel>
 </UserControl>

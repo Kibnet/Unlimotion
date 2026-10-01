@@ -102,6 +102,77 @@ public sealed class WorkspaceNavigationFlaUiTests
         Capture(session, evidenceDirectory, "workspace-narrow.png");
     }
 
+    [Test, NotInParallel("DesktopUi")]
+    public void WorkspaceReview_ShowsSourceBesideDecision_AndNarrowSourceSwitch()
+    {
+        EnsurePhysicalPixelDpiAwareness();
+        var evidenceDirectory = Environment.GetEnvironmentVariable(EvidenceDirectoryVariable);
+        if (!string.IsNullOrWhiteSpace(evidenceDirectory)) Directory.CreateDirectory(evidenceDirectory);
+        using var session = DesktopAppSession.Launch(UnlimotionAppLaunchHost.CreateDesktopLaunchOptions(
+            UnlimotionAutomationScenario.Feed, language: "en", buildBeforeLaunch: false,
+            mainWindowTimeout: TimeSpan.FromSeconds(90)));
+        session.MainWindow.Patterns.Window.Pattern.SetWindowVisualState(WindowVisualState.Normal);
+        FeedReadingPolishFlaUiTests.Resize(session.MainWindow, 1200, 800);
+        session.MainWindow.Focus();
+        var reviewButton = WaitUntil(() => FindInMainWindow(session, "GlobalReviewButton"),
+            button => button is not null && !button.Properties.IsOffscreen.ValueOrDefault, "Global review is absent.")!;
+        System.Diagnostics.Process? recorder = null;
+        var script = Environment.GetEnvironmentVariable("UNLIMOTION_WINDOW_RECORDER");
+        if (!string.IsNullOrWhiteSpace(script) && !string.IsNullOrWhiteSpace(evidenceDirectory))
+        {
+            const string title = "Unlimotion workspace parity automation";
+            SetWindowText(new IntPtr(session.MainWindow.Properties.NativeWindowHandle.ValueOrDefault), title);
+            var start = new System.Diagnostics.ProcessStartInfo("pwsh") { UseShellExecute = false, CreateNoWindow = true };
+            foreach (var argument in new[] { "-NoProfile", "-File", script, "-WindowTitle", title, "-Output",
+                Path.Combine(evidenceDirectory, "workspace-review-after.mp4"), "-DurationSeconds", "20", "-Fps", "15" })
+                start.ArgumentList.Add(argument);
+            recorder = System.Diagnostics.Process.Start(start);
+            Thread.Sleep(1800);
+        }
+        try
+        {
+            reviewButton.Click();
+            WaitUntil(() => FindInMainWindow(session, "WorkspaceReviewSourceButton"),
+                button => button is not null && !button.Properties.IsOffscreen.ValueOrDefault, "Review document did not open.");
+            var primary = FindInMainWindow(session, "WorkspacePrimaryPane")!;
+            WaitUntil(() => primary.FindFirstDescendant(session.ConditionFactory.ByAutomationId("FeedRoot")),
+                element => element is not null && !element.Properties.IsOffscreen.ValueOrDefault, "Review source is hidden.");
+            WaitUntil(() => FindInMainWindow(session, "FeedReviewConfirmButton"),
+                button => button is not null && !button.Properties.IsOffscreen.ValueOrDefault, "Decision is hidden.");
+            Capture(session, evidenceDirectory, "workspace-review-wide.png");
+        }
+        finally
+        {
+            if (recorder is not null)
+            {
+                if (!recorder.WaitForExit(40000) || recorder.ExitCode != 0)
+                    throw new InvalidOperationException("Window recording failed; retain screenshots as diagnostics.");
+                recorder.Dispose();
+            }
+        }
+        FeedReadingPolishFlaUiTests.Resize(session.MainWindow, 520, 700);
+        var sourceButton = WaitUntil(() => FindInMainWindow(session, "WorkspaceReviewSourceButton"),
+            button => button is not null && !button.Properties.IsOffscreen.ValueOrDefault, "Source action is inaccessible on narrow screen.")!;
+        sourceButton.Click();
+        WaitUntil(() => FindInMainWindow(session, "FeedRoot"),
+            element => element is not null && !element.Properties.IsOffscreen.ValueOrDefault, "Narrow source switch failed.");
+        var secondarySelector = FindInMainWindow(session, "WorkspaceSecondaryPaneSelector")!;
+        if (secondarySelector.Properties.Name.ValueOrDefault != "Review")
+            throw new InvalidOperationException("The narrow selector has no contextual document name.");
+        secondarySelector.Click();
+        WaitUntil(() => FindInMainWindow(session, "WorkspaceReviewSourceButton"),
+            button => button is not null && !button.Properties.IsOffscreen.ValueOrDefault, "Review pane did not become visible.");
+        Capture(session, evidenceDirectory, "workspace-review-narrow.png");
+        WaitUntil(() => FindInMainWindow(session, "FeedFinishReviewButton"),
+            button => button is not null && !button.Properties.IsOffscreen.ValueOrDefault, "Finish review is inaccessible.")!.Click();
+        WaitUntil(() => FindInMainWindow(session, "WorkspaceReviewComplete"),
+            element => element is not null && !element.Properties.IsOffscreen.ValueOrDefault, "Completed review state is absent.");
+    }
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetWindowText(IntPtr window, string title);
+
     private static AutomationElement? FindInMainWindow(DesktopAppSession session, string automationId) =>
         session.MainWindow.FindFirstDescendant(session.ConditionFactory.ByAutomationId(automationId));
 

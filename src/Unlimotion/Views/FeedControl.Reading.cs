@@ -94,7 +94,7 @@ public partial class FeedControl
         FeedAreaFilterButton.IsVisible = chronology;
         SearchFilters.IsVisible = IsFeedSurfaceAvailable && feed?.IsSearchActive == true
             && (UseWorkspaceTabs ? ShowChronology : feed.HasOpenedThematicFile == false);
-        ThematicTitle.IsVisible = !MarkdownReadingPresentation.HasMatchingThematicHeading(
+        ThematicTitle.IsVisible = ShowStandaloneDocumentChrome && !MarkdownReadingPresentation.HasMatchingThematicHeading(
             DisplayedDocument?.MarkdownEditor.GetSnapshotWithActiveDraft()?.Raw,
             DisplayedDocument?.DisplayName);
         var target = ReturnTarget;

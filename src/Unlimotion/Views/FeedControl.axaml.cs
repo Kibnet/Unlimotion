@@ -49,6 +49,13 @@ public partial class FeedControl : UserControl
     }
 
     private bool useWorkspaceTabs;
+    public static readonly StyledProperty<bool> ShowStandaloneDocumentChromeProperty =
+        AvaloniaProperty.Register<FeedControl, bool>(nameof(ShowStandaloneDocumentChrome), true);
+    public bool ShowStandaloneDocumentChrome
+    {
+        get => GetValue(ShowStandaloneDocumentChromeProperty);
+        private set => SetValue(ShowStandaloneDocumentChromeProperty, value);
+    }
     private WorkspaceLocation? workspaceLocation;
     private Guid workspaceTabId;
     private bool isWorkspacePaneActive;
@@ -60,6 +67,7 @@ public partial class FeedControl : UserControl
         set
         {
             useWorkspaceTabs = value;
+            ShowStandaloneDocumentChrome = !value;
             if (value && DataContext is FeedViewModel feed) feed.EnableWorkspaceAreaPresentation();
             if (DocumentHost is not null) DocumentHost.ShowDocumentTabs = !value;
             RefreshDisplayAreaBindings();
@@ -578,7 +586,7 @@ public partial class FeedControl : UserControl
 
     private void NavigateToFeedBlock(FeedSearchNavigationRequestedEventArgs e)
     {
-        if (UseWorkspaceTabs && (!isWorkspacePaneActive
+        if (UseWorkspaceTabs && ((!isWorkspacePaneActive && !(DataContext is FeedViewModel { IsReviewActive: true }))
             || !string.Equals(workspaceLocation?.Id, e.RelativePath, StringComparison.OrdinalIgnoreCase)))
             return;
         Dispatcher.UIThread.Post(
@@ -610,7 +618,7 @@ public partial class FeedControl : UserControl
 
     private void FocusNavigatedBlock(FeedSearchNavigationRequestedEventArgs e, int remainingAttempts)
     {
-        if (UseWorkspaceTabs && (!isWorkspacePaneActive
+        if (UseWorkspaceTabs && ((!isWorkspacePaneActive && !(DataContext is FeedViewModel { IsReviewActive: true }))
             || !string.Equals(workspaceLocation?.Id, e.RelativePath, StringComparison.OrdinalIgnoreCase)))
             return;
         var scroller = e.Day is null ? DocumentScroller : ChronologyScroller;
@@ -647,6 +655,7 @@ public partial class FeedControl : UserControl
                     }
                 }
             }
+            if (!isWorkspacePaneActive && UseWorkspaceTabs) return;
             if (preview.Focus())
             {
                 return;

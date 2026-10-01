@@ -452,6 +452,7 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
     public event EventHandler<FeedSearchNavigationRequestedEventArgs>? SearchNavigationRequested;
 
     public event EventHandler<FeedSearchNavigationRequestedEventArgs>? ReviewNavigationRequested;
+    public Func<FeedSearchNavigationRequestedEventArgs, Task>? PresentReviewSourceRequested { get; set; }
 
     public FeedFilesDrawerViewModel? FilesDrawer
     {
@@ -2763,13 +2764,9 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
         RebuildReviewTaskAreas(preserveExistingSelection: false);
         UpdateReviewSelectionViewModel();
         RaiseReviewNavigationChanged();
-        ReviewNavigationRequested?.Invoke(
-            this,
-            new FeedSearchNavigationRequestedEventArgs(
-                day.RelativePath,
-                day.MarkdownEditor,
-                block.Index,
-                day));
+        var navigation = new FeedSearchNavigationRequestedEventArgs(day.RelativePath, day.MarkdownEditor, block.Index, day);
+        if (PresentReviewSourceRequested is { } present) await present(navigation);
+        ReviewNavigationRequested?.Invoke(this, navigation);
     }
 
     private void ExpandReviewSelection(bool up)
@@ -4755,7 +4752,8 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
     {
         var nextFiles = new FeedFilesDrawerViewModel(sourceVault, naming)
         {
-            OpenFileCallbackAsync = OpenThematicFileAsync
+            OpenFileCallbackAsync = OpenThematicFileAsync,
+            OpenFileWithDispositionCallbackAsync = (path, disposition) => OpenVaultLinkAsync(path, null, true, disposition)
         };
         var nextAreas = new AreaManagementViewModel(new AreaCatalogStore(sourceVault));
         try
@@ -6756,9 +6754,9 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
         };
         UpdateReviewSelectionViewModel();
         RaiseReviewNavigationChanged();
-        ReviewNavigationRequested?.Invoke(
-            this,
-            new FeedSearchNavigationRequestedEventArgs(sourcePath, editor, anchor.Index, day));
+        var navigation = new FeedSearchNavigationRequestedEventArgs(sourcePath, editor, anchor.Index, day);
+        if (PresentReviewSourceRequested is { } present) await present(navigation);
+        ReviewNavigationRequested?.Invoke(this, navigation);
     }
 
     private async Task OpenHeadingAreaConversionAsync(

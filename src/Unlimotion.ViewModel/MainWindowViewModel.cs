@@ -47,7 +47,7 @@ namespace Unlimotion.ViewModel
     }
 
     [AddINotifyPropertyChangedInterface]
-    public class MainWindowViewModel : DisposableList
+    public partial class MainWindowViewModel : DisposableList
     {
         public bool IsInitialized { get; private set; }
         private DisposableList connectionDisposableList = new DisposableListRealization();
@@ -62,6 +62,7 @@ namespace Unlimotion.ViewModel
         private bool _isSynchronizingStatusFilters;
         private bool _isApplyingWorkspaceLocation;
         public bool IsWorkspaceShellAttached { get; set; }
+        public bool IsLegacyReviewOverlayVisible { get; private set; }
         private readonly bool _defaultShowCompleted;
         private readonly bool _defaultShowArchived;
         private readonly bool? _defaultShowWanted;
@@ -108,6 +109,11 @@ namespace Unlimotion.ViewModel
             Feed.NavigateToTaskWithDispositionRequested = NavigateFeedTask;
             Feed.NavigateToWorkspaceLocationRequested = NavigateFeedWorkspaceLocationAsync;
             Feed.WorkspaceScopeChanged = ResetWorkspaceForCurrentScope;
+            Feed.PresentReviewSourceRequested = PresentReviewSourceAsync;
+            InitializeWorkspaceExtras();
+            Feed.WhenAnyValue(feed => feed.IsReviewActive).Subscribe(active =>
+                IsLegacyReviewOverlayVisible = active && !IsWorkspaceShellAttached)
+                .AddToDispose(this);
             Disposables.Add(Feed);
             OpenQuickCaptureCommand = ReactiveCommand.Create(() => OpenQuickCapture(isTask: false))
                 .AddToDisposeAndReturn(this);
@@ -2209,7 +2215,9 @@ namespace Unlimotion.ViewModel
             var fallback = pane == WorkspaceNavigation.PrimaryPane
                 ? WorkspaceLocation.TasksRoot
                 : WorkspaceLocation.FeedRoot;
+            var isReview = tab.CurrentLocation?.Kind == WorkspaceLocationKind.Review;
             if (!await WorkspaceNavigation.CloseTabAsync(pane, tab, fallback).ConfigureAwait(true)) return false;
+            if (isReview && Feed.IsReviewActive) Feed.FinishReviewCommand.Execute(null);
             if (pane == WorkspaceNavigation.ActivePane)
                 await ActivateWorkspaceLocationAsync(pane.ActiveTab?.CurrentLocation).ConfigureAwait(true);
             return true;
@@ -2218,9 +2226,51 @@ namespace Unlimotion.ViewModel
         public async Task<bool> CloseWorkspaceSecondaryPaneAsync()
         {
             CaptureFeedWorkspaceLocation();
+            var hasReview = WorkspaceNavigation.SecondaryPane?.Tabs.Any(tab => tab.CurrentLocation?.Kind == WorkspaceLocationKind.Review) == true;
             if (!await WorkspaceNavigation.CloseSecondaryPaneAsync(WorkspaceLocation.TasksRoot).ConfigureAwait(true)) return false;
+            if (hasReview && Feed.IsReviewActive) Feed.FinishReviewCommand.Execute(null);
             await ActivateWorkspaceLocationAsync(WorkspaceNavigation.ActiveTab.CurrentLocation).ConfigureAwait(true);
             return true;
+        }
+
+        public async Task<bool> MoveWorkspaceTabAsync(WorkspacePaneViewModel pane, WorkspaceNavigationTabViewModel tab)
+        {
+            CaptureFeedWorkspaceLocation();
+            if (!await WorkspaceNavigation.MoveTabAsync(pane, tab)) return false;
+            await ActivateWorkspaceLocationAsync(WorkspaceNavigation.ActiveTab.CurrentLocation);
+            return true;
+        }
+
+        public async Task<bool> MergeWorkspacePanesAsync()
+        {
+            CaptureFeedWorkspaceLocation();
+            if (!await WorkspaceNavigation.MergePanesAsync()) return false;
+            await ActivateWorkspaceLocationAsync(WorkspaceNavigation.ActiveTab.CurrentLocation);
+            return true;
+        }
+
+        private WorkspaceLocation? reviewSourceLocation;
+
+        public async Task ShowReviewSourceAsync()
+        {
+            if (reviewSourceLocation is not { } source) return;
+            var pane = WorkspaceNavigation.Panes.FirstOrDefault(p => p.Tabs.Any(t => t.CurrentLocation?.ObjectKey == source.ObjectKey));
+            var tab = pane?.Tabs.FirstOrDefault(t => t.CurrentLocation?.ObjectKey == source.ObjectKey);
+            if (pane is not null && tab is not null && await SelectWorkspaceTabAsync(pane, tab))
+                await OpenWorkspaceLocationAsync(source);
+            else if (pane is null)
+                await OpenWorkspaceLocationAsync(source, WorkspaceOpenDisposition.AdjacentPane);
+        }
+
+        private async Task PresentReviewSourceAsync(FeedSearchNavigationRequestedEventArgs navigation)
+        {
+            if (!IsWorkspaceShellAttached) return;
+            var source = navigation.Day is null
+                ? WorkspaceLocation.ForNote(navigation.RelativePath, System.IO.Path.GetFileNameWithoutExtension(navigation.RelativePath), navigation.BlockIndex.ToString())
+                : WorkspaceLocation.ForFeedDay(navigation.RelativePath, navigation.Day.DisplayDate, navigation.BlockIndex.ToString());
+            if (!await WorkspaceNavigation.ShowPairAsync(source, WorkspaceLocation.ReviewRoot with { Title = L10n.Get("GlobalReview") }))
+                throw new InvalidOperationException(L10n.Get("FeedDocumentConflictPending"));
+            reviewSourceLocation = source;
         }
 
         private async Task<bool> CommitWorkspaceTabAsync(WorkspaceNavigationTabViewModel tab)
@@ -2267,6 +2317,9 @@ namespace Unlimotion.ViewModel
 
         private void ResetWorkspaceForCurrentScope()
         {
+            reviewSourceLocation = null;
+            ReloadPinnedNotes();
+            IsNextStepOpen = false;
             var preferredMode = WorkspaceNavigation.ActiveTab.CurrentLocation?.Mode ?? SelectedWorkspaceMode;
             var root = preferredMode == WorkspaceMode.Feed && Settings.IsFeedEnabled
                 ? WorkspaceLocation.FeedRoot
@@ -2326,6 +2379,7 @@ namespace Unlimotion.ViewModel
                         break;
                     case WorkspaceLocationKind.Note:
                         await Feed.OpenVaultLinkAsync(location.Id, null, wikiLink: true).ConfigureAwait(true);
+                        await Feed.RestoreWorkspaceLocationAsync(location).ConfigureAwait(true);
                         break;
                 }
             }
@@ -3549,6 +3603,11 @@ namespace Unlimotion.ViewModel
 
         public bool CloseTopmostOverlay()
         {
+            if (IsNextStepOpen)
+            {
+                CloseNextStepCommand.Execute(null);
+                return true;
+            }
             if (IsSettingsOpen)
             {
                 CloseSettings();
@@ -3561,7 +3620,7 @@ namespace Unlimotion.ViewModel
                 return true;
             }
 
-            if (Feed.IsReviewActive)
+            if (Feed.IsReviewActive && !IsWorkspaceShellAttached)
             {
                 Feed.FinishReviewCommand.Execute(null);
                 return true;
@@ -3589,7 +3648,15 @@ namespace Unlimotion.ViewModel
         {
             IsQuickCaptureOpen = false;
             IsSettingsOpen = false;
+            IsNextStepOpen = false;
+            if (IsWorkspaceShellAttached && Feed.IsReviewActive)
+            {
+                await OpenWorkspaceLocationAsync(WorkspaceLocation.ReviewRoot with { Title = L10n.Get("GlobalReview") });
+                return;
+            }
             await Feed.StartReviewAsync();
+            if (IsWorkspaceShellAttached && !Feed.IsReviewActive)
+                await OpenWorkspaceLocationAsync(WorkspaceLocation.ReviewRoot with { Title = L10n.Get("GlobalReview") });
         }
 
         [AlsoNotifyFor(nameof(IsTasksMode), nameof(IsFeedMode))]

@@ -944,4 +944,19 @@ ID: {1}</value></data>
   <data name="FeedBlockMoveToArea" xml:space="preserve"><value>Move to area…</value></data>
   <data name="FeedDocumentMissing" xml:space="preserve"><value>The file is missing. The open text is retained; unsaved changes remain available in recovery.</value></data>
   <data name="FeedDocumentConflictPending" xml:space="preserve"><value>The file changed outside the app. Your draft is retained; resolve the conflict before saving.</value></data>
+  <data name="WorkspaceGoToSource" xml:space="preserve"><value>Go to source entry</value></data>
+  <data name="WorkspaceMoveTab" xml:space="preserve"><value>Move to the other pane</value></data>
+  <data name="WorkspaceMergePanes" xml:space="preserve"><value>Merge panes</value></data>
+  <data name="WorkspaceClosePaneTabs" xml:space="preserve"><value>Close pane and its tabs</value></data>
+  <data name="WorkspaceNotes" xml:space="preserve"><value>Notes</value></data>
+  <data name="WorkspacePinnedNotes" xml:space="preserve"><value>Pinned notes</value></data>
+  <data name="WorkspacePinNote" xml:space="preserve"><value>Pin note</value></data>
+  <data name="WorkspaceUnpinNote" xml:space="preserve"><value>Unpin note</value></data>
+  <data name="WorkspaceNoteUnavailable" xml:space="preserve"><value>The source note is unavailable in this space.</value></data>
+  <data name="WorkspaceTaskTitleRequired" xml:space="preserve"><value>Enter the task title.</value></data>
+  <data name="WorkspaceAddNextStep" xml:space="preserve"><value>Add next step</value></data>
+  <data name="WorkspaceCreateStep" xml:space="preserve"><value>Create step</value></data>
+  <data name="WorkspaceReviewComplete" xml:space="preserve"><value>Review complete. All entries have been processed.</value></data>
+  <data name="WorkspaceFinishReview" xml:space="preserve"><value>Finish review</value></data>
+  <data name="WorkspaceOpenHere" xml:space="preserve"><value>Open in current tab</value></data>
 </root>
