@@ -1,0 +1,68 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:Unlimotion"
+             x:Class="Unlimotion.Views.TaskHistoryFieldChangeView"
+             x:DataType="local:TaskHistoryFieldChange">
+    <UserControl.Styles>
+        <Style Selector="Button.HistoryTextAction">
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="MinHeight" Value="24"/>
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FontSize" Value="{DynamicResource AppSmallFontSize}"/>
+            <Setter Property="Opacity" Value="0.72"/>
+        </Style>
+    </UserControl.Styles>
+    <StackPanel Spacing="3" Margin="0,3,0,2">
+        <StackPanel x:Name="InlineRow" Orientation="Horizontal" Spacing="5">
+            <TextBlock x:Name="InlineFieldName" FontWeight="SemiBold"/>
+            <SelectableTextBlock Text="{Binding OldValueDisplay}" MaxLines="2"
+                                 Foreground="{DynamicResource TaskHistoryOldValueBrush}"/>
+            <TextBlock Text="→" Opacity="0.55"/>
+            <SelectableTextBlock Text="{Binding NewValueDisplay}" MaxLines="2"
+                                 Foreground="{DynamicResource TaskHistoryNewValueBrush}"/>
+        </StackPanel>
+        <StackPanel x:Name="ComparisonRow" Spacing="3">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                <TextBlock x:Name="ComparisonFieldName" FontWeight="SemiBold" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                <Button x:Name="ShowDetailsButton" Grid.Column="1" Classes="HistoryTextAction"
+                        Content="{DynamicResource TaskHistoryShowDetails}"
+                        Click="ShowDetailsButton_OnClick"
+                        AutomationProperties.AutomationId="TaskHistoryShowDetailsButton"/>
+            </Grid>
+            <Grid x:Name="PreviewGrid" ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" ColumnSpacing="8" RowSpacing="3">
+                <TextBlock x:Name="PreviewOldLabel" Text="{DynamicResource TaskHistoryOldValue}" Opacity="0.6"/>
+                <SelectableTextBlock x:Name="PreviewOld" Grid.Column="1" Text="{Binding OldValueDisplay}"
+                                     MaxLines="2" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
+                                     Foreground="{DynamicResource TaskHistoryOldValueBrush}"/>
+                <TextBlock x:Name="PreviewNewLabel" Grid.Row="1" Text="{DynamicResource TaskHistoryNewValue}" Opacity="0.6"/>
+                <SelectableTextBlock x:Name="PreviewNew" Grid.Row="1" Grid.Column="1" Text="{Binding NewValueDisplay}"
+                                     MaxLines="2" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
+                                     Foreground="{DynamicResource TaskHistoryNewValueBrush}"/>
+            </Grid>
+        </StackPanel>
+        <StackPanel x:Name="DetailsPanel" IsVisible="False" Spacing="4"
+                    AutomationProperties.IsControlElementOverride="True"
+                    AutomationProperties.AutomationId="TaskHistoryDetailsPanel">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                <TextBlock x:Name="DetailsFieldName" FontWeight="SemiBold" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                <Button x:Name="CollapseDetailsButton" Grid.Column="1" Classes="HistoryTextAction" Content="{DynamicResource TaskHistoryCloseDetails}"
+                        Click="CloseDetailsButton_OnClick"
+                        AutomationProperties.AutomationId="TaskHistoryCloseDetailsButton"/>
+            </Grid>
+            <Grid x:Name="FullValueGrid" ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" ColumnSpacing="8" RowSpacing="6">
+                <TextBlock x:Name="FullOldLabel" Text="{DynamicResource TaskHistoryOldValue}" Opacity="0.6"/>
+                <ScrollViewer x:Name="FullOldViewer" Grid.Column="1" MaxHeight="160"
+                              HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                    <SelectableTextBlock x:Name="FullOldValue" TextWrapping="Wrap"/>
+                </ScrollViewer>
+                <TextBlock x:Name="FullNewLabel" Grid.Row="1" Text="{DynamicResource TaskHistoryNewValue}" Opacity="0.6"/>
+                <ScrollViewer x:Name="FullNewViewer" Grid.Row="1" Grid.Column="1" MaxHeight="160"
+                              HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                    <SelectableTextBlock x:Name="FullNewValue" TextWrapping="Wrap"/>
+                </ScrollViewer>
+            </Grid>
+        </StackPanel>
+    </StackPanel>
+</UserControl>

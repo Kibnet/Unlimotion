@@ -5,6 +5,8 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
@@ -14,7 +16,9 @@ using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using Avalonia.Input.Platform;
 using Avalonia.Media;
+using Avalonia.Skia;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -139,8 +143,13 @@ public class MainControlTaskCardLayoutUiTests
 
                 await Assert.That(IsVisibleAndArranged(parentsAddButton)).IsTrue();
                 AssertHasClass(parentsAddButton, "RelationAddButton");
-                AssertIconOnlyButton(parentsAddButton, "＋", 32);
+                AssertIconOnlyButton(parentsAddButton, "＋", 26);
                 await Assert.That(parentsTree).IsNotNull();
+                var relationTrees = relations.GetVisualDescendants().OfType<TreeView>()
+                    .Where(tree => tree.Classes.Contains("RelationTaskTree")).ToArray();
+                await Assert.That(relationTrees.Any(tree => tree.ItemCount == 0)).IsTrue();
+                foreach (var tree in relationTrees)
+                    await Assert.That(tree.IsVisible).IsEqualTo(tree.ItemCount > 0);
             }
             finally
             {
@@ -1037,6 +1046,268 @@ public class MainControlTaskCardLayoutUiTests
                 $"Task card header is not visible in the first phone viewport: " +
                 $"headerTop={headerTop:F1}; titleTop={titleTop:F1}; viewport={scrollViewer.Bounds.Height:F1}.");
         }
+    }
+
+    [Test]
+    public async Task CurrentTaskCard_TaskHistory_ExposesGitChangesAndStatusModes()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            ResetTaskCardLayoutSharedState();
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+
+            try
+            {
+                var (view, createdWindow) = await CreateArrangedMainControlAsync(fixture, 1400, 900);
+                window = createdWindow;
+                var expander = FindControlByAutomationId<Expander>(view, "StatusHistoryExpander");
+                expander.IsExpanded = true;
+                RunLayoutJobs();
+
+                var gitMode = FindControlByAutomationId<ToggleButton>(view, "TaskHistoryGitModeButton");
+                var statusMode = FindControlByAutomationId<ToggleButton>(view, "TaskHistoryStatusModeButton");
+                var options = FindControlByAutomationId<Button>(view, "TaskHistoryOptionsButton");
+                var metadata = (CheckBox)((Flyout)options.Flyout!).Content!;
+                var refresh = FindControlByAutomationId<Button>(view, "TaskHistoryRefreshButton");
+                var gitPanel = FindControlByAutomationId<Control>(view, "TaskGitHistoryPanel");
+                var gitItems = FindControlByAutomationId<ItemsControl>(view, "TaskHistoryItems");
+
+                await Assert.That(gitMode.IsChecked).IsTrue();
+                await Assert.That(statusMode.IsChecked).IsFalse();
+                await Assert.That(IsVisibleAndArranged(options)).IsTrue();
+                await Assert.That(TopLevel.GetTopLevel(metadata)).IsNull();
+                options.Flyout!.ShowAt(options);
+                RunLayoutJobs();
+                await Assert.That(IsVisibleAndArranged(metadata)).IsTrue();
+                metadata.IsChecked = true;
+                await Assert.That(view.TaskHistory.ShowMetadata).IsTrue();
+                metadata.IsChecked = false;
+                options.Flyout.Hide();
+                await Assert.That(IsVisibleAndArranged(refresh)).IsTrue();
+                await Assert.That(IsVisibleAndArranged(gitPanel)).IsTrue();
+                await Assert.That(gitItems).IsNotNull();
+
+                view.TaskHistory.IsGitMode = false;
+                RunLayoutJobs();
+
+                var statusItems = FindControlByAutomationId<ItemsControl>(view, "StatusHistoryItems");
+                await Assert.That(IsVisibleAndArranged(statusItems)).IsTrue();
+                await Assert.That(gitPanel.IsVisible).IsFalse();
+
+                view.TaskHistory.IsGitMode = true;
+                view.TaskHistory.Entries.Add(new TaskHistoryEntry(
+                    "1234567890",
+                    "Test Author",
+                    DateTimeOffset.UtcNow,
+                    "git 1234567",
+                    "change title",
+                    [new TaskHistoryFieldChange(
+                        "Title",
+                        "Title",
+                        "Before",
+                        "After",
+                        TaskHistoryChangeType.Modified,
+                        IsMetadata: false)]));
+                RunLayoutJobs();
+
+                await Assert.That(IsVisibleAndArranged(gitPanel)).IsTrue();
+                await Assert.That(view.TaskHistory.Entries.Count).IsEqualTo(1);
+                await Assert.That(gitItems.GetVisualDescendants().OfType<SelectableTextBlock>()
+                    .Any(value => IsVisibleAndArranged(value) && value.Text == "After")).IsTrue();
+            }
+            finally
+            {
+                CloseWindow(window);
+                await fixture.CleanTasksAsync();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task CurrentTaskCard_TaskHistory_AdaptsAtThreeWidthsInBothThemes()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(RenderedTaskHistoryAppBuilder));
+        await session.DispatchAsync(async () =>
+        {
+            ResetTaskCardLayoutSharedState();
+            var app = Application.Current!;
+            var previousTheme = app.RequestedThemeVariant;
+            try
+            {
+                foreach (var theme in new[] { ThemeVariant.Light, ThemeVariant.Dark })
+                {
+                    app.RequestedThemeVariant = theme;
+                    foreach (var width in new[] { 360d, 480d, 900d })
+                    {
+                        var fixture = new MainWindowViewModelFixture();
+                        Window? window = null;
+                        try
+                        {
+                            var (view, createdWindow) = await CreateArrangedMainControlAsync(fixture, width, 900);
+                            window = createdWindow;
+                            var expander = FindControlByAutomationId<Expander>(view, "StatusHistoryExpander");
+                            view.TaskHistory.IsGitMode = false;
+                            expander.IsExpanded = true;
+                            view.TaskHistory.IsGitMode = true;
+                            view.TaskHistory.Entries.Add(new TaskHistoryEntry(
+                                "1234567890", "Test Author", DateTimeOffset.UtcNow, "git 1234567", "change fields",
+                                [new TaskHistoryFieldChange("Title", "Title", "Before", "After", TaskHistoryChangeType.Modified, false),
+                                 new TaskHistoryFieldChange("Description", "Description", "Old description", "New description", TaskHistoryChangeType.Modified, false),
+                                 new TaskHistoryFieldChange("LongDescription", "Long description", new string('c', 60) + "…", new string('d', 60) + "…", TaskHistoryChangeType.Modified, false)]));
+                            RunLayoutJobs();
+
+                            await Assert.That(IsVisibleAndArranged(expander)).IsTrue();
+                            var values = FindControlByAutomationId<ItemsControl>(view, "TaskHistoryItems")
+                                .GetVisualDescendants().OfType<SelectableTextBlock>().Where(IsVisibleAndArranged).ToArray();
+                            var before = values.Single(value => value.Text == "Before");
+                            var after = values.Single(value => value.Text == "After");
+                            var beforeY = before.TranslatePoint(default, expander)?.Y ?? double.NaN;
+                            var afterY = after.TranslatePoint(default, expander)?.Y ?? double.NaN;
+                            await Assert.That(Math.Abs(afterY - beforeY)).IsLessThan(1);
+                            await Assert.That(values.All(value => value.Bounds.Width <= expander.Bounds.Width)).IsTrue();
+                            var longPreview = values.Single(value => value.Text == new string('d', 60) + "…");
+                            await Assert.That(longPreview.MaxLines).IsEqualTo(2);
+                            await Assert.That(longPreview.TextLayout.TextLines.Count).IsLessThanOrEqualTo(2);
+                            var oldLongPreview = values.Single(value => value.Text == new string('c', 60) + "…");
+                            if (longPreview.FindAncestorOfType<TaskHistoryFieldChangeView>()!.Bounds.Width >= 440)
+                                await Assert.That(Math.Abs(GetTop(longPreview, expander) - GetTop(oldLongPreview, expander))).IsLessThan(1);
+                            else
+                                await Assert.That(Math.Abs(GetLeftEdge(expander, longPreview) - GetLeftEdge(expander, oldLongPreview))).IsLessThan(1);
+                            foreach (var value in values)
+                                await Assert.That(GetRightEdge(expander, value)).IsLessThanOrEqualTo(expander.Bounds.Width + 1);
+                            await Assert.That(ResolveResourceColor(view, "TaskHistoryOldValueBrush", "old value"))
+                                .IsNotEqualTo(ResolveResourceColor(view, "TaskHistoryNewValueBrush", "new value"));
+                            if (theme == ThemeVariant.Light && (width == 480 || width == 900) &&
+                                Environment.GetEnvironmentVariable("UNLIMOTION_TEST_CAPTURE_FRAMES") == "1")
+                            {
+                                var renderedEntries = view.TaskHistory.Entries.ToArray();
+                                view.TaskHistory.Dispose();
+                                foreach (var entry in renderedEntries)
+                                    view.TaskHistory.Entries.Add(entry);
+                                expander.BringIntoView();
+                                RunLayoutJobs();
+                                var directory = Environment.GetEnvironmentVariable("UNLIMOTION_TEST_TRACE_DIRECTORY")
+                                    ?? Path.Combine(Directory.GetCurrentDirectory(), "artifacts", "ui-evidence", "task-history");
+                                Directory.CreateDirectory(directory);
+                                using var frame = window.CaptureRenderedFrame();
+                                if (frame is not null)
+                                {
+                                    frame.Save(Path.Combine(directory, $"after-headless-history-{width:0}.png"));
+                                }
+                                if (width == 900)
+                                {
+                                    var showDetails = view.GetVisualDescendants().OfType<Button>()
+                                        .Single(button => AutomationProperties.GetAutomationId(button) == "TaskHistoryShowDetailsButton"
+                                            && IsVisibleAndArranged(button));
+                                    await Assert.That((showDetails.DataContext as TaskHistoryFieldChange)?.FieldPath)
+                                        .IsEqualTo("LongDescription");
+                                    showDetails.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                                    RunLayoutJobs();
+                                    using var detailFrame = window.CaptureRenderedFrame();
+                                    detailFrame?.Save(Path.Combine(directory, "after-headless-full-value.png"));
+                                }
+                            }
+                        }
+                        finally
+                        {
+                            CloseWindow(window);
+                            await fixture.CleanTasksAsync();
+                        }
+                    }
+                }
+            }
+            finally
+            {
+                app.RequestedThemeVariant = previousTheme;
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task CurrentTaskCard_TaskHistory_InlineDetailsPreserveContextAndClose()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(RenderedTaskHistoryAppBuilder));
+        await session.DispatchAsync(async () =>
+        {
+            ResetTaskCardLayoutSharedState();
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+            var valuePath = Path.GetTempFileName();
+            try
+            {
+                var oldText = string.Join(" ", Enumerable.Repeat("Old full value", 25));
+                var newText = string.Join(" ", Enumerable.Repeat("New full value", 30));
+                var bytes = Encoding.UTF8.GetBytes(new JObject { ["Old"] = oldText, ["New"] = newText }.ToString());
+                File.WriteAllBytes(valuePath, bytes);
+                var hash = Convert.ToHexString(SHA256.HashData(bytes));
+                var (view, createdWindow) = await CreateArrangedMainControlAsync(fixture, 900, 900);
+                window = createdWindow;
+                window.Activate();
+                var expander = FindControlByAutomationId<Expander>(view, "StatusHistoryExpander");
+                view.TaskHistory.IsGitMode = false;
+                expander.IsExpanded = true;
+                view.TaskHistory.IsGitMode = true;
+                view.TaskHistory.Dispose();
+                var change = new TaskHistoryFieldChange("Description", "Description", oldText[..60] + "…", newText[..60] + "…",
+                    TaskHistoryChangeType.Modified, false,
+                    new TaskHistoryValueReference("", null, valuePath, "Old", true, hash),
+                    new TaskHistoryValueReference("", null, valuePath, "New", true, hash));
+                const string sha = "1234567890123456789012345678901234567890";
+                view.TaskHistory.Entries.Add(new TaskHistoryEntry(sha, "Author", DateTimeOffset.UtcNow, "Git 1234567", "Edit content",
+                    [change, change with { FieldPath = "Title", DisplayName = "Title" }]));
+                RunLayoutJobs();
+                var fields = view.GetVisualDescendants().OfType<TaskHistoryFieldChangeView>().Where(IsVisibleAndArranged).ToArray();
+                await Assert.That(fields.Length).IsEqualTo(2);
+                async Task Open(TaskHistoryFieldChangeView field)
+                {
+                    var show = FindControlByAutomationId<Button>(field, "TaskHistoryShowDetailsButton");
+                    show.Focus();
+                    await Assert.That(show.IsFocused).IsTrue();
+                    show.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    for (var attempt = 0; attempt < 200 && !field.IsDetailsExpanded; attempt++)
+                        await Task.Delay(10);
+                    RunLayoutJobs();
+                    await Assert.That(field.IsDetailsExpanded).IsTrue();
+                    await Assert.That(FindControlByAutomationId<Button>(field, "TaskHistoryCloseDetailsButton").IsFocused).IsTrue();
+                }
+                await Open(fields[0]);
+                await Assert.That(fields[0].GetVisualDescendants().OfType<SelectableTextBlock>()
+                    .Any(value => IsVisibleAndArranged(value) && value.Text == newText)).IsTrue();
+                var panel = FindControlByAutomationId<Control>(fields[0], "TaskHistoryDetailsPanel");
+                await Assert.That(panel.TranslatePoint(default, fields[0])!.Value.Y).IsGreaterThanOrEqualTo(0);
+                await Assert.That(panel.Bounds.Width).IsLessThanOrEqualTo(fields[0].Bounds.Width);
+                await Open(fields[1]);
+                await Assert.That(fields[0].IsDetailsExpanded).IsFalse();
+                await Assert.That(fields[0].GetVisualDescendants().OfType<SelectableTextBlock>()
+                    .Any(value => value.Text == newText)).IsFalse();
+                FindControlByAutomationId<Button>(fields[1], "TaskHistoryCloseDetailsButton")
+                    .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                RunLayoutJobs();
+                await Assert.That(fields.All(field => !field.IsDetailsExpanded)).IsTrue();
+                await Assert.That(view.TaskHistory.HasDetails).IsFalse();
+                await Assert.That(view.TaskHistory.DetailNewValue).IsEmpty();
+                await Open(fields[0]);
+                FindControlByAutomationId<ToggleButton>(view, "TaskHistoryStatusModeButton")
+                    .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                RunLayoutJobs();
+                await Assert.That(fields[0].IsDetailsExpanded).IsFalse();
+                await Assert.That(view.TaskHistory.HasDetails).IsFalse();
+                view.TaskHistory.IsGitMode = true;
+                RunLayoutJobs();
+                var copy = FindControlByAutomationId<Button>(view, "TaskHistoryCopyCommitButton");
+                copy.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                await Task.Delay(20);
+                await Assert.That(await window.Clipboard!.TryGetTextAsync()).IsEqualTo(sha);
+            }
+            finally
+            {
+                CloseWindow(window);
+                await fixture.CleanTasksAsync();
+                File.Delete(valuePath);
+            }
+        }, CancellationToken.None);
     }
 
     private static async Task<(MainControl View, Window Window)> CreateArrangedMainControlAsync(
@@ -2180,9 +2451,11 @@ public class MainControlTaskCardLayoutUiTests
             .Any(ancestor => ancestor is TextBox or ComboBox or NumericUpDown or CalendarDatePicker or DropDownButton);
     }
 
+    private static double GetTop(Control control, Visual relativeTo) => control.TranslatePoint(default, relativeTo)!.Value.Y;
+
     private static bool IsVisibleAndArranged(Control control)
     {
-        return control.IsVisible &&
+        return control.IsEffectivelyVisible &&
                control.Bounds.Width > 0 &&
                control.Bounds.Height > 0;
     }
@@ -2284,4 +2557,12 @@ public class MainControlTaskCardLayoutUiTests
 
         public CultureInfo SystemUICulture { get; }
     }
+}
+
+public sealed class RenderedTaskHistoryAppBuilder
+{
+    public static AppBuilder BuildAvaloniaApp() => AppBuilder.Configure<App>()
+        .UseSkia()
+        .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+        .WithCustomFont();
 }
