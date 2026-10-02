@@ -68,16 +68,23 @@ public sealed class TaskHistoryFlaUiTests
             ?? throw new InvalidOperationException("The task-details scroll viewer was not exposed.");
         var scrollPattern = detailsScroll.Patterns.Scroll.PatternOrDefault
             ?? throw new InvalidOperationException("The task-details scroll pattern was not exposed.");
-        Console.WriteLine($"Task history offscreen before scroll: {historyItems.IsOffscreen}; vertical={scrollPattern.VerticalScrollPercent}");
+        await Assert.That(expander.IsOffscreen).IsFalse();
+        await Assert.That(historyItems.IsOffscreen).IsFalse();
+        var historyBounds = expander.BoundingRectangle;
         if (scrollPattern.VerticalScrollPercent >= 0)
         {
-            scrollPattern.SetScrollPercent(-1, 100);
-            await WaitUntil(
-                () => scrollPattern.VerticalScrollPercent,
-                percent => percent >= 99,
-                "The task-details pane did not scroll to the history section.");
+            foreach (var targetPercent in new[] { 0d, 100d })
+            {
+                scrollPattern.SetScrollPercent(-1, targetPercent);
+                await WaitUntil(
+                    () => scrollPattern.VerticalScrollPercent,
+                    percent => Math.Abs(percent - targetPercent) <= 1,
+                    "The task-details pane did not reach the requested scroll position.");
+                await Assert.That(expander.IsOffscreen).IsFalse();
+                await Assert.That(historyItems.IsOffscreen).IsFalse();
+                await Assert.That(expander.BoundingRectangle).IsEqualTo(historyBounds);
+            }
         }
-        Console.WriteLine($"Task history offscreen after scroll: {historyItems.IsOffscreen}; vertical={scrollPattern.VerticalScrollPercent}");
 
         var visibleNames = historyItems.FindAllDescendants()
             .Select(element => element.Properties.Name.ValueOrDefault)

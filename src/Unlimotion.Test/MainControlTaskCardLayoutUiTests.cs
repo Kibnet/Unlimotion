@@ -859,7 +859,8 @@ public class MainControlTaskCardLayoutUiTests
                 {
                     throw new InvalidOperationException(
                         $"Phone weekday toggles should stay in one filled row: " +
-                        $"content={wrappedToggle.Toggle.Content}; firstTop={firstTop:F1}; top={wrappedToggle.Top:F1}.");
+                        $"content={wrappedToggle.Toggle.Content}; firstTop={firstTop:F1}; top={wrappedToggle.Top:F1}; " +
+                        $"viewport={scrollViewer.Viewport}; panel={weekdayPanel.Bounds}; toggleWidth={weekdayToggles[0].Width:F1}.");
                 }
 
                 var repeaterSelectorTop = GetTopEdge(view, repeaterSelector);
@@ -1323,6 +1324,103 @@ public class MainControlTaskCardLayoutUiTests
     }
 
     [Test]
+    public async Task CurrentTaskCard_TaskHistory_StaysDockedWhileTaskAndHistoryScroll()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(RenderedTaskHistoryAppBuilder));
+        await session.DispatchAsync(async () =>
+        {
+            ResetTaskCardLayoutSharedState();
+            var previousTheme = Application.Current!.RequestedThemeVariant;
+            try
+            {
+                foreach (var theme in new[] { ThemeVariant.Light, ThemeVariant.Dark })
+                foreach (var size in new[] { new Size(360, 480), new Size(900, 900) })
+                {
+                    Application.Current.RequestedThemeVariant = theme;
+                    var fixture = new MainWindowViewModelFixture();
+                    Window? window = null;
+                    try
+                    {
+                        var taskPath = Path.Combine(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.RootTask2Id);
+                        var taskJson = JObject.Parse(File.ReadAllText(taskPath));
+                        taskJson[nameof(TaskItem.PlannedBeginDateTime)] = DateTime.Today;
+                        taskJson[nameof(TaskItem.Description)] = string.Join("\n", Enumerable.Repeat("Long task content", 80));
+                        File.WriteAllText(taskPath, taskJson.ToString());
+                        var (view, createdWindow) = await CreateArrangedMainControlAsync(fixture, size.Width, size.Height);
+                        window = createdWindow;
+                        var frame = FindControlByAutomationId<Border>(view, "CurrentTaskDetailsPanelFrame");
+                        var body = FindControlByAutomationId<ScrollViewer>(view, "CurrentTaskDetailsScrollViewer");
+                        var footer = FindControlByAutomationId<Border>(view, "CurrentTaskStatusHistorySection");
+                        var expander = FindControlByAutomationId<Expander>(view, "StatusHistoryExpander");
+                        view.TaskHistory.IsGitMode = false;
+                        expander.IsExpanded = true;
+                        RunLayoutJobs();
+                        view.TaskHistory.Dispose();
+                        view.TaskHistory.IsGitMode = true;
+                        FindControlByAutomationId<ItemsControl>(view, "StatusHistoryItems").ItemsSource = Enumerable.Range(0, 40)
+                            .Select(index => new TaskStatusHistoryEntry { Author = "Author", ChangedAt = DateTimeOffset.UtcNow.AddMinutes(-index) });
+                        foreach (var expanded in new[] { false, true })
+                        foreach (var gitMode in new[] { true, false })
+                        {
+                            view.TaskHistory.IsGitMode = false;
+                            expander.IsExpanded = expanded;
+                            RunLayoutJobs();
+                            // Closing the real panel disposes its rows; reseed each deterministic layout state.
+                            view.TaskHistory.Dispose();
+                            view.TaskHistory.IsGitMode = gitMode;
+                            for (var index = 0; index < 40; index++)
+                                view.TaskHistory.Entries.Add(new TaskHistoryEntry($"commit-{index}", "Author", DateTimeOffset.UtcNow,
+                                    "Git", $"Change {index}", [new TaskHistoryFieldChange("Title", "Title", "Before", "After", TaskHistoryChangeType.Modified, false)]));
+                            RunLayoutJobs();
+                            var footerTop = GetTopEdge(frame, footer);
+                            var footerBottom = GetBottomEdge(frame, footer);
+                            await Assert.That(footerTop).IsGreaterThanOrEqualTo(0);
+                            await Assert.That(footerBottom).IsLessThanOrEqualTo(frame.Bounds.Height);
+                            await Assert.That(frame.Bounds.Height - footerBottom).IsLessThanOrEqualTo(24);
+                            await Assert.That(body.Extent.Height).IsGreaterThan(body.Viewport.Height);
+                            foreach (var fraction in new[] { 0d, 0.5, 1d })
+                            {
+                                body.Offset = new Vector(0, (body.Extent.Height - body.Viewport.Height) * fraction);
+                                RunLayoutJobs();
+                                await Assert.That(Math.Abs(GetTopEdge(frame, footer) - footerTop)).IsLessThan(1);
+                                await Assert.That(GetBottomEdge(frame, body)).IsLessThanOrEqualTo(footerTop + 1);
+                                if (expanded)
+                                {
+                                    var list = FindControlByAutomationId<ListBox>(view, "TaskHistoryItems");
+                                    var historyScroll = gitMode
+                                        ? list.GetVisualDescendants().OfType<ScrollViewer>().Single(control => ReferenceEquals(control.TemplatedParent, list))
+                                        : FindControlByAutomationId<ScrollViewer>(view, "TaskHistoryStatusScrollViewer");
+                                    Console.WriteLine($"Docked history: theme={theme}; size={size}; git={gitMode}; footer={footer.Bounds}; viewport={historyScroll.Viewport}; extent={historyScroll.Extent}");
+                                    await Assert.That(historyScroll.Viewport.Height).IsGreaterThan(0);
+                                    await Assert.That(GetBottomEdge(frame, historyScroll)).IsLessThanOrEqualTo(frame.Bounds.Height);
+                                    var bodyOffset = body.Offset;
+                                    await Assert.That(historyScroll.Extent.Height).IsGreaterThan(historyScroll.Viewport.Height);
+                                    historyScroll.ScrollToEnd();
+                                    RunLayoutJobs();
+                                    await Assert.That(body.Offset).IsEqualTo(bodyOffset);
+                                    await Assert.That(Math.Abs(GetTopEdge(frame, footer) - footerTop)).IsLessThan(1);
+                                }
+                            }
+                        }
+                        fixture.MainWindowViewModelTest.CurrentTaskItem = null;
+                        RunLayoutJobs();
+                        await Assert.That(footer.IsEffectivelyVisible).IsFalse();
+                    }
+                    finally
+                    {
+                        CloseWindow(window);
+                        await fixture.CleanTasksAsync();
+                    }
+                }
+            }
+            finally
+            {
+                Application.Current.RequestedThemeVariant = previousTheme;
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
     public async Task CurrentTaskCard_TaskHistory_HeaderAndContentHaveCleanChrome()
     {
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(RenderedTaskHistoryAppBuilder));
@@ -1605,9 +1703,15 @@ public class MainControlTaskCardLayoutUiTests
             return detailsWidth;
         }
 
-        scrollViewer.Width = detailsWidth;
-        scrollViewer.MinWidth = detailsWidth;
-        scrollViewer.MaxWidth = detailsWidth;
+        // The card grid supplies a finite width shared by the body and docked footer.
+        var frame = scrollViewer.GetVisualAncestors().OfType<Border>().First(control =>
+            AutomationProperties.GetAutomationId(control) == "CurrentTaskDetailsPanelFrame");
+        frame.Width = detailsWidth;
+        frame.MinWidth = detailsWidth;
+        frame.MaxWidth = detailsWidth;
+        scrollViewer.Width = double.NaN;
+        scrollViewer.MinWidth = 0;
+        scrollViewer.MaxWidth = double.PositiveInfinity;
         return detailsWidth;
     }
 
@@ -1634,13 +1738,6 @@ public class MainControlTaskCardLayoutUiTests
         paneRoot.Measure(new Size(paneWidth, height));
         paneRoot.Arrange(new Rect(0, 0, paneWidth, height));
         RunLayoutJobs();
-
-        if (scrollViewer.Content is Control content)
-        {
-            content.Width = detailsWidth;
-            content.Measure(new Size(detailsWidth, double.PositiveInfinity));
-            content.Arrange(new Rect(0, 0, detailsWidth, Math.Max(height, content.DesiredSize.Height)));
-        }
 
         RunLayoutJobs();
         return IsDetailsPaneArranged(detailsPanelFrame, scrollViewer);
@@ -2607,7 +2704,7 @@ public class MainControlTaskCardLayoutUiTests
                     "CurrentTaskDetailsScrollViewer",
                     StringComparison.Ordinal));
         var panel = root.GetVisualDescendants()
-            .OfType<StackPanel>()
+            .OfType<Grid>()
             .FirstOrDefault(static control => string.Equals(control.Name, "TaskDetailsPanelRoot", StringComparison.Ordinal));
         var paneLength = splitView == null ? "null" : splitView.OpenPaneLength.ToString("F1", CultureInfo.InvariantCulture);
         var isCompact = panel?.Classes.Contains("TaskDetailsCompact");
