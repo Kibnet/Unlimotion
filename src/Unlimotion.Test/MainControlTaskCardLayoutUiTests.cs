@@ -1242,6 +1242,12 @@ public class MainControlTaskCardLayoutUiTests
                 var bytes = Encoding.UTF8.GetBytes(new JObject { ["Old"] = oldText, ["New"] = newText }.ToString());
                 File.WriteAllBytes(valuePath, bytes);
                 var hash = Convert.ToHexString(SHA256.HashData(bytes));
+                // Prepare the start date in storage so showing the card does not autosave it
+                // and refresh away the deterministic history rows during the interaction.
+                var taskPath = Path.Combine(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.RootTask2Id);
+                var taskJson = JObject.Parse(File.ReadAllText(taskPath));
+                taskJson[nameof(TaskItem.PlannedBeginDateTime)] = DateTime.Today;
+                File.WriteAllText(taskPath, taskJson.ToString());
                 var (view, createdWindow) = await CreateArrangedMainControlAsync(fixture, 900, 900);
                 window = createdWindow;
                 window.Activate();
@@ -1270,7 +1276,13 @@ public class MainControlTaskCardLayoutUiTests
                         await Task.Delay(10);
                     RunLayoutJobs();
                     await Assert.That(field.IsDetailsExpanded).IsTrue();
-                    await Assert.That(FindControlByAutomationId<Button>(field, "TaskHistoryCloseDetailsButton").IsFocused).IsTrue();
+                    var collapse = FindControlByAutomationId<Button>(field, "TaskHistoryCloseDetailsButton");
+                    for (var attempt = 0; attempt < 200 && !collapse.IsFocused; attempt++)
+                    {
+                        RunLayoutJobs();
+                        await Task.Delay(10);
+                    }
+                    await Assert.That(collapse.IsFocused).IsTrue();
                 }
                 await Open(fields[0]);
                 await Assert.That(fields[0].GetVisualDescendants().OfType<SelectableTextBlock>()
@@ -1306,6 +1318,65 @@ public class MainControlTaskCardLayoutUiTests
                 CloseWindow(window);
                 await fixture.CleanTasksAsync();
                 File.Delete(valuePath);
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task CurrentTaskCard_TaskHistory_HeaderAndContentHaveCleanChrome()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(RenderedTaskHistoryAppBuilder));
+        await session.DispatchAsync(async () =>
+        {
+            ResetTaskCardLayoutSharedState();
+            var previousTheme = Application.Current!.RequestedThemeVariant;
+            try
+            {
+                foreach (var theme in new[] { ThemeVariant.Light, ThemeVariant.Dark })
+                foreach (var width in new[] { 360d, 900d })
+                {
+                    Application.Current.RequestedThemeVariant = theme;
+                    var fixture = new MainWindowViewModelFixture();
+                    Window? window = null;
+                    try
+                    {
+                        var (view, createdWindow) = await CreateArrangedMainControlAsync(fixture, width, 900);
+                        window = createdWindow;
+                        var expander = FindControlByAutomationId<Expander>(view, "StatusHistoryExpander");
+                        view.TaskHistory.IsGitMode = false;
+                        expander.IsExpanded = true;
+                        RunLayoutJobs();
+                        var content = expander.GetVisualDescendants().OfType<Border>()
+                            .Single(border => ReferenceEquals(border.TemplatedParent, expander));
+                        Console.WriteLine($"History content border: {content.BorderThickness}; theme={theme}; width={width}");
+                        await Assert.That(content.BorderThickness).IsEqualTo(new Thickness(0));
+                        var header = expander.GetVisualDescendants().OfType<ToggleButton>().Single(button => button.Name == "PART_HeaderSite");
+                        foreach (var expanded in new[] { true, false })
+                        {
+                            expander.IsExpanded = expanded;
+                            RunLayoutJobs();
+                            var icon = header.GetVisualDescendants().OfType<PathIcon>().Single(control => control.IsEffectivelyVisible);
+                            var title = header.GetVisualDescendants().OfType<ContentPresenter>().Single(control => control.Name == "TaskHistoryHeading");
+                            var iconCenter = icon.TranslatePoint(new Point(icon.Bounds.Width / 2, icon.Bounds.Height / 2), header)!.Value.Y;
+                            var titleCenter = title.TranslatePoint(new Point(title.Bounds.Width / 2, title.Bounds.Height / 2), header)!.Value.Y;
+                            var iconRight = Math.Max(icon.TranslatePoint(default, header)!.Value.X,
+                                icon.TranslatePoint(new Point(icon.Bounds.Width, icon.Bounds.Height), header)!.Value.X);
+                            await Assert.That(Math.Abs(iconCenter - titleCenter)).IsLessThanOrEqualTo(1);
+                            await Assert.That(icon.Bounds.Width).IsEqualTo(14);
+                            await Assert.That(icon.Bounds.Height).IsEqualTo(14);
+                            await Assert.That(Math.Abs(GetLeftEdge(header, title) - iconRight - 8)).IsLessThan(0.01);
+                        }
+                    }
+                    finally
+                    {
+                        CloseWindow(window);
+                        await fixture.CleanTasksAsync();
+                    }
+                }
+            }
+            finally
+            {
+                Application.Current.RequestedThemeVariant = previousTheme;
             }
         }, CancellationToken.None);
     }
