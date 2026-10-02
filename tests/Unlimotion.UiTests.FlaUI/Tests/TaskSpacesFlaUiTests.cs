@@ -1,10 +1,9 @@
 using AppAutomation.Abstractions;
 using AppAutomation.FlaUI.Automation;
 using AppAutomation.FlaUI.Session;
+using AppAutomation.FlaUI.Input;
 using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Definitions;
-using FlaUI.Core.Exceptions;
-using FlaUI.UIA3;
 using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Text.Json;
@@ -202,10 +201,12 @@ public sealed class TaskSpacesFlaUiTests
 
     private static void RemoveTaskSpaceFromSettings(DesktopAppSession session, string displayName)
     {
-        var settingsList = FindTaskSpaceCombo(session, "TaskSpacesList");
-        SelectTaskSpaceFromDesktopPopup(session, settingsList, displayName);
         var page = new MainWindowPage(
             new FlaUiControlResolver(session.MainWindow, session.ConditionFactory));
+        // The name editor is bound to SelectedTaskSpace.DisplayName. Rename leaves that space selected.
+        WaitUntil(() => page.TaskSpaceNameTextBox.Text,
+            value => string.Equals(value, displayName, StringComparison.Ordinal),
+            $"Task space '{displayName}' was not the selected Settings space before removal.");
         WaitUntil(
             () => page.RemoveTaskSpaceButton.IsEnabled,
             value => value,
@@ -219,97 +220,6 @@ public sealed class TaskSpacesFlaUiTests
             "Task-space removal confirmation did not appear.")
             ?? throw new InvalidOperationException("Task-space removal confirmation was not found.");
         confirmation.AsButton().Invoke();
-    }
-
-    private static void SelectTaskSpaceFromDesktopPopup(
-        DesktopAppSession session,
-        ComboBox selector,
-        string displayName)
-    {
-        selector.Focus();
-        selector.Expand();
-        Thread.Sleep(250);
-
-        using var automation = new UIA3Automation();
-        var desktop = automation.GetDesktop();
-        var processId = session.MainWindow.Properties.ProcessId.ValueOrDefault;
-        var item = WaitUntil(
-            () => FindDesktopPopupItem(desktop, processId, displayName),
-            value => value != null,
-            $"Task-space Settings popup did not expose '{displayName}'.")
-            ?? throw new InvalidOperationException($"Task space '{displayName}' was not found.");
-        item.Click();
-    }
-
-    private static AutomationElement? FindDesktopPopupItem(
-        AutomationElement desktop,
-        int processId,
-        string displayName)
-    {
-        AutomationElement? bestMatch = null;
-        var bestProcessPriority = int.MaxValue;
-        var bestControlPriority = int.MaxValue;
-
-        foreach (var (controlType, controlPriority) in new[]
-                 {
-                     (ControlType.ListItem, 0),
-                     (ControlType.Text, 1),
-                 })
-        {
-            AutomationElement[] elements;
-            try
-            {
-                elements = desktop.FindAllDescendants(
-                    factory => factory.ByControlType(controlType));
-            }
-            catch (COMException)
-            {
-                continue;
-            }
-
-            foreach (var element in elements)
-            {
-                try
-                {
-                    if (element.Properties.IsOffscreen.ValueOrDefault)
-                    {
-                        continue;
-                    }
-
-                    var name = element.Properties.Name.ValueOrDefault;
-                    if (string.IsNullOrEmpty(name) ||
-                        !name.Contains(displayName, StringComparison.Ordinal))
-                    {
-                        continue;
-                    }
-
-                    var processPriority =
-                        element.Properties.ProcessId.ValueOrDefault == processId ? 0 : 1;
-                    if (processPriority < bestProcessPriority ||
-                        processPriority == bestProcessPriority &&
-                        controlPriority < bestControlPriority)
-                    {
-                        bestMatch = element;
-                        bestProcessPriority = processPriority;
-                        bestControlPriority = controlPriority;
-                    }
-                }
-                catch (COMException)
-                {
-                    // Popup elements can disappear while Avalonia rebuilds the tree.
-                }
-                catch (PropertyNotSupportedException)
-                {
-                    // Some UIA providers expose matching controls without all properties.
-                }
-                catch (NullReferenceException)
-                {
-                    // FlaUI can observe a released native element between property reads.
-                }
-            }
-        }
-
-        return bestMatch;
     }
 
     private static bool IsVisibleText(DesktopAppSession session, string text)
@@ -370,16 +280,34 @@ public sealed class TaskSpacesFlaUiTests
 
     private static void SelectTaskSpace(ComboBox selector, string displayName)
     {
+        WaitUntil(() => selector.IsEnabled, enabled => enabled,
+            "Task-space selector did not become enabled before opening its popup.");
         selector.Focus();
         selector.Expand();
-        Thread.Sleep(250);
+        WaitUntil(() => selector.ExpandCollapseState, state => state == ExpandCollapseState.Expanded,
+            "Task-space selector did not open its popup.");
         var item = WaitUntil(
             () => selector.Items.SingleOrDefault(candidate =>
                 string.Equals(candidate.Name, displayName, StringComparison.Ordinal)),
             value => value != null,
             $"Task-space selector did not expose '{displayName}'.")
             ?? throw new InvalidOperationException($"Task space '{displayName}' was not found.");
-        item.Click();
+        var selection = item.Patterns.SelectionItem.PatternOrDefault;
+        if (selection is not null)
+        {
+            selection.Select();
+            // FlaUI Collapse is a no-op while the app temporarily disables the selector.
+            WaitUntil(() => selector.IsEnabled, enabled => enabled,
+                "Task-space selector did not become enabled after selection.");
+            selector.Collapse();
+            WaitUntil(() => selector.ExpandCollapseState,
+                state => state == ExpandCollapseState.Collapsed,
+                "Task-space selector did not close its popup.");
+        }
+        else
+            DesktopPointer.ClickAsync(() => selector.Items.Single(candidate =>
+                string.Equals(candidate.Name, displayName, StringComparison.Ordinal)))
+                .GetAwaiter().GetResult();
     }
 
     private static void WaitUntilTaskVisible(DesktopAppSession session, string expectedTitle)

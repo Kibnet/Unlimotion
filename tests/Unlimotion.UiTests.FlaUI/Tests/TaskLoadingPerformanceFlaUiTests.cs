@@ -4,9 +4,13 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using AppAutomation.FlaUI.Session;
+using AppAutomation.FlaUI.Input;
 using AppAutomation.Session.Contracts;
 using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Exceptions;
+using FlaUI.Core.Definitions;
+using FlaUI.Core.Input;
+using FlaUI.Core.WindowsAPI;
 using TUnit.Core;
 using Unlimotion.AppAutomation.TestHost;
 
@@ -109,11 +113,17 @@ public sealed class TaskLoadingPerformanceFlaUiTests
         if (selection is not null)
         {
             selection.Select();
+            // The app disables this selector while switching spaces; FlaUI Collapse is a no-op then.
+            Wait(() => selector.IsEnabled, "Task-space selector did not become enabled after selection.",
+                TimeSpan.FromSeconds(15));
+            selector.Collapse();
+            Wait(() => selector.ExpandCollapseState == ExpandCollapseState.Collapsed,
+                "Task-space selector did not close its popup.", TimeSpan.FromSeconds(15));
         }
         else
         {
             target.Patterns.ScrollItem.PatternOrDefault?.ScrollIntoView();
-            target.Click();
+            DesktopPointer.Click(target);
         }
         var measurement = ReadyAndAct(session, title, watch);
         WriteMeasurement(session, space, measurement, null, copied);
@@ -164,8 +174,26 @@ public sealed class TaskLoadingPerformanceFlaUiTests
                     .FindAllDescendants(session.ConditionFactory.ByAutomationId("InlineTaskTitleTextBlock"))
                     .FirstOrDefault(e => e.Name == title && Visible(e));
                 if (task is null) return false;
-                task.Focus();
-                task.Click();
+                var row = task.Parent;
+                while (row is not null && row.ControlType != ControlType.TreeItem)
+                    row = row.Parent;
+                if (row is not null)
+                {
+                    var selection = row.Patterns.SelectionItem.PatternOrDefault;
+                    if (selection is not null)
+                        selection.Select();
+                    else
+                    {
+                        row.Focus();
+                        Keyboard.Type(VirtualKeyShort.SPACE);
+                    }
+                }
+                else
+                    DesktopPointer.ClickAsync(() => session.MainWindow
+                        .FindAllDescendants(session.ConditionFactory.ByAutomationId("InlineTaskTitleTextBlock"))
+                        .FirstOrDefault(element => element.Name == title && Visible(element))
+                        ?? throw new InvalidOperationException($"Task '{title}' disappeared before selection."))
+                        .GetAwaiter().GetResult();
                 clicked = true;
                 toggledAfterClick = false;
                 lastClick.Restart();

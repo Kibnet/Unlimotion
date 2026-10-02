@@ -1,4 +1,5 @@
 using AppAutomation.FlaUI.Session;
+using AppAutomation.FlaUI.Input;
 using FlaUI.Core.AutomationElements;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -35,14 +36,13 @@ public sealed class NewTaskTitleFlaUiTests
         using var session = DesktopAppSession.Launch(options);
         session.MainWindow.Focus();
 
-        (FindInMainWindow(session, "GlobalTaskCreateMenuButton")
-            ?? throw new InvalidOperationException("The global task-create menu button was not exposed."))
-            .Click();
+        DesktopPointer.Click(FindInMainWindow(session, "GlobalTaskCreateMenuButton")
+            ?? throw new InvalidOperationException("The global task-create menu button was not exposed."));
         var createTask = await WaitUntil(
             () => FindInProcess(session, "GlobalTaskCreateTaskMenuItem"),
             element => element is not null,
             "The global task-create menu did not expose the new-task action.");
-        createTask!.Click();
+        DesktopPointer.Click(createTask!);
 
         var titleEditor = await WaitUntil(
             () => FindInMainWindow(session, "CurrentTaskTitleTextBox"),

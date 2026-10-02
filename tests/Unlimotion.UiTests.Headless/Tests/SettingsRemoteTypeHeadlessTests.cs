@@ -8,6 +8,8 @@ using TUnit.Core;
 using Unlimotion.AppAutomation.TestHost;
 using Unlimotion.UiTests.Authoring.Pages;
 using Unlimotion.ViewModel;
+using Unlimotion.UiTests.Headless.Infrastructure;
+using Avalonia.Threading;
 
 namespace Unlimotion.UiTests.Headless.Tests;
 
@@ -34,6 +36,7 @@ public sealed class SettingsRemoteTypeHeadlessTests
     [NotInParallel(DesktopUiConstraint)]
     public async Task Settings_remote_type_switch_creates_ssh_copy_for_single_http_remote()
     {
+        using var presentation = new HeadlessWindowPresentation(Session.Inner.MainWindow);
         Page.SelectTabItem(static page => page.SettingsTabItem, timeoutMs: 10_000);
         _ = WaitUntil(
             () => TryResolveDuringWait(() => Page.SettingsRoot),
@@ -66,22 +69,23 @@ public sealed class SettingsRemoteTypeHeadlessTests
         var commandErrors = new List<Exception>();
         using var commandErrorSubscription =
             (vm.Settings.SwitchRemoteToSshCommand as IReactiveCommand)?.ThrownExceptions.Subscribe(commandErrors.Add);
-        vm.Settings.SwitchRemoteToSshCommand!.Execute(null);
+        Page.ClickButton(static page => page.SwitchRemoteToSshButton, timeoutMs: 10_000);
 
         var sshSection = WaitUntil(
             () => TryResolveDuringWait(() => Page.SshKeysSection),
             static control => control is not null,
             timeout: TimeSpan.FromSeconds(10),
             timeoutMessage: "SSH keys section did not become available after switching remote type.")!;
-        var selectedRemoteUrl = WaitUntil(
-            () =>
+        var selectedRemoteUrl = await WaitUntilAsync(
+            () => HeadlessRuntime.Dispatch(() =>
             {
+                Dispatcher.UIThread.RunJobs();
                 return new RemoteSwitchWaitState(
                     _vm?.Settings.GitRemoteName,
                     _vm?.Settings.GitRemoteUrl,
                     _vm?.Settings.IsSshAuthSelected,
                     commandErrors.FirstOrDefault());
-            },
+            }),
             static state => state.Error is not null ||
                             string.Equals(state.SelectedRemoteName, "origin-ssh", StringComparison.Ordinal) &&
                             string.Equals(
