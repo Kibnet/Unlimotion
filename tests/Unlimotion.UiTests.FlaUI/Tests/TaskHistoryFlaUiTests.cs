@@ -1,0 +1,186 @@
+using AppAutomation.FlaUI.Session;
+using AppAutomation.Session.Contracts;
+using FlaUI.Core.AutomationElements;
+using FlaUI.Core.Definitions;
+using FlaUI.UIA3;
+using LibGit2Sharp;
+using System.Text.Json.Nodes;
+using TUnit.Assertions;
+using TUnit.Core;
+using Unlimotion.AppAutomation.TestHost;
+
+namespace Unlimotion.UiTests.FlaUI.Tests;
+
+public sealed class TaskHistoryFlaUiTests
+{
+    [Test]
+    [NotInParallel("DesktopUi")]
+    public async Task Task_history_expands_and_shows_git_commit_changes()
+    {
+        var options = UnlimotionAppLaunchHost.CreateDesktopLaunchOptions(
+            UnlimotionAutomationScenario.Smoke,
+            buildBeforeLaunch: false,
+            mainWindowTimeout: TimeSpan.FromSeconds(90));
+        var configPath = options.Arguments.Single(argument =>
+            argument.StartsWith("--config=", StringComparison.Ordinal))[9..];
+        var config = JsonNode.Parse(File.ReadAllText(configPath))!;
+        var taskStoragePath = config["TaskStorage"]!["Path"]!.GetValue<string>();
+        var currentTaskPath = Path.Combine(
+            taskStoragePath,
+            UnlimotionAppLaunchHost.GetCurrentTaskId(UnlimotionAutomationScenario.Smoke));
+
+        CreateHistory(taskStoragePath, currentTaskPath);
+
+        using var session = DesktopAppSession.Launch(options);
+        session.MainWindow.Patterns.Window.Pattern.SetWindowVisualState(WindowVisualState.Maximized);
+        session.MainWindow.Focus();
+
+        var detailsToggle = Find(session, "DetailsPaneToggleButton")?.AsToggleButton()
+            ?? throw new InvalidOperationException("The details-pane toggle was not exposed.");
+        if (detailsToggle.IsToggled == true)
+        {
+            detailsToggle.Toggle();
+            await WaitUntil(
+                () => detailsToggle.IsToggled,
+                toggled => toggled == false,
+                "The task details pane did not open.");
+        }
+        var expander = await WaitUntil(
+            () => Find(session, "StatusHistoryExpander"),
+            element => element is not null,
+            "The task-history expander was not exposed.");
+        expander!.Patterns.ScrollItem.PatternOrDefault?.ScrollIntoView();
+        if (expander.Patterns.ExpandCollapse.PatternOrDefault is { } expandPattern)
+        {
+            expandPattern.Expand();
+        }
+        else
+        {
+            expander.Click();
+        }
+
+        var historyItems = await WaitUntil(
+            () => Find(session, "TaskHistoryItems"),
+            element => element is not null,
+            "The Git history items control was not exposed after expanding the panel.");
+        historyItems!.Patterns.ScrollItem.PatternOrDefault?.ScrollIntoView();
+        var detailsScroll = Find(session, "CurrentTaskDetailsScrollViewer")
+            ?? throw new InvalidOperationException("The task-details scroll viewer was not exposed.");
+        var scrollPattern = detailsScroll.Patterns.Scroll.PatternOrDefault
+            ?? throw new InvalidOperationException("The task-details scroll pattern was not exposed.");
+        Console.WriteLine($"Task history offscreen before scroll: {historyItems.IsOffscreen}; vertical={scrollPattern.VerticalScrollPercent}");
+        if (scrollPattern.VerticalScrollPercent >= 0)
+        {
+            scrollPattern.SetScrollPercent(-1, 100);
+            await WaitUntil(
+                () => scrollPattern.VerticalScrollPercent,
+                percent => percent >= 99,
+                "The task-details pane did not scroll to the history section.");
+        }
+        Console.WriteLine($"Task history offscreen after scroll: {historyItems.IsOffscreen}; vertical={scrollPattern.VerticalScrollPercent}");
+
+        var visibleNames = historyItems.FindAllDescendants()
+            .Select(element => element.Properties.Name.ValueOrDefault)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .ToArray();
+        Console.WriteLine("Task history automation names: " + string.Join(" | ", visibleNames));
+        await Assert.That(visibleNames.Contains("Update task for history", StringComparer.Ordinal)).IsTrue();
+
+        var gitMode = Find(session, "TaskHistoryGitModeButton");
+        var optionsButton = Find(session, "TaskHistoryOptionsButton");
+        await Assert.That(gitMode).IsNotNull();
+        await Assert.That(optionsButton).IsNotNull();
+        optionsButton!.AsButton().Invoke();
+        using var popupAutomation = new UIA3Automation();
+        var desktop = popupAutomation.GetDesktop();
+        var metadata = await WaitUntil(
+            () => desktop.FindFirstDescendant(popupAutomation.ConditionFactory.ByAutomationId("TaskHistoryMetadataCheckBox")),
+            element => element is { IsOffscreen: false },
+            "The history options did not expose system fields.");
+        await Assert.That(metadata).IsNotNull();
+        optionsButton!.AsButton().Invoke();
+        await Assert.That(FindText(historyItems, "History title after commit")).IsNotNull();
+
+        var showDetails = await WaitUntil(
+            () => Find(session, "TaskHistoryShowDetailsButton"),
+            element => element is not null,
+            "The long-value details button was not exposed.");
+        showDetails!.Patterns.ScrollItem.PatternOrDefault?.ScrollIntoView();
+        var evidenceDirectory = Path.Combine(
+            Directory.GetCurrentDirectory(), "artifacts", "ui-evidence", "task-history");
+        Directory.CreateDirectory(evidenceDirectory);
+        using (var historyScreenshot = session.MainWindow.Capture())
+            historyScreenshot.Save(Path.Combine(evidenceDirectory, "history-list.png"));
+        showDetails.AsButton().Invoke();
+        var detailPanel = await WaitUntil(
+            () => session.MainWindow.FindAllDescendants(session.ConditionFactory.ByAutomationId("TaskHistoryDetailsPanel"))
+                .FirstOrDefault(element => !element.IsOffscreen),
+            element => element is { IsOffscreen: false },
+            "The full value did not become visible after opening details.");
+        await Assert.That(detailPanel).IsNotNull();
+        await Assert.That(detailPanel!.FindAllDescendants()
+            .Any(element => element.Properties.Name.ValueOrDefault == new string('h', 460))).IsTrue();
+        using var screenshot = session.MainWindow.Capture();
+        screenshot.Save(Path.Combine(evidenceDirectory, "full-value.png"));
+        var collapse = detailPanel.FindFirstDescendant(session.ConditionFactory.ByAutomationId("TaskHistoryCloseDetailsButton"));
+        await Assert.That(collapse).IsNotNull();
+        collapse!.AsButton().Invoke();
+        await WaitUntil(
+            () => FindText(historyItems, new string('h', 460)),
+            element => element is null || element.IsOffscreen,
+            "The full text remained visible after collapsing the row.");
+    }
+
+    private static void CreateHistory(string taskStoragePath, string currentTaskPath)
+    {
+        Repository.Init(taskStoragePath);
+        using var repository = new Repository(taskStoragePath);
+        var signature = new Signature(
+            "Unlimotion UI Test",
+            "ui-test@unlimotion.local",
+            DateTimeOffset.UtcNow);
+
+        Commands.Stage(repository, "*");
+        repository.Commit("Initial task snapshot", signature, signature);
+
+        var task = JsonNode.Parse(File.ReadAllText(currentTaskPath))!.AsObject();
+        task["Title"] = "History title after commit";
+        task["Description"] = new string('h', 460);
+        File.WriteAllText(currentTaskPath, task.ToJsonString());
+
+        Commands.Stage(repository, "*");
+        repository.Commit("Update task for history", signature, signature);
+    }
+
+    private static AutomationElement? Find(DesktopAppSession session, string automationId) =>
+        session.MainWindow.FindFirstDescendant(
+            session.ConditionFactory.ByAutomationId(automationId));
+
+    private static AutomationElement? FindText(AutomationElement root, string text) =>
+        root.FindFirstDescendant(
+            condition => condition.ByName(text));
+
+    private static async Task<T> WaitUntil<T>(
+        Func<T> observation,
+        Func<T, bool> isReady,
+        string timeoutMessage)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(20);
+        while (true)
+        {
+            var value = observation();
+            if (isReady(value))
+            {
+                return value;
+            }
+
+            if (DateTime.UtcNow >= deadline)
+            {
+                throw new TimeoutException(timeoutMessage);
+            }
+
+            await Task.Delay(100);
+        }
+    }
+
+}
