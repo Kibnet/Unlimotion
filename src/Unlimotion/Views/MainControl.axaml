@@ -75,23 +75,39 @@
                         <ToggleButton x:Name="PART_HeaderSite"
                                       HorizontalAlignment="Stretch"
                                       HorizontalContentAlignment="Left"
+                                      VerticalContentAlignment="Center"
+                                      AutomationProperties.Name="{DynamicResource TaskHistory}"
                                       Background="Transparent"
                                       BorderThickness="0"
-                                      Padding="0,6"
+                                      Padding="0,5"
+                                      MinHeight="28"
                                       CornerRadius="{TemplateBinding CornerRadius}"
                                       IsEnabled="{TemplateBinding IsEnabled}"
                                       IsChecked="{TemplateBinding IsExpanded, Mode=TwoWay}">
-                            <StackPanel Orientation="Horizontal" Spacing="7">
-                                <TextBlock Text="›" Foreground="{DynamicResource TaskHistoryHeadingBrush}" IsVisible="{Binding !IsExpanded, RelativeSource={RelativeSource TemplatedParent}}"/>
-                                <TextBlock Text="⌄" Foreground="{DynamicResource TaskHistoryHeadingBrush}" IsVisible="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}}"/>
-                                <ContentPresenter Content="{TemplateBinding Header}" Foreground="{DynamicResource TaskHistoryHeadingBrush}" FontWeight="SemiBold"/>
-                            </StackPanel>
+                            <Grid ColumnDefinitions="14,*" ColumnSpacing="8" VerticalAlignment="Center">
+                                <PathIcon Width="14" Height="14" VerticalAlignment="Center"
+                                          Foreground="{DynamicResource TaskHistoryHeadingBrush}"
+                                          Data="M2,5 L3.4,3.6 L7,7.2 L10.6,3.6 L12,5 L7,10 Z"
+                                          IsVisible="{Binding !IsExpanded, RelativeSource={RelativeSource TemplatedParent}}">
+                                    <PathIcon.RenderTransform>
+                                        <RotateTransform Angle="-90"/>
+                                    </PathIcon.RenderTransform>
+                                </PathIcon>
+                                <PathIcon Width="14" Height="14" VerticalAlignment="Center"
+                                          Foreground="{DynamicResource TaskHistoryHeadingBrush}"
+                                          Data="M2,5 L3.4,3.6 L7,7.2 L10.6,3.6 L12,5 L7,10 Z"
+                                          IsVisible="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}}"/>
+                                <ContentPresenter x:Name="TaskHistoryHeading" Grid.Column="1"
+                                                  Content="{TemplateBinding Header}" VerticalAlignment="Center"
+                                                  Foreground="{DynamicResource TaskHistoryHeadingBrush}" FontWeight="SemiBold"/>
+                            </Grid>
                         </ToggleButton>
+                        <!-- A custom name avoids Fluent's expanded-state border rule for #ExpanderContent. -->
                         <Border Grid.Row="1"
-                                x:Name="ExpanderContent"
+                                x:Name="TaskHistoryContent"
                                 IsVisible="{TemplateBinding IsExpanded}"
                                 Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderBrush="Transparent"
                                 BorderThickness="0"
                                 MinHeight="{TemplateBinding MinHeight}"
                                 HorizontalAlignment="Stretch"

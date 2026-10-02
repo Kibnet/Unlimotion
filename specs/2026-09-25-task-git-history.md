@@ -496,6 +496,18 @@ Post-SPEC pass: просмотрены baseline PNG, шаблон MainControl, l
 - **Expected objections / depth:** неустойчивая пара и лишние отступы закрыты; режимы и служебные поля доступны; header читается в Light/Dark; long text не перекрывает соседние области; четыре relationship действия сохранены. Нет unrelated scope, неподтверждённых perf/delivery claims, открытого обязательного AC или требуемого решения человека. Changelog/release не входят в запрос.
 - **Stop decision: PASS** для этой UX/UI коррекции. Независимый agent не привлекался: medium scoped UI addendum, Git/provider/storage контракт прежний. Остаток — прежние ограничения полной suite/video evidence из основного feature delivery; они не подменяются новым локальным PASS.
 
+### Полировка значка и рамки (по следующему запросу 02.10.2026)
+
+Пользователь принял результат и запросил commit, затем две точечные правки. Принятый вариант сохранён как `cd78e3d4`. Это short-sized редакционное продолжение EXEC в той же UI поверхности; новый feature/storage контракт не вводится.
+
+Цель: `[chevron 14×14 по центру] История изменений`, без прямоугольной рамки вокруг toolbar/list. Chevron — vector, одинаковый размер в двух состояниях, регулярный зазор 8 DIP; заголовок и icon по вертикали выровнены. Тонкие разделители между коммитами сохраняются, данные/действия не меняются.
+
+Проверки: regression на actual rendered content border и выравнивание/состояния icon в Light/Dark на 360/900 DIP; существующие три history UI tests, Desktop build, новый Skia кадр и просмотр. Provider/relationship behavior прежние, повторный полный suite не нужен. Video fallback прежний: закрытая desktop-сессия и Headless capture harness без recorder; next-best evidence — PNG + targeted UI tests. Пост-SPEC pass: границы/решение/AC→evidence/риск/rollback заданы; основной риск — theme trigger поверх template setter, проверяется actual border. Push/PR не входят в поручение.
+
+Пост-EXEC pass: meaningful RED обнаружил фактическую рамку `1,0,1,1`, которую Fluent theme накладывала на `#ExpanderContent`. Локальное имя `TaskHistoryContent` устранило коллизию; векторный chevron 14×14 выровнен с заголовком и имеет зазор 8 DIP в обоих состояниях. Новый regression проверяет фактическую компоновку в Light/Dark на 360/900 DIP. В existing inline-details test дата начала подготовлена в fixture storage, чтобы autosave не удалял синтетические строки истории; deferred focus ожидается явно. Проверка повёрнутого icon учитывает RenderTransform и допуск вычисления координат.
+
+Validation: четыре `CurrentTaskCard_TaskHistory_*` UI tests PASS (`chrome-headless-20261002.log`), Desktop Release build PASS (`chrome-build-20261002.log`), capture scenario 1/1 PASS (`chrome-capture-20261002.log`). Снимки в `chrome-after-20261002`: просмотрены четыре `history-{Light|Dark}-{360|900}.png` и `details-Light-900.png`; значок и заголовок выровнены, рамка отсутствует, детали сохраняют структуру. Capture выполнен последовательно через `--no-build`, harness сохранён рядом с PNG вне source. Изменены только template, UI tests и эта SPEC; provider/storage/relationship поведение прежнее. Scope/self-review/visual pass: PASS; обязательных незакрытых требований нет. Rollback — отдельный fix commit поверх принятой реализации `cd78e3d4`.
+
 ## Approval
 
 Получено: «Спеку подтверждаю».
