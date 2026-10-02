@@ -19,6 +19,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using ReactiveUI;
 using Unlimotion.Domain;
+using Unlimotion.Services;
 using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
 using Unlimotion.ViewModel.Localization;
@@ -56,8 +57,6 @@ namespace Unlimotion.Views
         private const double NarrowFilterToolbarMaxWidth = 520d;
         private const double CompactTaskDetailsMaxWidth = 430d;
         private const double RegularTaskPlanningGroupWidth = 176d;
-        private const double CompactTaskDetailsContentInset = 18d;
-        private const double RegularTaskDetailsContentInset = 24d;
         private const double TaskPlanningGroupGap = 4d;
         private const double RepeaterControlGap = 6d;
         private const double WeekdayToggleGap = 4d;
@@ -66,6 +65,12 @@ namespace Unlimotion.Views
         private const string NarrowFilterToolbarClass = "NarrowFilterToolbar";
         private const string CompactTaskDetailsClass = "TaskDetailsCompact";
         private IDisposable? _titleFocusSubscription;
+        private IDisposable? _taskHistoryTaskSubscription;
+        private IDisposable? _taskHistoryItemSubscription;
+        private IDisposable? _taskHistoryVisibilitySubscription;
+        private IDisposable? _taskHistoryWatcherSubscription;
+        private TaskHistoryFieldChangeView? _expandedTaskHistoryField;
+        private bool _taskHistoryNeedsRefresh;
         private IDisposable? _relationEditorFocusSubscription;
         private IDisposable? _currentTaskCompletionCriterionSubscription;
         private IDisposable? _completionCriterionFocusSubscription;
@@ -141,8 +146,11 @@ namespace Unlimotion.Views
             double MinWidth,
             double MaxWidth);
 
+        public TaskHistoryPaneViewModel TaskHistory { get; }
+
         public MainControl()
         {
+            TaskHistory = new TaskHistoryPaneViewModel(new GitTaskHistoryProvider());
             InitializeComponent();
             EmbeddedHotkeyHelpPanel.CloseRequested += (_, _) => HideHotkeyHelp();
             AddHandler(KeyDownEvent, MainControl_OnKeyDown, RoutingStrategies.Tunnel);
@@ -189,6 +197,7 @@ namespace Unlimotion.Views
             QueueFilterToolbarLayoutUpdate();
             ObserveTaskDetailsBounds();
             QueueTaskDetailsLayoutUpdate();
+            RefreshTaskHistoryIfVisible();
         }
 
         private void MainControl_OnDetachedFromVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
@@ -206,6 +215,7 @@ namespace Unlimotion.Views
             _filterToolbarLayoutUpdateQueued = false;
             _taskDetailsBoundsSubscription?.Dispose();
             _taskDetailsBoundsSubscription = null;
+            CloseTaskHistoryDetails();
             _taskDetailsLayoutUpdateQueued = false;
             foreach (var subscription in _mainTabsLayoutSubscriptions)
             {
@@ -215,6 +225,8 @@ namespace Unlimotion.Views
             _mainTabsLayoutSubscriptions.Clear();
             StopObservingMainTabsLocalization();
             _mainTabsOverflowUpdateQueued = false;
+            TaskHistory.Dispose();
+            _taskHistoryNeedsRefresh = true;
         }
 
         private void ObserveMainTabsLayout()
@@ -283,7 +295,8 @@ namespace Unlimotion.Views
 
         private void ObserveTaskDetailsBounds()
         {
-            _taskDetailsBoundsSubscription ??= CurrentTaskDetailsScrollViewer.GetObservable(BoundsProperty)
+            _taskDetailsBoundsSubscription ??= TaskDetailsPanelRoot.GetObservable(BoundsProperty).Select(_ => 0)
+                .Merge(CurrentTaskDetailsScrollViewer.GetObservable(ScrollViewer.ViewportProperty).Select(_ => 0))
                 .Skip(1)
                 .Subscribe(_ => QueueTaskDetailsLayoutUpdate());
         }
@@ -307,8 +320,10 @@ namespace Unlimotion.Views
 
         private void UpdateTaskDetailsLayout()
         {
-            var detailsWidth = CurrentTaskDetailsScrollViewer.Bounds.Width > 0
-                ? CurrentTaskDetailsScrollViewer.Bounds.Width
+            // Keep both scroll regions usable when the card is short or resized.
+            TaskHistoryExpander.MaxHeight = Math.Max(28d, Math.Min(480d, TaskDetailsPanelRoot.Bounds.Height * 0.45));
+            var detailsWidth = CurrentTaskDetailsScrollViewer.Viewport.Width > 0
+                ? CurrentTaskDetailsScrollViewer.Viewport.Width
                 : Bounds.Width;
 
             if (detailsWidth <= 0)
@@ -316,7 +331,11 @@ namespace Unlimotion.Views
                 return;
             }
 
-            var isCompact = detailsWidth <= CompactTaskDetailsMaxWidth;
+            // Classify by the outer width so compact padding cannot toggle the breakpoint back and forth.
+            var layoutWidth = CurrentTaskDetailsPanelFrame.Bounds.Width > 0
+                ? CurrentTaskDetailsPanelFrame.Bounds.Width
+                : detailsWidth;
+            var isCompact = layoutWidth <= CompactTaskDetailsMaxWidth;
             if (TaskDetailsPanelRoot.Classes.Contains(CompactTaskDetailsClass) != isCompact)
             {
                 if (isCompact)
@@ -334,8 +353,9 @@ namespace Unlimotion.Views
 
         private void ApplyTaskDetailsMeasuredWidths(double detailsWidth, bool isCompact)
         {
-            var compactCardContentWidth = Math.Max(180d, detailsWidth - CompactTaskDetailsContentInset);
-            var regularCardContentWidth = Math.Max(420d, detailsWidth - RegularTaskDetailsContentInset);
+            // The scroll viewport is already inside the card padding.
+            var compactCardContentWidth = Math.Max(180d, detailsWidth);
+            var regularCardContentWidth = Math.Max(180d, detailsWidth);
             var planningGroups = TaskDetailsPanelRoot.GetVisualDescendants()
                 .OfType<StackPanel>()
                 .Where(static panel => panel.Classes.Contains("TaskPlanningGroup"))
@@ -472,7 +492,7 @@ namespace Unlimotion.Views
                     .ToArray();
                 var weekdayWidth = weekdayToggles.Length > 0
                     ? Math.Max(
-                        38d,
+                        32d,
                         Math.Floor((weekdayPanelWidth - (weekdayToggles.Length - 1) * WeekdayToggleGap) / weekdayToggles.Length))
                     : 46d;
 
@@ -1243,12 +1263,22 @@ namespace Unlimotion.Views
 
         private void MainWindow_DataContextChanged(object? sender, EventArgs e)
         {
+            CloseTaskHistoryDetails();
             _titleFocusSubscription?.Dispose();
             _titleFocusSubscription = null;
             _relationEditorFocusSubscription?.Dispose();
             _relationEditorFocusSubscription = null;
             _currentTaskCompletionCriterionSubscription?.Dispose();
             _currentTaskCompletionCriterionSubscription = null;
+            _taskHistoryTaskSubscription?.Dispose();
+            _taskHistoryTaskSubscription = null;
+            _taskHistoryItemSubscription?.Dispose();
+            _taskHistoryItemSubscription = null;
+            _taskHistoryVisibilitySubscription?.Dispose();
+            _taskHistoryVisibilitySubscription = null;
+            _taskHistoryWatcherSubscription?.Dispose();
+            _taskHistoryWatcherSubscription = null;
+            TaskHistory.SelectTask(null, string.Empty, null);
             _completionCriterionFocusSubscription?.Dispose();
             _completionCriterionFocusSubscription = null;
             if (_treeCommandViewModel != null)
@@ -1279,6 +1309,49 @@ namespace Unlimotion.Views
                             requestVersion,
                             vm.CurrentRelationEditor.InputAutomationId,
                             MaxRelationEditorFocusRetries));
+                _taskHistoryTaskSubscription = vm.WhenAnyValue(m => m.CurrentTaskItem)
+                    .Subscribe(task =>
+                    {
+                        CloseTaskHistoryDetails();
+                        _taskHistoryItemSubscription?.Dispose();
+                        _taskHistoryItemSubscription = null;
+                        _taskHistoryWatcherSubscription?.Dispose();
+                        _taskHistoryWatcherSubscription = null;
+                        _taskHistoryNeedsRefresh = true;
+                        var storagePath = (vm.taskRepository?.TaskTreeManager.Storage as FileStorage)?.Path;
+                        TaskHistory.SelectTask(
+                            storagePath,
+                            task?.SourceId ?? string.Empty,
+                            task?.Id);
+                        if (task != null)
+                        {
+                            _taskHistoryItemSubscription = task.SaveItemCommand
+                                .Subscribe(_ => Dispatcher.UIThread.Post(RefreshTaskHistoryIfVisible));
+                            if ((vm.taskRepository?.TaskTreeManager.Storage as FileStorage)?.Watcher is IRawDatabaseWatcher watcher)
+                            {
+                                _taskHistoryWatcherSubscription = Observable
+                                    .FromEventPattern<EventHandler<DbUpdatedEventArgs>, DbUpdatedEventArgs>(
+                                        handler => watcher.OnRawUpdated += handler,
+                                        handler => watcher.OnRawUpdated -= handler)
+                                    .Throttle(TimeSpan.FromMilliseconds(250))
+                                    .Subscribe(_ => Dispatcher.UIThread.Post(RefreshTaskHistoryIfVisible));
+                            }
+                        }
+
+                        RefreshTaskHistoryIfVisible();
+                    });
+                _taskHistoryVisibilitySubscription = vm.WhenAnyValue(m => m.DetailsAreOpen)
+                    .Subscribe(isOpen =>
+                    {
+                        if (!isOpen)
+                        {
+                            TaskHistory.Dispose();
+                        }
+                        else if (vm.CurrentTaskItem != null && TaskHistoryExpander.IsExpanded)
+                        {
+                            RefreshTaskHistoryIfVisible();
+                        }
+                    });
                 _currentTaskCompletionCriterionSubscription = vm.WhenAnyValue(m => m.CurrentTaskItem)
                     .Subscribe(task =>
                     {
@@ -1322,6 +1395,99 @@ namespace Unlimotion.Views
             }
         }
 
+        private async void TaskHistoryExpander_OnExpanded(object? sender, RoutedEventArgs e)
+        {
+            if (DataContext is not MainWindowViewModel { CurrentTaskItem: { } task, DetailsAreOpen: true } vm)
+            {
+                return;
+            }
+
+            var storagePath = (vm.taskRepository?.TaskTreeManager.Storage as FileStorage)?.Path;
+            TaskHistory.SelectTask(storagePath, task.SourceId, task.Id);
+            if (TaskHistory.IsGitMode)
+            {
+                _taskHistoryNeedsRefresh = false;
+                await TaskHistory.RefreshAsync();
+            }
+        }
+
+        private void TaskHistoryExpander_OnCollapsed(object? sender, RoutedEventArgs e)
+        {
+            CloseTaskHistoryDetails();
+            TaskHistory.Dispose();
+        }
+
+        private async void TaskHistoryRefreshButton_OnClick(object? sender, RoutedEventArgs e)
+        {
+            CloseTaskHistoryDetails();
+            await TaskHistory.RefreshAsync();
+            e.Handled = true;
+        }
+
+        private async void TaskHistoryLoadMoreButton_OnClick(object? sender, RoutedEventArgs e)
+        {
+            await TaskHistory.LoadMoreAsync();
+            e.Handled = true;
+        }
+
+        internal async Task ToggleTaskHistoryDetailsAsync(TaskHistoryFieldChangeView field)
+        {
+            var wasSelected = _expandedTaskHistoryField == field;
+            CloseTaskHistoryDetails();
+            if (wasSelected || field.DataContext is not TaskHistoryFieldChange change)
+                return;
+            _expandedTaskHistoryField = field;
+            await TaskHistory.ShowDetailsAsync(change);
+            if (_expandedTaskHistoryField == field && ReferenceEquals(field.DataContext, change) &&
+                TopLevel.GetTopLevel(field) is not null && TaskHistory.HasDetails)
+                field.ExpandDetails(TaskHistory.DetailOldValue, TaskHistory.DetailNewValue);
+        }
+
+        internal void CloseTaskHistoryDetails(TaskHistoryFieldChangeView? field = null)
+        {
+            if (field is not null && field != _expandedTaskHistoryField)
+                return;
+            _expandedTaskHistoryField?.CollapseDetails();
+            _expandedTaskHistoryField = null;
+            TaskHistory.ClearDetails();
+        }
+
+        private async void TaskHistoryCopyCommit_OnClick(object? sender, RoutedEventArgs e)
+        {
+            if (sender is Button { DataContext: TaskHistoryEntry { CommitSha: { } sha } })
+                await SetClipboardTextAsync(sha);
+            e.Handled = true;
+        }
+
+        private void TaskHistoryGitModeButton_OnClick(object? sender, RoutedEventArgs e)
+        {
+            TaskHistory.IsGitMode = true;
+            if (_taskHistoryNeedsRefresh)
+            {
+                RefreshTaskHistoryIfVisible();
+            }
+            e.Handled = true;
+        }
+
+        private void TaskHistoryStatusModeButton_OnClick(object? sender, RoutedEventArgs e)
+        {
+            CloseTaskHistoryDetails();
+            TaskHistory.IsGitMode = false;
+            e.Handled = true;
+        }
+
+        private void RefreshTaskHistoryIfVisible()
+        {
+            _taskHistoryNeedsRefresh = true;
+            if (TopLevel.GetTopLevel(this) is not null &&
+                DataContext is MainWindowViewModel { CurrentTaskItem: not null, DetailsAreOpen: true }
+                && TaskHistoryExpander.IsExpanded && TaskHistory.IsGitMode)
+            {
+                _taskHistoryNeedsRefresh = false;
+                CloseTaskHistoryDetails();
+                _ = TaskHistory.RefreshAsync();
+            }
+        }
         private async Task SetClipboardTextAsync(string text)
         {
             var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
