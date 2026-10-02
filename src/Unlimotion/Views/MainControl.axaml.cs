@@ -57,8 +57,6 @@ namespace Unlimotion.Views
         private const double NarrowFilterToolbarMaxWidth = 520d;
         private const double CompactTaskDetailsMaxWidth = 430d;
         private const double RegularTaskPlanningGroupWidth = 176d;
-        private const double CompactTaskDetailsContentInset = 18d;
-        private const double RegularTaskDetailsContentInset = 24d;
         private const double TaskPlanningGroupGap = 4d;
         private const double RepeaterControlGap = 6d;
         private const double WeekdayToggleGap = 4d;
@@ -297,7 +295,8 @@ namespace Unlimotion.Views
 
         private void ObserveTaskDetailsBounds()
         {
-            _taskDetailsBoundsSubscription ??= CurrentTaskDetailsScrollViewer.GetObservable(BoundsProperty)
+            _taskDetailsBoundsSubscription ??= TaskDetailsPanelRoot.GetObservable(BoundsProperty).Select(_ => 0)
+                .Merge(CurrentTaskDetailsScrollViewer.GetObservable(ScrollViewer.ViewportProperty).Select(_ => 0))
                 .Skip(1)
                 .Subscribe(_ => QueueTaskDetailsLayoutUpdate());
         }
@@ -321,8 +320,10 @@ namespace Unlimotion.Views
 
         private void UpdateTaskDetailsLayout()
         {
-            var detailsWidth = CurrentTaskDetailsScrollViewer.Bounds.Width > 0
-                ? CurrentTaskDetailsScrollViewer.Bounds.Width
+            // Keep both scroll regions usable when the card is short or resized.
+            TaskHistoryExpander.MaxHeight = Math.Max(28d, Math.Min(480d, TaskDetailsPanelRoot.Bounds.Height * 0.45));
+            var detailsWidth = CurrentTaskDetailsScrollViewer.Viewport.Width > 0
+                ? CurrentTaskDetailsScrollViewer.Viewport.Width
                 : Bounds.Width;
 
             if (detailsWidth <= 0)
@@ -330,7 +331,11 @@ namespace Unlimotion.Views
                 return;
             }
 
-            var isCompact = detailsWidth <= CompactTaskDetailsMaxWidth;
+            // Classify by the outer width so compact padding cannot toggle the breakpoint back and forth.
+            var layoutWidth = CurrentTaskDetailsPanelFrame.Bounds.Width > 0
+                ? CurrentTaskDetailsPanelFrame.Bounds.Width
+                : detailsWidth;
+            var isCompact = layoutWidth <= CompactTaskDetailsMaxWidth;
             if (TaskDetailsPanelRoot.Classes.Contains(CompactTaskDetailsClass) != isCompact)
             {
                 if (isCompact)
@@ -348,8 +353,9 @@ namespace Unlimotion.Views
 
         private void ApplyTaskDetailsMeasuredWidths(double detailsWidth, bool isCompact)
         {
-            var compactCardContentWidth = Math.Max(180d, detailsWidth - CompactTaskDetailsContentInset);
-            var regularCardContentWidth = Math.Max(420d, detailsWidth - RegularTaskDetailsContentInset);
+            // The scroll viewport is already inside the card padding.
+            var compactCardContentWidth = Math.Max(180d, detailsWidth);
+            var regularCardContentWidth = Math.Max(180d, detailsWidth);
             var planningGroups = TaskDetailsPanelRoot.GetVisualDescendants()
                 .OfType<StackPanel>()
                 .Where(static panel => panel.Classes.Contains("TaskPlanningGroup"))
@@ -486,7 +492,7 @@ namespace Unlimotion.Views
                     .ToArray();
                 var weekdayWidth = weekdayToggles.Length > 0
                     ? Math.Max(
-                        38d,
+                        32d,
                         Math.Floor((weekdayPanelWidth - (weekdayToggles.Length - 1) * WeekdayToggleGap) / weekdayToggles.Length))
                     : 46d;
 
