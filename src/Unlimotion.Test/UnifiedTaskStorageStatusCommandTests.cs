@@ -16,6 +16,51 @@ namespace Unlimotion.Test;
 public sealed class UnifiedTaskStorageStatusCommandTests
 {
     [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task Reload_RevisionZeroHubUpdateOrDeleteWinsOverDetachedResponse(bool delete)
+    {
+        var task = CreateTask("reload-hub", DomainTaskStatus.Prepared);
+        var storage = new GenerationOrderingStorage(task) { BlockFirstReload = true };
+        using var unified = new UnifiedTaskStorage(new TaskTreeManager(storage));
+        await unified.Init();
+        var cached = unified.Tasks.Lookup(task.Id).Value;
+        var read = unified.ReloadTaskAsync(task.Id);
+        await storage.ReloadEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        if (delete) storage.PublishRemoved(0);
+        else storage.PublishSaved(task with { Status = DomainTaskStatus.Completed }, 0);
+        await WaitUntilAsync(() => delete ? !unified.Tasks.Lookup(task.Id).HasValue
+            : cached.Status == DomainTaskStatus.Completed, TimeSpan.FromSeconds(5));
+        storage.ReleaseReload.SetResult();
+        var result = await read.WaitAsync(TimeSpan.FromSeconds(5));
+        using (Assert.Multiple())
+        {
+            await Assert.That(result.Outcome).IsEqualTo(delete ? TaskReloadOutcome.Missing : TaskReloadOutcome.Loaded);
+            await Assert.That(result.AppliedToCache).IsTrue();
+            await Assert.That(storage.ReloadCount).IsEqualTo(2);
+            if (delete) await Assert.That(cached.IsMissingFromStorage).IsTrue();
+            else await Assert.That(cached.Status).IsEqualTo(DomainTaskStatus.Completed);
+        }
+    }
+
+    [Test]
+    public async Task Reload_LateResponseAfterSourceDisposalIsNotPublished()
+    {
+        var task = CreateTask("reload-source-disposed", DomainTaskStatus.Prepared);
+        var storage = new GenerationOrderingStorage(task) { BlockFirstReload = true };
+        var unified = new UnifiedTaskStorage(new TaskTreeManager(storage));
+        await unified.Init();
+        var cached = unified.Tasks.Lookup(task.Id).Value;
+        var read = unified.ReloadTaskAsync(task.Id);
+        await storage.ReloadEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        unified.Dispose();
+        storage.ReleaseReload.SetResult();
+        var result = await read.WaitAsync(TimeSpan.FromSeconds(5));
+        await Assert.That(result.Failure).IsEqualTo(TaskReloadFailure.SourceUnavailable);
+        await Assert.That(cached.Status).IsEqualTo(DomainTaskStatus.Prepared);
+    }
+
+    [Test]
     public async Task InMemoryDiagnosticRead_PreservesNullHistorySlots()
     {
         var storage = new InMemoryStorage();
@@ -616,12 +661,27 @@ public sealed class UnifiedTaskStorageStatusCommandTests
         }
     }
 
-    private sealed class GenerationOrderingStorage : IStorage, ITaskGraphDiagnosticStorage
+    private sealed class GenerationOrderingStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskReloadReader
     {
         private TaskItem? persisted;
         private int graphReadCount;
 
         public GenerationOrderingStorage(TaskItem task) => persisted = CloneTask(task);
+
+        public bool BlockFirstReload { get; set; }
+        public int ReloadCount { get; private set; }
+        public TaskCompletionSource ReloadEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource ReleaseReload { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public async Task<TaskReloadResult> ReloadTaskAsync(string id)
+        {
+            var snapshot = persisted == null ? null : CloneTask(persisted);
+            if (++ReloadCount == 1 && BlockFirstReload)
+            {
+                ReloadEntered.SetResult();
+                await ReleaseReload.Task;
+            }
+            return snapshot == null ? TaskReloadResult.Missing() : TaskReloadResult.Loaded(snapshot);
+        }
 
         public bool BlockPostWriteRead { get; set; }
         public TaskCompletionSource PostWriteReadEntered { get; } =

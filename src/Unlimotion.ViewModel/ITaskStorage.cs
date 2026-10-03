@@ -24,6 +24,8 @@ public interface ITaskStorage
     public Task<bool> Delete(TaskItemViewModel change, TaskItemViewModel parent);
     public Task<TaskItemViewModel> Update(TaskItemViewModel change);
     public Task<TaskItemViewModel> Update(TaskItem change);
+    public Task<TaskReloadResult> ReloadTaskAsync(string taskId) =>
+        Task.FromResult(TaskReloadResult.Failed(TaskReloadFailure.Unsupported));
     public Task<TaskOperationResult> TrySetStatusAsync(
         string taskId,
         Unlimotion.Domain.TaskStatus requestedStatus,

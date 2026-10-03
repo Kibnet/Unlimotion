@@ -79,6 +79,7 @@ public sealed class MainWindowHeadlessTests
                 .Select(item => $"{item.Id}:{item.TaskItem.Status}:{item.TaskItem.ArchiveDateTime:O}")
                 .ToArray();
             return $"ArchivedMode={viewModel.ArchivedMode}; " +
+                   $"Current={viewModel.CurrentTaskItem?.Id}; Busy={viewModel.CurrentTaskItem?.IsTaskOperationBusy}; Error={viewModel.CurrentTaskItem?.TaskOperationError}; " +
                    $"Date={viewModel.ArchivedDateFilter.From:O}..{viewModel.ArchivedDateFilter.To:O}; " +
                    $"Tasks=[{string.Join(", ", tasks)}]; " +
                    $"ArchivedItems=[{string.Join(", ", archivedItems)}]";
@@ -172,6 +173,22 @@ public sealed class MainWindowHeadlessTests
                 ShowOnDisabled: ToolTip.GetShowOnDisabled(option));
         });
     }
+
+    protected override void InvokeOpenStatusOption(string automationId)
+    {
+        var statusPicker = GetNativeControl<TaskStatusPicker>(Page.CurrentTaskStatusButton);
+        HeadlessRuntime.Dispatch(() =>
+        {
+            var flyout = (MenuFlyout)statusPicker.Flyout!;
+            var option = flyout.Items.OfType<MenuItem>().Single(item =>
+                AutomationProperties.GetAutomationId(item) == automationId);
+            option.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(MenuItem.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+        });
+    }
+
+    protected override void PumpStatusContractUi() =>
+        HeadlessRuntime.Dispatch(() => Dispatcher.UIThread.RunJobs());
 
     protected override void CloseStatusPicker()
     {

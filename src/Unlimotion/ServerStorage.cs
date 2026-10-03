@@ -22,7 +22,7 @@ using Unlimotion.ViewModel;
 
 namespace Unlimotion;
 
-public class ServerStorage : IStorage, ITaskGraphDiagnosticStorage
+public class ServerStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskReloadReader
 {
     public event EventHandler<TaskStorageUpdateEventArgs>? Updating;
     public event Action<Exception?>? OnConnectionError;
@@ -48,6 +48,7 @@ public class ServerStorage : IStorage, ITaskGraphDiagnosticStorage
     private readonly Func<GetAllTasks, Task<TaskItemPage>> fetchAllTasks;
     private readonly Func<TaskItem, Task<TaskItem>> saveTask;
     private readonly Func<string, Task<TaskItem?>> loadTask;
+    private readonly Func<string, Task<TaskItem?>> reloadTask;
     private IChatHub? _hub;
     private ClientSettings settings = new();
     private IConfiguration? configuration;
@@ -71,6 +72,7 @@ public class ServerStorage : IStorage, ITaskGraphDiagnosticStorage
         fetchAllTasks = request => serviceClient.GetAsync(request);
         saveTask = SaveCoreAsync;
         loadTask = LoadCoreAsync;
+        reloadTask = ReadTaskForReloadAsync;
         ServicePointManager.ServerCertificateValidationCallback +=
             (sender, cert, chain, sslPolicyErrors) => true;
         this.configuration = configuration;
@@ -109,6 +111,7 @@ public class ServerStorage : IStorage, ITaskGraphDiagnosticStorage
         this.fetchAllTasks = fetchAllTasks ?? throw new ArgumentNullException(nameof(fetchAllTasks));
         this.saveTask = saveTask ?? this.saveTask;
         this.loadTask = loadTask ?? this.loadTask;
+        this.reloadTask = loadTask ?? this.reloadTask;
     }
 
     public async Task<bool> Connect()
@@ -329,6 +332,28 @@ public class ServerStorage : IStorage, ITaskGraphDiagnosticStorage
     }
 
     public Task<TaskItem?> Load(string itemId) => loadTask(itemId);
+
+    private async Task<TaskItem?> ReadTaskForReloadAsync(string taskId)
+    {
+        var response = await serviceClient.GetAsync(new GetTask { Id = taskId });
+        return mapper?.Map<TaskItem>(response);
+    }
+
+    public async Task<TaskReloadResult> ReloadTaskAsync(string taskId)
+    {
+        try
+        {
+            var task = await reloadTask(taskId);
+            return task != null && string.Equals(task.Id, taskId, StringComparison.Ordinal)
+                ? TaskReloadResult.Loaded(task)
+                : TaskReloadResult.Failed();
+        }
+        catch (WebServiceException exception) when (exception.StatusCode == 404)
+        {
+            return TaskReloadResult.Missing();
+        }
+        catch (Exception) { return TaskReloadResult.Failed(); }
+    }
 
     private async Task<TaskItem?> LoadCoreAsync(string itemId)
     {

@@ -13,6 +13,7 @@ public abstract class StatusContractScenariosBase<TSession> : MainWindowScenario
     where TSession : class, IUiTestSession
 {
     public const string StatusContractTestName = nameof(StatusContract_TerminalPickerAndUnarchive);
+    public const string StatusRecoveryTestName = nameof(TaskCardStatusRecovery_FailureRefreshRetry);
     public const string StatusContractRussianDarkTestName = "StatusContract_RussianDarkFutureAndBlocker";
     public const string StatusContractRussianDarkFutureTestName = "StatusContract_RussianDarkFuture";
     public const string StatusContractRussianDarkBlockedTestName = "StatusContract_RussianDarkBlocked";
@@ -22,7 +23,7 @@ public abstract class StatusContractScenariosBase<TSession> : MainWindowScenario
 
     protected static bool IsStatusContractScenarioTest =>
         TestContext.Current?.Metadata.TestName is
-            StatusContractTestName or
+            StatusContractTestName or StatusRecoveryTestName or
             StatusContractRussianDarkTestName or
             StatusContractRussianDarkFutureTestName or
             StatusContractRussianDarkBlockedTestName;
@@ -39,6 +40,7 @@ public abstract class StatusContractScenariosBase<TSession> : MainWindowScenario
 
     protected static string StatusContractCurrentTaskId => TestContext.Current?.Metadata.TestName switch
     {
+        StatusRecoveryTestName => UnlimotionAutomationScenarioData.StatusContractFutureTaskId,
         StatusContractRussianDarkFutureTestName =>
             UnlimotionAutomationScenarioData.StatusContractFutureTaskId,
         StatusContractRussianDarkBlockedTestName =>
@@ -57,6 +59,34 @@ public abstract class StatusContractScenariosBase<TSession> : MainWindowScenario
     protected abstract StatusContractOptionObservation ObserveOpenStatusOption(string automationId);
 
     protected abstract void CloseStatusPicker();
+
+    protected abstract void InvokeOpenStatusOption(string automationId);
+
+    protected virtual void PumpStatusContractUi() { }
+
+    private async Task DelayStatusContractUiAsync(TimeSpan duration)
+    {
+        var deadline = DateTimeOffset.UtcNow + duration;
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            PumpStatusContractUi();
+            await Task.Delay(100);
+        }
+        PumpStatusContractUi();
+    }
+
+    private async Task WaitForRecoveryReadyAsync()
+    {
+        var deadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(30);
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            PumpStatusContractUi();
+            if (Page.CurrentTaskReloadButton.IsEnabled && Page.CurrentTaskStatusButton.IsEnabled)
+                return;
+            await Task.Delay(100);
+        }
+        throw new TimeoutException("Task recovery did not finish: " + DescribeStatusContractRuntimeState());
+    }
 
     protected virtual string? GetRenderedStatusContractTheme() => null;
 
@@ -103,6 +133,79 @@ public abstract class StatusContractScenariosBase<TSession> : MainWindowScenario
     {
         Page.SelectTabItem(static page => page.AllTasksTabItem, timeoutMs: 10_000);
         Page.SelectTreeItem(static page => page.AllTasksTree, title, timeoutMs: 10_000);
+    }
+
+    [Test]
+    [NotInParallel(DesktopUiConstraint)]
+    public async Task TaskCardStatusRecovery_FailureRefreshRetry()
+    {
+        var handshake = StatusContractHandshake.TryCreate();
+        await handshake.WriteReadyAndWaitForGoAsync(GetStatusContractWindowSnapshot());
+        var artifacts = ResolveArtifactDirectory();
+        Directory.CreateDirectory(artifacts);
+        var tasksPath = UnlimotionAppLaunchHost.StatusContractTasksPath
+            ?? throw new InvalidOperationException("Synthetic status fixture path was not published.");
+        var taskFile = Path.Combine(tasksPath, StatusContractCurrentTaskId);
+        var before = await File.ReadAllTextAsync(taskFile);
+        using var initial = JsonDocument.Parse(before);
+        var initialHistoryCount = initial.RootElement.GetProperty("StatusHistory").GetArrayLength();
+        FileStream? storageBlock = null;
+        var failures = new List<string>();
+        try
+        {
+            // Deny the real pre-write directory lock once. No production injection seam,
+            // synthetic status result, or damage to the task graph is needed.
+            storageBlock = new FileStream(Path.Combine(tasksPath, ".unlimotion.lock"),
+                FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+            OpenStatusPicker();
+            await Assert.That(ObserveOpenStatusOption("TaskStatusOptionNotReady").Enabled).IsTrue();
+            InvokeOpenStatusOption("TaskStatusOptionNotReady");
+            // A pre-write failure also waits for the recoverable scope's rollback lock.
+            var lockTimeout = new Unlimotion.Storage.FileTaskStorageOptions().DirectoryLockTimeout;
+            await DelayStatusContractUiAsync(lockTimeout + lockTimeout + TimeSpan.FromSeconds(5));
+            CloseStatusPicker();
+            storageBlock.Dispose();
+            storageBlock = null;
+            await Assert.That(await File.ReadAllTextAsync(taskFile)).IsEqualTo(before);
+            var refresh = TryResolveDuringWait(() => Page.CurrentTaskReloadButton);
+            if (SupportsStatusContractScreenshotCapture)
+                CaptureStatusContractScreenshot(Path.Combine(artifacts, GetPhaseSpecificScreenshotName("recovery-error")));
+            if (refresh is null) failures.Add("RefreshUnavailable");
+            else
+            {
+                var error = Page.CurrentTaskOperationErrorText.Name;
+                await Assert.That(error).IsEqualTo(
+                    "The task status could not be changed. Reload the task before retrying.")
+                    .Because(DescribeStatusContractRuntimeState());
+                Page.ClickButton(static page => page.CurrentTaskReloadButton, timeoutMs: 10_000);
+                await WaitForRecoveryReadyAsync();
+                await Assert.That(await File.ReadAllTextAsync(taskFile)).IsEqualTo(before);
+                OpenStatusPicker();
+                InvokeOpenStatusOption("TaskStatusOptionNotReady");
+                await DelayStatusContractUiAsync(TimeSpan.FromMilliseconds(1500));
+                CloseStatusPicker();
+                using var document = JsonDocument.Parse(await File.ReadAllTextAsync(
+                    taskFile));
+                var status = document.RootElement.GetProperty("Status");
+                var confirmed = status.ValueKind == JsonValueKind.String
+                    ? status.GetString() == "NotReady"
+                    : status.GetInt32() == (int)Unlimotion.Domain.TaskStatus.NotReady;
+                if (!confirmed) failures.Add("StatusNotConfirmedAfterRetry");
+                if (document.RootElement.GetProperty("StatusHistory").GetArrayLength() != initialHistoryCount + 1)
+                    failures.Add("HistoryDuplicatedAfterRetry");
+                if (SupportsStatusContractScreenshotCapture)
+                    CaptureStatusContractScreenshot(Path.Combine(artifacts, GetPhaseSpecificScreenshotName("recovery-after-retry")));
+            }
+        }
+        finally
+        {
+            storageBlock?.Dispose();
+        }
+        await File.WriteAllTextAsync(Path.Combine(artifacts, GetPhaseSpecificScreenshotName("recovery-observations") + ".json"),
+            JsonSerializer.Serialize(new { FailureIds = failures, FlowCompleted = true }));
+        await handshake.WriteCompleteAndWaitForRecordingFinishedAsync(
+            new StatusContractObservations { FlowCompleted = true }, failures);
+        await Assert.That(failures).IsEmpty();
     }
 
     [Test]

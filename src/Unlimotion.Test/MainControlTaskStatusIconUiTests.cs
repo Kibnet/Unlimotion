@@ -31,6 +31,246 @@ namespace Unlimotion.Test;
 public class MainControlTaskStatusIconUiTests
 {
     [Test]
+    public async Task TaskCardStatusRecovery_AuthoritativeReadRunsOffUiThread()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var directory = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "Unlimotion.ReloadThread", Guid.NewGuid().ToString("N"));
+            System.IO.Directory.CreateDirectory(directory);
+            try
+            {
+                using var storage = new DelayedCardReloadFileStorage(directory);
+                await storage.Save(new TaskItem { Id = "thread-check", Title = "fixture" });
+                await Assert.That(Dispatcher.UIThread.CheckAccess()).IsTrue();
+                var result = await storage.ReloadTaskAsync("thread-check");
+                await Assert.That(result.Outcome).IsEqualTo(TaskReloadOutcome.Loaded);
+                await Assert.That(storage.ReadOnUiThread).IsFalse();
+                await Assert.That(Dispatcher.UIThread.CheckAccess()).IsTrue();
+            }
+            finally
+            {
+                System.IO.Directory.Delete(directory, true);
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task TaskCardStatusRecovery_ExternalDeleteDuringReloadKeepsCopyableDraft()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            DelayedCardReloadFileStorage storage = null!;
+            var fixture = new MainWindowViewModelFixture(path =>
+                new UnifiedTaskStorage(new TaskTreeManager(storage = new DelayedCardReloadFileStorage(path))));
+            Window? window = null;
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+                var card = TestHelpers.GetTask(vm, MainWindowViewModelFixture.RootTask1Id);
+                vm.CurrentTaskItem = card;
+                vm.DetailsAreOpen = true;
+                vm.SelectCurrentTask();
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view);
+                window.Show();
+                var title = WaitForAutomationControl<TextBox>(view, "CurrentTaskTitleTextBox");
+                var description = WaitForAutomationControl<TextBox>(view, "CurrentTaskDescriptionTextBox");
+                title.Text = "Draft title to copy";
+                description.Text = "Draft description to copy";
+                Dispatcher.UIThread.RunJobs();
+                var file = System.IO.Path.Combine(fixture.DefaultTasksFolderPath, card.Id);
+                storage.BlockRead = true;
+                var read = card.ReloadTaskAsync();
+                await storage.ReadEntered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+                System.IO.File.Delete(file);
+                // The same cache event is used by a confirmed watcher/hub deletion.
+                storage.PublishRemoved(card.Id);
+                Dispatcher.UIThread.RunJobs();
+                storage.ReleaseRead.TrySetResult();
+                await read.WaitAsync(TimeSpan.FromSeconds(10));
+                Dispatcher.UIThread.RunJobs();
+                using (Assert.Multiple())
+                {
+                    await Assert.That(vm.CurrentTaskItem).IsSameReferenceAs(card);
+                    await Assert.That(card.IsMissingFromStorage).IsTrue();
+                    await Assert.That(storage.ReadOnUiThread).IsFalse();
+                    await Assert.That(title.IsEffectivelyVisible).IsTrue();
+                    await Assert.That(title.Text).IsEqualTo("Draft title to copy");
+                    await Assert.That(description.Text).IsEqualTo("Draft description to copy");
+                    await Assert.That(WaitForAutomationControl<TextBlock>(view, "CurrentTaskOperationErrorText").IsEffectivelyVisible).IsTrue();
+                    await Assert.That(WaitForAutomationControl<Button>(view, "CurrentTaskStatusButton").IsEnabled).IsFalse();
+                    await Assert.That(WaitForAutomationControl<Button>(view, "CurrentTaskReloadButton").IsEnabled).IsFalse();
+                    await Assert.That(vm.taskRepository!.Tasks.Lookup(card.Id).HasValue).IsFalse();
+                }
+                await card.SealPendingSaves();
+                await Assert.That(System.IO.File.Exists(file)).IsFalse();
+                vm.CurrentTaskItem = TestHelpers.GetTask(vm, MainWindowViewModelFixture.RootTask2Id);
+                await Assert.That(vm.CurrentTaskItem).IsNotSameReferenceAs(card);
+            }
+            finally
+            {
+                storage.ReleaseRead.TrySetResult();
+                window?.Close();
+                await fixture.CleanTasksAsync();
+            }
+        }, CancellationToken.None);
+    }
+
+    private sealed class DelayedCardReloadFileStorage(string path) : FileStorage(path)
+    {
+        public bool BlockRead { get; set; }
+        public bool ReadOnUiThread { get; private set; }
+        public TaskCompletionSource ReadEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource ReleaseRead { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        protected override async Task OnTaskReloadSnapshotReadAsync(string taskId)
+        {
+            ReadOnUiThread = Dispatcher.UIThread.CheckAccess();
+            if (!BlockRead) return;
+            ReadEntered.TrySetResult();
+            await ReleaseRead.Task;
+        }
+        public void PublishRemoved(string taskId) => RaiseUpdating(new TaskStorageUpdateEventArgs
+        {
+            Id = taskId, Type = UpdateType.Removed
+        });
+    }
+
+    [Test]
+    [Arguments("ru", "Light", 1400)]
+    [Arguments("ru", "Dark", 1400)]
+    [Arguments("en", "Light", 1400)]
+    [Arguments("en", "Dark", 1400)]
+    [Arguments("ru", "Light", 760)]
+    [Arguments("ru", "Dark", 760)]
+    [Arguments("en", "Light", 760)]
+    [Arguments("en", "Dark", 760)]
+    public async Task TaskCardStatusRecovery_ErrorAndReloadRemainVisible(string language, string theme, int width)
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(StatusRecoveryRenderedAppBuilder));
+        await session.DispatchAsync(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            var app = Application.Current!;
+            var previousTheme = app.RequestedThemeVariant;
+            var previousLanguage = Unlimotion.ViewModel.Localization.LocalizationService.Current.LanguageMode;
+            var taskFile = System.IO.Path.Combine(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.RootTask1Id);
+            var originalBytes = await System.IO.File.ReadAllBytesAsync(taskFile);
+            Window? window = null;
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+                Unlimotion.ViewModel.Localization.Localization.SetLanguage(language);
+                app.RequestedThemeVariant = theme == "Dark" ? ThemeVariant.Dark : ThemeVariant.Light;
+                var task = TestHelpers.GetTask(vm, MainWindowViewModelFixture.RootTask1Id);
+                vm.CurrentTaskItem = task;
+                vm.DetailsAreOpen = true;
+                vm.SelectCurrentTask();
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view);
+                window.Width = width;
+                window.Show();
+                // Corrupt only the fixture file to exercise a real failed read and bound error.
+                await System.IO.File.WriteAllTextAsync(taskFile, "not JSON");
+                await task.ReloadTaskAsync();
+                var reload = WaitForAutomationControl<Button>(view, "CurrentTaskReloadButton");
+                var error = WaitForAutomationControl<TextBlock>(view, "CurrentTaskOperationErrorText");
+                var details = WaitForAutomationControl<Expander>(view, "CurrentTaskOperationDetails");
+                await Assert.That(details.Header).IsEqualTo(language == "ru" ? "Подробности" : "Details");
+                details.IsExpanded = true;
+                Dispatcher.UIThread.RunJobs();
+                using (Assert.Multiple())
+                {
+                    await Assert.That(reload.IsEffectivelyVisible).IsTrue();
+                    await Assert.That(reload.IsEnabled).IsTrue();
+                    await Assert.That(AutomationProperties.GetName(reload))
+                        .IsEqualTo(language == "ru" ? "Обновить задачу" : "Reload task");
+                    await Assert.That(error.IsEffectivelyVisible).IsTrue();
+                    await Assert.That(error.Text).IsEqualTo(task.TaskOperationError);
+                    await Assert.That(error.TextWrapping).IsEqualTo(TextWrapping.Wrap);
+                    await Assert.That(error.Bounds.Width).IsGreaterThan(0);
+                    await Assert.That(error.Bounds.Width).IsLessThanOrEqualTo(window.Bounds.Width);
+                    await Assert.That(WaitForAutomationControl<TextBlock>(view, "CurrentTaskOperationDetailsText").IsEffectivelyVisible).IsTrue();
+                }
+                // Avalonia selects its renderer once per process. Run this matrix alone
+                // with the flag below for pixel evidence; the full suite also hosts
+                // semantic Headless tests that can initialize the stub renderer first.
+                if (Environment.GetEnvironmentVariable("UNLIMOTION_STATUS_RECOVERY_RENDERED_EVIDENCE") == "1")
+                {
+                    using var frame = window.CaptureRenderedFrame();
+                    await Assert.That(frame).IsNotNull();
+                    var stride = frame!.PixelSize.Width * 4;
+                    var pixels = new byte[stride * frame.PixelSize.Height];
+                    var buffer = System.Runtime.InteropServices.Marshal.AllocHGlobal(pixels.Length);
+                    try
+                    {
+                        frame.CopyPixels(new PixelRect(frame.PixelSize), buffer, pixels.Length, stride);
+                        System.Runtime.InteropServices.Marshal.Copy(buffer, pixels, 0, pixels.Length);
+                        await Assert.That(pixels.Distinct().Count()).IsGreaterThan(2)
+                            .Because("A flat Headless stub frame is not rendered UI evidence.");
+                    }
+                    finally
+                    {
+                        System.Runtime.InteropServices.Marshal.FreeHGlobal(buffer);
+                    }
+                    var directory = System.IO.Path.Combine(Environment.CurrentDirectory, "artifacts", "status-recovery");
+                    System.IO.Directory.CreateDirectory(directory);
+                    frame.Save(System.IO.Path.Combine(directory, $"error-{language}-{theme}-{width}.png"));
+                }
+            }
+            finally
+            {
+                await System.IO.File.WriteAllBytesAsync(taskFile, originalBytes);
+                window?.Close();
+                app.RequestedThemeVariant = previousTheme;
+                Unlimotion.ViewModel.Localization.Localization.SetLanguage(previousLanguage);
+                await fixture.CleanTasksAsync();
+            }
+        }, CancellationToken.None);
+    }
+
+    public static class StatusRecoveryRenderedAppBuilder
+    {
+        public static Avalonia.AppBuilder BuildAvaloniaApp() => Avalonia.AppBuilder.Configure<App>()
+            .UseSkia()
+            .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false });
+    }
+
+    [Test]
+    public async Task TaskCardStatusRecovery_HasAccessibleRefreshAction()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+            try
+            {
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+                vm.CurrentTaskItem = TestHelpers.GetTask(vm, MainWindowViewModelFixture.RootTask1Id);
+                vm.DetailsAreOpen = true;
+                vm.SelectCurrentTask();
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view);
+                window.Show();
+                var reload = WaitForAutomationControl<Button>(view, "CurrentTaskReloadButton");
+                await Assert.That(reload.IsEffectivelyVisible).IsTrue();
+                await Assert.That(reload.IsEnabled).IsTrue();
+                await Assert.That(AutomationProperties.GetName(reload)).IsNotNullOrEmpty();
+            }
+            finally
+            {
+                window?.Close();
+                await fixture.CleanTasksAsync();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
     public async Task TaskTreeStatusControl_UsesCompactVectorIconInsteadOfTextGlyph()
     {
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));

@@ -47,6 +47,14 @@
   <data name="TaskStatusDirectBlockersBlocked" xml:space="preserve"><value>Complete this task's direct blockers before starting or completing it.</value></data>
   <data name="TaskStatusInheritedBlockersBlocked" xml:space="preserve"><value>Complete blockers inherited from parent tasks before starting or completing this task.</value></data>
   <data name="TaskStatusSaveFailed" xml:space="preserve"><value>The task status could not be changed. Reload the task before retrying.</value></data>
+  <data name="TaskReload" xml:space="preserve"><value>Reload</value></data>
+  <data name="TaskReloadTip" xml:space="preserve"><value>Reload task</value></data>
+  <data name="TaskReloadFailed" xml:space="preserve"><value>Could not read the task from storage. Your local edits are preserved. Check the connection or storage access and reload again.</value></data>
+  <data name="TaskReloadMissing" xml:space="preserve"><value>The task no longer exists in storage. Saving and status changes are disabled. You can copy your local text.</value></data>
+  <data name="TaskOperationDetails" xml:space="preserve"><value>Details</value></data>
+  <data name="TaskStatusGraphInvalid" xml:space="preserve"><value>The status could not be changed because task data or links are invalid. Check the task files and links, then reload the task.</value></data>
+  <data name="TaskStatusAgentActive" xml:space="preserve"><value>The status cannot be changed while an agent is running this task. Wait for the run to finish or stop it, then reload the task.</value></data>
+  <data name="TaskStatusMarkerInvalid" xml:space="preserve"><value>The status could not be changed because the agent marker in the description is invalid. Fix the marker, then reload the task.</value></data>
   <data name="TaskStatusOutcomeUnknown" xml:space="preserve"><value>The final status is unknown because storage verification failed. Reload the task before retrying.</value></data>
   <data name="TaskStatusSourceChanged" xml:space="preserve"><value>The task changed in storage and can no longer be unarchived. Its current status has been refreshed.</value></data>
   <data name="TaskStatusCascadeConfirmationFailed" xml:space="preserve"><value>Could not confirm changes to contained tasks: {0}</value></data>
