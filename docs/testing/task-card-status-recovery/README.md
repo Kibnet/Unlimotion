@@ -4,43 +4,54 @@
 
 Согласованный контракт и post-EXEC review: [SPEC](../../../specs/2026-10-02-task-card-status-recovery.md).
 
-## До и после
+## Текущее размещение: ⚙ → Обновить
 
-Чистый baseline `46711e60` запускался с новым тестовым драйвером, без изменений production-кода. Native-сценарий завершился с единственным ожидаемым нарушением `RefreshUnavailable`: в карточке отсутствовала кнопка обновления. Снимок показывает карточку после окончания временного уведомления.
+По уточнению пользователя от 3 октября «Обновить» находится первым пунктом меню шестерёнки. Отдельной кнопки в заголовке карточки нет. Пункт доступен без ошибки, блокируется во время чтения и для удалённой задачи; команда, доступное имя и стабильный automation ID сохранены.
+
+Чистый baseline `46711e60` запускался с новым recovery-драйвером, без изменений production-кода. Native-сценарий завершился с единственным ожидаемым нарушением `RefreshUnavailable`: обновление было недоступно. Снимок показывает карточку после окончания временного уведомления.
 
 ![До: обновление недоступно](before.png)
 
-В исправленной версии сценарий удерживает блокировку синтетического хранилища, выбирает допустимый статус, проверяет отказ и неизменность файла. Постоянное сообщение остаётся в карточке, кнопка Reload доступна.
+Текущая карточка с постоянной ошибкой и открытым меню; Skia rendered frame, русская локализация, тёмная тема, ширина 1400:
 
-![После: ошибка и доступное обновление](after-error.png)
+![Обновить первым пунктом меню шестерёнки](menu-ru-dark-wide.png)
 
-После освобождения блокировки тест нажимает Reload и явно повторяет выбор статуса. Native-прогон прошёл; чтение JSON подтвердило `NotReady` и ровно одну новую запись истории. Сам Reload не менял файл.
+Текущая узкая карточка, ширина 760:
 
-![После обновления и повторного выбора](after-retry.png)
+![Русская карточка и меню, тёмная тема, ширина 760](ru-dark-narrow.png)
 
-Отдельный Skia-прогон проверил RU/EN × Light/Dark × 1400/760: 8/8. Все восемь изображений просмотрены; тест также проверяет непустой кадр и различающиеся пиксели. Пример русской узкой карточки:
+Все восемь актуальных кадров RU/EN × Light/Dark × 1400/760 просмотрены. Тесты требуют непустой кадр с различающимися пикселями и проверяют локализованный menu item. Это rendered evidence; новый native-прогон меню не завершён.
 
-![Русская карточка, тёмная тема, ширина 760](ru-dark-narrow.png)
-
-## Проверки
+## Проверки последнего размещения
 
 | Проверка | Результат | Evidence |
 | --- | --- | --- |
-| Обычная Desktop-сборка | PASS, 0 предупреждений / 0 ошибок | [desktop-build.log](desktop-build.log) |
+| Menu placement, actual binding, accessible name, busy | RED на прежней отдельной кнопке → GREEN 1/1 | [RED](menu-action-red.log), [GREEN](menu-action.log) |
+| Полный Headless suite после усиления recovery assertion | 52/52 PASS, 0 SKIP, 3м09с | [menu-headless-full.log](menu-headless-full.log) |
+| Recovery: отказ → ⚙ → Обновить → явный повтор | PASS внутри full Headless; `FlowCompleted=true`, `FailureIds=[]`; перед retry ошибка исчезает, JSON содержит NotReady и одну новую запись истории | [observations](menu-headless-observations.json), [suite log](menu-headless-full.log) |
+| Rendered RU/EN/theme/width matrix | 8/8 PASS, 1м01с | [menu-rendered-matrix.log](menu-rendered-matrix.log) |
+| Удаление открытой dirty-карточки во время чтения | 1/1 PASS; menu item disabled, текст можно скопировать, файл не восстанавливается | [menu-missing-card.log](menu-missing-card.log) |
+| Desktop и phone layout с полным набором пунктов ⚙ | 4/4 PASS: desktop 1, phone 3 | [desktop](menu-layout-desktop.log), [phone](menu-layout-phone.log) |
+| Обычная Desktop-сборка с пунктом меню | PASS, 0 предупреждений / 0 ошибок | [menu-desktop-build.log](menu-desktop-build.log) |
+| Последняя компиляция FlaUI adapter | PASS, 0 ошибок; 3 существующих предупреждения в ServerStorage/TaskStorageBuilder/ConflictResolutionControl | [menu-flaui-build.log](menu-flaui-build.log) |
+| Native FlaUI последнего меню | Не подтверждён: `SendInput` получил Win32 Access denied при первом status click, до открытия ⚙. Текущий Windows-сеанс отключён/заблокирован | [menu-native-blocked.log](menu-native-blocked.log) |
+
+Recovery-тест теперь ждёт одновременно enabled status и исчезновения постоянной ошибки. Доступность status сама по себе не доказывает выполнение Reload: после StorageFailed она уже восстановлена. Adversarial source re-review подтвердил исправление этой проверки. Headless использует существующий repository fallback для detached flyout bindings; actual MainControl test отдельно проверяет привязку MenuItem к ReloadTaskCommand.
+
+## Предыдущие проверки recovery до переноса в меню
+
+Эти результаты относятся к исходному исправлению с отдельной кнопкой в commit `11808873`; они не подтверждают native-путь последнего меню.
+
+| Проверка | Результат | Evidence |
+| --- | --- | --- |
+| Native FlaUI recovery с отдельной кнопкой | 1/1 PASS, `FlowCompleted=true`, `FailureIds=[]`; JSON NotReady и ровно одна новая запись истории; Reload не менял файл | [flaui.log](flaui.log), [ошибка](after-error.png), [после повтора](after-retry.png) |
+| Весь класс status/reload ViewModel | 41/41 PASS; включая два TaskNotFound race cases | [viewmodel.log](viewmodel.log) |
 | Полный Main suite 2026-10-02 | 1193 PASS / 1 FAIL / 0 SKIP; 32м34с; до последнего раннего Missing guard | [main-full-excerpt.log](main-full-excerpt.log) |
 | Упавший Workspace executable spec отдельно | 1/1 PASS; причину сбоя в общей серии это не устанавливает | [workspace-focused.log](workspace-focused.log) |
-| Headless: весь затронутый класс | 12/12 PASS | [headless-class.log](headless-class.log) |
-| Последний полный Headless suite | 52/52 PASS, 3м40с; до/после recovery проходят другие классы | [headless-full.log](headless-full.log) |
-| Последний весь класс status/reload ViewModel | 41/41 PASS; включая два TaskNotFound race cases | [viewmodel.log](viewmodel.log) |
-| Native FlaUI recovery | 1/1 PASS, `FlowCompleted=true`, `FailureIds=[]` | [flaui.log](flaui.log) |
-| Rendered RU/EN/theme/width matrix | 8/8 PASS | [rendered-matrix.log](rendered-matrix.log) |
-| Удаление открытой dirty-карточки во время чтения | 1/1 PASS; текст можно скопировать, autosave/final-save не восстанавливают файл | [missing-card.log](missing-card.log) |
 
-Полный Headless-прогон теперь проходит после исправления test-session startup: pinned dispatcher reset выполняется непосредственно на новом worker перед инициализацией renderer, а bootstrap/handoff используют ограниченное 15 секундами синхронное ожидание. Оно предотвращает inline continuation, запускающее следующий тест на занятом worker. До исправления оба механизма подтверждены локальными dump/stacks.
+После status command TaskNotFound применяется до editor drain, чтобы локальные правки не создали удалённую задачу заново. Два deterministic race cases дали RED до исправления и GREEN после; последний VM-класс прошёл 41/41. Full Headless также проверяет исправленный startup/handoff тестовых сессий до и после recovery.
 
-На отдельном adversarial review обнаружен post-status race: ответ TaskNotFound допускал editor drain до установки Missing и повторное создание задачи. Два deterministic cases дали RED до исправления, затем GREEN: локальные Title/Description сохраняются, source отсутствует, UpdateCount=0, concurrent Seal не восстанавливает задачу. Последний VM-класс прошёл 41/41. Тест read-only reload теперь явно откладывает user autosave; отдельный тест проверяет autosave, созревший во время чтения.
-
-Логи выше сохраняют результаты прогонов; абсолютный корень рабочей копии заменён на `<worktree>`. Main-файл — явно обозначенная выдержка с ошибкой и итогом, остальные — полные небольшие логи. Полные локальные отчёты, TRX, дампы и остальные снимки находятся в `artifacts/status-recovery/` implementation worktree.
+Логи сохраняют результаты прогонов; абсолютный корень рабочей копии заменён на `<worktree>`. Main-файл — явно обозначенная выдержка с ошибкой и итогом. Полные локальные HTML/TRX, дампы и остальные снимки находятся в `artifacts/status-recovery/` implementation worktree.
 
 ## Воспроизведение
 
@@ -52,16 +63,17 @@ dotnet build tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.cspro
 & './tests/Unlimotion.UiTests.Headless/bin/Debug/net10.0/Unlimotion.UiTests.Headless.exe' --maximum-parallel-tests 1 --report-trx
 ```
 
-Main запускается из `src/Unlimotion.Test/bin/Debug/net10.0`, поскольку fixtures используют относительные пути. Для native recovery нужен Windows desktop:
+Main запускается из `src/Unlimotion.Test/bin/Debug/net10.0`, поскольку fixtures используют относительные пути. Для native recovery нужен активный разблокированный Windows desktop:
 
 ```powershell
+dotnet build tests/Unlimotion.UiTests.FlaUI/Unlimotion.UiTests.FlaUI.csproj --no-restore
 & './tests/Unlimotion.UiTests.FlaUI/bin/Debug/net10.0-windows7.0/Unlimotion.UiTests.FlaUI.exe' --treenode-filter '/*/*/MainWindowFlaUiTests/TaskCardStatusRecovery_FailureRefreshRetry' --maximum-parallel-tests 1 --report-trx
 ```
 
 ## Video fallback
 
-Полная проверенная пара before/after MP4 не получена: попытки recording не прошли проверку средней частоты кадров, ожидание готовности baseline либо закончились преждевременным выходом ffmpeg. Неудачные MP4 не представлены как доказательство успешного flow. Выбран предусмотренный SPEC fallback: чистый baseline RED, итоговый native GREEN с persisted read-back, просмотренные снимки и rendered matrix. Исходные recording-логи и непрошедшие проверку файлы сохранены локально в `artifacts/status-recovery/`, включая `baseline-diagnostics/`.
+Проверенная пара before/after MP4 не получена: recording не прошёл проверку средней частоты кадров, ожидание готовности baseline либо закончился ранним выходом ffmpeg. Неудачные MP4 не представлены как доказательство успешного flow. Предусмотренный SPEC fallback для исходного исправления: чистый baseline RED, native GREEN с persisted read-back, просмотренные снимки и rendered matrix. Для последнего размещения добавлены актуальные menu frames и полный Headless; прежний native GREEN не переносится на новое меню. Исходные recording-логи сохранены локально в `artifacts/status-recovery/`, включая `baseline-diagnostics/`.
 
 ## Остаток до ready for review
 
-Разобрать сбой Workspace executable spec в полной Main-серии и подтвердить полный Main gate с последним Missing guard, затем завершить обязательный post-EXEC review. Успешные focused-прогоны не заменяют эту проверку, поэтому PR остаётся draft.
+Подтвердить native recovery последнего меню в активном Windows-сеансе. Разобрать сбой Workspace executable spec в полной Main-серии и подтвердить полный Main gate с последним Missing guard. Успешные focused-прогоны не заменяют эти проверки; общий post-EXEC verdict — NEEDS-FIX, PR остаётся draft.

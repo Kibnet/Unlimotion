@@ -64,6 +64,16 @@ public abstract class StatusContractScenariosBase<TSession> : MainWindowScenario
 
     protected virtual void PumpStatusContractUi() { }
 
+    protected virtual bool OpenActionsAndFindReloadCommand()
+    {
+        Page.ClickButton(static page => page.CurrentTaskActionsMenuButton, timeoutMs: 10_000);
+        return TryResolveDuringWait(() => Page.CurrentTaskReloadButton) is not null;
+    }
+
+    protected virtual void InvokeReloadCommand() => Page.CurrentTaskReloadButton.Invoke();
+
+    protected abstract bool IsRecoveryErrorCleared();
+
     private async Task DelayStatusContractUiAsync(TimeSpan duration)
     {
         var deadline = DateTimeOffset.UtcNow + duration;
@@ -81,7 +91,7 @@ public abstract class StatusContractScenariosBase<TSession> : MainWindowScenario
         while (DateTimeOffset.UtcNow < deadline)
         {
             PumpStatusContractUi();
-            if (Page.CurrentTaskReloadButton.IsEnabled && Page.CurrentTaskStatusButton.IsEnabled)
+            if (Page.CurrentTaskStatusButton.IsEnabled && IsRecoveryErrorCleared())
                 return;
             await Task.Delay(100);
         }
@@ -167,17 +177,17 @@ public abstract class StatusContractScenariosBase<TSession> : MainWindowScenario
             storageBlock.Dispose();
             storageBlock = null;
             await Assert.That(await File.ReadAllTextAsync(taskFile)).IsEqualTo(before);
-            var refresh = TryResolveDuringWait(() => Page.CurrentTaskReloadButton);
+            var hasRefresh = OpenActionsAndFindReloadCommand();
             if (SupportsStatusContractScreenshotCapture)
                 CaptureStatusContractScreenshot(Path.Combine(artifacts, GetPhaseSpecificScreenshotName("recovery-error")));
-            if (refresh is null) failures.Add("RefreshUnavailable");
+            if (!hasRefresh) failures.Add("RefreshUnavailable");
             else
             {
                 var error = Page.CurrentTaskOperationErrorText.Name;
                 await Assert.That(error).IsEqualTo(
                     "The task status could not be changed. Reload the task before retrying.")
                     .Because(DescribeStatusContractRuntimeState());
-                Page.ClickButton(static page => page.CurrentTaskReloadButton, timeoutMs: 10_000);
+                InvokeReloadCommand();
                 await WaitForRecoveryReadyAsync();
                 await Assert.That(await File.ReadAllTextAsync(taskFile)).IsEqualTo(before);
                 OpenStatusPicker();

@@ -72,7 +72,7 @@ Stop rules: SPEC заканчивается проверенным планом 
 
 - Storage facade: явное асинхронное чтение актуальной задачи и безопасное применение snapshot в cache.
 - ViewModel: reload command, busy/error/recovery state, сохранение локальных правок и согласование с status/autosave lifecycle.
-- View: доступная кнопка и объяснение результата. Локализованные сообщения выбираются по structured reason.
+- View: доступное действие в меню ⚙ и объяснение результата. Локализованные сообщения выбираются по structured reason.
 - UI Authoring/TestHost: детерминированная fixture отказа и recovery; Headless/FlaUI адаптеры проверяют реальную карточку.
 
 ### 6.2 Детальный дизайн
@@ -81,17 +81,21 @@ Stop rules: SPEC заканчивается проверенным планом 
 2. Локальное чтение выполнить через узкий typed reload primitive в `FileStorage`/`FileTaskStorage`, а не bare `Load(forced:true)`. Под existing directory/command boundary прочитать detached snapshot и диагностику mapped source-файла без преждевременной публикации. До чтения захватить source/watcher generation и mapping; перед публикацией проверить их и актуальность source hash в согласованном cache/domain boundary. Изменение/удаление во время read не может назначить старым bytes новую revision: stale snapshot отклонить и перечитать/применить newest watcher state. Retries ограничить; непрерывные внешние изменения завершаются ReadFailed с доступной повторной попыткой и снятым busy. Не менять ordinary `Load` для других consumers без доказанной необходимости. При null/empty проверить diagnostics и физическое отсутствие mapped file: пустой/повреждённый/недоступный файл — ReadFailed, не Missing. Не удалять UI snapshot на основании одного null. В `ServerStorage` добавить узкий typed recovery read напрямую через существующий ServiceStack client и mapper: только подтверждённый backend not-found даёт Missing; network/auth/mapping error и неполный/невалидный response дают ReadFailed. Existing swallowing `Load` нельзя использовать как доказательство удаления. Связи и доступность синхронизируются существующим путём; ограничиться необходимым read-back, не выполнять холодный full-directory init.
 3. Reload и status согласуются существующим command/cache boundary; повторное нажатие во время операции не запускает конкурентное обновление. UI не блокируется. Edit во время чтения сохраняется как pending local field; результат применяется только к исходным task/source/context и с актуальной revision. Для server recovery захватить source-lifetime cache/event epoch до запроса; server hub Saved/Removed, status/autosave cache updates и dispose/source switch изменяют этот epoch до применения соответствующих событий. Проверку epoch и применение read response выполнить в одном cache synchronization boundary. Изменившийся epoch запрещает позднему response перезаписать более новое hub/cache update/delete; discard/re-read ограничены тем же retry budget. Default server StorageRevision=0 не является protection и не сравнивается как локальная backend revision. Не менять semantics существующих hub/CRUD consumers ради новой глобальной versioning схемы.
 4. Reload вызывает existing snapshot merge, сохраняя все pending editable fields: title, description, planning, importance, wanted, repeater, completion criteria. Сам reload не должен пытаться предварительно сохранить dirty revision: иначе временная ошибка записи сделает recovery недоступным. Уже допущенный autosave согласовать с чтением: дождаться его завершения, но обработать fault отдельно и продолжить reload; failed editable revision остаётся dirty. На время reload новые autosave producers не должны конкурировать с read/merge. После него штатный autosave, вызванный пользовательским edit, может продолжиться с актуальным authoritative status; reload не создаёт отдельный save/retry для dirty полей. Последующий осознанный status command выполняет штатный editor drain и запись. Проверить delayed autosave success и failure до reload: нет повторной записи, pending поля и свежий статус сохранены.
-5. В command bar добавить отдельную кнопку `Обновить` с accessible name `Обновить задачу`, tooltip и стабильным `CurrentTaskReloadButton`. Кнопка доступна и без ошибки, чтобы действие не исчезало вместе с toast. На reload/status она disabled; закрытая/сменённая карточка не принимает старый результат.
+5. По уточнению пользователя разместить `Обновить` первым пунктом меню шестерёнки `CurrentTaskActionsMenuButton`, без отдельной кнопки в command bar. Accessible name `Обновить задачу`, tooltip и стабильный `CurrentTaskReloadButton` сохраняются на MenuItem для совместимости automation. Пункт доступен и без ошибки, чтобы действие не исчезало вместе с toast. На reload/status он disabled; закрытая/сменённая карточка не принимает старый результат.
 6. Сохранить ошибку status/reload в состоянии карточки до следующего успешного восстановления/операции. В коротком сообщении обозначить причину; для диагностики дать детали structured error через раскрываемые `Подробности` без сырых JSON, настроек, токенов или stack trace. Отказ в доменном правиле не называется ошибкой записи. Не добавлять общую подсистему логирования.
 7. `OutcomeUnknown` сообщает, что статус ещё не подтверждён; после успешного reload показать фактический статус. Не предлагать автоматическое повторение и не утверждать, что запись отменена. `StorageFailed` предлагает доступное обновление и повторный выбор. `ValidationFailed` сообщает о некорректном графе; `ExecutionStateDenied` — об активном агенте; `TaskNotFound` — об отсутствии задачи. Обновление не обещает снять постоянные ограничения.
-8. После успешного refresh убрать прежнюю storage/reload ошибку, пересчитать status options и показать подтверждённый статус. При ошибке чтения сохранить последнюю карточку и правки, оставить кнопку для новой попытки. При подтверждённом удалении показать «Задача удалена из хранилища», запретить status, autosave и lifecycle final-save для этого объекта, не воскресить его. Dirty текст оставить доступным для копирования; встроенная навигация остаётся доступной. Не обещать сохранение удалённой задачи или persistence несохранённых правок после закрытия приложения.
+8. После успешного refresh убрать прежнюю storage/reload ошибку, пересчитать status options и показать подтверждённый статус. При ошибке чтения сохранить последнюю карточку и правки, оставить пункт меню для новой попытки. При подтверждённом удалении показать «Задача удалена из хранилища», запретить status, autosave и lifecycle final-save для этого объекта, не воскресить его. Dirty текст оставить доступным для копирования; встроенная навигация остаётся доступной. Не обещать сохранение удалённой задачи или persistence несохранённых правок после закрытия приложения.
 
 Visual planning artifact — текстовый wireframe в этой SPEC:
 
 ```text
 ┌ Карточка задачи ─────────────────────────────────────┐
 │ [значок статуса ▼] Название                          │
-│ …существующие метаданные…       [Обновить] [⚙]       │
+│ …существующие метаданные…                  [⚙]       │
+│                         меню ⚙: [⟳ Обновить]       │
+│                                 [Переместить…]     │
+│                                 [Архивировать]     │
+│                                 [Удалить]          │
 │ Ошибка: не удалось подтвердить статус.              │
 │ Нажмите «Обновить», затем проверьте текущий статус.  │
 │ [Подробности ▸]                                    │
@@ -99,7 +103,7 @@ Visual planning artifact — текстовый wireframe в этой SPEC:
 └─────────────────────────────────────────────────────┘
 ```
 
-Состояния: обычное — error area скрыта; busy — кнопки refresh/status disabled, данные остаются читаемыми; error — краткая причина и доступное восстановление; successful reload — фактический статус и сохранённые local edits; missing — объяснение и disabled status. Проверить узкую карточку, light/dark и RU/EN: кнопка/сообщение не перекрывают меню или редактор.
+Состояния: обычное — error area скрыта, обновление доступно через ⚙; busy — пункт refresh и status disabled, данные остаются читаемыми; error — краткая причина и доступное восстановление через ⚙; successful reload — фактический статус и сохранённые local edits; missing — объяснение и disabled status/reload. Проверить узкую карточку, light/dark и RU/EN: меню/сообщение не перекрывают редактор после закрытия popup.
 
 UI video evidence: repository имеет `scripts/record-status-contract-evidence.ps1`, FlaUI и ffmpeg/ffprobe. После approval добавить recovery-сценарий и обеспечить recording hook на принятом harness. Сохранить failing/repro `before` и passing `after` на synthetic tasks, в `artifacts/task-card-status-recovery/`, local-only. Existing terminal/unarchive video не доказывает этот дефект. Fallback допускается только при конкретной технической причине; next-best — отрисованные Headless PNG и test/log report. Без реально записанного/просмотренного артефакта не заявлять визуальную проверку.
 
@@ -108,8 +112,8 @@ UI video evidence: repository имеет `scripts/record-status-contract-evidenc
 | Scenario | User action / trigger | Expected visible result | Evidence required | AC |
 | --- | --- | --- | --- | --- |
 | S1 | В карточке выбрать допустимый статус | Значок/выбранный статус, storage и история согласованы | UI assertion и file read-back | AC1 |
-| S2 | Status command получает временный storage failure | Понятная ошибка и видимая кнопка refresh; успешного статуса нет | RED/GREEN regression и before/after | AC2, AC3 |
-| S3 | После устранения временного сбоя нажать refresh и повторно выбрать статус | Фактический статус перечитан, новая запись подтверждена | End-to-end fixture recovery | AC3 |
+| S2 | Status command получает временный storage failure | Понятная ошибка и доступный refresh через ⚙; успешного статуса нет | RED/GREEN regression и before/after | AC2, AC3 |
+| S3 | После устранения временного сбоя открыть ⚙, выбрать «Обновить», затем выбрать статус | Фактический статус перечитан, новая запись подтверждена | End-to-end fixture recovery через menu item | AC3 |
 | S4 | Исправить поля до/во время reload | Правки остались в редакторе и последующей успешной записи | UI + unit race test | AC4 |
 | S5 | Запись могла пройти, но результат неизвестен | Refresh показывает записанный статус без второй history entry | Fault injection + read-back | AC5 |
 | S6 | Граф/agent lease/удаление запрещают операцию | Конкретная причина и честные доступные действия | Negative tests, screenshot | AC6, AC7 |
@@ -131,7 +135,7 @@ UI video evidence: repository имеет `scripts/record-status-contract-evidenc
 
 | Decision | Owner | Chosen option | Confidence | Risk if assumed | Needs user before EXEC |
 | --- | --- | --- | ---: | --- | --- |
-| Recovery action | agent | Отдельная кнопка в command bar | 0.95 | Доступность при узкой ширине проверяется UI | Нет |
+| Recovery action | user | Первый пункт «Обновить» в меню ⚙ | 1.0 | Доступность и disabled-состояния проверяются UI | Нет; прямое уточнение пользователя |
 | Local edits | agent | Сохранять dirty поля, read-only reload | 0.95 | Требуется race coverage | Нет |
 | Unknown outcome | agent | Read-back без автоповтора | 1.0 | Повтор может дублировать историю/side effects | Нет |
 | Причина конкретного отказа | agent | Не считать установленной без exact repro | 1.0 | Кнопка сама по себе не подтверждает root cause | Нет; fixture доказывает recovery, индивидуальный случай отдельно |
@@ -153,7 +157,7 @@ Reload читает и отображает, status command пишет посл�
 
 ## 8. Точки интеграции и триггеры
 
-`TaskStatusPicker → TrySelectStatusOptionAsync → ExecuteStatusOperationAsync`; `CurrentTaskReloadButton → ReloadCommand → storage read → existing snapshot merge/cache synchronization`. Ошибка обновляет presentation state; следующая успешная операция снимает устаревшую ошибку. Existing watcher обработка остаётся независимым путём изменения cache.
+`TaskStatusPicker → TrySelectStatusOptionAsync → ExecuteStatusOperationAsync`; `CurrentTaskActionsMenuButton → CurrentTaskReloadButton (MenuItem) → ReloadCommand → storage read → existing snapshot merge/cache synchronization`. Ошибка обновляет presentation state; следующая успешная операция снимает устаревшую ошибку. Existing watcher обработка остаётся независимым путём изменения cache.
 
 ## 9. Изменения модели данных / состояния
 
@@ -166,7 +170,7 @@ Reload читает и отображает, status command пишет посл�
 ## 11. Тестирование и критерии приёмки
 
 - **AC1:** допустимый переход из реальной карточки подтверждается storage, обновляет icon/options и сохраняет одну корректную history entry.
-- **AC2:** ошибка не предлагает недоступного действия; кнопка обновления видима, reason соответствует фактическому failure, busy не оставляет карточку навсегда disabled.
+- **AC2:** ошибка не предлагает недоступного действия; обновление доступно через меню ⚙ и отсутствует как отдельная кнопка карточки, reason соответствует фактическому failure, busy не оставляет карточку навсегда disabled.
 - **AC3:** deterministic temporary failure → successful reload → explicit retry → confirmed status проходит из той же карточки без app restart; reload не создаёт новой status/business записи, сохраняет штатный journal recovery.
 - **AC4:** все pending editable поля сохраняются при reload, включая edit во время чтения; последующая штатная запись сохраняет их. Deterministic already-running autosave → delayed success/failure → reload подтверждает согласованное чтение, отсутствие нового save от reload, сохранение failed dirty revision и newest authoritative status. Autosave failure не блокирует само обновление.
 - **AC5:** после unknown outcome read-back показывает фактический статус и не создаёт вторую status/history запись; read failure сохраняет последнюю карточку.
@@ -198,7 +202,7 @@ git diff --check
 | AC | Automated test | Visual/manual check | Evidence artifact | If not tested, why |
 | --- | --- | --- | --- | --- |
 | AC1 | Existing picker/status + new recovery scenario | Icon/options после выбора | test log + synthetic file read-back | SPEC: исполнение после approval |
-| AC2 | Reason mapping и refresh visibility | Error area и button доступны | before/after PNG/video | То же |
+| AC2 | Reason mapping и refresh через ⚙ | Error area видна, menu item доступен; отдельной кнопки нет | before/after PNG/video | То же |
 | AC3 | Temporary failure/reload/retry UI; no-journal Save count=0; pending-journal recovery test | Та же открытая карточка | targeted UI report/video | То же |
 | AC4 | Pending fields parameterized tests; edit during read; already-running autosave delayed success/failure → reload → normal later write | Title/description retained | unit report + UI assertion | То же |
 | AC5 | Unknown persisted outcome/read failure | Confirmed status без второй записи | history/read-back assertions | То же |
@@ -216,7 +220,7 @@ git diff --check
 | --- | --- | --- | --- |
 | «Добавили кнопку, а статус всё ещё не меняется» | Исходная жалоба включает смену статуса | AC1/AC3 проверяют реальную запись; точная production причина не заявляется установленной | mitigated |
 | «Обновление стёрло описание» | Карточка autosaves с задержкой | AC4 покрывает все pending поля и edit during read | mitigated |
-| «Сообщение исчезло, где обновлять?» | Toast временный | Постоянная кнопка и error state карточки | mitigated |
+| «Сообщение исчезло, где обновлять?» | Toast временный | Постоянно доступное меню ⚙ и error state карточки | mitigated |
 | «Ошибку замаскировали успешным статусом» | Outcome может быть неизвестен | Authoritative read-back и AC5 | mitigated |
 | «На моём компьютере всё осталось как было» | Установленное приложение отдельно от source | Final различает локальный код и установленную версию | mitigated |
 
@@ -260,7 +264,7 @@ Desktop: асинхронное чтение, отсутствие UI blocking, 
 
 | Область | Было | Стало |
 | --- | --- | --- |
-| Recovery | Невыполнимое «обновите» | Видимая кнопка, authoritative reload, explicit retry |
+| Recovery | Невыполнимое «обновите» | Пункт «Обновить» в ⚙, authoritative reload, explicit retry |
 | Failure reason | Общая ошибка для разных denied kinds | Причина и подходящее действие |
 | Dirty editor | Existing merge только на storage/status update | Тот же инвариант при explicit reload |
 | Unknown outcome | Toast и внутренняя попытка reread | Пользователь может подтвердить реальный статус |
@@ -319,7 +323,7 @@ Desktop: асинхронное чтение, отсутствие UI blocking, 
 | Role | Applicability | Review question | Verdict | Required spec changes |
 | --- | --- | --- | --- | --- |
 | Business analyst / workflow | applicable | Есть ли смена статуса/recovery без обхода правил? | PASS | S1/S3 и policy guard |
-| UX / designer | applicable | Действие доступно после toast, error понятен? | PASS | Wireframe, постоянная кнопка |
+| UX / designer | applicable | Действие доступно после toast, error понятен? | PASS | Wireframe, постоянно доступное действие |
 | Tester / validation | applicable | Проверяется ли настоящий отказ и повторная запись? | PASS | RED/GREEN, read-back, unknown/races |
 | Developer / architect | applicable | Cache bypass/merge/revisions/lifecycle coherent? | PASS | Detached/typed reads, event epoch и no resurrection |
 | Delivery / operations / security | applicable | Не смешаны code, install и user data? | PASS | Local-only synthetic evidence, no live writes |
@@ -347,6 +351,8 @@ Desktop: асинхронное чтение, отсутствие UI blocking, 
 - Остаточный риск: индивидуальный отказ не воспроизведён; установленный бинарник отличается от source HEAD; никаких claims об исправленном installed app.
 
 ### Post-EXEC Review
+
+Первый блок ниже фиксирует исходное исправление до переноса Reload в ⚙ (commit `11808873`). Актуальная проверка размещения приведена в отдельном дополнении; прежний native PASS не считается подтверждением нового меню.
 
 #### Scope reviewed / Evidence inspected
 
@@ -422,6 +428,27 @@ Manual-review challenge: «Кнопка есть, но повтор не пиш�
 
 **NEEDS-FIX.** Post-EXEC completion/ready for review не подтверждены из-за открытого full Main gate. Пользователь 2026-10-03 отдельно поручил «Оформи pr», поэтому разрешены commit/push и **draft PR** с честным evidence и открытой проверкой согласно GitHub delivery policy. Merge/release/install этим не разрешены.
 
+### Дополнение post-EXEC: размещение в ⚙, 2026-10-03
+
+Scope: только размещение существующего Reload первым MenuItem в меню ⚙, его UI assertions, адаптеры recovery-сценария и evidence. Storage/VM contract и approved risk не меняются. Exact approval и отдельная PR authorization действуют; по quest-mode прямое уточнение размещения сохраняет EXEC. `origin/main` повторно проверен: `46711e60`.
+
+| Проверка | Результат | Evidence в `artifacts/status-recovery/` |
+| --- | --- | --- |
+| Отсутствие отдельной кнопки, actual menu binding/name, busy | RED на прежнем заголовке → GREEN 1/1 | `menu-red.log`, `menu-action-green.log` |
+| Full Headless после усиления ожидания error clear | 52/52 PASS, 0 SKIP, 3м09с | `menu-headless-final-full.log`, HTML/TRX |
+| Failure → ⚙ → Reload → явный retry | PASS внутри full Headless; `FlowCompleted=true`, `FailureIds=[]`; read-only Reload и JSON NotReady/history +1 | `menu-headless-final/status-contract-recovery-observations.png.json` |
+| Rendered RU/EN × Light/Dark × 1400/760 | 8/8 PASS, 1м01с; все восемь новых menu frames просмотрены | `menu-rendered-matrix.log`, `menu-rendered/*.png` |
+| Missing dirty card с пунктом меню | 1/1 PASS, 11с; disabled menu item, copyable draft, no resurrection | `menu-missing-final.log` |
+| Desktop/phone layout с четырьмя пунктами ⚙ | 4/4 PASS: desktop 1, phone 3 | `menu-layout-desktop.log`, `menu-layout-phone.log` |
+| Desktop build после переноса | PASS, 0 предупреждений / 0 ошибок | `menu-desktop-build.log` |
+| Native recovery последнего меню | Не подтверждён; SendInput получил Win32 Access denied при первом status click, до меню. Текущий Windows-сеанс Disc/LogonUI; повтор до появления active desktop не имеет нового основания | `menu-native.log` |
+
+Отдельный adversarial fallback `/root/spec_review` выявил MEDIUM: enabled status не доказывал выполнение Reload, поскольку статус уже доступен после StorageFailed. Исправление требует одновременно enabled status и исчезновения постоянной ошибки до retry. Headless читает `HasTaskOperationError`, FlaUI проверяет error UI. Последний full Headless подтвердил усиленный сценарий. Native screenshot adapter сохраняет фокус открытого меню, чтобы capture не закрывал его; этот adapter компилируется, но native flow остаётся открытым.
+
+Адресный source re-review: PASS, MEDIUM driver assertion CLOSED, новых продуктовых BLOCKER/HIGH/MEDIUM не найдено. Фактический child sandbox `danger-full-access`, approval `never`; reviewer выполнял только чтение, это adversarial fallback без enforced read-only. Scope/Evidence и Contract pass подтверждены focused UI tests и rendered frames. Role-Based: UX/workflow/architecture PASS адресно; tester/delivery сохраняют NEEDS-FIX до native/menu и full Main gates.
+
+**Общий post-EXEC verdict остаётся NEEDS-FIX.** Открыты прежний full Main finding и native recovery последнего меню в active desktop. Обновление разрешённого draft PR #314 допустимо с точным разделением нового Headless/rendered evidence и прежнего native результата. Новые снимки/логи сохранены в [evidence README](../docs/testing/task-card-status-recovery/README.md).
+
 ## Approval
 
 Получена точная фраза пользователя: «Спеку подтверждаю» (2026-10-02).
@@ -436,3 +463,5 @@ Manual-review challenge: «Кнопка есть, но повтор не пиш�
 | EXEC: реализация и review 2026-10-02 | Typed reload, UI recovery, pending/lifetime/epoch guards; исправлены найденные off-UI/missing/empty cases | Native 1/1, Headless class 12/12, rendered 8/8, missing card 1/1; full Main 1193/1194 | Разобрать full-suite findings | Exact approval действует | Исходники/tests, локальные логи/PNG |
 | Delivery: 2026-10-03 | Пользователь отдельно поручил создать PR; draft обязателен пока gates открыты | Desktop 0/0, Workspace isolated 1/1; full Headless startup fault диагностирован | Commit/push/draft PR после review, attach artifact | «Оформи pr» | SPEC и docs/testing/task-card-status-recovery |
 | EXEC: адресный fix/re-review 2026-10-03 | Закрыты late TaskNotFound resurrection и Headless startup/handoff; test clock отделяет reload от user autosave | Full Headless 52/52, VM class 41/41, missing UI 1/1, Desktop 0/0; Main full gate открыт | Опубликовать draft с открытым Main gate | PR отдельно разрешён | Итоговые логи и SPEC |
+| EXEC: уточнение размещения 2026-10-03 | Обновление переносится в ⚙; тот же recovery outcome/storage contract/risk, фаза EXEC сохраняется по quest-mode | Нужны menu placement/busy UI assertions и исходный failure→menu reload→retry, новые снимки | Реализовать и обновить PR #314 после relevant UI checks | «Кнопку перезагрузки задачи надо спрятать в меню шестерёнки»; прежние exact approval и PR authorization действуют | Текущая SPEC |
+| EXEC: menu re-review 2026-10-03 | Reload первым в ⚙; исправлен driver false-positive ожиданием error clear; actual binding/busy/Missing assertions | Full Headless 52/52, rendered 8/8, menu 1/1, Missing 1/1, layout 4/4, Desktop 0/0; native заблокирован отключённым desktop; full Main открыт | Commit/push и обновление draft PR #314; ready не подтверждать | Прямое уточнение и PR authorization действуют | Menu frames, логи, evidence README |

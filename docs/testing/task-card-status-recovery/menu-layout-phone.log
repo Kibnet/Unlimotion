@@ -1,0 +1,31 @@
+
+████████╗██╗   ██╗███╗   ██╗██╗████████╗
+╚══██╔══╝██║   ██║████╗  ██║██║╚══██╔══╝
+   ██║   ██║   ██║██╔██╗ ██║██║   ██║
+   ██║   ██║   ██║██║╚██╗██║██║   ██║
+   ██║   ╚██████╔╝██║ ╚████║██║   ██║
+   ╚═╝    ╚═════╝ ╚═╝  ╚═══╝╚═╝   ╚═╝
+
+   TUnit v1.44.0.0 | 64-bit | Microsoft Windows 10.0.22631 | win-x64 | .NET 10.0.12 | Microsoft Testing Platform v2.2.2
+
+   Engine Mode: SourceGenerated
+
+[TUnit] External span cap of 100 reached; subsequent spans will be dropped. Set TUNIT_OTEL_MAX_EXTERNAL_SPANS to raise the limit.
+passed CurrentTaskCard_PhoneWidthLayout_DoesNotOverflowAndKeepsRelationEditorUsable(360) (12s 188ms)
+  Error output
+    [TUnit] External span cap of 100 reached; subsequent spans will be dropped. Set TUNIT_OTEL_MAX_EXTERNAL_SPANS to raise the limit.
+
+passed CurrentTaskCard_PhoneWidthLayout_DoesNotOverflowAndKeepsRelationEditorUsable(390) (6s 798ms)
+passed CurrentTaskCard_PhoneWidthLayout_DoesNotOverflowAndKeepsRelationEditorUsable(430) (5s 333ms)
+HTML test report written to: <worktree>\src\Unlimotion.Test\bin\Debug\net10.0\TestResults\Unlimotion.Test-windows-net10.0-report.html
+
+  In process file artifacts produced:
+    - <worktree>\src\Unlimotion.Test\bin\Debug\net10.0\TestResults\Unlimotion.Test-windows-net10.0-report.html
+    - <worktree>\src\Unlimotion.Test\bin\Debug\net10.0\TestResults\Kibnet_DESKTOP-AUDO1TJ_2026-10-03_20_15_03.2640566.trx
+
+Test run summary: Passed! - <worktree>\src\Unlimotion.Test\bin\Debug\net10.0\Unlimotion.Test.dll (net10.0|x64)
+  total: 3
+  failed: 0
+  succeeded: 3
+  skipped: 0
+  duration: 25s 196ms

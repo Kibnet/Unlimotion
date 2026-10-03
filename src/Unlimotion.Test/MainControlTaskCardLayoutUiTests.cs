@@ -1751,6 +1751,7 @@ public class MainControlTaskCardLayoutUiTests
 
         string[] expectedAutomationIds =
         [
+            "CurrentTaskReloadButton",
             "CurrentTaskMoveToPathMenuItem",
             "CurrentTaskArchiveMenuItem",
             "CurrentTaskRemoveMenuItem"

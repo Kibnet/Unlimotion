@@ -1859,13 +1859,6 @@
                                                        AutomationProperties.ControlTypeOverride="Group"
                                                        AutomationProperties.IsControlElementOverride="True"
                                                        AutomationProperties.AutomationId="CurrentTaskCommandBar">
-                                                <Button Classes="TaskAccentOutlineButton"
-                                                        Content="{DynamicResource TaskReload}"
-                                                        Command="{Binding ReloadTaskCommand}"
-                                                        IsEnabled="{Binding CanReloadTask}"
-                                                        ToolTip.Tip="{DynamicResource TaskReloadTip}"
-                                                        AutomationProperties.Name="{DynamicResource TaskReloadTip}"
-                                                        AutomationProperties.AutomationId="CurrentTaskReloadButton"/>
                                                 <DropDownButton Classes="TaskActionsMenuButton TaskAccentOutlineButton TaskIconOnlyDropDownButton"
                                                                 Content="⚙"
                                                                 ToolTip.Tip="{DynamicResource TaskActionsMenuTip}"
@@ -1873,6 +1866,16 @@
                                                                 AutomationProperties.AutomationId="CurrentTaskActionsMenuButton">
                                                     <DropDownButton.Flyout>
                                                         <MenuFlyout>
+                                                            <MenuItem Header="{DynamicResource TaskReload}"
+                                                                      Command="{Binding ReloadTaskCommand}"
+                                                                      IsEnabled="{Binding CanReloadTask}"
+                                                                      ToolTip.Tip="{DynamicResource TaskReloadTip}"
+                                                                      AutomationProperties.Name="{DynamicResource TaskReloadTip}"
+                                                                      AutomationProperties.AutomationId="CurrentTaskReloadButton">
+                                                                <MenuItem.Icon>
+                                                                    <TextBlock Text="⟳"/>
+                                                                </MenuItem.Icon>
+                                                            </MenuItem>
                                                             <MenuItem Header="{DynamicResource MoveToPath}"
                                                                       Command="{Binding MainWindow.MoveToPath}"
                                                                       AutomationProperties.AutomationId="CurrentTaskMoveToPathMenuItem">

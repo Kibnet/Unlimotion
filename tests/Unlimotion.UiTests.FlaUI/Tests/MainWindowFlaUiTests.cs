@@ -88,7 +88,10 @@ public sealed class MainWindowFlaUiTests
     protected override void CaptureStatusContractScreenshot(string outputPath)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
-        Session.Inner.MainWindow.Focus();
+        // Keep an open task menu focused while capturing its recovery action.
+        var reloadMenuItem = FindProcessElement("CurrentTaskReloadButton");
+        if (reloadMenuItem is null || reloadMenuItem.Properties.IsOffscreen.ValueOrDefault)
+            Session.Inner.MainWindow.Focus();
         Thread.Sleep(TimeSpan.FromMilliseconds(200));
         using var bitmap = Session.Inner.MainWindow.Capture();
         bitmap.Save(outputPath);
@@ -306,6 +309,33 @@ public sealed class MainWindowFlaUiTests
                FindProcessElement("TaskStatusOptionInProgress") is not null ||
                FindProcessElement("TaskStatusOptionCompleted") is not null ||
                FindProcessElement("TaskStatusOptionArchived") is not null;
+    }
+
+    protected override bool OpenActionsAndFindReloadCommand()
+    {
+        InvokeMainWindowButton("CurrentTaskActionsMenuButton");
+        var deadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(5);
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            var item = FindProcessElement("CurrentTaskReloadButton");
+            if (item is not null && !item.Properties.IsOffscreen.ValueOrDefault) return true;
+            Thread.Sleep(100);
+        }
+        return false;
+    }
+
+    protected override bool IsRecoveryErrorCleared()
+    {
+        var error = FindProcessElement("CurrentTaskOperationErrorText");
+        return error is null || error.Properties.IsOffscreen.ValueOrDefault || string.IsNullOrWhiteSpace(error.Name);
+    }
+
+    protected override void InvokeReloadCommand()
+    {
+        var item = FindProcessElement("CurrentTaskReloadButton")
+            ?? throw new InvalidOperationException("Task actions menu did not expose reload.");
+        if (!item.IsEnabled) throw new InvalidOperationException("Task reload menu item was disabled.");
+        item.Click();
     }
 
     protected override string OpenActionsAndInvokeArchiveCommand()

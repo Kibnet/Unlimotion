@@ -102,7 +102,7 @@ public class MainControlTaskStatusIconUiTests
                     await Assert.That(description.Text).IsEqualTo("Draft description to copy");
                     await Assert.That(WaitForAutomationControl<TextBlock>(view, "CurrentTaskOperationErrorText").IsEffectivelyVisible).IsTrue();
                     await Assert.That(WaitForAutomationControl<Button>(view, "CurrentTaskStatusButton").IsEnabled).IsFalse();
-                    await Assert.That(WaitForAutomationControl<Button>(view, "CurrentTaskReloadButton").IsEnabled).IsFalse();
+                    await Assert.That(OpenTaskReloadMenu(view).IsEnabled).IsFalse();
                     await Assert.That(vm.taskRepository!.Tasks.Lookup(card.Id).HasValue).IsFalse();
                 }
                 await card.SealPendingSaves();
@@ -176,7 +176,7 @@ public class MainControlTaskStatusIconUiTests
                 // Corrupt only the fixture file to exercise a real failed read and bound error.
                 await System.IO.File.WriteAllTextAsync(taskFile, "not JSON");
                 await task.ReloadTaskAsync();
-                var reload = WaitForAutomationControl<Button>(view, "CurrentTaskReloadButton");
+                var reload = OpenTaskReloadMenu(view);
                 var error = WaitForAutomationControl<TextBlock>(view, "CurrentTaskOperationErrorText");
                 var details = WaitForAutomationControl<Expander>(view, "CurrentTaskOperationDetails");
                 await Assert.That(details.Header).IsEqualTo(language == "ru" ? "Подробности" : "Details");
@@ -219,6 +219,10 @@ public class MainControlTaskStatusIconUiTests
                     var directory = System.IO.Path.Combine(Environment.CurrentDirectory, "artifacts", "status-recovery");
                     System.IO.Directory.CreateDirectory(directory);
                     frame.Save(System.IO.Path.Combine(directory, $"error-{language}-{theme}-{width}.png"));
+                    var menuRoot = TopLevel.GetTopLevel(reload);
+                    using var menuFrame = menuRoot?.CaptureRenderedFrame();
+                    await Assert.That(menuFrame).IsNotNull();
+                    menuFrame!.Save(System.IO.Path.Combine(directory, $"reload-menu-{language}-{theme}-{width}.png"));
                 }
             }
             finally
@@ -245,7 +249,9 @@ public class MainControlTaskStatusIconUiTests
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
-            var fixture = new MainWindowViewModelFixture();
+            DelayedCardReloadFileStorage storage = null!;
+            var fixture = new MainWindowViewModelFixture(path =>
+                new UnifiedTaskStorage(new TaskTreeManager(storage = new DelayedCardReloadFileStorage(path))));
             Window? window = null;
             try
             {
@@ -257,17 +263,44 @@ public class MainControlTaskStatusIconUiTests
                 var view = new MainControl { DataContext = vm };
                 window = CreateWindow(view);
                 window.Show();
-                var reload = WaitForAutomationControl<Button>(view, "CurrentTaskReloadButton");
+                await Assert.That(view.GetVisualDescendants().OfType<Button>()
+                    .Any(button => AutomationProperties.GetAutomationId(button) == "CurrentTaskReloadButton")).IsFalse();
+                var reload = OpenTaskReloadMenu(view);
                 await Assert.That(reload.IsEffectivelyVisible).IsTrue();
                 await Assert.That(reload.IsEnabled).IsTrue();
                 await Assert.That(AutomationProperties.GetName(reload)).IsNotNullOrEmpty();
+                await Assert.That(reload.Header).IsEqualTo(Unlimotion.ViewModel.Localization.Localization.Get("TaskReload"));
+                await Assert.That(reload.Command).IsSameReferenceAs(vm.CurrentTaskItem!.ReloadTaskCommand);
+
+                var card = vm.CurrentTaskItem!;
+                storage.BlockRead = true;
+                var busy = card.ReloadTaskAsync();
+                await storage.ReadEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+                Dispatcher.UIThread.RunJobs();
+                await Assert.That(reload.IsEnabled).IsFalse();
+                storage.ReleaseRead.TrySetResult();
+                await busy;
+                Dispatcher.UIThread.RunJobs();
+                await Assert.That(reload.IsEnabled).IsTrue();
             }
             finally
             {
+                storage.ReleaseRead.TrySetResult();
                 window?.Close();
                 await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
+    }
+
+    private static MenuItem OpenTaskReloadMenu(MainControl view)
+    {
+        var actions = WaitForAutomationControl<DropDownButton>(view, "CurrentTaskActionsMenuButton");
+        var flyout = actions.Flyout as MenuFlyout
+            ?? throw new InvalidOperationException("Task actions should expose a MenuFlyout.");
+        flyout.ShowAt(actions);
+        Dispatcher.UIThread.RunJobs();
+        return flyout.Items.OfType<MenuItem>().Single(item =>
+            AutomationProperties.GetAutomationId(item) == "CurrentTaskReloadButton");
     }
 
     [Test]
