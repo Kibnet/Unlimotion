@@ -96,7 +96,7 @@ public sealed class RepeaterStartDateFlaUiTests
                 session.ConditionFactory.ByName(name)))) is { IsOffscreen: false });
             item!.Focus();
             await Until(() => item.Properties.HasKeyboardFocus.ValueOrDefault);
-            Keyboard.Press(VirtualKeyShort.RETURN);
+            Keyboard.Type(VirtualKeyShort.RETURN);
         }
     }
 
