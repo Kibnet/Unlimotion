@@ -1,0 +1,31 @@
+Excerpt: failure and final summary from final-main-full.log
+
+failed TaskGraphWorkspaceCommandScenario_ExecutesFeatureSteps (29s 189ms)
+  TUnit.Engine.Exceptions.TestFailedException: [Test Failure] AssertionException: Expected to be null
+  but found TaskItem { Id = c119a20a-6b75-40df-97c2-d2ca3822085f, UserId = , Title = Task 4, Description = , Status = NotReady, StatusHistory = System.Collections.Generic.List`1[Unlimotion.Domain.TaskStatusHistoryEntry], CompletionCriteria = System.Collections.Generic.List`1[Unlimotion.Domain.TaskCompletionCriterion], IsCanBeCompleted = False, CreatedDateTime = 7/28/2025 5:43:19 PM +03:00, UpdatedDateTime = , UnlockedDateTime = , PlannedBeginDateTime = , PlannedEndDateTime = , PlannedDuration = , ContainsTasks = System.Collections.Generic.List`1[System.String], ParentTasks = System.Collections.Generic.List`1[System.String], BlocksTasks = System.Collections.Generic.List`1[System.String], BlockedByTasks = System.Collections.Generic.List`1[System.String], Repeater = , Importance = 0, Wanted = False, Version = 1, AgentExecution = , ExtensionData = , IsCompleted = False, CompletedDateTime = , ArchiveDateTime = , StartedDateTime = , PreparedDateTime =  }
+
+  at Assert.That(TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.RootTask4Id)).IsNull()
+    at Unlimotion.Test.MainControlTreeCommandsUiTests.<>c.<<TreeCommandUi_ShiftDelete_RemovesSelectedMainTreeItems>b__33_0>d.MoveNext() in <worktree>\src\Unlimotion.Test\MainControlTreeCommandsUiTests.cs:2200
+    --- End of stack trace from previous location ---
+    at Unlimotion.Test.MainControlTreeCommandsUiTests.<>c.<<TreeCommandUi_ShiftDelete_RemovesSelectedMainTreeItems>b__33_0>d.MoveNext() in <worktree>\src\Unlimotion.Test\MainControlTreeCommandsUiTests.cs:2207
+    --- End of stack trace from previous location ---
+    at Unlimotion.Test.HeadlessSessionExtensions.<>c__DisplayClass1_0.<<DispatchAsync>b__1>d.MoveNext() in <worktree>\src\Unlimotion.Test\HeadlessSessionExtensions.cs:30
+    --- End of stack trace from previous location ---
+    at Unlimotion.Test.HeadlessSessionExtensions.<>c__DisplayClass1_0.<<DispatchAsync>g__DispatchAndThrowAsync|0>d.MoveNext() in <worktree>\src\Unlimotion.Test\HeadlessSessionExtensions.cs:42
+    --- End of stack trace from previous location ---
+    at Unlimotion.Test.MainControlTreeCommandsUiTests.TreeCommandUi_ShiftDelete_RemovesSelectedMainTreeItems() in <worktree>\src\Unlimotion.Test\MainControlTreeCommandsUiTests.cs:2170
+    at Unlimotion.Test.MainControlTreeCommandsUiTests.TreeCommandUi_ShiftDelete_RemovesSelectedMainTreeItems() in <worktree>\src\Unlimotion.Test\MainControlTreeCommandsUiTests.cs:2170
+    at Unlimotion.Test.TaskGraphWorkspaceCommandContract.ExecuteTaskGraphWorkspaceCommandScenarioAsync() in <worktree>\src\Unlimotion.Test\TaskGraphWorkspaceCommandContract.cs:63
+    at Unlimotion.Test.StormBdd.TaskGraphWorkspaceCommandStepDefinitions.<>c.<<Create>b__1_2>d.MoveNext() in <worktree>\src\Unlimotion.Test\StormBdd\TaskGraphWorkspaceCommandStepDefinitions.cs:47
+    --- End of stack trace from previous location ---
+    at Unlimotion.Test.StormBdd.StormScenarioRunner.ExecuteAsync(StormScenario scenario) in <worktree>\src\Unlimotion.Test\StormBdd\StormScenarioRunner.cs:48
+    at Unlimotion.Test.StormTaskGraphWorkspaceCommandExecutableSpecTests.TaskGraphWorkspaceCommandScenario_ExecutesFeatureSteps() in <worktree>\src\Unlimotion.Test\StormTaskGraphWorkspaceCommandExecutableSpecTests.cs:25
+       --- TUnit internals omitted (run with --detailed-stacktrace for full trace) ---
+
+
+Test run summary: Failed! - <worktree>\src\Unlimotion.Test\bin\Debug\net10.0\Unlimotion.Test.dll (net10.0|x64)
+  total: 1194
+  failed: 1
+  succeeded: 1193
+  skipped: 0
+  duration: 32m 34s 416ms

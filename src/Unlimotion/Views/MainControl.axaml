@@ -63,7 +63,7 @@
         <Style Selector="TreeView.TaskTree Label.TaskTreeMetaLabel">
             <Setter Property="Margin" Value="0,0,16,0"/>
         </Style>
-        <Style Selector="Expander.TaskStatusHistoryExpander">
+        <Style Selector="Expander.TaskStatusHistoryExpander, Expander.TaskOperationDetailsExpander">
             <Setter Property="HorizontalAlignment" Value="Stretch"/>
             <Setter Property="Template">
                 <ControlTemplate>
@@ -1866,6 +1866,16 @@
                                                                 AutomationProperties.AutomationId="CurrentTaskActionsMenuButton">
                                                     <DropDownButton.Flyout>
                                                         <MenuFlyout>
+                                                            <MenuItem Header="{DynamicResource TaskReload}"
+                                                                      Command="{Binding ReloadTaskCommand}"
+                                                                      IsEnabled="{Binding CanReloadTask}"
+                                                                      ToolTip.Tip="{DynamicResource TaskReloadTip}"
+                                                                      AutomationProperties.Name="{DynamicResource TaskReloadTip}"
+                                                                      AutomationProperties.AutomationId="CurrentTaskReloadButton">
+                                                                <MenuItem.Icon>
+                                                                    <TextBlock Text="⟳"/>
+                                                                </MenuItem.Icon>
+                                                            </MenuItem>
                                                             <MenuItem Header="{DynamicResource MoveToPath}"
                                                                       Command="{Binding MainWindow.MoveToPath}"
                                                                       AutomationProperties.AutomationId="CurrentTaskMoveToPathMenuItem">
@@ -1913,6 +1923,27 @@
                                             </WrapPanel>
                                         </WrapPanel>
                                     </Grid>
+
+                                    <Border Classes="TaskCardSection"
+                                            IsVisible="{Binding HasTaskOperationError}"
+                                            AutomationProperties.AutomationId="CurrentTaskOperationError">
+                                        <StackPanel Classes="TaskCardSectionContent">
+                                            <TextBlock Text="{Binding TaskOperationError}"
+                                                       TextWrapping="Wrap"
+                                                       AutomationProperties.Name="{Binding TaskOperationError}"
+                                                       AutomationProperties.AutomationId="CurrentTaskOperationErrorText"/>
+                                            <Expander Classes="TaskOperationDetailsExpander"
+                                                      Header="{DynamicResource TaskOperationDetails}"
+                                                      AutomationProperties.Name="{DynamicResource TaskOperationDetails}"
+                                                      IsVisible="{Binding HasTaskOperationDetails}"
+                                                      HorizontalAlignment="Stretch"
+                                                      AutomationProperties.AutomationId="CurrentTaskOperationDetails">
+                                                <TextBlock Text="{Binding TaskOperationDetails}"
+                                                           TextWrapping="Wrap"
+                                                           AutomationProperties.AutomationId="CurrentTaskOperationDetailsText"/>
+                                            </Expander>
+                                        </StackPanel>
+                                    </Border>
 
                                     <Border Classes="TaskCardSection"
                                             AutomationProperties.ControlTypeOverride="Group"

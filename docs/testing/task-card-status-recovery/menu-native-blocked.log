@@ -1,0 +1,36 @@
+
+████████╗██╗   ██╗███╗   ██╗██╗████████╗
+╚══██╔══╝██║   ██║████╗  ██║██║╚══██╔══╝
+   ██║   ██║   ██║██╔██╗ ██║██║   ██║
+   ██║   ██║   ██║██║╚██╗██║██║   ██║
+   ██║   ╚██████╔╝██║ ╚████║██║   ██║
+   ╚═╝    ╚═════╝ ╚═╝  ╚═══╝╚═╝   ╚═╝
+
+   TUnit v1.44.0.0 | 64-bit | Microsoft Windows 10.0.22631 | win-x64 | .NET 10.0.12 | Microsoft Testing Platform v2.2.2
+
+   Engine Mode: SourceGenerated
+
+сбой TaskCardStatusRecovery_FailureRefreshRetry (563ms)
+  TUnit.Engine.Exceptions.TestFailedException: [Test Failure] Win32Exception: Отказано в доступе.
+    в FlaUI.Core.Input.Mouse.SendInput(Int32 x, Int32 y, UInt32 data, MouseEventFlags flags)
+    в FlaUI.Core.Input.Mouse.Down(MouseButton mouseButton)
+    в FlaUI.Core.Input.Mouse.Click(MouseButton mouseButton)
+    в FlaUI.Core.Input.Mouse.LeftClick()
+    в FlaUI.Core.AutomationElements.AutomationElement.PerformMouseAction(Boolean moveMouse, Action action)
+    в FlaUI.Core.AutomationElements.AutomationElement.Click(Boolean moveMouse)
+    в Unlimotion.UiTests.FlaUI.Tests.MainWindowFlaUiTests.ClickMainWindowElement(String automationId) в <worktree>\tests\Unlimotion.UiTests.FlaUI\Tests\MainWindowFlaUiTests.cs:529
+    в Unlimotion.UiTests.FlaUI.Tests.MainWindowFlaUiTests.OpenStatusPicker() в <worktree>\tests\Unlimotion.UiTests.FlaUI\Tests\MainWindowFlaUiTests.cs:136
+    в Unlimotion.UiTests.Authoring.Tests.StatusContractScenariosBase`1.TaskCardStatusRecovery_FailureRefreshRetry() в <worktree>\tests\Unlimotion.UiTests.Authoring\Tests\StatusContractScenariosBase.cs:168
+       --- TUnit internals omitted (run with --detailed-stacktrace for full trace) ---
+HTML test report written to: <worktree>\tests\Unlimotion.UiTests.FlaUI\bin\Debug\net10.0-windows7.0\TestResults\Unlimotion.UiTests.FlaUI-windows-net10.0-report.html
+
+  Созданные в процессе артефакты файлов:
+    - <worktree>\tests\Unlimotion.UiTests.FlaUI\bin\Debug\net10.0-windows7.0\TestResults\Unlimotion.UiTests.FlaUI-windows-net10.0-report.html
+    - <worktree>\tests\Unlimotion.UiTests.FlaUI\bin\Debug\net10.0-windows7.0\TestResults\Kibnet_DESKTOP-AUDO1TJ_2026-10-03_20_07_52.3764380.trx
+
+Сводка тестового запуска: Сбой! - <worktree>\tests\Unlimotion.UiTests.FlaUI\bin\Debug\net10.0-windows7.0\Unlimotion.UiTests.FlaUI.dll (net10.0|x64)
+  всего: 1
+  сбой: 1
+  успешно выполнено: 0
+  пропущено: 0
+  длительность: 29s 310ms

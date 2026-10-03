@@ -803,12 +803,13 @@ namespace Unlimotion.ViewModel
                 }
                 taskRepository = taskStorage;
 
-                //Если из коллекции пропадает итем, то очищаем выделенный итем.
+                // Retain a missing open card so its detached local draft can still be copied.
+                // Explicit deletion/navigation clears the card through its existing commands.
                 taskRepository.Tasks.Connect()
                     .OnItemAdded(AttachTaskContext)
                     .OnItemRemoved(x =>
                     {
-                        if (CurrentTaskItem?.Id == x.Id) CurrentTaskItem = null;
+                        if (CurrentTaskItem?.Id == x.Id && !x.IsMissingFromStorage) CurrentTaskItem = null;
                     })
                     .OnItemUpdated((newItem, oldItem) =>
                     {

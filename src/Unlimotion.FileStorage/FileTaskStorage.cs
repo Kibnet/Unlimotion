@@ -10,7 +10,7 @@ using Unlimotion.TaskTree;
 
 namespace Unlimotion.Storage;
 
-public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraphWriteLock, ITaskGraphWriteScopeStorage
+public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraphWriteLock, ITaskGraphWriteScopeStorage, ITaskReloadReader
 {
     internal static readonly StringComparer FilePathComparer = OperatingSystem.IsWindows()
         ? StringComparer.OrdinalIgnoreCase
@@ -27,6 +27,9 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
         new(FilePathComparer);
     private readonly ConcurrentDictionary<string, TaskItem> _tasks = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, string> _taskFilePaths = new(StringComparer.Ordinal);
+    // A failed watcher parse may remove the current graph mapping. Reload must still
+    // diagnose the last known source file instead of mistaking an alias for deletion.
+    private readonly ConcurrentDictionary<string, string> _reloadTaskFilePaths = new(StringComparer.Ordinal);
     private readonly FileTaskStorageOptions _options;
     private readonly object _liveGraphSync = new();
     private TaskGraphReadResult? _liveGraph;
@@ -86,6 +89,85 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
 
     public async Task<TaskItem?> Load(string itemId) => await Load(itemId, forced: false);
 
+    public async Task<TaskReloadResult> ReloadTaskAsync(string taskId)
+    {
+        try
+        {
+            // The lock wait, detached read and final hash check must not capture a UI caller.
+            return await Task.Run(() => WithDirectoryLockAsync(async () =>
+            {
+                for (var attempt = 0; attempt < 3; attempt++)
+                {
+                    await PrepareTaskReloadAsync();
+                    long generation;
+                    long revision;
+                    string filePath;
+                    lock (_liveGraphSync)
+                    {
+                        generation = _liveGraphInvalidationGeneration;
+                        revision = _liveGraphRevision;
+                        if (!TryResolveReloadFilePath(taskId, out filePath))
+                            return TaskReloadResult.Failed();
+                    }
+
+                    TaskItem? task = null;
+                    byte[]? hash = null;
+                    var missing = false;
+                    try
+                    {
+                        (task, hash) = await Task.Run(() => DeserializeTaskSnapshot(filePath));
+                        if (task == null || !string.Equals(task.Id, taskId, StringComparison.Ordinal))
+                            return TaskReloadResult.Failed();
+                    }
+                    catch (FileNotFoundException) { missing = true; }
+                    catch (DirectoryNotFoundException) { missing = true; }
+                    catch (Exception) { return TaskReloadResult.Failed(); }
+
+                    await OnTaskReloadSnapshotReadAsync(taskId);
+                    lock (_liveGraphSync)
+                    {
+                        // Raw watcher invalidation uses this same boundary. An old detached read
+                        // must never be published with a new revision after a newer update/delete.
+                        if (generation != _liveGraphInvalidationGeneration || revision != _liveGraphRevision ||
+                            !TryResolveReloadFilePath(taskId, out var currentPath) ||
+                            !FilePathComparer.Equals(filePath, currentPath))
+                            continue;
+                        try
+                        {
+                            using var source = new FileStream(filePath, FileMode.Open, FileAccess.Read,
+                                FileShare.ReadWrite | FileShare.Delete);
+                            if (missing || !SHA256.HashData(source).AsSpan().SequenceEqual(hash))
+                                continue;
+                        }
+                        catch (FileNotFoundException) { if (!missing) continue; }
+                        catch (DirectoryNotFoundException) { if (!missing) continue; }
+                        catch (Exception) { return TaskReloadResult.Failed(); }
+
+                        if (missing)
+                        {
+                            RemoveCachedTaskMappedToFile(filePath, exceptTaskId: null);
+                            PublishLiveFileChange(filePath, task: null, error: null);
+                            return TaskReloadResult.Missing(_liveGraphRevision);
+                        }
+
+                        var stored = TaskItemSnapshot.Clone(task!);
+                        RemoveCachedTaskMappedToFile(filePath, exceptTaskId: taskId);
+                        _tasks[taskId] = stored;
+                        _taskFilePaths[taskId] = filePath;
+                        _reloadTaskFilePaths[taskId] = filePath;
+                        PublishLiveFileChange(filePath, stored, error: null, hash);
+                        return TaskReloadResult.Loaded(stored, _liveGraphRevision);
+                    }
+                }
+                return TaskReloadResult.Failed(TaskReloadFailure.ChangedDuringRead);
+            })).ConfigureAwait(false);
+        }
+        catch (Exception) { return TaskReloadResult.Failed(); }
+    }
+
+    protected virtual Task PrepareTaskReloadAsync() => Task.CompletedTask;
+    protected virtual Task OnTaskReloadSnapshotReadAsync(string taskId) => Task.CompletedTask;
+
     public async Task<TaskItem?> Load(string itemId, bool forced)
     {
         var liveGraphEnabled = false;
@@ -109,7 +191,7 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
             return null;
         }
 
-        if (!File.Exists(filePath) || new FileInfo(filePath).Length == 0)
+        if (!File.Exists(filePath))
         {
             RemoveCachedTaskMappedToFile(filePath, exceptTaskId: null);
             _tasks.TryRemove(itemId, out _);
@@ -146,6 +228,7 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
         RemoveCachedTaskMappedToFile(filePath, exceptTaskId: stored.Id);
         _tasks.AddOrUpdate(stored.Id, stored, (_, _) => stored);
         _taskFilePaths.AddOrUpdate(task.Id, filePath, (_, _) => filePath);
+        _reloadTaskFilePaths[task.Id] = filePath;
         PublishLiveFileChange(filePath, stored, error: null, sourceHash);
         return TaskItemSnapshot.Clone(stored);
     }
@@ -182,6 +265,7 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
             var stored = TaskItemSnapshot.Clone(task);
             _tasks.AddOrUpdate(stored.Id, stored, (_, _) => stored);
             _taskFilePaths.AddOrUpdate(task.Id, file, (_, _) => file);
+            _reloadTaskFilePaths[task.Id] = file;
             yield return TaskItemSnapshot.Clone(stored);
         }
     }
@@ -244,6 +328,7 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
                 var stored = TaskItemSnapshot.Clone(task);
                 _tasks.AddOrUpdate(task.Id, stored, (_, _) => stored);
                 _taskFilePaths.AddOrUpdate(task.Id, file, (_, _) => file);
+                _reloadTaskFilePaths[task.Id] = file;
             }
             catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
             {
@@ -558,6 +643,7 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
             var stored = TaskItemSnapshot.Clone(item);
             _tasks.AddOrUpdate(taskItem.Id, stored, (_, _) => stored);
             _taskFilePaths.AddOrUpdate(taskItem.Id, filePath, (_, _) => filePath);
+            _reloadTaskFilePaths[taskItem.Id] = filePath;
             var generationBeforePublication = CaptureLiveGraphInvalidationGeneration();
             OnBeforeLiveFileChangePublication(item.Id, filePath);
             var ownInvalidationGeneration = PublishLiveFileChange(
@@ -1559,6 +1645,14 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
         return _taskFilePaths.TryGetValue(taskId, out var sourcePath)
             ? sourcePath
             : System.IO.Path.Combine(Path, taskId);
+    }
+
+    private bool TryResolveReloadFilePath(string taskId, out string filePath)
+    {
+        if (!TryResolveTaskFilePath(taskId, out filePath)) return false;
+        if (!_taskFilePaths.ContainsKey(taskId) && _reloadTaskFilePaths.TryGetValue(taskId, out var knownSource))
+            filePath = knownSource;
+        return true;
     }
 
     private bool TryResolveTaskFilePath(string taskId, out string filePath)

@@ -187,7 +187,12 @@ public class MainControlTaskCardLayoutUiTests
                 await Assert.That(IsVisibleAndArranged(trail)).IsTrue();
                 await Assert.That(GetTopEdge(view, trail)).IsGreaterThanOrEqualTo(GetBottomEdge(view, title) - 1);
                 await Assert.That(GetRightEdge(view, trail)).IsLessThan(GetLeftEdge(view, id));
-                await Assert.That(GetLeftEdge(view, actions)).IsGreaterThan(GetRightEdge(view, id));
+                // The command group may wrap below the ID when its reload button does not fit.
+                // In either layout, keep the actions after the ID without overlapping it.
+                var actionsFollowId = GetLeftEdge(view, actions) > GetRightEdge(view, id)
+                    || GetTopEdge(view, actions) >= GetBottomEdge(view, id) - 1;
+                await Assert.That(actionsFollowId).IsTrue();
+                await Assert.That(IsVisibleAndArranged(actions)).IsTrue();
             }
             finally
             {
@@ -1746,6 +1751,7 @@ public class MainControlTaskCardLayoutUiTests
 
         string[] expectedAutomationIds =
         [
+            "CurrentTaskReloadButton",
             "CurrentTaskMoveToPathMenuItem",
             "CurrentTaskArchiveMenuItem",
             "CurrentTaskRemoveMenuItem"

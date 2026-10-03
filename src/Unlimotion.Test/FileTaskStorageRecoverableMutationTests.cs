@@ -13,6 +13,34 @@ namespace Unlimotion.Test;
 public sealed class FileTaskStorageRecoverableMutationTests
 {
     [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task Reload_CompletesExistingJournalRecoveryWithoutNewStatusWrite(bool committed)
+    {
+        using var temp = TempDirectory.Create();
+        var storage = new CommitInterruptingStorage(Options(temp.Path));
+        var task = CreateTask(Guid.NewGuid().ToString("D"), "original");
+        await storage.Save(task);
+        var scope = (IRecoverableTaskGraphWriteScope)storage.BeginWriteScope();
+        await storage.WithWriteLockAsync(async () =>
+        {
+            await storage.Save(task with { Title = "transaction title" });
+            if (committed)
+            {
+                storage.InterruptCommit = true;
+                try { await scope.CommitAsync(); } catch (IOException) { }
+            }
+            return true;
+        });
+        scope.Dispose();
+        var result = await CreateStorage(temp.Path).ReloadTaskAsync(task.Id);
+        await Assert.That(result.Outcome).IsEqualTo(TaskReloadOutcome.Loaded);
+        await Assert.That(result.Snapshot!.Title).IsEqualTo(committed ? "transaction title" : "original");
+        await Assert.That(result.Snapshot.StatusHistory.Count).IsEqualTo(task.StatusHistory.Count);
+        await Assert.That(PendingJournals(temp.Path)).IsEmpty();
+    }
+
+    [Test]
     public async Task UncommittedJournal_IsRolledBackBeforeNextGraphRead()
     {
         using var temp = TempDirectory.Create();

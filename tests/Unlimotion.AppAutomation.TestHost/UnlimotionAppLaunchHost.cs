@@ -18,6 +18,7 @@ namespace Unlimotion.AppAutomation.TestHost;
 
 public static class UnlimotionAppLaunchHost
 {
+    public static string? StatusContractTasksPath { get; private set; }
     public const string AutomationCurrentTaskIdEnvironmentVariable = "UNLIMOTION_AUTOMATION_CURRENT_TASK_ID";
     public const string AutomationOpenDetailsEnvironmentVariable = "UNLIMOTION_AUTOMATION_OPEN_DETAILS";
     public const string AutomationOpenedTaskIdsEnvironmentVariable = "UNLIMOTION_AUTOMATION_OPENED_TASK_IDS";
@@ -802,6 +803,7 @@ public static class UnlimotionAppLaunchHost
             Directory.CreateDirectory(tasksPath);
             UnlimotionAutomationScenarioData.SeedTasks(scenario, repositoryRoot, tasksPath, language);
             UnlimotionAutomationScenarioData.WriteConfig(scenario, configPath, tasksPath, language, theme);
+            if (scenario == UnlimotionAutomationScenario.StatusContract) StatusContractTasksPath = tasksPath;
 
             return new UnlimotionAutomationLaunchData(
                 repositoryRoot,

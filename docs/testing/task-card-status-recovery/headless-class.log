@@ -1,0 +1,39 @@
+
+████████╗██╗   ██╗███╗   ██╗██╗████████╗
+╚══██╔══╝██║   ██║████╗  ██║██║╚══██╔══╝
+   ██║   ██║   ██║██╔██╗ ██║██║   ██║
+   ██║   ██║   ██║██║╚██╗██║██║   ██║
+   ██║   ╚██████╔╝██║ ╚████║██║   ██║
+   ╚═╝    ╚═════╝ ╚═╝  ╚═══╝╚═╝   ╚═╝
+
+   TUnit v1.44.0.0 | 64-bit | Microsoft Windows 10.0.22631 | win-x64 | .NET 10.0.12 | Microsoft Testing Platform v2.2.2
+
+   Engine Mode: SourceGenerated
+
+[TUnit] External span cap of 100 reached; subsequent spans will be dropped. Set TUNIT_OTEL_MAX_EXTERNAL_SPANS to raise the limit.
+пройдено StatusContract_RussianDarkFutureAndBlocker (1s 566ms)
+  Вывод ошибок
+    [TUnit] External span cap of 100 reached; subsequent spans will be dropped. Set TUNIT_OTEL_MAX_EXTERNAL_SPANS to raise the limit.
+
+passed Main_window_loads_current_task_on_launch (124ms)
+passed Current_task_card_exposes_redesigned_sections_on_launch (455ms)
+passed Task_card_can_be_closed_and_reopened_from_details_toggle (148ms)
+passed Major_tabs_can_be_opened_from_main_window (1s 188ms)
+passed Settings_ssh_backup_flow_shows_key_controls_for_ssh_remote (1s 666ms)
+passed Card_relation_picker_can_be_opened_from_task_card (312ms)
+passed Card_blocking_relation_editor_can_be_opened_from_task_card (192ms)
+passed Card_containing_relation_editor_can_be_opened_from_task_card (245ms)
+passed Card_blocked_relation_editor_can_be_opened_from_task_card (209ms)
+passed TaskCardStatusRecovery_FailureRefreshRetry (27s 019ms)
+passed StatusContract_TerminalPickerAndUnarchive (3s 411ms)
+HTML test report written to: <worktree>\tests\Unlimotion.UiTests.Headless\bin\Debug\net10.0\TestResults\Unlimotion.UiTests.Headless-windows-net10.0-report.html
+
+  In process file artifacts produced:
+    - <worktree>\tests\Unlimotion.UiTests.Headless\bin\Debug\net10.0\TestResults\Unlimotion.UiTests.Headless-windows-net10.0-report.html
+
+Test run summary: Passed! - <worktree>\tests\Unlimotion.UiTests.Headless\bin\Debug\net10.0\Unlimotion.UiTests.Headless.dll (net10.0|x64)
+  total: 12
+  failed: 0
+  succeeded: 12
+  skipped: 0
+  duration: 1m 57s 201ms

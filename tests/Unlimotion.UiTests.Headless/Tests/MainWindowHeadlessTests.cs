@@ -79,6 +79,7 @@ public sealed class MainWindowHeadlessTests
                 .Select(item => $"{item.Id}:{item.TaskItem.Status}:{item.TaskItem.ArchiveDateTime:O}")
                 .ToArray();
             return $"ArchivedMode={viewModel.ArchivedMode}; " +
+                   $"Current={viewModel.CurrentTaskItem?.Id}; Busy={viewModel.CurrentTaskItem?.IsTaskOperationBusy}; Error={viewModel.CurrentTaskItem?.TaskOperationError}; " +
                    $"Date={viewModel.ArchivedDateFilter.From:O}..{viewModel.ArchivedDateFilter.To:O}; " +
                    $"Tasks=[{string.Join(", ", tasks)}]; " +
                    $"ArchivedItems=[{string.Join(", ", archivedItems)}]";
@@ -173,6 +174,22 @@ public sealed class MainWindowHeadlessTests
         });
     }
 
+    protected override void InvokeOpenStatusOption(string automationId)
+    {
+        var statusPicker = GetNativeControl<TaskStatusPicker>(Page.CurrentTaskStatusButton);
+        HeadlessRuntime.Dispatch(() =>
+        {
+            var flyout = (MenuFlyout)statusPicker.Flyout!;
+            var option = flyout.Items.OfType<MenuItem>().Single(item =>
+                AutomationProperties.GetAutomationId(item) == automationId);
+            option.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(MenuItem.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+        });
+    }
+
+    protected override void PumpStatusContractUi() =>
+        HeadlessRuntime.Dispatch(() => Dispatcher.UIThread.RunJobs());
+
     protected override void CloseStatusPicker()
     {
         var statusPicker = GetNativeControl<TaskStatusPicker>(Page.CurrentTaskStatusButton);
@@ -191,6 +208,38 @@ public sealed class MainWindowHeadlessTests
             : statusPicker.ActualThemeVariant == ThemeVariant.Light
                 ? "Light"
                 : statusPicker.ActualThemeVariant?.ToString() ?? string.Empty);
+    }
+
+    protected override bool OpenActionsAndFindReloadCommand()
+    {
+        var actionsButton = GetNativeControl<DropDownButton>(Page.CurrentTaskActionsMenuButton);
+        InvokeNativeButton(actionsButton);
+        return HeadlessRuntime.Dispatch(() => ((MenuFlyout)actionsButton.Flyout!).Items
+            .OfType<MenuItem>().Any(item => AutomationProperties.GetAutomationId(item) == "CurrentTaskReloadButton"));
+    }
+
+    protected override bool IsRecoveryErrorCleared() => HeadlessRuntime.Dispatch(() =>
+        (Session.Inner.MainWindow.DataContext as Unlimotion.ViewModel.MainWindowViewModel)
+        ?.CurrentTaskItem?.HasTaskOperationError == false);
+
+    protected override void InvokeReloadCommand()
+    {
+        var actionsButton = GetNativeControl<DropDownButton>(Page.CurrentTaskActionsMenuButton);
+        HeadlessRuntime.Dispatch(() =>
+        {
+            var flyout = (MenuFlyout)actionsButton.Flyout!;
+            var item = flyout.Items.OfType<MenuItem>().Single(menuItem =>
+                AutomationProperties.GetAutomationId(menuItem) == "CurrentTaskReloadButton");
+            // Detached Headless flyouts may not materialize command bindings. The
+            // native adapter verifies the actual popup binding and pointer flow.
+            var task = (Unlimotion.ViewModel.TaskItemViewModel)actionsButton.DataContext!;
+            var command = item.Command ?? task.ReloadTaskCommand;
+            if (!command.CanExecute(item.CommandParameter))
+                throw new InvalidOperationException("Task reload menu command was disabled.");
+            command.Execute(item.CommandParameter);
+            flyout.Hide();
+            Dispatcher.UIThread.RunJobs();
+        });
     }
 
     protected override string OpenActionsAndInvokeArchiveCommand()

@@ -88,6 +88,11 @@ public sealed class MainWindowFlaUiTests
     protected override void CaptureStatusContractScreenshot(string outputPath)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+        // Keep an open task menu focused while capturing its recovery action.
+        var reloadMenuItem = FindProcessElement("CurrentTaskReloadButton");
+        if (reloadMenuItem is null || reloadMenuItem.Properties.IsOffscreen.ValueOrDefault)
+            Session.Inner.MainWindow.Focus();
+        Thread.Sleep(TimeSpan.FromMilliseconds(200));
         using var bitmap = Session.Inner.MainWindow.Capture();
         bitmap.Save(outputPath);
         var screenshot = new FileInfo(outputPath);
@@ -279,6 +284,14 @@ public sealed class MainWindowFlaUiTests
         }
     }
 
+    protected override void InvokeOpenStatusOption(string automationId)
+    {
+        var option = WaitUntil(() => FindProcessElement(automationId),
+            static element => element is not null, timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: $"Status option '{automationId}' was unavailable.")!;
+        option.Click();
+    }
+
     protected override void CloseStatusPicker()
     {
         Keyboard.Press(VirtualKeyShort.ESCAPE);
@@ -296,6 +309,33 @@ public sealed class MainWindowFlaUiTests
                FindProcessElement("TaskStatusOptionInProgress") is not null ||
                FindProcessElement("TaskStatusOptionCompleted") is not null ||
                FindProcessElement("TaskStatusOptionArchived") is not null;
+    }
+
+    protected override bool OpenActionsAndFindReloadCommand()
+    {
+        InvokeMainWindowButton("CurrentTaskActionsMenuButton");
+        var deadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(5);
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            var item = FindProcessElement("CurrentTaskReloadButton");
+            if (item is not null && !item.Properties.IsOffscreen.ValueOrDefault) return true;
+            Thread.Sleep(100);
+        }
+        return false;
+    }
+
+    protected override bool IsRecoveryErrorCleared()
+    {
+        var error = FindProcessElement("CurrentTaskOperationErrorText");
+        return error is null || error.Properties.IsOffscreen.ValueOrDefault || string.IsNullOrWhiteSpace(error.Name);
+    }
+
+    protected override void InvokeReloadCommand()
+    {
+        var item = FindProcessElement("CurrentTaskReloadButton")
+            ?? throw new InvalidOperationException("Task actions menu did not expose reload.");
+        if (!item.IsEnabled) throw new InvalidOperationException("Task reload menu item was disabled.");
+        item.Click();
     }
 
     protected override string OpenActionsAndInvokeArchiveCommand()
@@ -468,12 +508,16 @@ public sealed class MainWindowFlaUiTests
         try
         {
             var processId = Session.Inner.MainWindow.Properties.ProcessId.ValueOrDefault;
-            var processOption = Session.Inner.ConditionFactory
-                .ByAutomationId(automationId)
-                .And(Session.Inner.ConditionFactory.ByProcessId(processId));
-            return Session.Inner.MainWindow.Automation
-                .GetDesktop()
-                .FindFirstDescendant(processOption);
+            var option = Session.Inner.ConditionFactory.ByAutomationId(automationId);
+            // Popups can be separate native windows. Search only this app's top-level
+            // windows, avoiding unrelated desktop trees and blocked foreign providers.
+            foreach (var window in Session.Inner.MainWindow.Automation.GetDesktop()
+                .FindAllChildren(Session.Inner.ConditionFactory.ByProcessId(processId)))
+            {
+                var element = window.FindFirstDescendant(option);
+                if (element is not null) return element;
+            }
+            return null;
         }
         catch
         {
@@ -483,10 +527,14 @@ public sealed class MainWindowFlaUiTests
 
     private void ClickMainWindowElement(string automationId)
     {
-        var element = Session.Inner.MainWindow.FindFirstDescendant(
-            Session.Inner.ConditionFactory.ByAutomationId(automationId))
-            ?? throw new InvalidOperationException(
-                $"Main window did not expose automation element '{automationId}'.");
+        Session.Inner.MainWindow.Focus();
+        var element = WaitUntil(
+            () => Session.Inner.MainWindow.FindFirstDescendant(
+                Session.Inner.ConditionFactory.ByAutomationId(automationId)),
+            static control => control is not null && control.IsEnabled &&
+                !control.Properties.IsOffscreen.ValueOrDefault,
+            timeout: TimeSpan.FromSeconds(30),
+            timeoutMessage: $"Main window button '{automationId}' did not become enabled and visible.")!;
         element.Click();
     }
 

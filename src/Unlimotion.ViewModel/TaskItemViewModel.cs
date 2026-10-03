@@ -81,6 +81,21 @@ namespace Unlimotion.ViewModel
         private readonly Dictionary<PendingTaskField, long> _latestEditableRevisionByField = [];
         private readonly Dictionary<PendingTaskField, long> _persistedEditableRevisionByField = [];
         private int _statusOperationCount;
+        private bool _isReloading;
+        private bool _isMissingFromStorage;
+        private bool _isDisposed;
+        private bool _deferredAutosave;
+        private bool _requiresStatusReadBack;
+        public bool IsTaskOperationBusy => Volatile.Read(ref _statusOperationCount) > 0 || _isReloading;
+        public bool CanChangeTaskStatus => !IsTaskOperationBusy && !_isMissingFromStorage &&
+            !_requiresStatusReadBack && _acceptingSaves;
+        public bool CanReloadTask => !IsTaskOperationBusy && !_isMissingFromStorage && _acceptingSaves;
+        public bool IsMissingFromStorage => _isMissingFromStorage;
+        public string TaskOperationError { get; private set; } = string.Empty;
+        public string TaskOperationDetails { get; private set; } = string.Empty;
+        public bool HasTaskOperationError => !string.IsNullOrEmpty(TaskOperationError);
+        public bool HasTaskOperationDetails => !string.IsNullOrEmpty(TaskOperationDetails);
+        public ReactiveCommand<Unit, Unit> ReloadTaskCommand { get; private set; } = null!;
         private Task? _sealedPendingSavesTask;
         private bool _isUpdatingFromModel;
         public bool IsHighlighted { get; set; }
@@ -104,7 +119,20 @@ namespace Unlimotion.ViewModel
 
         private bool CanAutosave =>
             CanTrackEditableChange &&
+            !_isReloading && !_isMissingFromStorage && _acceptingSaves &&
+            !_requiresStatusReadBack &&
             Volatile.Read(ref _statusOperationCount) == 0;
+
+        private bool AdmitAutosave()
+        {
+            lock (_pendingSavesLock)
+            {
+                if ((_isReloading || _requiresStatusReadBack) && CanTrackEditableChange &&
+                    _acceptingSaves && !_isMissingFromStorage)
+                    _deferredAutosave = true;
+                return CanAutosave;
+            }
+        }
 
         private IObservable<T> ObserveProperty<T>(string propertyName, Func<TaskItemViewModel, T> valueProvider) =>
             Observable.Create<T>(observer =>
@@ -167,12 +195,29 @@ namespace Unlimotion.ViewModel
 
         private void Init(ITaskStorage taskStorage)
         {
+            Disposable.Create(() =>
+            {
+                lock (_pendingSavesLock)
+                {
+                    _acceptingSaves = false;
+                    _isDisposed = true;
+                }
+                _writeProducerLifetime.Cancel();
+            }).AddToDispose(this);
             _repeaterPropertyChangedSubscription.AddToDispose(this);
             _completionCriteriaPropertyChangedSubscription.AddToDispose(this);
             _writeProducerLifetime.AddToDispose(this);
             deferredCommandLifetime.AddToDispose(this);
             SaveItemCommand = ReactiveCommand.CreateFromTask(async () =>
             {
+                if (_isMissingFromStorage) return;
+                if (_isReloading)
+                {
+                    lock (_pendingSavesLock) _deferredAutosave = true;
+                    return;
+                }
+                if (_requiresStatusReadBack)
+                    throw new InvalidOperationException(L10n.Get("TaskStatusOutcomeUnknown"));
                 var pendingEditor = CapturePendingEditorState();
                 var revision = pendingEditor?.Revision ?? GetEditableRevision();
                 var snapshot = pendingEditor is { } editor
@@ -183,6 +228,10 @@ namespace Unlimotion.ViewModel
             });
             var saveExceptionSubscription = SaveItemCommand.ThrownExceptions
                 .Subscribe(new ObservableExceptionHandler(NotificationManager));
+            ReloadTaskCommand = ReactiveCommand.CreateFromTask(async () => { await ReloadTaskAsync(); },
+                ObserveProperty(nameof(CanReloadTask), static task => task.CanReloadTask));
+            ReloadTaskCommand.AddToDispose(this);
+            ReloadTaskCommand.ThrownExceptions.Subscribe(new ObservableExceptionHandler(NotificationManager)).AddToDispose(this);
 
             NotifyCollectionChangedEventHandler completionCriteriaChangedHandler = (_, __) => OnCompletionCriteriaChanged();
             CompletionCriteria.CollectionChanged += completionCriteriaChangedHandler;
@@ -263,7 +312,7 @@ namespace Unlimotion.ViewModel
                     .Where(_ => CanTrackEditableChange)
                     .Do(MarkEditableChanged)
                     .Throttle(PropertyChangedThrottleTimeSpanDefault)
-                    .Where(_ => CanAutosave);
+                    .Where(_ => AdmitAutosave());
 
                 propertyChanged
                     .Subscribe(_ => ExecuteSaveCommand())
@@ -347,7 +396,7 @@ namespace Unlimotion.ViewModel
                 .Where(_ => CanTrackEditableChange)
                 .Do(_ => MarkEditableChanged(PendingTaskField.Repeater))
                 .Throttle(TimeSpan.FromSeconds(2))
-                .Where(_ => CanAutosave)
+                .Where(_ => AdmitAutosave())
                 .Subscribe(_ => ExecuteSaveCommand());
 
             _repeaterPropertyChangedSubscription.Disposable = new CompositeDisposable(markerSubscription, saveSubscription);
@@ -1356,7 +1405,7 @@ namespace Unlimotion.ViewModel
 
         private void SaveCompletionCriteriaIfNeeded()
         {
-            if (!CanAutosave)
+            if (!AdmitAutosave())
             {
                 return;
             }
@@ -1373,6 +1422,15 @@ namespace Unlimotion.ViewModel
                 {
                     return;
                 }
+
+                // Admission and producer registration can be separated by a reload click.
+                // Recheck under the same boundary used to capture already-running saves.
+                if (_isReloading || _requiresStatusReadBack)
+                {
+                    if (!_isMissingFromStorage) _deferredAutosave = true;
+                    return;
+                }
+                if (_isMissingFromStorage || Volatile.Read(ref _statusOperationCount) > 0) return;
 
                 saveTask = SaveItemCommand.Execute().ToTask();
                 _pendingSaves.Add(saveTask);
@@ -1392,7 +1450,12 @@ namespace Unlimotion.ViewModel
                     SealPendingSavesCoreAsync(pendingWrites);
             }
 
-            _writeProducerLifetime.Cancel();
+            lock (_pendingSavesLock)
+            {
+                // A detached Missing card can be sealed after its cache VM was disposed.
+                // Disposal marks this flag under the same lock before disposing the CTS.
+                if (!_isDisposed) _writeProducerLifetime.Cancel();
+            }
             return sealedSnapshot;
         }
 
@@ -1405,6 +1468,9 @@ namespace Unlimotion.ViewModel
 
             // Throttled edits may not have started a SaveItemCommand yet. Once the producer
             // boundary is closed, persist that stable final revision before allowing teardown.
+            if (_isMissingFromStorage || _isDisposed) return;
+            if (_requiresStatusReadBack)
+                throw new InvalidOperationException(L10n.Get("TaskStatusOutcomeUnknown"));
             await DrainPendingEditorChangesAsync();
 
             lock (_editorStateLock)
@@ -1488,6 +1554,93 @@ namespace Unlimotion.ViewModel
                 () => _taskStorage.TrySetStatusAsync(Id, targetStatus, author),
                 targetStatus);
 
+        private void NotifyTaskOperationState()
+        {
+            OnPropertyChanged(nameof(IsTaskOperationBusy));
+            OnPropertyChanged(nameof(CanChangeTaskStatus));
+            OnPropertyChanged(nameof(CanReloadTask));
+            OnPropertyChanged(nameof(IsMissingFromStorage));
+        }
+
+        public void MarkMissingFromStorage()
+        {
+            _isMissingFromStorage = true;
+            SetTaskOperationError(L10n.Get("TaskReloadMissing"), "TaskNotFound");
+            NotifyTaskOperationState();
+        }
+
+        private void SetTaskOperationError(string message, string details = "")
+        {
+            TaskOperationError = message;
+            TaskOperationDetails = details;
+        }
+
+        public Task<TaskReloadResult> ReloadTaskAsync()
+        {
+            Task[] pending;
+            var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            lock (_pendingSavesLock)
+            {
+                if (!CanReloadTask) return Task.FromResult(TaskReloadResult.Failed(TaskReloadFailure.SourceUnavailable));
+                _isReloading = true;
+                pending = _pendingSaves.ToArray();
+                // Seal must wait for the missing/loaded decision before its final editor save.
+                // The read itself is never included in the autosaves it waits for.
+                _pendingWriteProducers.Add(completion.Task);
+            }
+            return ExecuteTaskReloadAsync(pending, completion);
+        }
+
+        private async Task<TaskReloadResult> ExecuteTaskReloadAsync(Task[] pending, TaskCompletionSource completion)
+        {
+            NotifyTaskOperationState();
+            var loaded = false;
+            try
+            {
+                try { await Task.WhenAll(pending); } catch { /* Failed autosave remains dirty; reading can recover. */ }
+                if (_isDisposed) return TaskReloadResult.Failed(TaskReloadFailure.SourceUnavailable);
+                var result = await _taskStorage.ReloadTaskAsync(Id);
+                if (_isDisposed) return TaskReloadResult.Failed(TaskReloadFailure.SourceUnavailable);
+                if (result.Outcome == TaskReloadOutcome.Loaded && result.Snapshot is { } task &&
+                    string.Equals(task.Id, Id, StringComparison.Ordinal))
+                {
+                    // The facade may already have merged this snapshot on the UI context.
+                    // Applying it again could overwrite a newer revision-zero server event.
+                    if (!result.AppliedToCache) Update(task, result.StorageRevision);
+                    _requiresStatusReadBack = false;
+                    SetTaskOperationError(string.Empty);
+                    loaded = true;
+                }
+                else if (result.Outcome == TaskReloadOutcome.Missing) MarkMissingFromStorage();
+                else SetTaskOperationError(L10n.Get("TaskReloadFailed"), result.Failure.ToString());
+                return result;
+            }
+            catch (Exception)
+            {
+                SetTaskOperationError(L10n.Get("TaskReloadFailed"), "ReadFailed");
+                return TaskReloadResult.Failed();
+            }
+            finally
+            {
+                lock (_pendingSavesLock)
+                {
+                    _isReloading = false;
+                    if (loaded && _deferredAutosave && CanAutosave)
+                    {
+                        _deferredAutosave = false;
+                        // Resume the user's autosave event that matured during the read.
+                        // Never retry a previous failed save merely because reload succeeded.
+                        ExecuteSaveCommand();
+                    }
+                    if (_isMissingFromStorage) _deferredAutosave = false;
+                    _pendingWriteProducers.Remove(completion.Task);
+                    completion.TrySetResult();
+                }
+                RefreshStatusOptions();
+                NotifyTaskOperationState();
+            }
+        }
+
         public Task TrySelectStatusOptionAsync(DomainTaskStatus targetStatus)
         {
             if (targetStatus == Status)
@@ -1514,7 +1667,8 @@ namespace Unlimotion.ViewModel
             Task<TaskOperationResult> transitionTask;
             lock (_pendingSavesLock)
             {
-                if (!_acceptingSaves)
+                if (!_acceptingSaves || _isReloading || _isMissingFromStorage || _requiresStatusReadBack ||
+                    Volatile.Read(ref _statusOperationCount) > 0)
                 {
                     return Task.FromResult(TaskOperationResult.Denied(
                         TaskOperationDeniedReason.Create(
@@ -1546,6 +1700,7 @@ namespace Unlimotion.ViewModel
             TaskCompletionSource editorWriteCompletion)
         {
             Interlocked.Increment(ref _statusOperationCount);
+            NotifyTaskOperationState();
             var editorDrainFailed = false;
             Exception? editorDrainException = null;
             long editorDrainRevision = 0;
@@ -1590,6 +1745,13 @@ namespace Unlimotion.ViewModel
                                 requestedStatus));
                     }
 
+                    if (result.DeniedReason?.Kind == TaskOperationDeniedKind.OutcomeUnknown)
+                        _requiresStatusReadBack = true;
+                    // A definitive missing result must block writes before draining
+                    // edits made while the status command was pending.
+                    if (result.DeniedReason?.Kind == TaskOperationDeniedKind.TaskNotFound)
+                        MarkMissingFromStorage();
+
                     if (result.AuthoritativeTask is { } authoritativeTask &&
                         string.Equals(authoritativeTask.Id, Id, StringComparison.Ordinal))
                     {
@@ -1598,7 +1760,7 @@ namespace Unlimotion.ViewModel
 
                     try
                     {
-                        await DrainPendingEditorChangesAsync();
+                        if (!_requiresStatusReadBack) await DrainPendingEditorChangesAsync();
                     }
                     catch (Exception exception)
                     {
@@ -1612,12 +1774,20 @@ namespace Unlimotion.ViewModel
 
                 if (!result.Success)
                 {
-                    NotificationManager?.ErrorToast(GetStatusOperationFailureMessage(result));
+                    var message = GetStatusOperationFailureMessage(result);
+                    // Structured codes expose the cause without leaking exception text, settings or credentials.
+                    if (result.DeniedReason?.Kind == TaskOperationDeniedKind.TaskNotFound)
+                        MarkMissingFromStorage();
+                    else SetTaskOperationError(message, result.DeniedReason?.StatusTransitionReason?.ToString()
+                        ?? result.DeniedReason?.Kind.ToString() ?? "StorageFailed");
+                    NotificationManager?.ErrorToast(message);
                 }
                 else if (editorDrainFailed)
                 {
+                    SetTaskOperationError(L10n.Get("TaskStatusSaveFailed"), "EditorSaveFailed");
                     NotificationManager?.ErrorToast(L10n.Get("TaskStatusSaveFailed"));
                 }
+                else SetTaskOperationError(string.Empty);
 
                 RefreshStatusOptions();
                 OnPropertyChanged(nameof(StatusOption));
@@ -1636,6 +1806,7 @@ namespace Unlimotion.ViewModel
                 {
                     ExecuteSaveCommand();
                 }
+                NotifyTaskOperationState();
             }
         }
 
@@ -1643,6 +1814,7 @@ namespace Unlimotion.ViewModel
         {
             while (CapturePendingEditorState() is { } pendingEditor)
             {
+                if (_isMissingFromStorage) return;
                 var editorSnapshot = MergeAuthoritativeStateWithPendingLocalFields(
                     Model,
                     pendingEditor.Snapshot,
@@ -1886,6 +2058,10 @@ namespace Unlimotion.ViewModel
             {
                 TaskOperationDeniedKind.OutcomeUnknown => L10n.Get("TaskStatusOutcomeUnknown"),
                 TaskOperationDeniedKind.StatusPreconditionFailed => L10n.Get("TaskStatusSourceChanged"),
+                TaskOperationDeniedKind.ValidationFailed => L10n.Get("TaskStatusGraphInvalid"),
+                TaskOperationDeniedKind.ExecutionStateDenied => L10n.Get("TaskStatusAgentActive"),
+                TaskOperationDeniedKind.DescriptionMarkerConflict => L10n.Get("TaskStatusMarkerInvalid"),
+                TaskOperationDeniedKind.TaskNotFound => L10n.Get("TaskReloadMissing"),
                 _ => L10n.Get("TaskStatusSaveFailed")
             };
         }
