@@ -5,6 +5,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using Funq;
 using Microsoft.AspNetCore.Builder;
@@ -16,7 +17,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Raven.Client.Documents;
-using Raven.Client.Documents.Linq;
 using Raven.Client.Documents.Session;
 using ServiceStack;
 using ServiceStack.Auth;
@@ -179,9 +179,9 @@ internal static class ServerStorageCrudRealtimeContract
             ]
         });
 
-        await fixture.WaitForTaskQueryIndexesAsync(storedTaskId);
-
-        TaskItemPage ownerPage = await ownerClient.GetAsync(new GetAllTasks());
+        // Bulk insert precedes query-index visibility. Wait through the authenticated
+        // endpoint whose result is asserted, rather than an extra non-stale query barrier.
+        TaskItemPage ownerPage = await WaitForTaskInPageAsync(ownerClient, storedTaskId);
         TaskItemMold loaded = await ownerClient.GetAsync(new GetTask { Id = storedTaskId });
         TaskItemPage otherUserPage = await otherUserClient.GetAsync(new GetAllTasks());
         TaskItemMold? otherUserLoaded = await TryGetTaskAsync(otherUserClient, storedTaskId);
@@ -237,6 +237,47 @@ internal static class ServerStorageCrudRealtimeContract
         }
 
         return await task;
+    }
+
+    private static async Task<TaskItemPage> WaitForTaskInPageAsync(JsonServiceClient client, string taskId)
+    {
+        using var queryLifetime = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(10);
+        var originalTimeout = client.Timeout;
+        try
+        {
+            while (true)
+            {
+                var remaining = deadline - DateTimeOffset.UtcNow;
+                if (remaining <= TimeSpan.Zero)
+                    throw new TimeoutException($"GetAllTasks did not expose {taskId} within 10 seconds.");
+
+                // Every request, including the first cold query, shares the same budget.
+                // Authentication/server errors propagate; only an empty successful page is polled.
+                // The SDK timer aborts pending response headers; the token also covers body reads.
+                client.Timeout = originalTimeout is { } configuredTimeout && configuredTimeout > TimeSpan.Zero &&
+                    configuredTimeout < remaining ? configuredTimeout : remaining;
+                var page = await client.GetAsync(new GetAllTasks(), queryLifetime.Token).WaitAsync(remaining);
+                if (page.Tasks.Any(task => task.Id == taskId))
+                    return page;
+
+                remaining = deadline - DateTimeOffset.UtcNow;
+                if (remaining <= TimeSpan.Zero)
+                    throw new TimeoutException($"GetAllTasks did not expose {taskId} within 10 seconds.");
+                await Task.Delay(remaining < TimeSpan.FromMilliseconds(50) ? remaining : TimeSpan.FromMilliseconds(50),
+                    queryLifetime.Token);
+            }
+        }
+        catch (OperationCanceledException canceled) when (queryLifetime.IsCancellationRequested)
+        {
+            throw new TimeoutException($"GetAllTasks did not expose {taskId} within 10 seconds.", canceled);
+        }
+        finally
+        {
+            // WaitAsync may time out before the timer callback runs; stop the HTTP operation too.
+            queryLifetime.Cancel();
+            client.Timeout = originalTimeout;
+        }
     }
 
     private static async Task<bool> CompletesWithinAsync<T>(Task<T> task, TimeSpan timeout)
@@ -384,25 +425,6 @@ internal static class ServerStorageCrudRealtimeContract
             payload["session"] = Guid.NewGuid().ToString();
 
             return JwtAuthProvider.CreateEncryptedJweToken(payload, jwtProvider.PublicKey.Value);
-        }
-
-        public async Task WaitForTaskQueryIndexesAsync(string taskId)
-        {
-            using var scope = _host.Services.CreateScope();
-            var session = scope.ServiceProvider.GetRequiredService<IAsyncDocumentSession>();
-            var task = await session.LoadAsync<TaskItem>(taskId)
-                ?? throw new InvalidOperationException($"Bulk insert did not persist '{taskId}'.");
-
-            // Bulk insert completes before asynchronous auto-indexing. Warm both query
-            // shapes used by the API; keep the actual authenticated HTTP checks below.
-            await session.Query<TaskItem>()
-                .Customize(query => query.WaitForNonStaleResults(TimeSpan.FromSeconds(10)))
-                .Where(item => item.UserId == task.UserId)
-                .ToListAsync();
-            await session.Query<TaskItem>()
-                .Customize(query => query.WaitForNonStaleResults(TimeSpan.FromSeconds(10)))
-                .Where(item => item.Id == taskId && item.UserId == task.UserId)
-                .ToListAsync();
         }
 
         public HubConnection CreateHubConnection()
