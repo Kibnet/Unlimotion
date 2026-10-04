@@ -264,6 +264,8 @@ public class MainControlTaskCardLayoutUiTests
                     var path = Path.Combine(fixture.DefaultTasksFolderPath, id);
                     var json = JObject.Parse(File.ReadAllText(path));
                     json["Title"] = initialTitle;
+                    if (id == MainWindowViewModelFixture.RootTask2Id)
+                        json[nameof(TaskItem.PlannedBeginDateTime)] = new JValue(DateTime.Today);
                     File.WriteAllText(path, json.ToString());
                 }
                 var childPath = Path.Combine(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.SubTask22Id);
@@ -298,9 +300,25 @@ public class MainControlTaskCardLayoutUiTests
                 foreach (var emoji in new[] { replacementEmoji, "🐦‍🔥", "", originalEmoji })
                 {
                     changeIndex++;
-                    TestHelpers.SetCurrentTask(vm, parent.Id);
+                    parent = TestHelpers.SetCurrentTask(vm, parent.Id);
                     RunLayoutJobs();
                     var titleInput = FindControlByAutomationId<TextBox>(view, "CurrentTaskTitleTextBox");
+                    var inputReady = await TestHelpers.WaitUntilAsync(() =>
+                    {
+                        RunLayoutJobs();
+                        AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                        RunLayoutJobs();
+                        return IsVisibleAndArranged(titleInput) && ReferenceEquals(titleInput.DataContext, parent) &&
+                            titleInput.Text == parent.Title;
+                    }, TimeSpan.FromSeconds(2));
+                    if (!inputReady)
+                        Console.Error.WriteLine("Emoji card input readiness: " + JsonConvert.SerializeObject(new
+                        {
+                            parent.Id, parent.Title, parent.Emoji, InputText = titleInput.Text,
+                            InputIsParent = ReferenceEquals(titleInput.DataContext, parent),
+                            CacheIsParent = ReferenceEquals(TestHelpers.GetTask(vm, parent.Id), parent)
+                        }));
+                    await Assert.That(inputReady).IsTrue();
                     await Assert.That(titleInput.Focus()).IsTrue();
                     titleInput.SelectAll();
                     window.KeyTextInput($"{emoji} Проект");
@@ -313,16 +331,36 @@ public class MainControlTaskCardLayoutUiTests
                         var descendant = TestHelpers.SetCurrentTask(vm, descendantId);
                         RunLayoutJobs();
                         var trail = FindControlByAutomationId<EmojiTextBlock>(view, "CurrentTaskParentEmojiTrail");
-                        var expectedTrail = string.Concat(descendant.GetAllParents().Select(ancestor => ancestor.Emoji));
-                        await Assert.That(await TestHelpers.WaitUntilAsync(() =>
+                        var expectedTitle = $"{emoji} Проект";
+                        var trailReady = await TestHelpers.WaitUntilAsync(() =>
                         {
                             RunLayoutJobs();
                             AvaloniaHeadlessPlatform.ForceRenderTimerTick();
                             RunLayoutJobs();
+                            var ancestors = descendant.GetAllParents().ToArray();
+                            var editedAncestor = ancestors.Single(ancestor => ancestor.Id == parent.Id);
+                            var expectedTrail = string.Concat(ancestors.Select(ancestor => ancestor.Emoji));
                             return ReferenceEquals(trail.DataContext, descendant) &&
+                                parent.Title == expectedTitle && parent.Emoji == emoji &&
+                                editedAncestor.Title == expectedTitle && editedAncestor.Emoji == emoji &&
                                 IsVisibleAndArranged(trail) && trail.EmojiText == expectedTrail &&
                                 descendant.ParentEmojiTrail == expectedTrail && descendant.GetAllEmoji == expectedTrail;
-                        }, TimeSpan.FromSeconds(2))).IsTrue();
+                        }, TimeSpan.FromSeconds(2));
+                        if (!trailReady)
+                            Console.Error.WriteLine("Emoji card trail readiness: " + JsonConvert.SerializeObject(new
+                            {
+                                ExpectedTitle = expectedTitle, parent.Id, parent.Title, parent.Emoji,
+                                CacheIsParent = ReferenceEquals(TestHelpers.GetTask(vm, parent.Id), parent),
+                                CacheTitle = TestHelpers.GetTask(vm, parent.Id).Title,
+                                descendant.ParentEmojiTrail, descendant.GetAllEmoji, TrailText = trail.EmojiText,
+                                TrailIsDescendant = ReferenceEquals(trail.DataContext, descendant),
+                                Ancestors = descendant.GetAllParents().Select(ancestor => new
+                                {
+                                    ancestor.Id, ancestor.Title, ancestor.Emoji,
+                                    IsEditedParent = ReferenceEquals(ancestor, parent)
+                                }).ToArray()
+                            }));
+                        await Assert.That(trailReady).IsTrue();
                         SaveEmojiTitleFrame(window, capturePrefix + $"{changeIndex}-" + (descendantId == grandchildId ? "grandchild-after" : "card-after"));
                         await Assert.That(IsVisibleAndArranged(trail)).IsTrue();
                         await Assert.That(trail.EmojiText).Contains("🛠");
