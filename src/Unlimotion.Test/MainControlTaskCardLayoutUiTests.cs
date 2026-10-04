@@ -1650,11 +1650,15 @@ public class MainControlTaskCardLayoutUiTests
     [Test]
     public async Task CurrentTaskCard_TaskHistory_CentersActionsAndScrollsSmoothlyWithinUnifiedBackground()
     {
-        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(RenderedTaskHistoryAppBuilder));
+        // Match the suite's drawing backend: cached glyphs from other Headless tests
+        // cannot be rendered by Skia. Pixel evidence runs separately in a fresh Skia process.
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             ResetTaskCardLayoutSharedState();
             var previousTheme = Application.Current!.RequestedThemeVariant;
+            var previousLogSink = Avalonia.Logging.Logger.Sink;
+            Avalonia.Logging.Logger.Sink = new HistoryRenderDiagnosticLogSink();
             try
             {
                 foreach (var theme in new[] { ThemeVariant.Light, ThemeVariant.Dark })
@@ -1702,10 +1706,7 @@ public class MainControlTaskCardLayoutUiTests
                             if (args.Property == ScrollViewer.OffsetProperty)
                                 offsets.Add(scroll.Offset.Y);
                         };
-                        // Commit the compositor scene before computing a physical input position.
-                        // MouseWheel renders first; an unfinished scene can move the footer before hit testing.
-                        using (window.CaptureRenderedFrame()) { }
-                        var wheelPoint = scroll.TranslatePoint(new Point(24, 24), window)!.Value;
+                        var wheelPoint = await WaitForHistoryWheelTargetAsync(window, scroll);
                         window.MouseMove(wheelPoint);
                         expander.AddHandler(Avalonia.Input.InputElement.PointerWheelChangedEvent, (_, args) =>
                         {
@@ -1748,7 +1749,8 @@ public class MainControlTaskCardLayoutUiTests
                             "Git", "Long description", [longChange]);
                         RunLayoutJobs();
                         scroll.ScrollToHome();
-                        using (window.CaptureRenderedFrame()) { }
+                        AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                        RunLayoutJobs();
                         var field = list.GetVisualDescendants().OfType<TaskHistoryFieldChangeView>()
                             .Single(control => ReferenceEquals(control.DataContext, longChange));
                         FindControlByAutomationId<Button>(field, "TaskHistoryShowDetailsButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -1756,12 +1758,13 @@ public class MainControlTaskCardLayoutUiTests
                             await Task.Delay(10);
                         RunLayoutJobs();
                         await Assert.That(field.IsDetailsExpanded).IsTrue();
-                        using (window.CaptureRenderedFrame()) { }
+                        AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                        RunLayoutJobs();
                         var fullText = field.GetVisualDescendants().OfType<ScrollViewer>().Single(control => control.Name == "FullOldViewer");
                         await Assert.That(fullText.Extent.Height).IsGreaterThan(fullText.Viewport.Height);
                         var commitOffset = scroll.Offset;
-                        using (window.CaptureRenderedFrame()) { }
-                        window.MouseWheel(fullText.TranslatePoint(new Point(24, 24), window)!.Value, new Vector(0, -1));
+                        var fullTextWheelPoint = await WaitForHistoryWheelTargetAsync(window, fullText);
+                        window.MouseWheel(fullTextWheelPoint, new Vector(0, -1));
                         for (var attempt = 0; attempt < 40 && Math.Abs(fullText.Offset.Y - 50) > 0.1; attempt++)
                         {
                             await Task.Delay(25);
@@ -1781,8 +1784,8 @@ public class MainControlTaskCardLayoutUiTests
                             if (args.Property == ScrollViewer.OffsetProperty)
                                 statusOffsets.Add(statuses.Offset.Y);
                         };
-                        using (window.CaptureRenderedFrame()) { }
-                        window.MouseWheel(statuses.TranslatePoint(new Point(24, 24), window)!.Value, new Vector(0, -1));
+                        var statusWheelPoint = await WaitForHistoryWheelTargetAsync(window, statuses);
+                        window.MouseWheel(statusWheelPoint, new Vector(0, -1));
                         for (var attempt = 0; attempt < 40 && Math.Abs(statuses.Offset.Y - 50) > 0.1; attempt++)
                         {
                             await Task.Delay(25);
@@ -1803,8 +1806,55 @@ public class MainControlTaskCardLayoutUiTests
             finally
             {
                 Application.Current.RequestedThemeVariant = previousTheme;
+                Avalonia.Logging.Logger.Sink = previousLogSink;
             }
         }, CancellationToken.None);
+    }
+
+    private static async Task<Point> WaitForHistoryWheelTargetAsync(Window window, ScrollViewer scroll)
+    {
+        Point point = default;
+        Point? previousPoint = null;
+        Visual? hit = null;
+        // Bounds can precede the compositor's input scene. Require two stable composition
+        // positions and a hit inside this viewport before sending physical wheel input.
+        var ready = await TestHelpers.WaitUntilAsync(() =>
+        {
+            RunLayoutJobs();
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            RunLayoutJobs();
+            var translated = scroll.TranslatePoint(new Point(24, 24), window);
+            if (!translated.HasValue)
+                return false;
+            point = translated.Value;
+            hit = window.InputHitTest(point) as Visual;
+            var inViewport = ReferenceEquals(hit, scroll) ||
+                hit?.GetVisualAncestors().Any(ancestor => ReferenceEquals(ancestor, scroll)) == true;
+            var stable = previousPoint == point;
+            previousPoint = point;
+            return stable && inViewport && scroll.IsEffectivelyVisible;
+        }, TimeSpan.FromSeconds(3));
+        if (!ready)
+        {
+            Console.WriteLine($"History wheel target not ready: window={window.Bounds}; scroll={scroll.Bounds}; point={point}; hit={hit}; visible={scroll.IsEffectivelyVisible}; disabledHit={window.InputHitTest(point, enabledElementsOnly: false)}");
+            Console.WriteLine("History wheel ancestors: " + string.Join(" | ", scroll.GetVisualAncestors().OfType<Control>()
+                .Select(control => $"{control.GetType().Name}/{control.Name}: visible={control.IsVisible}; enabled={control.IsEffectivelyEnabled}; hit={control.IsHitTestVisible}; opacity={control.Opacity}; bounds={control.Bounds}")));
+        }
+        await Assert.That(ready).IsTrue();
+        return point;
+    }
+
+    private sealed class HistoryRenderDiagnosticLogSink : Avalonia.Logging.ILogSink
+    {
+        public bool IsEnabled(Avalonia.Logging.LogEventLevel level, string area) =>
+            level >= Avalonia.Logging.LogEventLevel.Warning && area != "Binding";
+
+        public void Log(Avalonia.Logging.LogEventLevel level, string area, object? source, string messageTemplate) =>
+            Console.WriteLine($"Avalonia {level}/{area}: {messageTemplate}");
+
+        public void Log(Avalonia.Logging.LogEventLevel level, string area, object? source, string messageTemplate,
+            params object?[] propertyValues) =>
+            Console.WriteLine($"Avalonia {level}/{area}: {messageTemplate}; {string.Join(" | ", propertyValues)}");
     }
 
     private static void StopBackgroundTaskHistoryRefresh(MainControl view)
