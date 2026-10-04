@@ -134,6 +134,10 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<None Update="Baselines\TaskImportance\**" CopyToOutputDirectory="PreserveNewest" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<ProjectReference Include="..\Unlimotion.Cli\Unlimotion.Cli.csproj" />
 		<ProjectReference Include="..\Unlimotion.Desktop\Unlimotion.Desktop.csproj" />
 		<ProjectReference Include="..\Unlimotion.FileStorage\Unlimotion.FileStorage.csproj" />
