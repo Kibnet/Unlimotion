@@ -618,6 +618,9 @@
   <data name="TaskHistoryValueChangedRefresh" xml:space="preserve"><value>The task file changed after this history was loaded. Refresh the history to see its current value.</value></data>
   <data name="TaskHistoryDuplicateTaskFiles" xml:space="preserve"><value>More than one task file contains Id '{0}'. History is ambiguous.</value></data>
   <data name="TaskHistoryBlobTooLarge" xml:space="preserve"><value>The task revision is too large to display safely.</value></data>
+  <data name="TaskHistoryEmptyRevision" xml:space="preserve"><value>The task revision contains an empty file.</value></data>
+  <data name="TaskHistoryEmptyList" xml:space="preserve"><value>Empty list</value></data>
+  <data name="TaskHistoryEmptyObject" xml:space="preserve"><value>No fields</value></data>
   <data name="TaskHistoryMissingValue" xml:space="preserve"><value>Field was absent</value></data>
   <data name="TaskHistoryNullValue" xml:space="preserve"><value>Not set</value></data>
   <data name="TaskHistoryEmptyString" xml:space="preserve"><value>Empty string</value></data>

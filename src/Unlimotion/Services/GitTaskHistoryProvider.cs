@@ -159,19 +159,23 @@ public sealed class GitTaskHistoryProvider : ITaskHistoryProvider
 
         var entries = new List<TaskHistoryEntry>();
         var partial = session.IsPartial;
-        if (request.Cursor is null && workingSnapshot is not null)
+        if (request.Cursor is null)
         {
             try
             {
                 var headSnapshot = FindCommitSnapshot(
-                    head, relativeStoragePath, request.TaskId, cancellationToken, workingSnapshot.RelativePath);
-                if (!SnapshotsEqual(headSnapshot, workingSnapshot))
+                    head, relativeStoragePath, request.TaskId, cancellationToken, workingSnapshot?.RelativePath);
+                if (workingSnapshot is not null && !SnapshotsEqual(headSnapshot, workingSnapshot))
                     entries.Add(CreateWorkingTreeEntry(repository, workTreeRoot, headSnapshot, workingSnapshot, cancellationToken));
+                // A new working file cannot inherit an earlier, deleted incarnation of the same Id.
+                if (headSnapshot is null)
+                    return new TaskHistoryPage(entries, null, entries.Count == 0 ? Localization.Get("TaskHistoryEmpty") : string.Empty);
             }
             catch (Exception ex) when (ex is JsonException or InvalidDataException)
             {
                 partial = true;
-                entries.Add(CreateUnreadableWorkingTreeEntry(ex));
+                if (workingSnapshot is not null)
+                    entries.Add(CreateUnreadableWorkingTreeEntry(ex));
             }
         }
 
@@ -188,6 +192,7 @@ public sealed class GitTaskHistoryProvider : ITaskHistoryProvider
         {
             cancellationToken.ThrowIfCancellationRequested();
             var commit = session.Enumerator!.Current;
+            var reachedCreation = false;
             try
             {
                 var parent = commit.Parents.FirstOrDefault();
@@ -221,9 +226,11 @@ public sealed class GitTaskHistoryProvider : ITaskHistoryProvider
                         request.TaskId,
                         cancellationToken,
                         previousExpectedPath,
-                        previousCandidates);
+                        previousCandidates,
+                        GetChangedTaskPaths(treeChanges, relativeStoragePath, useOldPath: true, onlyRemovedPaths: true));
                 if (previousSnapshot is not null)
                     knownTaskPath = previousSnapshot.RelativePath;
+                reachedCreation = currentSnapshot is not null && previousSnapshot is null;
 
                 if (!SnapshotsEqual(previousSnapshot, currentSnapshot))
                 {
@@ -275,6 +282,11 @@ public sealed class GitTaskHistoryProvider : ITaskHistoryProvider
             }
 
             visited++;
+            if (reachedCreation)
+            {
+                session.HasCurrentCommit = false;
+                break;
+            }
             session.HasCurrentCommit = session.Enumerator.MoveNext();
         }
 
@@ -387,13 +399,15 @@ public sealed class GitTaskHistoryProvider : ITaskHistoryProvider
     private static IReadOnlyCollection<string>? GetChangedTaskPaths(
         TreeChanges? changes,
         string relativeStoragePath,
-        bool useOldPath)
+        bool useOldPath,
+        bool onlyRemovedPaths = false)
     {
         if (changes is null)
             return null;
 
         var normalizedStorage = relativeStoragePath.Replace(Path.DirectorySeparatorChar, '/').Trim('/');
         return changes
+            .Where(change => !onlyRemovedPaths || change.Status is ChangeKind.Deleted or ChangeKind.Renamed)
             .Where(change => useOldPath
                 ? change.Status != ChangeKind.Added
                 : change.Status != ChangeKind.Deleted)
@@ -427,8 +441,12 @@ public sealed class GitTaskHistoryProvider : ITaskHistoryProvider
                 !string.Equals(change.OldPath.Replace('\\', '/'), normalizedCurrent, StringComparison.OrdinalIgnoreCase))
                 return change.OldPath.Replace('\\', '/');
 
+            var removedPaths = changes.Where(change => change.Status is ChangeKind.Deleted or ChangeKind.Renamed)
+                .Select(change => (string.IsNullOrWhiteSpace(change.OldPath) ? change.Path : change.OldPath)?.Replace('\\', '/'))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
             var alternativePaths = previousCandidates?
                 .Where(path => !string.Equals(path, normalizedCurrent, StringComparison.OrdinalIgnoreCase))
+                .Where(path => removedPaths.Contains(path))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToArray();
 
@@ -455,7 +473,8 @@ public sealed class GitTaskHistoryProvider : ITaskHistoryProvider
         string taskId,
         CancellationToken cancellationToken,
         string? expectedRelativePath = null,
-        IReadOnlyCollection<string>? candidateRelativePaths = null)
+        IReadOnlyCollection<string>? candidateRelativePaths = null,
+        IReadOnlyCollection<string>? unreadableCandidatePaths = null)
     {
         Tree tree;
         if (string.IsNullOrWhiteSpace(relativeStoragePath) || relativeStoragePath == ".")
@@ -478,7 +497,9 @@ public sealed class GitTaskHistoryProvider : ITaskHistoryProvider
             if (expectedEntry?.TargetType == TreeEntryTargetType.Blob)
             {
                 var expectedBlob = (Blob)expectedEntry.Target;
-                if (expectedBlob.Size == 0 || expectedBlob.Size > MaxBlobBytes)
+                if (expectedBlob.Size == 0)
+                    throw new InvalidDataException(Localization.Get("TaskHistoryEmptyRevision"));
+                if (expectedBlob.Size > MaxBlobBytes)
                     throw new InvalidDataException(Localization.Get("TaskHistoryBlobTooLarge"));
 
                 var expectedJson = ParseJson(ReadBlobBytes(expectedBlob, cancellationToken));
@@ -509,10 +530,14 @@ public sealed class GitTaskHistoryProvider : ITaskHistoryProvider
                 continue;
 
             var blob = (Blob)entry.Target;
+            var mayBeUnreadableTask = candidateRelativePaths is not null &&
+                (unreadableCandidatePaths is null || unreadableCandidatePaths.Any(path =>
+                    string.Equals(Path.GetFileName(path), entry.Name, StringComparison.OrdinalIgnoreCase)));
             if (blob.Size == 0 || blob.Size > MaxBlobBytes)
             {
-                if (candidateRelativePaths is not null)
-                    unreadableCandidate ??= new InvalidDataException(Localization.Get("TaskHistoryBlobTooLarge"));
+                if (mayBeUnreadableTask)
+                    unreadableCandidate ??= new InvalidDataException(Localization.Get(
+                        blob.Size == 0 ? "TaskHistoryEmptyRevision" : "TaskHistoryBlobTooLarge"));
                 continue;
             }
 
@@ -532,7 +557,7 @@ public sealed class GitTaskHistoryProvider : ITaskHistoryProvider
             }
             catch (JsonException ex)
             {
-                if (candidateRelativePaths is not null)
+                if (mayBeUnreadableTask)
                     unreadableCandidate ??= ex;
             }
         }
@@ -781,7 +806,11 @@ internal static class TaskHistoryDiffBuilder
                 Localization.Get("TaskHistoryEmptyString"),
             JTokenType.String => token.Value<string>() ?? string.Empty,
             JTokenType.Date => FormatDate(token),
-            JTokenType.Object or JTokenType.Array => token.ToString(Formatting.Indented),
+            JTokenType.Array when !token.HasValues => Localization.Get("TaskHistoryEmptyList"),
+            JTokenType.Array => string.Join("\n", token.Children().Select(value => "• " + FormatFullValue(value))),
+            JTokenType.Object when !token.HasValues => Localization.Get("TaskHistoryEmptyObject"),
+            JTokenType.Object => string.Join("; ", ((JObject)token).Properties()
+                .Select(property => $"{DisplayName(property.Name)}: {FormatKnownValue(property.Name, property.Value)}")),
             _ => token.ToString(Formatting.None)
         };
 
@@ -936,8 +965,8 @@ internal static class TaskHistoryDiffBuilder
             if (oldCriterion is not null && newCriterion is not null &&
                 string.Equals(oldDisplay, newDisplay, StringComparison.Ordinal))
             {
-                oldDisplay = oldCriterion.ToString(Formatting.None);
-                newDisplay = newCriterion.ToString(Formatting.None);
+                oldDisplay = FormatFullValue(oldCriterion);
+                newDisplay = FormatFullValue(newCriterion);
             }
 
             changes.Add(new TaskHistoryFieldChange(
@@ -1019,12 +1048,15 @@ internal static class TaskHistoryDiffBuilder
                     ? TaskHistoryChangeType.Removed
                     : TaskHistoryChangeType.Modified,
             IsMetadata(rootProperty) ||
-            ((rootProperty == "CompletedDateTime" || rootProperty == "ArchiveDateTime") &&
-             ((oldToken is null && newToken?.Type == JTokenType.Null) ||
-              (newToken is null && oldToken?.Type == JTokenType.Null))),
+            (!string.Equals(rootProperty, "IsCompleted", StringComparison.OrdinalIgnoreCase) &&
+             ((oldToken is null && IsUnassigned(newToken)) || (newToken is null && IsUnassigned(oldToken)))),
             oldReference(path),
             newReference(path)));
     }
+
+    private static bool IsUnassigned(JToken? token) => token is not null &&
+        (token.Type == JTokenType.Null || token.Type == JTokenType.String && string.IsNullOrEmpty(token.Value<string>()) ||
+         token is JContainer { HasValues: false });
 
     private static string FormatKnownValue(string rootProperty, JToken value)
     {

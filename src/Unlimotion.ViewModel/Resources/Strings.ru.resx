@@ -618,6 +618,9 @@
   <data name="TaskHistoryValueChangedRefresh" xml:space="preserve"><value>Файл задачи изменился после загрузки истории. Обнови историю, чтобы увидеть актуальное значение.</value></data>
   <data name="TaskHistoryDuplicateTaskFiles" xml:space="preserve"><value>Идентификатор '{0}' найден более чем в одном файле задачи. История неоднозначна.</value></data>
   <data name="TaskHistoryBlobTooLarge" xml:space="preserve"><value>Версия задачи слишком велика для безопасного отображения.</value></data>
+  <data name="TaskHistoryEmptyRevision" xml:space="preserve"><value>Версия задачи содержит пустой файл.</value></data>
+  <data name="TaskHistoryEmptyList" xml:space="preserve"><value>Пустой список</value></data>
+  <data name="TaskHistoryEmptyObject" xml:space="preserve"><value>Нет полей</value></data>
   <data name="TaskHistoryMissingValue" xml:space="preserve"><value>Поля не было</value></data>
   <data name="TaskHistoryNullValue" xml:space="preserve"><value>Не задано</value></data>
   <data name="TaskHistoryEmptyString" xml:space="preserve"><value>Пустая строка</value></data>

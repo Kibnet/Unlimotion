@@ -97,6 +97,148 @@ public sealed class GitTaskHistoryProviderTests
     }
 
     [Test]
+    public async Task GetPageAsync_StopsAtCreationBeforeUnrelatedUnreadableFiles()
+    {
+        using var fixture = new GitHistoryFixture();
+        File.WriteAllText(Path.Combine(fixture.StoragePath, "unrelated.json"), "");
+        fixture.Commit("before task existed");
+        fixture.WriteTask("Created", "NotReady", "first");
+        fixture.Commit("create task");
+
+        var page = await new GitTaskHistoryProvider().GetPageAsync(
+            new TaskHistoryRequest(fixture.StoragePath, "local", fixture.TaskId, null, PageSize: 1), CancellationToken.None);
+
+        await Assert.That(page.Entries.Select(entry => entry.Message).ToArray()).IsEquivalentTo(new[] { "create task" });
+        await Assert.That(page.NextCursor).IsNull();
+        await Assert.That(page.IsPartial).IsFalse();
+    }
+
+    [Test]
+    public async Task GetPageAsync_MergeRetainsBothBranchesOfCurrentIncarnation()
+    {
+        using var fixture = new GitHistoryFixture();
+        fixture.WriteTask("Initial", "NotReady", "initial");
+        fixture.Commit("create task");
+        var repository = fixture.Repository;
+        var side = repository.CreateBranch("side");
+        fixture.WriteTask("Main edit", "NotReady", "initial");
+        fixture.Commit("main edit");
+        var mainTip = repository.Head.Tip;
+        Commands.Checkout(repository, side);
+        fixture.WriteTask("Initial", "NotReady", "side edit");
+        fixture.Commit("side edit");
+        var signature = new Signature("Test", "test@unlimotion.local", DateTimeOffset.UtcNow);
+        var merge = repository.ObjectDatabase.CreateCommit(signature, signature, "merge", repository.Head.Tip.Tree,
+            [repository.Head.Tip, mainTip], false);
+        repository.Reset(ResetMode.Hard, merge);
+        var page = await new GitTaskHistoryProvider().GetPageAsync(
+            new TaskHistoryRequest(fixture.StoragePath, "local", fixture.TaskId, null), CancellationToken.None);
+        await Assert.That(page.Entries.Any(entry => entry.Message == "main edit")).IsTrue();
+        await Assert.That(page.Entries.Any(entry => entry.Message == "side edit")).IsTrue();
+        await Assert.That(page.Entries.Last().Message).IsEqualTo("create task");
+    }
+
+    [Test]
+    public async Task GetPageAsync_RecreatedTaskDoesNotIncludePreviousIncarnation()
+    {
+        using var fixture = new GitHistoryFixture();
+        fixture.WriteTask("Old task", "NotReady", "old");
+        fixture.Commit("old incarnation");
+        File.Delete(Path.Combine(fixture.StoragePath, "task.json"));
+        fixture.Commit("delete task");
+        fixture.WriteTask("New task", "NotReady", "new");
+        fixture.Commit("recreate task");
+        fixture.WriteTask("New task edited", "NotReady", "new");
+        fixture.Commit("edit current task");
+        var provider = new GitTaskHistoryProvider();
+        var first = await provider.GetPageAsync(
+            new TaskHistoryRequest(fixture.StoragePath, "local", fixture.TaskId, null, PageSize: 1), CancellationToken.None);
+        var last = await provider.GetPageAsync(
+            new TaskHistoryRequest(fixture.StoragePath, "local", fixture.TaskId, first.NextCursor, PageSize: 1), CancellationToken.None);
+
+        await Assert.That(first.Entries.Single().Message).IsEqualTo("edit current task");
+        await Assert.That(last.Entries.Single().Message).IsEqualTo("recreate task");
+        await Assert.That(last.NextCursor).IsNull();
+        await Assert.That(last.IsPartial).IsFalse();
+    }
+
+    [Test]
+    public async Task GetPageAsync_UncommittedRecreatedTaskHasOnlyWorkingCopy()
+    {
+        using var fixture = new GitHistoryFixture();
+        fixture.WriteTask("Old task", "NotReady", "old");
+        fixture.Commit("old incarnation");
+        File.Delete(Path.Combine(fixture.StoragePath, "task.json"));
+        fixture.Commit("delete task");
+        fixture.WriteTask("New task", "NotReady", "new");
+
+        var page = await new GitTaskHistoryProvider().GetPageAsync(
+            new TaskHistoryRequest(fixture.StoragePath, "local", fixture.TaskId, null), CancellationToken.None);
+
+        await Assert.That(page.Entries.Count).IsEqualTo(1);
+        await Assert.That(page.Entries.Single().IsWorkingTree).IsTrue();
+        await Assert.That(page.NextCursor).IsNull();
+        await Assert.That(page.IsPartial).IsFalse();
+    }
+
+    [Test]
+    public async Task GetPageAsync_KnownEmptyRevisionHasAccurateNotice()
+    {
+        using var fixture = new GitHistoryFixture();
+        fixture.WriteTask("Task", "NotReady", "first");
+        fixture.Commit("create task");
+        File.WriteAllText(Path.Combine(fixture.StoragePath, "task.json"), "");
+        fixture.Commit("empty task file");
+        fixture.WriteTask("Task", "NotReady", "repaired");
+        fixture.Commit("repair task");
+
+        var page = await new GitTaskHistoryProvider().GetPageAsync(
+            new TaskHistoryRequest(fixture.StoragePath, "local", fixture.TaskId, null), CancellationToken.None);
+        var empty = page.Entries.Single(entry => entry.Message == "empty task file");
+        await Assert.That(empty.Notice).IsEqualTo(Unlimotion.ViewModel.Localization.Localization.Get("TaskHistoryEmptyRevision"));
+        await Assert.That(page.IsPartial).IsTrue();
+    }
+
+    [Test]
+    public async Task DiffBuilder_InitialEmptyValuesAreMetadataButRealClearingIsVisible()
+    {
+        var missing = Snapshot("""{"Id":"1"}""");
+        var initialized = Snapshot("""{"Id":"1","Description":"","Repeater":null,"PlannedBeginDateTime":null,"PlannedEndDateTime":null,"PlannedDuration":null,"Extension":[]}""");
+        foreach (var changes in new[]
+                 {
+                     TaskHistoryDiffBuilder.Build(missing, initialized, "repo", "root", "old", "new"),
+                     TaskHistoryDiffBuilder.Build(initialized, missing, "repo", "root", "old", "new")
+                 })
+        {
+            await Assert.That(changes.Count).IsGreaterThan(0);
+            await Assert.That(changes.All(change => change.IsMetadata)).IsTrue();
+        }
+        var cleared = TaskHistoryDiffBuilder.Build(
+            Snapshot("""{"Id":"1","Description":"Text","PlannedBeginDateTime":"2026-10-01"}"""),
+            Snapshot("""{"Id":"1","Description":"","PlannedBeginDateTime":null}"""), "repo", "root", "old", "new");
+        await Assert.That(cleared.Count).IsEqualTo(2);
+        await Assert.That(cleared.Any(change => change.IsMetadata)).IsFalse();
+        var archived = TaskHistoryDiffBuilder.Build(missing, Snapshot("""{"Id":"1","IsCompleted":null}"""), "repo", "root", "old", "new");
+        await Assert.That(archived.Single().IsMetadata).IsFalse();
+    }
+
+    [Test]
+    public async Task DiffBuilder_StructuredValuesAreReadableWithoutJsonPunctuation()
+    {
+        var changes = TaskHistoryDiffBuilder.Build(
+            Snapshot("""{"Id":"1","StatusHistory":[]}"""),
+            Snapshot("""{"Id":"1","StatusHistory":[{"Author":"Иван","Status":"InProgress"}]}"""), "repo", "root", "old", "new");
+        var change = changes.Single();
+        await Assert.That(change.IsMetadata).IsTrue();
+        await Assert.That(change.OldValueDisplay).IsEqualTo(Unlimotion.ViewModel.Localization.Localization.Get("TaskHistoryEmptyList"));
+        await Assert.That(change.NewValueDisplay.Contains("Иван", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(change.NewValueDisplay.Contains('[') || change.NewValueDisplay.Contains('{')).IsFalse();
+        var full = TaskHistoryDiffBuilder.FormatFullValue(JToken.Parse("""[{"Author":"Иван","Nested":{"Count":2}}]"""));
+        await Assert.That(full.Contains("Иван", StringComparison.Ordinal)).IsTrue();
+        await Assert.That(full.Contains('[') || full.Contains('{')).IsFalse();
+    }
+
+    [Test]
     public async Task ReadValueAsync_RejectsWorkingCopyChangedAfterPreview()
     {
         using var fixture = new GitHistoryFixture();
@@ -502,6 +644,7 @@ public sealed class GitTaskHistoryProviderTests
         public string RootPath { get; }
         public string StoragePath { get; }
         public string TaskId { get; } = Guid.NewGuid().ToString();
+        public Repository Repository => _repository;
 
         public void WriteTask(
             string title,
