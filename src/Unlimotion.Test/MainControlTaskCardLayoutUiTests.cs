@@ -306,12 +306,23 @@ public class MainControlTaskCardLayoutUiTests
                     window.KeyTextInput($"{emoji} Проект");
                     RunLayoutJobs();
                     await Assert.That(parent.Title).IsEqualTo($"{emoji} Проект");
+                    await Assert.That(parent.Emoji).IsEqualTo(emoji);
 
                     foreach (var descendantId in new[] { MainWindowViewModelFixture.SubTask22Id, grandchildId })
                     {
                         var descendant = TestHelpers.SetCurrentTask(vm, descendantId);
                         RunLayoutJobs();
                         var trail = FindControlByAutomationId<EmojiTextBlock>(view, "CurrentTaskParentEmojiTrail");
+                        var expectedTrail = string.Concat(descendant.GetAllParents().Select(ancestor => ancestor.Emoji));
+                        await Assert.That(await TestHelpers.WaitUntilAsync(() =>
+                        {
+                            RunLayoutJobs();
+                            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                            RunLayoutJobs();
+                            return ReferenceEquals(trail.DataContext, descendant) &&
+                                IsVisibleAndArranged(trail) && trail.EmojiText == expectedTrail &&
+                                descendant.ParentEmojiTrail == expectedTrail && descendant.GetAllEmoji == expectedTrail;
+                        }, TimeSpan.FromSeconds(2))).IsTrue();
                         SaveEmojiTitleFrame(window, capturePrefix + $"{changeIndex}-" + (descendantId == grandchildId ? "grandchild-after" : "card-after"));
                         await Assert.That(IsVisibleAndArranged(trail)).IsTrue();
                         await Assert.That(trail.EmojiText).Contains("🛠");
