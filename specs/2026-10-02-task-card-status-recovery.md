@@ -449,6 +449,61 @@ Scope: только размещение существующего Reload пе�
 
 **Общий post-EXEC verdict остаётся NEEDS-FIX.** Открыты прежний full Main finding и native recovery последнего меню в active desktop. Обновление разрешённого draft PR #314 допустимо с точным разделением нового Headless/rendered evidence и прежнего native результата. Новые снимки/логи сохранены в [evidence README](../docs/testing/task-card-status-recovery/README.md).
 
+### Интеграция свежего main, 2026-10-04
+
+Координатор передал поручение пользователя продолжить интеграцию в рамках прежнего EXEC. Рабочая копия recovery перед merge была чистой, HEAD `41bd9a78`; fetched `origin/main` — `5a780b2e` (#313 AppAutomation 1.9 и #315 emoji). Merge выполняется только в `fix/task-card-status-recovery`, не в main. Approval/PR authorization действуют; merge PR, install и release не разрешены этим действием.
+
+Два конфликтных файла разрешены по смыслу: canonical metadata/pumping fixture из main в `FileStorageTaskStatusTests` сохраняется вместе с новыми Reload cases; FlaUI объединяет pointer lifecycle/owned tooltip из #313 и recovery/menu flow. Все физические status/reload clicks используют `DesktopPointer`, stable ID и error-clear assertion сохранены. Канонический API-based `WaitForTaskInPageAsync` остаётся из main.
+
+Importance передал `artifacts/task-importance/upstream-fixtures.patch` со snapshot manifest и full evidence 1150/1150. Его wrapper-delete hunk перенесён отдельно: ожидание cache count и отсутствия файла вместо autosave debounce. Старый ShiftDelete hunk не применён, поскольку main уже содержит согласованный `WaitForDeletedTasksAsync`, проверяющий cache и storage для single/batch удаления. Остальные старые файлы целиком не копируются.
+
+В интеграционном Main у Importance воспроизвёлся `SwitchRemoteConnectionTypeCommand_KeepsSshKeyRequirementWhenNoKeyIsSelected`. Перенесён авторский CLI patch ожидания завершения typed `ReactiveCommand.Execute().ToTask().WaitAsync(3s)` без изменения product-кода; конечные SSH-key assertions сохранены. SHA256 patch: `DCADF0DF86DD74D720B9D266E12E3B975EC24DDC31407813270EF916F6C3F51E`. Адресный case прошёл 1/1; Main после этого пересобран, 51 warning / 0 errors. Этот результат не заменяет full-suite gate.
+
+Последний опубликованный HEAD `41bd9a78` имеет CI Main 1196/1196 и Headless 52/52 PASS. Это снимает устаревшее утверждение о последнем full Main failure для той головы, но не подтверждает текущую интеграцию. После merge нужны Desktop/Main/Headless builds, полный Main и Headless, targeted recovery/emoji/cache/delete checks и native menu recovery с inspected evidence. Full/native запускаются по очереди координатора после Importance; до передачи слота выполняются diff/review/build preparation. Продуктовые recovery semantics и схема не меняются; безусловный flush перед Reload не вводится.
+
+Адресный source re-review выявил MEDIUM: capture helper менял foreground через Focus внутри read/assert-only callback `DesktopPointer.HoverAsync` 1.9. Убран Focus из helper; capture теперь только читает кадр и сохраняет artifact, открытое меню не закрывается helper-ом. Reviewer подтвердил CLOSED по актуальному source, source verdict PASS; фактический child sandbox writable, поэтому это adversarial fallback без enforced read-only.
+
+Подготовительные проверки интеграционного снимка: Main build PASS, 95 существующих warnings / 0 errors; Headless/FlaUI и обычный Desktop build PASS, 0/0. Wrapper-delete, main ShiftDelete, прежний Workspace executable scenario и canonical cache hydration прошли 4/4. Rendered RU/EN/theme/width menu matrix прошла 8/8, все восемь новых PNG просмотрены. На этом этапе полные/native проверки ожидали слот Importance; адресное evidence не выдавалось за общий PASS. Итог следующего этапа приведён ниже.
+
+### Итог интеграционных проверок, 2026-10-05
+
+#### Scope / contract pass
+
+Approved outcome и Non-Goals сохранены. Recovery production semantics относительно `41bd9a78` не расширялись; входящие AppAutomation/emoji изменения сохранены из main. S1–S7/AC1–AC8 сопоставлены storage/VM/UI coverage и реальному menu recovery. Task status/history read-back проверен native-сценарием; read-only Reload сохраняет исходные bytes, изменение требует явного retry. Guard и pending-edit contracts сохраняются; source switch/disposal/cache/API/delete cases входят в общую серию. Индивидуальная production причина остаётся неизвестной.
+
+| Проверка | Итог |
+| --- | --- |
+| Full Main | **1229/1230, 1 FAIL, 0 SKIP**, 36м03с. Единственный FAIL — `WorkspaceTreeCommandsScenario_ExecutesFeatureSteps`, `PasteOutlineCommandWorked=false` |
+| Full Headless | **52/52 PASS, 0 SKIP**, 3м53с; recovery observations `FlowCompleted=true`, `FailureIds=[]` |
+| Native affected flows | **4/4 финальных PASS** в отдельных запусках: menu failure/reload/retry; RU Dark future; RU Dark blocked+owned tooltip; EN Light terminal picker/unarchive |
+| Rendered matrix | **8/8 PASS**, RU/EN × Light/Dark × 1400/760; все восемь новых menu PNG просмотрены |
+| Адресные общие fixtures | Wrapper-delete, ShiftDelete, Workspace graph commands, cache hydration и SSH wait **5/5 PASS**; все эти cases также PASS в full Main |
+| Build | Main после failure diagnostics: **PASS, 51 существующее предупреждение / 0 ошибок**; обычный Desktop, Headless и FlaUI: **PASS, 0/0** |
+| Workspace paste с диагностикой | **1/1 isolated PASS**, 13с; этот результат не закрывает full gate |
+
+Все шесть новых native PNG просмотрены. Логи/снимки опубликованы рядом с [evidence README](../docs/testing/task-card-status-recovery/README.md); локальные HTML/TRX, invocation/binary hashes и snapshots сохранены в `artifacts/status-recovery/integration-2026-10-04/`. Проверенная MP4 pair отсутствует: прежние recording attempts не прошли FPS/readiness/ffmpeg проверки; approved fallback дополнен новыми native PNG/read-back и rendered matrix. Full/native validation processes завершены, сообщение «Слот полных проверок освобождён» передано в чате для следующего агента.
+
+#### Adversarial pass / fix and re-review
+
+Фактический reviewer sandbox `danger-full-access`, approval `never`; `/root/spec_review` выполнял только чтение как adversarial fallback, без технического enforced read-only. Source re-review подтвердил semantic union и авторский typed SSH command wait. Новых продуктовых BLOCKER/HIGH/MEDIUM не найдено.
+
+| Severity / area | Finding / действие | Status |
+| --- | --- | --- |
+| MEDIUM / Hover callback | Focus внутри read/assert callback убран; helper только читает/saves frame | **CLOSED**, source review и native evidence |
+| MEDIUM / Hover action budget | Первый Blocked run получил `PointerOperation.Check` cancellation после успешных owned-tooltip assertions и capture; настоящий popup есть в PNG | **CLOSED**: tooltip wait сохраняет linked 15s deadline, owner/UIA/capture action получает 30s; cleanup/restoration имеет отдельный framework budget. Повтор 1/1 PASS |
+| MEDIUM / Paste failure evidence | Bool assertion скрывала, какой из clipboard/count/title conjuncts не выполнен | **CLOSED по source**: failure-only snapshot до следующего add/delete; mock preview/confirmation/errors, cache/persisted tasks, focus/selection. Исходные predicate, 5s и IsTrue сохранены; build и isolated 1/1 PASS |
+| MEDIUM / Full Main gate | Workspace paste full-only failure пока не объяснён; total36с включает setup/cleanup и не доказывает превышение import timeout | **OPEN**. Paste/parser/UI route не менялись recovery; related paste tests PASS. Следующее воспроизведение должно дать причину через новую диагностику и новый полный Main |
+
+Ожидание typed tree-command не добавлялось к paste: реальный UI route запускает `async void` import, и completion этой ReactiveCommand не означал бы завершение импорта. Причина сбоя не подменена гипотезой о timeout либо product regression. Изолированная пересдача не названа общим зелёным результатом.
+
+#### Role-based / depth / stop
+
+Business/workflow, UX и developer/architect: **PASS по affected source/evidence**, включая explicit retry, persisted history, menu binding/busy, safe errors, retained dirty/missing draft, stale read/lifetime и прочитанные реальные пиксели. Tester/validation: **NEEDS-FIX**, общий Main gate открыт. Delivery/operations: **PASS для draft publication**, rollback через revert без migration; ready/merge не подтверждаются.
+
+Depth checklist: scope/Non-Goals, AC/scenario matrix, denial versus storage failure, pending edits/unknown outcome, missing/corrupt/access classification, revision/epoch/source/disposal, popup/input lifecycle, localization/layout, persisted read-back, history uniqueness, source/evidence freshness, schema/rollback и publication boundary сверены. Manual challenge «Reload есть, но не работает/стирает draft/автоматически повторяет статус» сопоставлен native/file/VM assertions. Open finding указан явно; no-findings justification не применяется.
+
+**Stop decision: NEEDS-FIX для ready for review.** Опубликовать проверенный интеграционный снимок в уже разрешённый **draft PR #314**, сохранить открытый Main finding и failure-only диагностику. Exact approval и PR authorization действуют. Source review PASS не заменяет validation gate; merge/release/install не выполняются.
+
 ## Approval
 
 Получена точная фраза пользователя: «Спеку подтверждаю» (2026-10-02).
@@ -465,3 +520,5 @@ Scope: только размещение существующего Reload пе�
 | EXEC: адресный fix/re-review 2026-10-03 | Закрыты late TaskNotFound resurrection и Headless startup/handoff; test clock отделяет reload от user autosave | Full Headless 52/52, VM class 41/41, missing UI 1/1, Desktop 0/0; Main full gate открыт | Опубликовать draft с открытым Main gate | PR отдельно разрешён | Итоговые логи и SPEC |
 | EXEC: уточнение размещения 2026-10-03 | Обновление переносится в ⚙; тот же recovery outcome/storage contract/risk, фаза EXEC сохраняется по quest-mode | Нужны menu placement/busy UI assertions и исходный failure→menu reload→retry, новые снимки | Реализовать и обновить PR #314 после relevant UI checks | «Кнопку перезагрузки задачи надо спрятать в меню шестерёнки»; прежние exact approval и PR authorization действуют | Текущая SPEC |
 | EXEC: menu re-review 2026-10-03 | Reload первым в ⚙; исправлен driver false-positive ожиданием error clear; actual binding/busy/Missing assertions | Full Headless 52/52, rendered 8/8, menu 1/1, Missing 1/1, layout 4/4, Desktop 0/0; native заблокирован отключённым desktop; full Main открыт | Commit/push и обновление draft PR #314; ready не подтверждать | Прямое уточнение и PR authorization действуют | Menu frames, логи, evidence README |
+| EXEC: main integration 2026-10-04 | Координатор передал следующий этап после emoji #315; merge main только в recovery-ветку | Main `5a780b2e`, 2 source conflicts resolved по смыслу; авторский wrapper-delete wait, main ShiftDelete/cache/API fixtures сохранены | Builds/review, затем обязательные checks по очереди после Importance | Прежние exact approval и PR authorization действуют; main merge не разрешён | Текущая SPEC, integration logs |
+| EXEC: integration validation 2026-10-05 | Full/native пройдены в своём слоте; source findings по hover/diagnostics закрыты, paste cause остаётся неизвестной | Main1229/1230, Headless52/52, native4/4 final, rendered8/8; isolated paste1/1 не закрывает Main gate | Обновить draft PR с evidence; новый full требует согласованного слота | Прежние exact approval и PR authorization действуют | Integration logs/PNG, source snapshots, transferable diagnostic patch |

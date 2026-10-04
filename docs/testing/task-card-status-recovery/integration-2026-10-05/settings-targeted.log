@@ -1,0 +1,25 @@
+
+████████╗██╗   ██╗███╗   ██╗██╗████████╗
+╚══██╔══╝██║   ██║████╗  ██║██║╚══██╔══╝
+   ██║   ██║   ██║██╔██╗ ██║██║   ██║
+   ██║   ██║   ██║██║╚██╗██║██║   ██║
+   ██║   ╚██████╔╝██║ ╚████║██║   ██║
+   ╚═╝    ╚═════╝ ╚═╝  ╚═══╝╚═╝   ╚═╝
+
+   TUnit v1.44.0.0 | 64-bit | Microsoft Windows 10.0.22631 | win-x64 | .NET 10.0.12 | Microsoft Testing Platform v2.2.2
+
+   Engine Mode: SourceGenerated
+
+passed SwitchRemoteConnectionTypeCommand_KeepsSshKeyRequirementWhenNoKeyIsSelected (1s 129ms)
+HTML test report written to: <worktree>\artifacts\status-recovery\integration-2026-10-04\settings-targeted\Unlimotion.Test-windows-net10.0-report.html
+
+  In process file artifacts produced:
+    - <worktree>\artifacts\status-recovery\integration-2026-10-04\settings-targeted\Unlimotion.Test-windows-net10.0-report.html
+    - <worktree>\artifacts\status-recovery\integration-2026-10-04\settings-targeted\Kibnet_DESKTOP-AUDO1TJ_2026-10-04_20_37_14.4424804.trx
+
+Test run summary: Passed! - <worktree>\src\Unlimotion.Test\bin\Debug\net10.0\Unlimotion.Test.dll (net10.0|x64)
+  total: 1
+  failed: 0
+  succeeded: 1
+  skipped: 0
+  duration: 2s 471ms

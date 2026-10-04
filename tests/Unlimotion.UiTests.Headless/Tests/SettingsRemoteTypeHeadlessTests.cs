@@ -8,6 +8,11 @@ using TUnit.Core;
 using Unlimotion.AppAutomation.TestHost;
 using Unlimotion.UiTests.Authoring.Pages;
 using Unlimotion.ViewModel;
+using Unlimotion.UiTests.Headless.Infrastructure;
+using Avalonia.Threading;
+using Avalonia.Automation;
+using Avalonia.VisualTree;
+using System.Reflection;
 
 namespace Unlimotion.UiTests.Headless.Tests;
 
@@ -34,6 +39,7 @@ public sealed class SettingsRemoteTypeHeadlessTests
     [NotInParallel(DesktopUiConstraint)]
     public async Task Settings_remote_type_switch_creates_ssh_copy_for_single_http_remote()
     {
+        using var presentation = new HeadlessWindowPresentation(Session.Inner.MainWindow);
         Page.SelectTabItem(static page => page.SettingsTabItem, timeoutMs: 10_000);
         _ = WaitUntil(
             () => TryResolveDuringWait(() => Page.SettingsRoot),
@@ -66,22 +72,23 @@ public sealed class SettingsRemoteTypeHeadlessTests
         var commandErrors = new List<Exception>();
         using var commandErrorSubscription =
             (vm.Settings.SwitchRemoteToSshCommand as IReactiveCommand)?.ThrownExceptions.Subscribe(commandErrors.Add);
-        vm.Settings.SwitchRemoteToSshCommand!.Execute(null);
+        await ClickSettingsButtonAndWaitAsync("SwitchRemoteToSshButton");
 
         var sshSection = WaitUntil(
             () => TryResolveDuringWait(() => Page.SshKeysSection),
             static control => control is not null,
             timeout: TimeSpan.FromSeconds(10),
             timeoutMessage: "SSH keys section did not become available after switching remote type.")!;
-        var selectedRemoteUrl = WaitUntil(
-            () =>
+        var selectedRemoteUrl = await WaitUntilAsync(
+            () => HeadlessRuntime.Dispatch(() =>
             {
+                Dispatcher.UIThread.RunJobs();
                 return new RemoteSwitchWaitState(
                     _vm?.Settings.GitRemoteName,
                     _vm?.Settings.GitRemoteUrl,
                     _vm?.Settings.IsSshAuthSelected,
                     commandErrors.FirstOrDefault());
-            },
+            }),
             static state => state.Error is not null ||
                             string.Equals(state.SelectedRemoteName, "origin-ssh", StringComparison.Ordinal) &&
                             string.Equals(
@@ -112,6 +119,16 @@ public sealed class SettingsRemoteTypeHeadlessTests
             await Assert.That(vm.Settings.BackupConnectionState).IsEqualTo(BackupStatusState.NotConfigured);
             await Assert.That(vm.Settings.BackupStatusText).IsEqualTo("Select an SSH key.");
         }
+
+        await AssertRemoteSelectionAsync("origin-ssh", "git@github.com:org/unlimotion-backup.git", "SSH");
+        await ClickSettingsButtonAndWaitAsync("RefreshGitMetadataButton");
+        await AssertRemoteSelectionAsync("origin-ssh", "git@github.com:org/unlimotion-backup.git", "SSH");
+
+        await ClickSettingsButtonAndWaitAsync("SwitchRemoteToHttpButton");
+        await AssertRemoteSelectionAsync("origin", "https://github.com/org/unlimotion-backup.git", "HTTP");
+        await Assert.That(Page.TokenAuthSection.AutomationId).IsEqualTo("TokenAuthSection");
+        await ClickSettingsButtonAndWaitAsync("RefreshGitMetadataButton");
+        await AssertRemoteSelectionAsync("origin", "https://github.com/org/unlimotion-backup.git", "HTTP");
     }
 
     [Test]
@@ -154,6 +171,92 @@ public sealed class SettingsRemoteTypeHeadlessTests
             await Assert.That(selectedRemote.RemoteName).IsEqualTo("origin");
             await Assert.That(selectedRemote.RemoteUrl).IsEqualTo("https://github.com/org/unlimotion-backup.git");
         }
+    }
+
+    private async Task AssertRemoteSelectionAsync(string name, string url, string authType)
+    {
+        var selection = HeadlessRuntime.Dispatch(() =>
+        {
+            Dispatcher.UIThread.RunJobs();
+            var settings = _vm!.Settings;
+            var comboBox = Session.Inner.MainWindow.GetVisualDescendants()
+                .OfType<Avalonia.Controls.ComboBox>()
+                .Single(control => ReferenceEquals(control.ItemsSource, settings.RemotesWithAuthType));
+            return new
+            {
+                settings.GitRemoteName,
+                settings.GitRemoteUrl,
+                settings.IsSshAuthSelected,
+                SelectedItem = comboBox.SelectedItem as string,
+                Remotes = settings.Remotes.ToArray()
+            };
+        });
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(selection.GitRemoteName).IsEqualTo(name);
+            await Assert.That(selection.GitRemoteUrl).IsEqualTo(url);
+            await Assert.That(selection.IsSshAuthSelected).IsEqualTo(authType == "SSH");
+            await Assert.That(selection.SelectedItem).IsEqualTo($"{name} ({authType})");
+            await Assert.That(selection.Remotes).IsEquivalentTo(new[] { "origin", "origin-ssh" });
+        }
+    }
+
+    private Task ClickSettingsButtonAndWaitAsync(string automationId)
+    {
+        // Headless completes Dispatch inline on its queue worker. The caller must resume elsewhere
+        // before using Page helpers, which synchronously enqueue another dispatch.
+        var dispatched = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _ = DispatchAndCompleteAsync();
+        return dispatched.Task;
+
+        async Task DispatchAndCompleteAsync()
+        {
+            try
+            {
+                await DispatchClickAsync().ConfigureAwait(false);
+                dispatched.TrySetResult();
+            }
+            catch (OperationCanceledException error)
+            {
+                dispatched.TrySetCanceled(error.CancellationToken);
+            }
+            catch (Exception error)
+            {
+                dispatched.TrySetException(error);
+            }
+        }
+
+        Task<bool> DispatchClickAsync() => HeadlessRuntime.Session.Dispatch<bool>(async () =>
+        {
+            var button = Session.Inner.MainWindow.GetVisualDescendants()
+                .OfType<Avalonia.Controls.Button>()
+                .Single(control => AutomationProperties.GetAutomationId(control) == automationId);
+            if (!button.IsEffectivelyEnabled || button.Command?.CanExecute(button.CommandParameter) != true)
+                throw new InvalidOperationException($"Settings button '{automationId}' cannot execute.");
+
+            var command = button.Command as IReactiveCommand
+                ?? throw new InvalidOperationException($"Settings button '{automationId}' has no reactive command.");
+            var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var started = false;
+            using var execution = command.IsExecuting.Subscribe(isExecuting =>
+            {
+                if (isExecuting)
+                    started = true;
+                else if (started)
+                    completed.TrySetResult();
+            });
+            using var errors = command.ThrownExceptions.Subscribe(error => completed.TrySetException(error));
+
+            // Keep the PerTest dispatcher alive until the actual button's async command finishes.
+            var onClick = typeof(Avalonia.Controls.Button).GetMethod(
+                "OnClick", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new InvalidOperationException("Avalonia Button.OnClick was unavailable.");
+            onClick.Invoke(button, null);
+            await completed.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            Dispatcher.UIThread.RunJobs();
+            return true;
+        }, CancellationToken.None);
     }
 
     private sealed record RemoteSwitchWaitState(

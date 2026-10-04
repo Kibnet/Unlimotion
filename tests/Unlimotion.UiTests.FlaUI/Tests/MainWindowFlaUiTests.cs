@@ -1,5 +1,6 @@
 using AppAutomation.Abstractions;
 using AppAutomation.FlaUI.Automation;
+using AppAutomation.FlaUI.Input;
 using AppAutomation.FlaUI.Session;
 using AppAutomation.TUnit;
 using FlaUI.Core.AutomationElements;
@@ -44,11 +45,7 @@ public sealed class MainWindowFlaUiTests
         session.MainWindow.Patterns.Window.Pattern.SetWindowVisualState(
             isStatusContract ? WindowVisualState.Normal : WindowVisualState.Maximized);
         session.MainWindow.Focus();
-        if (isStatusContract)
-        {
-            Mouse.MoveTo(0, 0);
-        }
-        else
+        if (!isStatusContract)
         {
             var readiness = Retry.WhileNull(
                 () => session.MainWindow.FindFirstDescendant(
@@ -88,10 +85,8 @@ public sealed class MainWindowFlaUiTests
     protected override void CaptureStatusContractScreenshot(string outputPath)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
-        // Keep an open task menu focused while capturing its recovery action.
-        var reloadMenuItem = FindProcessElement("CurrentTaskReloadButton");
-        if (reloadMenuItem is null || reloadMenuItem.Properties.IsOffscreen.ValueOrDefault)
-            Session.Inner.MainWindow.Focus();
+        // Capture is read-only: HoverAsync callbacks must not change foreground or
+        // focus, and an open recovery menu must stay open while taking its frame.
         Thread.Sleep(TimeSpan.FromMilliseconds(200));
         using var bitmap = Session.Inner.MainWindow.Capture();
         bitmap.Save(outputPath);
@@ -204,14 +199,25 @@ public sealed class MainWindowFlaUiTests
         var blockedInProgress = ObserveOpenStatusOption("TaskStatusOptionInProgress");
         var blockedCompleted = ObserveOpenStatusOption("TaskStatusOptionCompleted");
         const string blockerReason = "Сначала выполните прямые блокирующие задачи.";
-        var blockerReasonElementCount = CountProcessElementsNamed(blockerReason);
-        HoverStatusOption("TaskStatusOptionInProgress");
-        var blockedTooltipOpened = WaitForAdditionalNamedElement(
-            blockerReason,
-            blockerReasonElementCount);
-        CaptureStatusContractScreenshot(Path.Combine(
-            ResolveArtifactDirectory(),
-            "after-blocked.png"));
+        await DesktopPointer.HoverAsync(
+            () => FindProcessElement("TaskStatusOptionInProgress")
+                ?? throw new InvalidOperationException("The disabled status option was not exposed for hover."),
+            async cancellationToken =>
+            {
+                using var tooltipDeadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                tooltipDeadline.CancelAfter(TimeSpan.FromSeconds(15));
+                await WaitForVisibleTooltipAsync(blockerReason, tooltipDeadline.Token);
+                await Assert.That(HasVisibleProcessTooltip(blockerReason))
+                    .IsTrue()
+                    .Because("Pointer hover must expose the disabled status row's tooltip.");
+                CaptureStatusContractScreenshot(Path.Combine(
+                    ResolveArtifactDirectory(),
+                    "after-blocked.png"));
+            },
+            // The action includes owner validation and read-only UIA assertions/capture.
+            // Pointer restoration has a separate framework cleanup budget.
+            // The action deadline must outlive the tooltip wait.
+            new PointerHoverOptions { Timeout = TimeSpan.FromSeconds(30) });
         CloseStatusPicker();
 
         await Assert.That(renderedTheme)
@@ -225,62 +231,49 @@ public sealed class MainWindowFlaUiTests
             blockedCompleted,
             "TaskStatusOptionCompleted",
             "Сначала выполните прямые блокирующие задачи.");
-        await Assert.That(blockedTooltipOpened)
-            .IsTrue()
-            .Because("Pointer hover must open the tooltip for a disabled status row.");
     }
 
-    private void HoverStatusOption(string automationId)
+    private async Task WaitForVisibleTooltipAsync(string expectedText, CancellationToken cancellationToken)
     {
-        var option = FindProcessElement(automationId)
-            ?? throw new InvalidOperationException(
-                $"Status option '{automationId}' was not exposed by UIA for pointer hover.");
-        var bounds = option.Properties.BoundingRectangle.ValueOrDefault;
-        if (bounds.Width <= 0 || bounds.Height <= 0)
+        // The pointer may already be on this row when the picker opens. A visible
+        // tooltip is valid in that case; forcing a leave/re-enter or counting new
+        // copies of the inline reason would add unnecessary pointer movement.
+        while (!HasVisibleProcessTooltip(expectedText))
         {
-            throw new InvalidOperationException(
-                $"Status option '{automationId}' did not expose usable screen bounds.");
-        }
-
-        Mouse.MoveTo(
-            (int)Math.Round(bounds.Left + bounds.Width / 2d),
-            (int)Math.Round(bounds.Top + bounds.Height / 2d));
-    }
-
-    private bool WaitForAdditionalNamedElement(string expectedText, int baselineCount)
-    {
-        try
-        {
-            _ = WaitUntil(
-                () => CountProcessElementsNamed(expectedText),
-                count => count > baselineCount,
-                timeout: TimeSpan.FromSeconds(5),
-                timeoutMessage: "Tooltip did not add its text to the process UIA tree.");
-            return true;
-        }
-        catch (TimeoutException)
-        {
-            return false;
+            await Task.Delay(TimeSpan.FromMilliseconds(100), cancellationToken);
         }
     }
 
-    private int CountProcessElementsNamed(string expectedText)
+    private bool HasVisibleProcessTooltip(string expectedText)
     {
+        var previousDpi = SetThreadDpiAwarenessContext(new IntPtr(-4));
         try
         {
             var processId = Session.Inner.MainWindow.Properties.ProcessId.ValueOrDefault;
-            var processCondition = Session.Inner.ConditionFactory.ByProcessId(processId);
+            var tooltipCondition = Session.Inner.ConditionFactory.ByName(expectedText);
+            var statusOption = FindProcessElement("TaskStatusOptionInProgress");
+            if (statusOption is null) return false;
+            var rowBounds = statusOption.BoundingRectangle;
+            var rowWindow = WindowFromPoint(new System.Drawing.Point(
+                rowBounds.Left + rowBounds.Width / 2, rowBounds.Top + rowBounds.Height / 2));
+            var mainWindow = Session.Inner.MainWindow.Properties.NativeWindowHandle.Value;
             return Session.Inner.MainWindow.Automation
                 .GetDesktop()
-                .FindAllDescendants(processCondition)
-                .Count(element => string.Equals(
-                    element.Properties.Name.ValueOrDefault,
-                    expectedText,
-                    StringComparison.Ordinal));
+                .FindAllChildren(Session.Inner.ConditionFactory.ByProcessId(processId))
+                .SelectMany(root => root.FindAllDescendants(tooltipCondition))
+                .Any(tooltip =>
+                    !tooltip.Properties.IsOffscreen.ValueOrDefault &&
+                    tooltip.Properties.BoundingRectangle.ValueOrDefault.Width > 0 &&
+                    tooltip.Properties.BoundingRectangle.ValueOrDefault.Height > 0 &&
+                    IsOwnedTooltipPopup(tooltip, processId, mainWindow, rowWindow));
         }
         catch
         {
-            return 0;
+            return false;
+        }
+        finally
+        {
+            if (previousDpi != IntPtr.Zero) SetThreadDpiAwarenessContext(previousDpi);
         }
     }
 
@@ -289,12 +282,40 @@ public sealed class MainWindowFlaUiTests
         var option = WaitUntil(() => FindProcessElement(automationId),
             static element => element is not null, timeout: TimeSpan.FromSeconds(10),
             timeoutMessage: $"Status option '{automationId}' was unavailable.")!;
-        option.Click();
+        DesktopPointer.Click(option);
     }
+
+    private static bool IsOwnedTooltipPopup(
+        AutomationElement text, int processId, IntPtr mainWindow, IntPtr rowWindow)
+    {
+        // Avalonia exposes a string tooltip as Text directly under the main window
+        // in the UIA control view. Its native popup, unlike either inline reason,
+        // has a separate HWND owned by the same application.
+        for (var ancestor = text.Parent; ancestor is not null; ancestor = ancestor.Parent)
+        {
+            if (ancestor.Properties.AutomationId.ValueOrDefault?.StartsWith(
+                    "TaskStatusOption", StringComparison.Ordinal) == true)
+                return false;
+            if (ancestor.Properties.ControlType.ValueOrDefault == ControlType.Window)
+                break;
+        }
+        var bounds = text.BoundingRectangle;
+        var popup = WindowFromPoint(new System.Drawing.Point(
+            bounds.Left + bounds.Width / 2, bounds.Top + bounds.Height / 2));
+        _ = GetWindowThreadProcessId(popup, out var popupProcessId);
+        return popup != IntPtr.Zero && popup != mainWindow && popup != rowWindow &&
+               popupProcessId == processId;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr WindowFromPoint(System.Drawing.Point point);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr window, out int processId);
 
     protected override void CloseStatusPicker()
     {
-        Keyboard.Press(VirtualKeyShort.ESCAPE);
+        Keyboard.Type(VirtualKeyShort.ESCAPE);
         _ = WaitUntil(
             IsAnyStatusOptionVisible,
             static visible => !visible,
@@ -335,7 +356,7 @@ public sealed class MainWindowFlaUiTests
         var item = FindProcessElement("CurrentTaskReloadButton")
             ?? throw new InvalidOperationException("Task actions menu did not expose reload.");
         if (!item.IsEnabled) throw new InvalidOperationException("Task reload menu item was disabled.");
-        item.Click();
+        DesktopPointer.Click(item);
     }
 
     protected override string OpenActionsAndInvokeArchiveCommand()
@@ -347,7 +368,7 @@ public sealed class MainWindowFlaUiTests
             timeout: TimeSpan.FromSeconds(10),
             timeoutMessage: "Archived task actions menu did not expose the archive command.")!;
         var label = menuItem.Name;
-        menuItem.Click();
+        DesktopPointer.Click(menuItem);
         return label;
     }
 
@@ -376,7 +397,7 @@ public sealed class MainWindowFlaUiTests
             }
             else
             {
-                overflowItem.Click();
+                DesktopPointer.Click(overflowItem);
             }
         }
 
@@ -408,7 +429,7 @@ public sealed class MainWindowFlaUiTests
                 return;
             }
 
-            Keyboard.Press(VirtualKeyShort.ESCAPE);
+            Keyboard.Type(VirtualKeyShort.ESCAPE);
             Thread.Sleep(TimeSpan.FromMilliseconds(200));
         }
 
@@ -486,7 +507,7 @@ public sealed class MainWindowFlaUiTests
         }
 
         task.Patterns.ScrollItem.PatternOrDefault?.ScrollIntoView();
-        var visibleTitle = WaitUntil(
+        _ = WaitUntil(
             () => FindTaskTitleElement(treeAutomationId, title),
             static element => element is not null &&
                               !element.Properties.IsOffscreen.ValueOrDefault &&
@@ -494,13 +515,15 @@ public sealed class MainWindowFlaUiTests
                               element.Properties.BoundingRectangle.ValueOrDefault.Height > 0,
             timeout: TimeSpan.FromSeconds(10),
             timeoutMessage: $"Tree title '{title}' did not become pointer-visible.")!;
-        var bounds = visibleTitle.Properties.BoundingRectangle.ValueOrDefault;
         task.Focus();
-        Keyboard.Press(VirtualKeyShort.SPACE);
+        Keyboard.Type(VirtualKeyShort.SPACE);
         Thread.Sleep(TimeSpan.FromMilliseconds(200));
-        Mouse.LeftClick(new System.Drawing.Point(
-            (int)Math.Round(bounds.Left + bounds.Width / 2d),
-            (int)Math.Round(bounds.Top + bounds.Height / 2d)));
+        if (string.Equals(Page.CurrentTaskTitleTextBox.Text, title, StringComparison.Ordinal))
+            return;
+
+        DesktopPointer.ClickAsync(() => FindTaskTitleElement(treeAutomationId, title)
+            ?? throw new InvalidOperationException($"Tree title '{title}' disappeared before selection."))
+            .GetAwaiter().GetResult();
     }
 
     private AutomationElement? FindProcessElement(string automationId)
@@ -508,16 +531,12 @@ public sealed class MainWindowFlaUiTests
         try
         {
             var processId = Session.Inner.MainWindow.Properties.ProcessId.ValueOrDefault;
-            var option = Session.Inner.ConditionFactory.ByAutomationId(automationId);
-            // Popups can be separate native windows. Search only this app's top-level
-            // windows, avoiding unrelated desktop trees and blocked foreign providers.
-            foreach (var window in Session.Inner.MainWindow.Automation.GetDesktop()
-                .FindAllChildren(Session.Inner.ConditionFactory.ByProcessId(processId)))
-            {
-                var element = window.FindFirstDescendant(option);
-                if (element is not null) return element;
-            }
-            return null;
+            var processOption = Session.Inner.ConditionFactory.ByAutomationId(automationId);
+            return Session.Inner.MainWindow.Automation
+                .GetDesktop()
+                .FindAllChildren(Session.Inner.ConditionFactory.ByProcessId(processId))
+                .Select(root => root.FindFirstDescendant(processOption))
+                .FirstOrDefault(element => element is not null);
         }
         catch
         {
@@ -527,7 +546,6 @@ public sealed class MainWindowFlaUiTests
 
     private void ClickMainWindowElement(string automationId)
     {
-        Session.Inner.MainWindow.Focus();
         var element = WaitUntil(
             () => Session.Inner.MainWindow.FindFirstDescendant(
                 Session.Inner.ConditionFactory.ByAutomationId(automationId)),
@@ -535,7 +553,7 @@ public sealed class MainWindowFlaUiTests
                 !control.Properties.IsOffscreen.ValueOrDefault,
             timeout: TimeSpan.FromSeconds(30),
             timeoutMessage: $"Main window button '{automationId}' did not become enabled and visible.")!;
-        element.Click();
+        DesktopPointer.Click(element);
     }
 
     private void InvokeMainWindowButton(string automationId)
@@ -641,6 +659,9 @@ public sealed class MainWindowFlaUiTests
 
     [DllImport("user32.dll")]
     private static extern IntPtr GetThreadDpiAwarenessContext();
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr SetThreadDpiAwarenessContext(IntPtr dpiContext);
 
     [DllImport("user32.dll")]
     private static extern DpiAwareness GetAwarenessFromDpiAwarenessContext(IntPtr dpiContext);

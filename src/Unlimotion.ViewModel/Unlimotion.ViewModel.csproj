@@ -15,4 +15,9 @@
 	<ItemGroup>
 	  <ProjectReference Include="..\Unlimotion.TaskTreeManager\Unlimotion.TaskTree.csproj" />
 	</ItemGroup>
+
+	<ItemGroup>
+		<Content Include="Unicode-Emoji.LICENSE.txt" Link="licenses\Unicode-Emoji.txt"
+			CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+	</ItemGroup>
 </Project>

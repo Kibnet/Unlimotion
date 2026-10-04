@@ -4,11 +4,14 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
+using System.Reactive;
+using System.Reactive.Threading.Tasks;
 using System.Reflection;
 using System.Text.Json;
 using System.Threading;
 using LibGit2Sharp;
 using Microsoft.Extensions.Configuration;
+using ReactiveUI;
 using Unlimotion.Services;
 using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
@@ -1368,6 +1371,49 @@ public class SettingsViewModelTests : IDisposable
     }
 
     [Test]
+    public async System.Threading.Tasks.Task ApplyRemoteConnectionTypeSwitch_PersistsSelectionAcrossRefreshAndRoundTrip()
+    {
+        var backupService = new FakeRemoteBackupService
+        {
+            RemoteNames = new List<string> { "origin" },
+            RemoteAuthTypes = new Dictionary<string, string> { ["origin"] = "HTTP" },
+            RemoteUrls = new Dictionary<string, string> { ["origin"] = "https://github.com/org/repo.git" }
+        };
+        var configuration = CreateConfiguration();
+        configuration.GetSection("Git").GetSection(nameof(GitSettings.BackupEnabled)).Set(true);
+        configuration.GetSection("Git").GetSection(nameof(GitSettings.RemoteName)).Set("origin");
+        configuration.GetSection("Git").GetSection(nameof(GitSettings.RemoteUrl)).Set("https://github.com/org/repo.git");
+        var settings = new SettingsViewModel(configuration, backupService);
+
+        backupService.RemoteNames.Add("origin-ssh");
+        backupService.RemoteAuthTypes["origin-ssh"] = "SSH";
+        backupService.RemoteUrls["origin-ssh"] = "git@github.com:org/repo.git";
+
+        foreach (var (remoteName, remoteUrl, authType) in new[]
+                 {
+                     ("origin-ssh", "git@github.com:org/repo.git", "SSH"),
+                     ("origin", "https://github.com/org/repo.git", "HTTP")
+                 })
+        {
+            settings.ApplyRemoteConnectionTypeSwitch(new RemoteConnectionTypeSwitchResult(
+                remoteName, remoteUrl, authType, CreatedRemote: authType == "SSH"));
+            settings.ReloadGitMetadata();
+
+            using var persisted = JsonDocument.Parse(File.ReadAllText(_configPath));
+            var git = persisted.RootElement.GetProperty("Git");
+            using (Assert.Multiple())
+            {
+                await Assert.That(settings.GitRemoteName).IsEqualTo(remoteName);
+                await Assert.That(settings.GitRemoteUrl).IsEqualTo(remoteUrl);
+                await Assert.That(settings.Remotes).IsEquivalentTo(new[] { "origin", "origin-ssh" });
+                await Assert.That(settings.IsSshAuthSelected).IsEqualTo(authType == "SSH");
+                await Assert.That(git.GetProperty(nameof(GitSettings.RemoteName)).GetString()).IsEqualTo(remoteName);
+                await Assert.That(git.GetProperty(nameof(GitSettings.RemoteUrl)).GetString()).IsEqualTo(remoteUrl);
+            }
+        }
+    }
+
+    [Test]
     public async System.Threading.Tasks.Task SwitchRemoteConnectionTypeCommand_KeepsSshKeyRequirementWhenNoKeyIsSelected()
     {
         var backupService = new FakeRemoteBackupService
@@ -1410,13 +1456,11 @@ public class SettingsViewModelTests : IDisposable
 
         await Assert.That(settings.BackupConnectionState).IsEqualTo(BackupStatusState.Connected);
 
-        settings.SwitchRemoteToSshCommand!.Execute(null);
+        await ((ReactiveCommand<Unit, Unit>)settings.SwitchRemoteToSshCommand!)
+            .Execute().ToTask().WaitAsync(TimeSpan.FromSeconds(3));
 
-        await WaitForConditionAsync(
-            () => backupService.SwitchRemoteConnectionTypeCalls == 1 &&
-                  settings.GitRemoteName == "origin-ssh" &&
-                  settings.BackupConnectionState != BackupStatusState.Connecting,
-            "Remote connection type switch did not complete.");
+        await Assert.That(backupService.SwitchRemoteConnectionTypeCalls).IsEqualTo(1);
+        await Assert.That(settings.GitRemoteName).IsEqualTo("origin-ssh");
 
         await Assert.That(settings.BackupConnectionState).IsEqualTo(BackupStatusState.NotConfigured);
         await Assert.That(settings.CanConnectRepository).IsFalse();
