@@ -420,7 +420,7 @@ public class MainControlTreeCommandsUiTests
                 await TestHelpers.WaitThrottleTime();
                 Dispatcher.UIThread.RunJobs();
 
-                var wrappersReady = WaitFor(() =>
+                var wrappersReady = await WaitForAsync(() =>
                     FindWrapper(vm, treeName, scenario.Parent.Id) != null &&
                     FindWrapper(vm, treeName, scenario.Child.Id) != null,
                     SearchExpansionWaitMilliseconds);
@@ -446,7 +446,7 @@ public class MainControlTreeCommandsUiTests
 
                 await ApplySearchAsync(vm, $"search warmup {Guid.NewGuid():N}");
                 await ApplySearchAsync(vm, scenario.SearchText);
-                var parentFilteredOut = WaitFor(
+                var parentFilteredOut = await WaitForAsync(
                     () => FindWrapper(vm, treeName, scenario.Parent.Id) == null,
                     SearchExpansionWaitMilliseconds);
                 await Assert.That(parentFilteredOut).IsTrue();
@@ -454,7 +454,7 @@ public class MainControlTreeCommandsUiTests
                 await ApplySearchAsync(vm, string.Empty);
                 TaskWrapperViewModel? restoredParentWrapper = null;
                 TaskWrapperViewModel? restoredChildWrapper = null;
-                var restored = WaitFor(
+                var restored = await WaitForAsync(
                     () =>
                     {
                         restoredParentWrapper = FindWrapper(vm, treeName, scenario.Parent.Id);
@@ -1369,7 +1369,8 @@ public class MainControlTreeCommandsUiTests
                 await Assert.That(vm.CurrentLastUpdated?.TaskItem.Id).IsEqualTo(MainWindowViewModelFixture.RootTask4Id);
 
                 PressHotkey(window, Key.Delete, PhysicalKey.Delete, RawInputModifiers.Shift);
-                await TestHelpers.WaitThrottleTime();
+                await Assert.That(await WaitForDeletedTasksAsync(fixture, MainWindowViewModelFixture.RootTask4Id))
+                    .IsTrue();
 
                 await Assert.That(TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.RootTask4Id)).IsNull();
             }
@@ -2194,7 +2195,11 @@ public class MainControlTreeCommandsUiTests
                 await Assert.That(GetSelectedWrappers(allTasksTree).Count).IsEqualTo(2);
 
                 PressHotkey(window, Key.Delete, PhysicalKey.Delete, RawInputModifiers.Shift);
-                await TestHelpers.WaitThrottleTime();
+                await Assert.That(await WaitForDeletedTasksAsync(fixture,
+                        MainWindowViewModelFixture.RootTask1Id,
+                        MainWindowViewModelFixture.RootTask4Id,
+                        MainWindowViewModelFixture.SubTask41Id))
+                    .IsTrue();
 
                 await Assert.That(TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.RootTask1Id)).IsNull();
                 await Assert.That(TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.RootTask4Id)).IsNull();
@@ -2611,6 +2616,22 @@ public class MainControlTreeCommandsUiTests
             _ => 0
         };
     }
+
+    private static Task<bool> WaitForAsync(Func<bool> predicate, int timeoutMilliseconds) =>
+        TestHelpers.WaitUntilAsync(() =>
+        {
+            Dispatcher.UIThread.RunJobs();
+            return predicate();
+        }, TimeSpan.FromMilliseconds(timeoutMilliseconds));
+
+    private static Task<bool> WaitForDeletedTasksAsync(MainWindowViewModelFixture fixture, params string[] ids) =>
+        TestHelpers.WaitUntilAsync(() =>
+        {
+            Dispatcher.UIThread.RunJobs();
+            var repository = fixture.MainWindowViewModelTest.taskRepository!;
+            return ids.All(id => !repository.Tasks.Lookup(id).HasValue &&
+                TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, id) == null);
+        }, TimeSpan.FromSeconds(5));
 
     private static bool WaitFor(Func<bool> predicate, int timeoutMilliseconds = 2000)
     {

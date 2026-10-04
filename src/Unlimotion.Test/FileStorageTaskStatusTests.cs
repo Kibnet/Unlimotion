@@ -1507,16 +1507,35 @@ public class FileStorageTaskStatusTests
         var tempDir = CreateTempDirectory();
         try
         {
+            // This test covers the hydration boundary and watcher identity, so use
+            // current task metadata without unrelated per-file migration writes.
+            var seedTimestamp = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+            TaskItem CreateHydrationTask(string id, string title)
+            {
+                var task = new TaskItem
+                {
+                    Id = id,
+                    Title = title,
+                    Status = DomainTaskStatus.NotReady,
+                    Version = FileTaskMigrator.Version,
+                    IsCanBeCompleted = true,
+                    CreatedDateTime = seedTimestamp,
+                    UnlockedDateTime = seedTimestamp
+                };
+                task.EnsureStatusHistory();
+                return task;
+            }
+
             var sourcePath = Path.Combine(tempDir, "alias.json");
             await File.WriteAllTextAsync(
                 sourcePath,
-                JsonConvert.SerializeObject(new TaskItem { Id = "old", Title = "Original" }));
+                JsonConvert.SerializeObject(CreateHydrationTask("old", "Original")));
             for (var i = 0; i < 64; i++)
             {
                 var id = $"task-{i:D2}";
                 await File.WriteAllTextAsync(
                     Path.Combine(tempDir, id),
-                    JsonConvert.SerializeObject(new TaskItem { Id = id, Title = id }));
+                    JsonConvert.SerializeObject(CreateHydrationTask(id, id)));
             }
 
             var watcher = new RecordingDatabaseWatcher();
@@ -1538,35 +1557,56 @@ public class FileStorageTaskStatusTests
             var hydrationDeadline = DateTimeOffset.UtcNow.AddSeconds(10);
             while (!init.IsCompleted && unified.Tasks.Count < 64)
             {
-                if (!context.ExecuteOne(TimeSpan.FromMilliseconds(100)) &&
-                    DateTimeOffset.UtcNow >= hydrationDeadline)
+                if (DateTimeOffset.UtcNow >= hydrationDeadline)
                 {
-                    throw new TimeoutException("Timed out waiting for the first cache hydration batch.");
+                    throw new TimeoutException($"Timed out waiting for the first cache hydration batch. " +
+                        $"Init={init.Status}, tasks={unified.Tasks.Count}, " +
+                        $"files={string.Join(", ", Directory.GetFiles(tempDir).Select(Path.GetFileName))}");
+                }
+
+                // Init runs migrations on the pool before posting the first batch. Release
+                // the test worker while waiting, but stop pumping exactly at the batch boundary.
+                if (!context.ExecuteOne(TimeSpan.Zero))
+                {
+                    await Task.Delay(20).ConfigureAwait(false);
                 }
             }
 
+            if (init.IsFaulted || init.IsCanceled)
+            {
+                await init;
+            }
             await Assert.That(unified.Tasks.Count).IsEqualTo(64);
+            await Assert.That(unified.StatusModelMigrationWasApplied).IsFalse();
             await File.WriteAllTextAsync(
                 sourcePath,
-                JsonConvert.SerializeObject(new TaskItem { Id = "new", Title = "Startup edit" }));
+                JsonConvert.SerializeObject(CreateHydrationTask("new", "Startup edit")));
             watcher.EmitRaw("alias.json", UpdateType.Saved);
 
             var initDeadline = DateTimeOffset.UtcNow.AddSeconds(10);
             while (!init.IsCompleted)
             {
-                context.ExecuteOne(TimeSpan.FromMilliseconds(100));
                 if (DateTimeOffset.UtcNow >= initDeadline)
                 {
                     throw new TimeoutException("Timed out completing startup reconciliation.");
                 }
+                if (!context.ExecuteOne(TimeSpan.Zero))
+                {
+                    await Task.Delay(20).ConfigureAwait(false);
+                }
             }
             await init;
+
+            await Assert.That(unified.Tasks.Count).IsEqualTo(65);
+            var availabilityReport = JObject.Parse(await File.ReadAllTextAsync(
+                Path.Combine(tempDir, "availability.migration.report")));
+            await Assert.That(availabilityReport["ChangedTasks"]!.Value<int>()).IsEqualTo(0);
 
             var observed = new List<(string Id, UpdateType Type)>();
             storage.Updating += (_, args) => observed.Add((args.Id, args.Type));
             await File.WriteAllTextAsync(
                 sourcePath,
-                JsonConvert.SerializeObject(new TaskItem { Id = "newer", Title = "Later edit" }));
+                JsonConvert.SerializeObject(CreateHydrationTask("newer", "Later edit")));
             watcher.EmitRaw("alias.json", UpdateType.Saved);
             await storage.TriggerUpdatingAsync("alias.json", UpdateType.Saved);
 
