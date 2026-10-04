@@ -16,6 +16,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Raven.Client.Documents;
+using Raven.Client.Documents.Linq;
 using Raven.Client.Documents.Session;
 using ServiceStack;
 using ServiceStack.Auth;
@@ -177,6 +178,8 @@ internal static class ServerStorageCrudRealtimeContract
                 }
             ]
         });
+
+        await fixture.WaitForTaskQueryIndexesAsync(storedTaskId);
 
         TaskItemPage ownerPage = await ownerClient.GetAsync(new GetAllTasks());
         TaskItemMold loaded = await ownerClient.GetAsync(new GetTask { Id = storedTaskId });
@@ -381,6 +384,25 @@ internal static class ServerStorageCrudRealtimeContract
             payload["session"] = Guid.NewGuid().ToString();
 
             return JwtAuthProvider.CreateEncryptedJweToken(payload, jwtProvider.PublicKey.Value);
+        }
+
+        public async Task WaitForTaskQueryIndexesAsync(string taskId)
+        {
+            using var scope = _host.Services.CreateScope();
+            var session = scope.ServiceProvider.GetRequiredService<IAsyncDocumentSession>();
+            var task = await session.LoadAsync<TaskItem>(taskId)
+                ?? throw new InvalidOperationException($"Bulk insert did not persist '{taskId}'.");
+
+            // Bulk insert completes before asynchronous auto-indexing. Warm both query
+            // shapes used by the API; keep the actual authenticated HTTP checks below.
+            await session.Query<TaskItem>()
+                .Customize(query => query.WaitForNonStaleResults(TimeSpan.FromSeconds(10)))
+                .Where(item => item.UserId == task.UserId)
+                .ToListAsync();
+            await session.Query<TaskItem>()
+                .Customize(query => query.WaitForNonStaleResults(TimeSpan.FromSeconds(10)))
+                .Where(item => item.Id == taskId && item.UserId == task.UserId)
+                .ToListAsync();
         }
 
         public HubConnection CreateHubConnection()

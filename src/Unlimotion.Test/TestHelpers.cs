@@ -35,6 +35,7 @@ namespace Unlimotion.Test
             var taskCountBefore = taskRepository.Tasks.Count;
             action.Invoke();
             await WaitThrottleTime();
+            await WaitForExpectedTaskCountAsync(taskRepository, taskCountBefore, changeCount);
             await WaitForPendingSavesAsync(taskRepository);
             await Assert.That(taskRepository.Tasks.Count).IsEqualTo(taskCountBefore + changeCount);
         }
@@ -45,6 +46,7 @@ namespace Unlimotion.Test
             var taskCountBefore = taskRepository.Tasks.Count;
             await action.Invoke();
             await WaitThrottleTime();
+            await WaitForExpectedTaskCountAsync(taskRepository, taskCountBefore, changeCount);
             await WaitForPendingSavesAsync(taskRepository);
             await Assert.That(taskRepository.Tasks.Count).IsEqualTo(taskCountBefore + changeCount);
         }
@@ -57,8 +59,23 @@ namespace Unlimotion.Test
             var taskCountBefore = taskRepository.Tasks.Count;
             await ExecuteCommandAsync(command);
             await WaitThrottleTime();
+            await WaitForExpectedTaskCountAsync(taskRepository, taskCountBefore, changeCount);
             await WaitForPendingSavesAsync(taskRepository);
             await Assert.That(taskRepository.Tasks.Count).IsEqualTo(taskCountBefore + changeCount);
+        }
+
+        private static async Task WaitForExpectedTaskCountAsync(
+            ITaskStorage taskRepository, int countBefore, int changeCount)
+        {
+            // Confirmation callbacks are Actions and may finish their async deletion after
+            // ICommand.Execute returns. Pending saves do not represent deletion completion.
+            if (changeCount != 0)
+            {
+                await Assert.That(await WaitUntilAsync(
+                        () => taskRepository.Tasks.Count == countBefore + changeCount,
+                        TimeSpan.FromSeconds(5)))
+                    .IsTrue().Because("The command must complete the expected task count change.");
+            }
         }
 
         public static async Task<TaskItemViewModel> CreateAndReturnNewTaskItem(Action action,

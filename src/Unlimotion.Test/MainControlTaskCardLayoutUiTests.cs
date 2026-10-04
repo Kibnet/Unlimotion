@@ -13,6 +13,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Styling;
@@ -233,6 +234,111 @@ public class MainControlTaskCardLayoutUiTests
                 await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task CurrentTaskCard_ParentEmojiTrail_TitleInputUpdatesChildrenAndGrandchildrenBeforeSave()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(EmojiTitleTestAppBuilder));
+        await session.DispatchAsync(async () =>
+        {
+            ResetTaskCardLayoutSharedState();
+            await using var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+            try
+            {
+                foreach (var (id, initialTitle) in new[]
+                {
+                    (MainWindowViewModelFixture.RootTask2Id, "🧭 Проект"),
+                    (MainWindowViewModelFixture.RootTask3Id, "🛠 Вторая ветка")
+                })
+                {
+                    var path = Path.Combine(fixture.DefaultTasksFolderPath, id);
+                    var json = JObject.Parse(File.ReadAllText(path));
+                    json["Title"] = initialTitle;
+                    File.WriteAllText(path, json.ToString());
+                }
+                var childPath = Path.Combine(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.SubTask22Id);
+                var childJson = JObject.Parse(File.ReadAllText(childPath));
+                var grandchildId = Guid.NewGuid().ToString();
+                childJson[nameof(TaskItem.ContainsTasks)] = new JArray(grandchildId);
+                File.WriteAllText(childPath, childJson.ToString());
+                File.WriteAllText(Path.Combine(fixture.DefaultTasksFolderPath, grandchildId),
+                    JsonConvert.SerializeObject(new TaskItem
+                    {
+                        Id = grandchildId,
+                        Title = "Внук проекта",
+                        Status = DomainTaskStatus.Prepared,
+                        ParentTasks = [MainWindowViewModelFixture.SubTask22Id]
+                    }));
+
+                var (view, createdWindow) = await CreateArrangedMainControlAsync(fixture, 1400, 900);
+                window = createdWindow;
+                var vm = fixture.MainWindowViewModelTest;
+                await Task.WhenAll(vm.taskRepository!.Tasks.Items.Select(task => task.SealPendingSaves()));
+                var parent = TestHelpers.GetTask(vm, MainWindowViewModelFixture.RootTask2Id);
+                var diskBefore = File.ReadAllText(Path.Combine(fixture.DefaultTasksFolderPath, parent.Id));
+                TestHelpers.SetCurrentTask(vm, MainWindowViewModelFixture.SubTask22Id);
+                RunLayoutJobs();
+                var beforeTrail = FindControlByAutomationId<EmojiTextBlock>(view, "CurrentTaskParentEmojiTrail");
+                await Assert.That(IsVisibleAndArranged(beforeTrail)).IsTrue();
+                await Assert.That(beforeTrail.EmojiText).Contains("🧭");
+                await Assert.That(beforeTrail.EmojiText).Contains("🛠");
+                SaveEmojiTitleFrame(window, "card-before");
+
+                var changeIndex = 0;
+                foreach (var emoji in new[] { "🫶", "🐦‍🔥", "", "🧭" })
+                {
+                    changeIndex++;
+                    TestHelpers.SetCurrentTask(vm, parent.Id);
+                    RunLayoutJobs();
+                    var titleInput = FindControlByAutomationId<TextBox>(view, "CurrentTaskTitleTextBox");
+                    await Assert.That(titleInput.Focus()).IsTrue();
+                    titleInput.SelectAll();
+                    window.KeyTextInput($"{emoji} Проект");
+                    RunLayoutJobs();
+                    await Assert.That(parent.Title).IsEqualTo($"{emoji} Проект");
+
+                    foreach (var descendantId in new[] { MainWindowViewModelFixture.SubTask22Id, grandchildId })
+                    {
+                        var descendant = TestHelpers.SetCurrentTask(vm, descendantId);
+                        RunLayoutJobs();
+                        var trail = FindControlByAutomationId<EmojiTextBlock>(view, "CurrentTaskParentEmojiTrail");
+                        SaveEmojiTitleFrame(window, $"{changeIndex}-" + (descendantId == grandchildId ? "grandchild-after" : "card-after"));
+                        await Assert.That(IsVisibleAndArranged(trail)).IsTrue();
+                        await Assert.That(trail.EmojiText).Contains("🛠");
+                        if (emoji.Length > 0)
+                        {
+                            await Assert.That(trail.EmojiText).Contains(emoji);
+                            await Assert.That(descendant.GetAllEmoji).Contains(emoji);
+                        }
+                        else
+                        {
+                            await Assert.That(trail.EmojiText).IsEqualTo("🛠");
+                        }
+                        await Assert.That(trail.EmojiText)
+                            .IsEqualTo(string.Concat(descendant.GetAllParents().Select(ancestor => ancestor.Emoji)));
+                    }
+                    await Assert.That(File.ReadAllText(Path.Combine(fixture.DefaultTasksFolderPath, parent.Id)))
+                        .IsEqualTo(diskBefore);
+                }
+            }
+            finally
+            {
+                CloseWindow(window);
+            }
+        }, CancellationToken.None);
+    }
+
+    private static void SaveEmojiTitleFrame(Window window, string state)
+    {
+        if (Environment.GetEnvironmentVariable("UNLIMOTION_TEST_CAPTURE_FRAMES") != "1") return;
+        var directory = Environment.GetEnvironmentVariable("UNLIMOTION_TEST_TRACE_DIRECTORY");
+        if (string.IsNullOrEmpty(directory)) return;
+        using var frame = window.CaptureRenderedFrame();
+        if (frame == null) throw new InvalidOperationException("Emoji title regression frame was unavailable.");
+        Directory.CreateDirectory(directory);
+        frame.Save(Path.Combine(directory, $"emoji-title-{state}.png"));
     }
 
     [Test]

@@ -1538,13 +1538,25 @@ public class FileStorageTaskStatusTests
             var hydrationDeadline = DateTimeOffset.UtcNow.AddSeconds(10);
             while (!init.IsCompleted && unified.Tasks.Count < 64)
             {
-                if (!context.ExecuteOne(TimeSpan.FromMilliseconds(100)) &&
-                    DateTimeOffset.UtcNow >= hydrationDeadline)
+                if (DateTimeOffset.UtcNow >= hydrationDeadline)
                 {
-                    throw new TimeoutException("Timed out waiting for the first cache hydration batch.");
+                    throw new TimeoutException($"Timed out waiting for the first cache hydration batch. " +
+                        $"Init={init.Status}, tasks={unified.Tasks.Count}, " +
+                        $"files={string.Join(", ", Directory.GetFiles(tempDir).Select(Path.GetFileName))}");
+                }
+
+                // Init runs migrations on the pool before posting the first batch. Release
+                // the test worker while waiting, but stop pumping exactly at the batch boundary.
+                if (!context.ExecuteOne(TimeSpan.Zero))
+                {
+                    await Task.Delay(20).ConfigureAwait(false);
                 }
             }
 
+            if (init.IsFaulted || init.IsCanceled)
+            {
+                await init;
+            }
             await Assert.That(unified.Tasks.Count).IsEqualTo(64);
             await File.WriteAllTextAsync(
                 sourcePath,
@@ -1554,10 +1566,13 @@ public class FileStorageTaskStatusTests
             var initDeadline = DateTimeOffset.UtcNow.AddSeconds(10);
             while (!init.IsCompleted)
             {
-                context.ExecuteOne(TimeSpan.FromMilliseconds(100));
                 if (DateTimeOffset.UtcNow >= initDeadline)
                 {
                     throw new TimeoutException("Timed out completing startup reconciliation.");
+                }
+                if (!context.ExecuteOne(TimeSpan.Zero))
+                {
+                    await Task.Delay(20).ConfigureAwait(false);
                 }
             }
             await init;

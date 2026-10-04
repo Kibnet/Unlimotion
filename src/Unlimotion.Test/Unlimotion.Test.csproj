@@ -121,6 +121,11 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<Content Include="TestData\Unicode\emoji-test-17.0.txt" CopyToOutputDirectory="PreserveNewest" />
+		<Content Include="TestData\Unicode\LICENSE.txt" CopyToOutputDirectory="PreserveNewest" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<PackageReference Include="Avalonia.Headless" />
 		<PackageReference Include="CompareNETObjects" />
 		<PackageReference Include="JustMock" />
