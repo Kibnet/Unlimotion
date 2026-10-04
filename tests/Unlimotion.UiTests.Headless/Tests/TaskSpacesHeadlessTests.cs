@@ -1,12 +1,14 @@
 using AppAutomation.Avalonia.Headless.Automation;
 using AppAutomation.Avalonia.Headless.Session;
 using AppAutomation.TUnit;
+using AppAutomation.Abstractions;
 using Avalonia.Threading;
 using TUnit.Assertions;
 using TUnit.Core;
 using Unlimotion.AppAutomation.TestHost;
 using Unlimotion.UiTests.Authoring.Pages;
 using Unlimotion.ViewModel;
+using Unlimotion.UiTests.Headless.Infrastructure;
 
 namespace Unlimotion.UiTests.Headless.Tests;
 
@@ -26,6 +28,7 @@ public sealed class TaskSpacesHeadlessTests
     [NotInParallel(DesktopUiConstraint)]
     public async Task Spaces_render_selector_and_settings_management_controls()
     {
+        using var presentation = new HeadlessWindowPresentation(Session.Inner.MainWindow);
         await Assert.That(Page.TaskSpaceSelector.AutomationId).IsEqualTo("TaskSpaceSelector");
         var vm = GetViewModel();
         await Assert.That(vm.Settings.TaskSpaces.Select(space => space.DisplayName))
@@ -33,16 +36,13 @@ public sealed class TaskSpacesHeadlessTests
         await Assert.That(GetOnlyTaskTitle(vm)).IsEqualTo(
             UnlimotionAutomationScenarioData.TaskSpacesSpaceATitle);
 
-        HeadlessRuntime.Dispatch(() =>
-        {
-            vm.SettingsMode = true;
-            Dispatcher.UIThread.RunJobs();
-        });
+        Page.SelectTabItem(static page => page.SettingsTabItem, timeoutMs: 10_000);
         await Assert.That(Page.TaskSpacesSection.AutomationId).IsEqualTo("TaskSpacesSection");
         await Assert.That(Page.TaskSpacesList.AutomationId).IsEqualTo("TaskSpacesList");
         await Assert.That(Page.AddTaskSpaceButton.AutomationId).IsEqualTo("AddTaskSpaceButton");
         await Assert.That(Page.RenameTaskSpaceButton.AutomationId).IsEqualTo("RenameTaskSpaceButton");
         await Assert.That(Page.RemoveTaskSpaceButton.AutomationId).IsEqualTo("RemoveTaskSpaceButton");
+        Page.WaitUntilIsEnabled(static page => page.RemoveTaskSpaceButton, true, 10_000);
         await Assert.That(Page.RemoveTaskSpaceButton.IsEnabled).IsTrue();
         await Assert.That(vm.Settings.SwitchTaskSpaceCommand).IsNotNull();
         await Assert.That(vm.Settings.AddTaskSpaceCommand).IsNotNull();
