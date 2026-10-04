@@ -92,6 +92,7 @@ public sealed class TaskHistoryFlaUiTests
             .ToArray();
         Console.WriteLine("Task history automation names: " + string.Join(" | ", visibleNames));
         await Assert.That(visibleNames.Contains("Update task for history", StringComparer.Ordinal)).IsTrue();
+        await Assert.That(visibleNames.Any(name => name!.Contains("ui-metadata-user", StringComparison.Ordinal))).IsFalse();
 
         var gitMode = Find(session, "TaskHistoryGitModeButton");
         var optionsButton = Find(session, "TaskHistoryOptionsButton");
@@ -105,6 +106,19 @@ public sealed class TaskHistoryFlaUiTests
             element => element is { IsOffscreen: false },
             "The history options did not expose system fields.");
         await Assert.That(metadata).IsNotNull();
+        metadata!.AsCheckBox().Toggle();
+        optionsButton!.AsButton().Invoke();
+        await WaitUntil(
+            () => historyItems.FindAllDescendants().Select(element => element.Properties.Name.ValueOrDefault).ToArray(),
+            names => names.Any(name => name?.Contains("ui-metadata-user", StringComparison.Ordinal) == true),
+            "Readable system-field values did not appear after enabling them.");
+        var systemNames = historyItems.FindAllDescendants().Select(element => element.Properties.Name.ValueOrDefault).ToArray();
+        await Assert.That(systemNames.Any(name => name is not null && (name.Contains('[') || name.Contains('{')))).IsFalse();
+        optionsButton!.AsButton().Invoke();
+        metadata = await WaitUntil(
+            () => desktop.FindFirstDescendant(popupAutomation.ConditionFactory.ByAutomationId("TaskHistoryMetadataCheckBox")),
+            element => element is { IsOffscreen: false }, "System-fields option did not reopen.");
+        metadata!.AsCheckBox().Toggle();
         optionsButton!.AsButton().Invoke();
         await Assert.That(FindText(historyItems, "History title after commit")).IsNotNull();
 
@@ -147,12 +161,22 @@ public sealed class TaskHistoryFlaUiTests
             "ui-test@unlimotion.local",
             DateTimeOffset.UtcNow);
 
+        var original = JsonNode.Parse(File.ReadAllText(currentTaskPath))!.AsObject();
+        original.Remove("PlannedDuration");
+        File.WriteAllText(currentTaskPath, original.ToJsonString());
+
         Commands.Stage(repository, "*");
         repository.Commit("Initial task snapshot", signature, signature);
 
         var task = JsonNode.Parse(File.ReadAllText(currentTaskPath))!.AsObject();
         task["Title"] = "History title after commit";
         task["Description"] = new string('h', 460);
+        task["PlannedDuration"] = null;
+        task["UserId"] = "ui-metadata-user";
+        task["StatusHistory"] = new JsonArray(new JsonObject
+        {
+            ["Status"] = "NotReady", ["Author"] = "ui-metadata-user", ["ChangedAt"] = DateTimeOffset.UtcNow.ToString("O")
+        });
         File.WriteAllText(currentTaskPath, task.ToJsonString());
 
         Commands.Stage(repository, "*");

@@ -5,6 +5,9 @@
              x:DataType="local:TaskHistoryFieldChange">
     <UserControl.Styles>
         <Style Selector="Button.HistoryTextAction">
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="Padding" Value="0"/>
             <Setter Property="MinHeight" Value="24"/>
             <Setter Property="MinWidth" Value="0"/>

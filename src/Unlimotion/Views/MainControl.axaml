@@ -67,6 +67,7 @@
         </Style>
         <Style Selector="Expander.TaskStatusHistoryExpander">
             <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Template">
                 <ControlTemplate>
                     <Grid MinWidth="{TemplateBinding MinWidth}"
@@ -127,6 +128,8 @@
             <Setter Property="BorderBrush" Value="Transparent"/>
         </Style>
         <Style Selector="ToggleButton.HistoryMode">
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
             <Setter Property="Padding" Value="8,3"/>
             <Setter Property="MinHeight" Value="28"/>
             <Setter Property="MinWidth" Value="0"/>
@@ -135,6 +138,9 @@
             <Setter Property="CornerRadius" Value="4"/>
         </Style>
         <Style Selector="Button.HistoryIcon">
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="Width" Value="28"/>
             <Setter Property="Height" Value="28"/>
             <Setter Property="MinWidth" Value="28"/>
@@ -144,6 +150,9 @@
             <Setter Property="BorderThickness" Value="0"/>
         </Style>
         <Style Selector="Button.HistoryCommit">
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="Padding" Value="0"/>
             <Setter Property="MinWidth" Value="0"/>
             <Setter Property="MinHeight" Value="20"/>
@@ -157,9 +166,13 @@
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
         </Style>
-        <Style Selector="ListBox.HistoryEntries ListBoxItem">
+        <Style Selector="ListBox.HistoryEntries ListBoxItem" x:DataType="unlimotion:TaskHistoryEntry">
+            <Setter Property="AutomationProperties.Name" Value="{Binding Heading}"/>
             <Setter Property="Padding" Value="0,4"/>
             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+        </Style>
+        <Style Selector="ListBox.HistoryEntries /template/ ScrollViewer">
+            <Setter Property="VerticalSnapPointsType" Value="None"/>
         </Style>
         <Style Selector="Grid.FilterToolbar">
             <Setter Property="ColumnSpacing" Value="8"/>
@@ -2454,12 +2467,14 @@
                                 </StackPanel>
                         </ScrollViewer>
                                     <Border Grid.Row="1" Classes="TaskCardSection"
+                                            Background="{DynamicResource CurrentTaskDetailsPanelBackgroundBrush}"
                                             AutomationProperties.ControlTypeOverride="Group"
                                             AutomationProperties.IsControlElementOverride="True"
                                             AutomationProperties.AutomationId="CurrentTaskStatusHistorySection">
                                         <Expander x:Name="TaskHistoryExpander"
                                                   Header="{DynamicResource TaskHistory}"
                                                   Classes="TaskStatusHistoryExpander"
+                                                  behavior:SmoothHistoryScroll.IsEnabled="True"
                                                   ExpandDirection="Down"
                                                   Expanded="TaskHistoryExpander_OnExpanded"
                                                   Collapsed="TaskHistoryExpander_OnCollapsed"
@@ -2520,7 +2535,7 @@
                                                              AutomationProperties.AutomationId="TaskHistoryItems">
                                                         <ListBox.ItemsPanel>
                                                             <ItemsPanelTemplate>
-                                                                <VirtualizingStackPanel/>
+                                                                <VirtualizingStackPanel CacheLength="0.5"/>
                                                             </ItemsPanelTemplate>
                                                         </ListBox.ItemsPanel>
                                                         <ListBox.ItemTemplate>
@@ -2554,6 +2569,7 @@
                                                         </ListBox.ItemTemplate>
                                                     </ListBox>
                                                     <Button Grid.Row="3" Content="{DynamicResource TaskHistoryLoadMore}"
+                                                            HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                                                             IsVisible="{Binding TaskHistory.CanLoadMore, ElementName=mainControl}"
                                                             HorizontalAlignment="Left"
                                                             Click="TaskHistoryLoadMoreButton_OnClick"

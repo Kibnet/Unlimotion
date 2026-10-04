@@ -1260,6 +1260,7 @@ public class MainControlTaskCardLayoutUiTests
                 await Assert.That(IsVisibleAndArranged(statusItems)).IsTrue();
                 await Assert.That(gitPanel.IsVisible).IsFalse();
 
+                StopBackgroundTaskHistoryRefresh(view);
                 view.TaskHistory.IsGitMode = true;
                 view.TaskHistory.Entries.Add(new TaskHistoryEntry(
                     "1234567890",
@@ -1314,7 +1315,9 @@ public class MainControlTaskCardLayoutUiTests
                             var expander = FindControlByAutomationId<Expander>(view, "StatusHistoryExpander");
                             view.TaskHistory.IsGitMode = false;
                             expander.IsExpanded = true;
+                            RunLayoutJobs();
                             view.TaskHistory.IsGitMode = true;
+                            StopBackgroundTaskHistoryRefresh(view);
                             view.TaskHistory.Entries.Add(new TaskHistoryEntry(
                                 "1234567890", "Test Author", DateTimeOffset.UtcNow, "git 1234567", "change fields",
                                 [new TaskHistoryFieldChange("Title", "Title", "Before", "After", TaskHistoryChangeType.Modified, false),
@@ -1418,8 +1421,9 @@ public class MainControlTaskCardLayoutUiTests
                 var expander = FindControlByAutomationId<Expander>(view, "StatusHistoryExpander");
                 view.TaskHistory.IsGitMode = false;
                 expander.IsExpanded = true;
+                RunLayoutJobs();
                 view.TaskHistory.IsGitMode = true;
-                view.TaskHistory.Dispose();
+                StopBackgroundTaskHistoryRefresh(view);
                 var change = new TaskHistoryFieldChange("Description", "Description", oldText[..60] + "…", newText[..60] + "…",
                     TaskHistoryChangeType.Modified, false,
                     new TaskHistoryValueReference("", null, valuePath, "Old", true, hash),
@@ -1439,6 +1443,7 @@ public class MainControlTaskCardLayoutUiTests
                     for (var attempt = 0; attempt < 200 && !field.IsDetailsExpanded; attempt++)
                         await Task.Delay(10);
                     RunLayoutJobs();
+                    Console.WriteLine($"Inline details: field={((TaskHistoryFieldChange)field.DataContext!).FieldPath}; expanded={field.IsDetailsExpanded}; attached={TopLevel.GetTopLevel(field) is not null}; visible={field.IsVisible}; model details={view.TaskHistory.HasDetails}; rows={view.TaskHistory.Entries.Count}");
                     await Assert.That(field.IsDetailsExpanded).IsTrue();
                     var collapse = FindControlByAutomationId<Button>(field, "TaskHistoryCloseDetailsButton");
                     for (var attempt = 0; attempt < 200 && !collapse.IsFocused; attempt++)
@@ -1518,7 +1523,7 @@ public class MainControlTaskCardLayoutUiTests
                         view.TaskHistory.IsGitMode = false;
                         expander.IsExpanded = true;
                         RunLayoutJobs();
-                        view.TaskHistory.Dispose();
+                        StopBackgroundTaskHistoryRefresh(view);
                         view.TaskHistory.IsGitMode = true;
                         FindControlByAutomationId<ItemsControl>(view, "StatusHistoryItems").ItemsSource = Enumerable.Range(0, 40)
                             .Select(index => new TaskStatusHistoryEntry { Author = "Author", ChangedAt = DateTimeOffset.UtcNow.AddMinutes(-index) });
@@ -1642,6 +1647,199 @@ public class MainControlTaskCardLayoutUiTests
         }, CancellationToken.None);
     }
 
+    [Test]
+    public async Task CurrentTaskCard_TaskHistory_CentersActionsAndScrollsSmoothlyWithinUnifiedBackground()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(RenderedTaskHistoryAppBuilder));
+        await session.DispatchAsync(async () =>
+        {
+            ResetTaskCardLayoutSharedState();
+            var previousTheme = Application.Current!.RequestedThemeVariant;
+            try
+            {
+                foreach (var theme in new[] { ThemeVariant.Light, ThemeVariant.Dark })
+                foreach (var width in new[] { 360d, 900d })
+                {
+                    Application.Current.RequestedThemeVariant = theme;
+                    var fixture = new MainWindowViewModelFixture();
+                    Window? window = null;
+                    try
+                    {
+                        var (view, createdWindow) = await CreateArrangedMainControlAsync(fixture, width, 900);
+                        window = createdWindow;
+                        var expander = FindControlByAutomationId<Expander>(view, "StatusHistoryExpander");
+                        view.TaskHistory.IsGitMode = false;
+                        expander.IsExpanded = true;
+                        RunLayoutJobs();
+                        StopBackgroundTaskHistoryRefresh(view);
+                        view.TaskHistory.IsGitMode = true;
+                        for (var index = 0; index < 40; index++)
+                            view.TaskHistory.Entries.Add(new TaskHistoryEntry($"commit-{index}", "Author", DateTimeOffset.UtcNow,
+                                "Git", $"Change {index}", [new TaskHistoryFieldChange("Title", "Title", "Before", "After", TaskHistoryChangeType.Modified, false)]));
+                        RunLayoutJobs();
+                        var footer = FindControlByAutomationId<Border>(view, "CurrentTaskStatusHistorySection");
+                        var content = expander.GetVisualDescendants().OfType<Border>().Single(border => ReferenceEquals(border.TemplatedParent, expander));
+                        await Assert.That(footer.Background).IsNotNull();
+                        await Assert.That(content.Background is null || content.Background is ISolidColorBrush { Color.A: 0 }).IsTrue();
+                        foreach (var id in new[] { "TaskHistoryGitModeButton", "TaskHistoryStatusModeButton", "TaskHistoryRefreshButton", "TaskHistoryOptionsButton", "TaskHistoryCopyCommitButton" })
+                        {
+                            var button = FindControlByAutomationId<Button>(view, id);
+                            var text = button.GetVisualDescendants().OfType<TextBlock>().First();
+                            var center = text.TranslatePoint(new Point(text.Bounds.Width / 2, text.Bounds.Height / 2), button)!.Value;
+                            await Assert.That(Math.Abs(center.X - button.Bounds.Width / 2)).IsLessThanOrEqualTo(1);
+                            await Assert.That(Math.Abs(center.Y - button.Bounds.Height / 2)).IsLessThanOrEqualTo(1);
+                        }
+                        var body = FindControlByAutomationId<ScrollViewer>(view, "CurrentTaskDetailsScrollViewer");
+                        var footerTop = GetTopEdge(view, footer);
+                        var bodyOffset = body.Offset;
+                        var list = FindControlByAutomationId<ListBox>(view, "TaskHistoryItems");
+                        var firstItem = list.GetVisualDescendants().OfType<ListBoxItem>().First(IsVisibleAndArranged);
+                        await Assert.That(AutomationProperties.GetName(firstItem)).IsEqualTo("Change 0");
+                        var scroll = list.GetVisualDescendants().OfType<ScrollViewer>().Single(control => ReferenceEquals(control.TemplatedParent, list));
+                        var offsets = new List<double>();
+                        scroll.PropertyChanged += (_, args) =>
+                        {
+                            if (args.Property == ScrollViewer.OffsetProperty)
+                                offsets.Add(scroll.Offset.Y);
+                        };
+                        // Commit the compositor scene before computing a physical input position.
+                        // MouseWheel renders first; an unfinished scene can move the footer before hit testing.
+                        using (window.CaptureRenderedFrame()) { }
+                        var wheelPoint = scroll.TranslatePoint(new Point(24, 24), window)!.Value;
+                        window.MouseMove(wheelPoint);
+                        expander.AddHandler(Avalonia.Input.InputElement.PointerWheelChangedEvent, (_, args) =>
+                        {
+                            var candidates = (args.Source as Visual)?.GetVisualAncestors().OfType<ScrollViewer>()
+                                .Select(candidate => $"{candidate.Name}: extent={candidate.Extent.Height}; viewport={candidate.Viewport.Height}; offset={candidate.Offset.Y}; bar={candidate.VerticalScrollBarVisibility}");
+                            Console.WriteLine($"History wheel: source={args.Source}; handled={args.Handled}; {string.Join(" | ", candidates ?? [])}");
+                        }, RoutingStrategies.Tunnel, handledEventsToo: true);
+                        window.MouseWheel(wheelPoint, new Vector(0, -1));
+                        await Assert.That(scroll.Offset.Y).IsLessThan(50);
+                        for (var attempt = 0; attempt < 40 && Math.Abs(scroll.Offset.Y - 50) > 0.1; attempt++)
+                        {
+                            await Task.Delay(25);
+                            RunLayoutJobs();
+                        }
+                        Console.WriteLine($"History wheel result: offset={scroll.Offset.Y}; rows={view.TaskHistory.Entries.Count}; samples={string.Join(",", offsets)}");
+                        await Assert.That(Math.Abs(scroll.Offset.Y - 50)).IsLessThan(1);
+                        await Assert.That(offsets.Any(offset => offset > 0 && offset < 49)).IsTrue();
+                        for (var index = 0; index < 3; index++)
+                            window.MouseWheel(wheelPoint, new Vector(0, -1));
+                        for (var attempt = 0; attempt < 40 && Math.Abs(scroll.Offset.Y - 200) > 0.1; attempt++)
+                        {
+                            await Task.Delay(25);
+                            RunLayoutJobs();
+                        }
+                        await Assert.That(Math.Abs(scroll.Offset.Y - 200)).IsLessThan(1);
+                        window.MouseWheel(wheelPoint, new Vector(0, -1));
+                        scroll.ScrollToHome();
+                        RunLayoutJobs();
+                        await Task.Delay(220);
+                        RunLayoutJobs();
+                        await Assert.That(scroll.Offset.Y).IsEqualTo(0);
+                        await Assert.That(body.Offset).IsEqualTo(bodyOffset);
+                        await Assert.That(Math.Abs(GetTopEdge(view, footer) - footerTop)).IsLessThan(1);
+
+                        // Wheel input over full text belongs to that text area, not the commit list.
+                        var longText = string.Join("\n", Enumerable.Repeat("Long history value", 60));
+                        var longChange = new TaskHistoryFieldChange("Description", "Description", longText, longText,
+                            TaskHistoryChangeType.Modified, false);
+                        view.TaskHistory.Entries[0] = new TaskHistoryEntry("full-text", "Author", DateTimeOffset.UtcNow,
+                            "Git", "Long description", [longChange]);
+                        RunLayoutJobs();
+                        scroll.ScrollToHome();
+                        using (window.CaptureRenderedFrame()) { }
+                        var field = list.GetVisualDescendants().OfType<TaskHistoryFieldChangeView>()
+                            .Single(control => ReferenceEquals(control.DataContext, longChange));
+                        FindControlByAutomationId<Button>(field, "TaskHistoryShowDetailsButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                        for (var attempt = 0; attempt < 100 && !field.IsDetailsExpanded; attempt++)
+                            await Task.Delay(10);
+                        RunLayoutJobs();
+                        await Assert.That(field.IsDetailsExpanded).IsTrue();
+                        using (window.CaptureRenderedFrame()) { }
+                        var fullText = field.GetVisualDescendants().OfType<ScrollViewer>().Single(control => control.Name == "FullOldViewer");
+                        await Assert.That(fullText.Extent.Height).IsGreaterThan(fullText.Viewport.Height);
+                        var commitOffset = scroll.Offset;
+                        using (window.CaptureRenderedFrame()) { }
+                        window.MouseWheel(fullText.TranslatePoint(new Point(24, 24), window)!.Value, new Vector(0, -1));
+                        for (var attempt = 0; attempt < 40 && Math.Abs(fullText.Offset.Y - 50) > 0.1; attempt++)
+                        {
+                            await Task.Delay(25);
+                            RunLayoutJobs();
+                        }
+                        await Assert.That(Math.Abs(fullText.Offset.Y - 50)).IsLessThan(1);
+                        await Assert.That(scroll.Offset).IsEqualTo(commitOffset);
+
+                        view.TaskHistory.IsGitMode = false;
+                        FindControlByAutomationId<ItemsControl>(view, "StatusHistoryItems").ItemsSource = Enumerable.Range(0, 40)
+                            .Select(index => new TaskStatusHistoryEntry { Author = "Author", ChangedAt = DateTimeOffset.UtcNow.AddMinutes(-index) });
+                        RunLayoutJobs();
+                        var statuses = FindControlByAutomationId<ScrollViewer>(view, "TaskHistoryStatusScrollViewer");
+                        var statusOffsets = new List<double>();
+                        statuses.PropertyChanged += (_, args) =>
+                        {
+                            if (args.Property == ScrollViewer.OffsetProperty)
+                                statusOffsets.Add(statuses.Offset.Y);
+                        };
+                        using (window.CaptureRenderedFrame()) { }
+                        window.MouseWheel(statuses.TranslatePoint(new Point(24, 24), window)!.Value, new Vector(0, -1));
+                        for (var attempt = 0; attempt < 40 && Math.Abs(statuses.Offset.Y - 50) > 0.1; attempt++)
+                        {
+                            await Task.Delay(25);
+                            RunLayoutJobs();
+                        }
+                        await Assert.That(Math.Abs(statuses.Offset.Y - 50)).IsLessThan(1);
+                        await Assert.That(statusOffsets.Any(offset => offset > 0 && offset < 49)).IsTrue();
+                        await Assert.That(body.Offset).IsEqualTo(bodyOffset);
+                        Console.WriteLine($"Smooth history wheel: theme={theme}; width={width}; Git samples={offsets.Count}; status samples={statusOffsets.Count}; nested offset={fullText.Offset.Y}");
+                    }
+                    finally
+                    {
+                        CloseWindow(window);
+                        await fixture.CleanTasksAsync();
+                    }
+                }
+            }
+            finally
+            {
+                Application.Current.RequestedThemeVariant = previousTheme;
+            }
+        }, CancellationToken.None);
+    }
+
+    private static void StopBackgroundTaskHistoryRefresh(MainControl view)
+    {
+        // These layout/interaction cases supply deterministic rows. Real Git/watchers are covered
+        // by provider and desktop tests; their delayed notifications must not replace these rows.
+        foreach (var name in new[] { "_taskHistoryWatcherSubscription", "_taskHistoryItemSubscription" })
+            (typeof(MainControl).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(view) as IDisposable)?.Dispose();
+        view.TaskHistory.Dispose();
+        RunLayoutJobs();
+    }
+
+    private static void PrepareTaskHistoryUiFixture(MainWindowViewModelFixture fixture, string selectedTaskId)
+    {
+        // These flows test the current UI, so prepare current-schema data before watchers start migrating it.
+        var migrate = typeof(UnifiedTaskStorage).GetMethod("TryMigrateTaskStatusJson", BindingFlags.Static | BindingFlags.NonPublic)!;
+        foreach (var file in Directory.EnumerateFiles(fixture.DefaultTasksFolderPath))
+        {
+            if (Path.GetFileName(file).StartsWith('.'))
+                continue;
+            var json = JObject.Parse(File.ReadAllText(file));
+            if (json[nameof(TaskItem.Id)] is null)
+                continue;
+            var changed = (bool)migrate.Invoke(null, [json, DateTimeOffset.UtcNow])!;
+            if (json[nameof(TaskItem.Id)]!.Value<string>() == selectedTaskId &&
+                json[nameof(TaskItem.PlannedBeginDateTime)]?.Type is null or JTokenType.Null)
+            {
+                json[nameof(TaskItem.PlannedBeginDateTime)] = DateTime.Today;
+                changed = true;
+            }
+            if (changed)
+                File.WriteAllText(file, json.ToString());
+        }
+    }
+
     private static async Task<(MainControl View, Window Window)> CreateArrangedMainControlAsync(
         MainWindowViewModelFixture fixture,
         double width,
@@ -1650,6 +1848,7 @@ public class MainControlTaskCardLayoutUiTests
         Action<TaskItemViewModel>? configureCurrentTask = null,
         double? fontSize = null)
     {
+        PrepareTaskHistoryUiFixture(fixture, selectedTaskId);
         var vm = fixture.MainWindowViewModelTest;
         vm.Settings.LanguageMode = LocalizationService.EnglishLanguage;
         vm.Settings.FontSize = AppearanceSettings.DefaultFontSize;
