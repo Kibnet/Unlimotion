@@ -4,11 +4,14 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
+using System.Reactive;
+using System.Reactive.Threading.Tasks;
 using System.Reflection;
 using System.Text.Json;
 using System.Threading;
 using LibGit2Sharp;
 using Microsoft.Extensions.Configuration;
+using ReactiveUI;
 using Unlimotion.Services;
 using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
@@ -1453,13 +1456,11 @@ public class SettingsViewModelTests : IDisposable
 
         await Assert.That(settings.BackupConnectionState).IsEqualTo(BackupStatusState.Connected);
 
-        settings.SwitchRemoteToSshCommand!.Execute(null);
+        await ((ReactiveCommand<Unit, Unit>)settings.SwitchRemoteToSshCommand!)
+            .Execute().ToTask().WaitAsync(TimeSpan.FromSeconds(3));
 
-        await WaitForConditionAsync(
-            () => backupService.SwitchRemoteConnectionTypeCalls == 1 &&
-                  settings.GitRemoteName == "origin-ssh" &&
-                  settings.BackupConnectionState != BackupStatusState.Connecting,
-            "Remote connection type switch did not complete.");
+        await Assert.That(backupService.SwitchRemoteConnectionTypeCalls).IsEqualTo(1);
+        await Assert.That(settings.GitRemoteName).IsEqualTo("origin-ssh");
 
         await Assert.That(settings.BackupConnectionState).IsEqualTo(BackupStatusState.NotConfigured);
         await Assert.That(settings.CanConnectRepository).IsFalse();
