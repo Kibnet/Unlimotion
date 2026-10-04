@@ -17,6 +17,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Raven.Client.Documents;
+using Raven.Client.Documents.Operations.Indexes;
 using Raven.Client.Documents.Session;
 using ServiceStack;
 using ServiceStack.Auth;
@@ -181,7 +182,17 @@ internal static class ServerStorageCrudRealtimeContract
 
         // Bulk insert precedes query-index visibility. Wait through the authenticated
         // endpoint whose result is asserted, rather than an extra non-stale query barrier.
-        TaskItemPage ownerPage = await WaitForTaskInPageAsync(ownerClient, storedTaskId);
+        TaskItemPage ownerPage;
+        try
+        {
+            ownerPage = await WaitForTaskInPageAsync(ownerClient, storedTaskId);
+        }
+        catch (Exception error) when (error is TimeoutException ||
+            error is WebException { Status: WebExceptionStatus.Timeout or WebExceptionStatus.RequestCanceled })
+        {
+            await fixture.WriteTaskApiTimeoutDiagnosticsAsync();
+            throw;
+        }
         TaskItemMold loaded = await ownerClient.GetAsync(new GetTask { Id = storedTaskId });
         TaskItemPage otherUserPage = await otherUserClient.GetAsync(new GetAllTasks());
         TaskItemMold? otherUserLoaded = await TryGetTaskAsync(otherUserClient, storedTaskId);
@@ -241,41 +252,56 @@ internal static class ServerStorageCrudRealtimeContract
 
     private static async Task<TaskItemPage> WaitForTaskInPageAsync(JsonServiceClient client, string taskId)
     {
-        using var queryLifetime = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        var deadline = DateTimeOffset.UtcNow.AddSeconds(10);
         var originalTimeout = client.Timeout;
+        var phase = "first_response";
+        var requestNumber = 1;
+        var elapsed = System.Diagnostics.Stopwatch.StartNew();
+        CancellationTokenSource? visibilityLifetime = null;
         try
         {
-            while (true)
+            // Preserve the existing SDK transport timeout for cold auto-index creation.
+            // Raven's normal first query can wait up to 15 seconds before returning a page.
+            var page = await client.GetAsync(new GetAllTasks());
+            Console.Error.WriteLine($"GetAllTasks initial response: elapsed={elapsed.Elapsed}, SDK timeout={originalTimeout?.ToString() ?? "default"}.");
+            if (page.Tasks.Any(task => task.Id == taskId))
+                return page;
+
+            phase = "visibility_poll";
+            visibilityLifetime = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            var deadline = DateTimeOffset.UtcNow.AddSeconds(10);
+            while (!page.Tasks.Any(task => task.Id == taskId))
             {
                 var remaining = deadline - DateTimeOffset.UtcNow;
                 if (remaining <= TimeSpan.Zero)
-                    throw new TimeoutException($"GetAllTasks did not expose {taskId} within 10 seconds.");
-
-                // Every request, including the first cold query, shares the same budget.
-                // Authentication/server errors propagate; only an empty successful page is polled.
-                // The SDK timer aborts pending response headers; the token also covers body reads.
-                client.Timeout = originalTimeout is { } configuredTimeout && configuredTimeout > TimeSpan.Zero &&
-                    configuredTimeout < remaining ? configuredTimeout : remaining;
-                var page = await client.GetAsync(new GetAllTasks(), queryLifetime.Token).WaitAsync(remaining);
-                if (page.Tasks.Any(task => task.Id == taskId))
-                    return page;
-
+                    throw new TimeoutException($"GetAllTasks did not expose {taskId} within 10 seconds of consistency retries.");
+                await Task.Delay(remaining < TimeSpan.FromMilliseconds(50) ? remaining : TimeSpan.FromMilliseconds(50),
+                    visibilityLifetime.Token);
                 remaining = deadline - DateTimeOffset.UtcNow;
                 if (remaining <= TimeSpan.Zero)
-                    throw new TimeoutException($"GetAllTasks did not expose {taskId} within 10 seconds.");
-                await Task.Delay(remaining < TimeSpan.FromMilliseconds(50) ? remaining : TimeSpan.FromMilliseconds(50),
-                    queryLifetime.Token);
+                    throw new TimeoutException($"GetAllTasks did not expose {taskId} within 10 seconds of consistency retries.");
+
+                // SDK timeout aborts pending headers; the token covers body reads and delays.
+                client.Timeout = originalTimeout is { } configuredTimeout && configuredTimeout > TimeSpan.Zero &&
+                    configuredTimeout < remaining ? configuredTimeout : remaining;
+                requestNumber++;
+                page = await client.GetAsync(new GetAllTasks(), visibilityLifetime.Token).WaitAsync(remaining);
             }
+            return page;
         }
-        catch (OperationCanceledException canceled) when (queryLifetime.IsCancellationRequested)
+        catch (OperationCanceledException canceled) when (visibilityLifetime?.IsCancellationRequested == true)
         {
-            throw new TimeoutException($"GetAllTasks did not expose {taskId} within 10 seconds.", canceled);
+            Console.Error.WriteLine($"GetAllTasks deadline: phase={phase}, request={requestNumber}, elapsed={elapsed.Elapsed}.");
+            throw new TimeoutException($"GetAllTasks did not expose {taskId} within 10 seconds of consistency retries.", canceled);
+        }
+        catch (Exception error)
+        {
+            Console.Error.WriteLine($"GetAllTasks failure: phase={phase}, request={requestNumber}, elapsed={elapsed.Elapsed}, type={error.GetType().Name}.");
+            throw;
         }
         finally
         {
-            // WaitAsync may time out before the timer callback runs; stop the HTTP operation too.
-            queryLifetime.Cancel();
+            visibilityLifetime?.Cancel();
+            visibilityLifetime?.Dispose();
             client.Timeout = originalTimeout;
         }
     }
@@ -425,6 +451,35 @@ internal static class ServerStorageCrudRealtimeContract
             payload["session"] = Guid.NewGuid().ToString();
 
             return JwtAuthProvider.CreateEncryptedJweToken(payload, jwtProvider.PublicKey.Value);
+        }
+
+        public async Task WriteTaskApiTimeoutDiagnosticsAsync()
+        {
+            // Failure-only, read-only snapshots share one budget and preserve the original failure.
+            using var diagnosticLifetime = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            try
+            {
+                using var scope = _host.Services.CreateScope();
+                var session = scope.ServiceProvider.GetRequiredService<IAsyncDocumentSession>();
+                var maintenance = session.Advanced.DocumentStore.Maintenance;
+                var statistics = await maintenance.SendAsync(
+                    new GetIndexesStatisticsOperation(), diagnosticLifetime.Token)
+                    .WaitAsync(diagnosticLifetime.Token);
+                Console.Error.WriteLine("Raven task API timeout statistics: " +
+                    Newtonsoft.Json.JsonConvert.SerializeObject(statistics,
+                        new Newtonsoft.Json.Converters.StringEnumConverter()));
+                var status = await maintenance.SendAsync(
+                    new GetIndexingStatusOperation(), diagnosticLifetime.Token)
+                    .WaitAsync(diagnosticLifetime.Token);
+                Console.Error.WriteLine("Raven task API timeout indexing status: " +
+                    Newtonsoft.Json.JsonConvert.SerializeObject(status,
+                        new Newtonsoft.Json.Converters.StringEnumConverter()));
+            }
+            catch (Exception diagnosticFailure)
+            {
+                Console.Error.WriteLine("Raven task API timeout diagnostics unavailable: " +
+                    $"{diagnosticFailure.GetType().Name}: {diagnosticFailure.Message}");
+            }
         }
 
         public HubConnection CreateHubConnection()
