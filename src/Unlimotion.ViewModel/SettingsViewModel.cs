@@ -975,9 +975,9 @@ public class SettingsViewModel
             return;
         }
 
+        ReloadGitMetadata();
         GitRemoteName = result.RemoteName;
         GitRemoteUrl = result.RemoteUrl;
-        ReloadGitMetadata();
     }
 
     public void ReloadBackupConflictStatus()
