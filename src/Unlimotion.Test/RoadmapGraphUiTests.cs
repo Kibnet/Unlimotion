@@ -2819,6 +2819,7 @@ public class RoadmapGraphUiTests
                 var targetTask = await vm.taskRepository.Add();
                 targetTask.Title = "Roadmap batch DnD target";
                 await TestHelpers.WaitThrottleTime();
+                await TestHelpers.WaitForPendingSavesAsync(vm.taskRepository);
                 Dispatcher.UIThread.RunJobs();
 
                 var view = new MainControl { DataContext = vm };

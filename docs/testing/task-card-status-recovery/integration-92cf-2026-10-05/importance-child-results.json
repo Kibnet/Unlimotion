@@ -1,0 +1,42 @@
+{
+  "source": "Original rendered child TRX files",
+  "stdoutLimitation": "Parent Process decoding produced replacement characters in localized footer labels; original child stdout retained locally without inferred transcoding.",
+  "results": [
+    {
+      "testName": "Importance_ImageComparison_RejectsHiddenDigitAndHorizontalButtons",
+      "outcome": "Passed",
+      "total": 1,
+      "passed": 1,
+      "failed": 0,
+      "startedUtc": "2026-10-04T22:14:01.7856018Z",
+      "finishedUtc": "2026-10-04T22:14:13.5693201Z",
+      "duration": "00:00:10.9697537",
+      "sourceTrx": "importance-frames\\52b0f2517f91468a97e17ac8e6d4b393\\rendered-process-Importance_ImageComparison_RejectsHiddenDigitAndHorizontalButtons\\results\\Kibnet_DESKTOP-AUDO1TJ_2026-10-04_22_14_13.5679221.trx",
+      "sourceTrxSha256": "88389A822514ED651EE94DCCA6AE3983D095D1DB2277975BB3BEF8DF766338DA"
+    },
+    {
+      "testName": "Importance_All24States_MatchReviewedComponentBaselines",
+      "outcome": "Passed",
+      "total": 1,
+      "passed": 1,
+      "failed": 0,
+      "startedUtc": "2026-10-04T22:11:48.5221706Z",
+      "finishedUtc": "2026-10-04T22:13:34.9443519Z",
+      "duration": "00:01:45.2746528",
+      "sourceTrx": "importance-frames\\600fa23bb56e44a8b16e1ac3f5415bf0\\rendered-process-Importance_All24States_MatchReviewedComponentBaselines\\results\\Kibnet_DESKTOP-AUDO1TJ_2026-10-04_22_13_34.9436963.trx",
+      "sourceTrxSha256": "EF6AB4C27B287265707FD30721AA31E4EB84F187D48605D227BAE40C0081C6F9"
+    },
+    {
+      "testName": "Importance_TypingMouseKeyboardAndReload_PreserveTheSavedValue",
+      "outcome": "Passed",
+      "total": 1,
+      "passed": 1,
+      "failed": 0,
+      "startedUtc": "2026-10-04T22:13:35.5946383Z",
+      "finishedUtc": "2026-10-04T22:14:01.1714697Z",
+      "duration": "00:00:24.8708862",
+      "sourceTrx": "importance-frames\\f7fba1d7b9b8498397418efbb5482acf\\rendered-process-Importance_TypingMouseKeyboardAndReload_PreserveTheSavedValue\\results\\Kibnet_DESKTOP-AUDO1TJ_2026-10-04_22_14_01.1705809.trx",
+      "sourceTrxSha256": "BD316B0DCCA08FDEAD16C09EABBF8096EFFE1FE63732C983B42BDD88C1CE8640"
+    }
+  ]
+}

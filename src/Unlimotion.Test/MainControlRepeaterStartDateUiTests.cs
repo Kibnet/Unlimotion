@@ -144,20 +144,28 @@ public class MainControlRepeaterStartDateUiTests
                 Dispatcher.UIThread.RunJobs();
                 var selector = Find<ComboBox>(view, "CurrentTaskRepeaterSelector");
 
-                task.Repeater = new RepeaterPatternViewModel
+                // Hydrate authoritative models instead of enqueueing two user edits with
+                // the suite's 10 ms autosave: storage feedback can overwrite the next case.
+                task.Update(task.Model with
                 {
-                    Type = RepeaterType.Weekly,
-                    WorkDays = true
-                };
+                    Repeater = new RepeaterPatternViewModel
+                    {
+                        Type = RepeaterType.Weekly,
+                        WorkDays = true
+                    }.Model
+                });
                 Dispatcher.UIThread.RunJobs();
                 await Assert.That(selector.SelectedItem).IsSameReferenceAs(task.Repeaters[2]);
 
-                task.Repeater = new RepeaterPatternViewModel
+                task.Update(task.Model with
                 {
-                    Type = RepeaterType.Weekly,
-                    Monday = true,
-                    Saturday = true
-                };
+                    Repeater = new RepeaterPatternViewModel
+                    {
+                        Type = RepeaterType.Weekly,
+                        Monday = true,
+                        Saturday = true
+                    }.Model
+                });
                 Dispatcher.UIThread.RunJobs();
                 await Assert.That(selector.SelectedItem).IsSameReferenceAs(task.Repeaters[3]);
             }

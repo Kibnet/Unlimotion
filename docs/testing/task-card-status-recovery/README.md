@@ -4,7 +4,30 @@
 
 Согласованный контракт и post-EXEC review: [SPEC](../../../specs/2026-10-02-task-card-status-recovery.md).
 
-## Интеграция main 5a780b2e, 4–5 октября
+## Текущая база main 92cf8c1e, 5 октября
+
+Во время проверки предыдущего снимка main получил #316 Importance. Проверенный union с `5a780b2e` сохранён в локальном merge commit `35924686`, затем отдельно объединён `92cf8c1e`. Все входящие Importance styles, 24 baseline-пары, тесты, CI и canonical fixtures сохранены. Recovery storage/VM semantics, постоянная ошибка и Reload первым пунктом ⚙ не менялись.
+
+| Проверка на 92cf8c1e | Результат | Evidence |
+| --- | --- | --- |
+| Main / Desktop / Headless / FlaUI build | **PASS**; Main 95 warnings / 0 errors, остальные 0/0 | [Main](integration-92cf-2026-10-05/main-build.log), [Desktop](integration-92cf-2026-10-05/desktop-build.log), [Headless](integration-92cf-2026-10-05/headless-build.log), [FlaUI](integration-92cf-2026-10-05/flaui-build.log) |
+| Menu binding/name/busy, Missing copyable draft, off-UI read | **3/3 PASS** в отдельных запусках | [Binding/busy](integration-92cf-2026-10-05/menu-binding-busy.log), [Missing](integration-92cf-2026-10-05/missing-card.log), [UI thread](integration-92cf-2026-10-05/ui-thread.log) |
+| Rendered RU/EN × Light/Dark × 1400/760 | **8/8 PASS**; все восемь свежих menu PNG просмотрены, Importance виден | [Лог](integration-92cf-2026-10-05/menu-rendered-matrix.log), [RU Dark wide](integration-92cf-2026-10-05/reload-menu-ru-Dark-1400.png), [RU Dark narrow](integration-92cf-2026-10-05/reload-menu-ru-Dark-760.png) |
+| Importance visual/input/persistence | **3/3 PASS**, включая 24 component baselines и negative controls | [Лог](integration-92cf-2026-10-05/importance.log), [результаты трёх child TRX](integration-92cf-2026-10-05/importance-child-results.json) |
+| Headless отказ → ⚙ → Reload → явный retry | **1/1 PASS**; error clear, unchanged bytes после Reload, JSON NotReady и одна новая запись истории | [Лог](integration-92cf-2026-10-05/headless-recovery.log), [observations](integration-92cf-2026-10-05/headless-recovery-observations.json) |
+| Desktop/phone card layout | **4/4 PASS**: desktop 1, phone 3 | [Desktop](integration-92cf-2026-10-05/layout-desktop.log), [Phone](integration-92cf-2026-10-05/layout-phone.log) |
+
+Новый кадр на объединённой базе:
+
+![Reload в меню и сохранённый контрол важности](integration-92cf-2026-10-05/reload-menu-ru-Dark-1400.png)
+
+[Validation snapshot](integration-92cf-2026-10-05/validation-snapshot.json) фиксирует checkpoint, merged main, filters, timestamps, counts и binary hashes. Локальные HTML/TRX и все Importance images сохранены в `artifacts/status-recovery/integration-92cf-2026-10-05/`. Rendered flyout подтверждает содержание меню; необычное положение EN Light 760 popup не используется как доказательство native positioning. Source вызывает `ShowAt(actions)`.
+
+В raw Importance child stdout авторский parent process повредил кодировку русских footer labels. Исходные stdout сохранены локально без предполагаемой перекодировки; публичный основной лог читаемый. Child names/counts/times и SHA256 исходных TRX приведены в JSON, извлечённом из самих TRX; тесты и assertions не менялись.
+
+**Общий verdict остаётся NEEDS-FIX; публикация — draft.** Полный Main finding ниже остаётся открытым; полный Main/native повтор на `92cf8c1e` ожидает согласованного слота. Все полные/native результаты следующего раздела относятся к **5a780b2e**, а не к текущей базе. Source re-review нового union: PASS для draft; ready не подтверждён. Video fallback сохраняется: проверенной MP4 pair нет, доступны предыдущие native PNG/read-back и свежие rendered frames.
+
+## Предыдущая интеграция main 5a780b2e, 4–5 октября
 
 Объединены #313 AppAutomation 1.9 и #315 emoji со status recovery. Canonical metadata/pumping fixture, API-based server wait и ShiftDelete cache/storage wait сохранены из main; wrapper-delete wait перенесён отдельным hunk автора Importance. Pointer lifecycle объединён с recovery/menu clicks через DesktopPointer. Capture helper теперь не меняет focus/foreground внутри read-only HoverAsync callback; найденный MEDIUM закрыт source re-review.
 

@@ -504,6 +504,26 @@ Depth checklist: scope/Non-Goals, AC/scenario matrix, denial versus storage fail
 
 **Stop decision: NEEDS-FIX для ready for review.** Опубликовать проверенный интеграционный снимок в уже разрешённый **draft PR #314**, сохранить открытый Main finding и failure-only диагностику. Exact approval и PR authorization действуют. Source review PASS не заменяет validation gate; merge/release/install не выполняются.
 
+### Обновление базы на main 92cf8c1e, 2026-10-05
+
+Пока выполнялась предыдущая validation, main получил #316 Importance. Tested snapshot на `5a780b2e` сохранён отдельным merge commit `35924686`; затем main `92cf8c1e` объединён в recovery-ветку без конфликтов. Approved outcome не расширен. Importance styles, 24 baseline-пары, тесты, CI и canonical fixtures сохранены. Recovery storage/VM guards, dirty/Missing/OutcomeUnknown/revision/source protections и permanent error не менялись относительно checkpoint. Reload остаётся первым пунктом ⚙ с command binding и CanReloadTask.
+
+| Проверка именно union 92cf8c1e | Итог |
+| --- | --- |
+| Builds | Main **PASS, 95 warnings / 0 errors**; обычный Desktop, Headless, FlaUI **PASS, 0/0** |
+| Menu binding/name/busy; external deletion copyable draft; off-UI read | **3/3 PASS** в отдельных запусках |
+| Rendered menu RU/EN × Light/Dark × 1400/760 | **8/8 PASS**; все восемь новых PNG просмотрены, Importance виден |
+| Importance visual/input/persistence | **3/3 PASS**, включая 24 reviewed component baselines и отрицательные проверки скрытой цифры/горизонтальных buttons |
+| Headless menu recovery | **1/1 PASS**, error clear до retry, read-only bytes invariant, NotReady и ровно одна новая запись истории; FlowCompleted=true, FailureIds=[] |
+| Desktop/phone card layout | **4/4 PASS**: desktop 1, phone 3 |
+| Полный Main/native повтор на новой базе | **PENDING**; текущий согласованный слот у CLI, затем у history. Повтор не запущен; предыдущие 1229/1230 и native4/4 относятся только к 5a780b2e |
+
+Evidence опубликован в [README](../docs/testing/task-card-status-recovery/README.md), filters/timestamps/binary hashes — в [validation snapshot](../docs/testing/task-card-status-recovery/integration-92cf-2026-10-05/validation-snapshot.json). Локальные HTML/TRX и Importance rendered images сохранены отдельно. Source re-review выполнен тем же отдельным adversarial fallback `/root/spec_review` (danger-full-access, approval never; только чтение, без технического read-only enforcement). Из 60 входящих upstream-путей только MainControl.axaml отличается от main recovery-элементами; потери Importance/fixtures нет. Новых source BLOCKER/HIGH/MEDIUM/LOW не найдено. Необычное положение rendered EN Light 760 popup не названо доказательством native positioning; source ShowAt(actions) корректен.
+
+Role/depth pass: workflow/UX/developer — PASS для affected source/targeted evidence и сохранённых AC/guards; tester — NEEDS-FIX. MEDIUM validation остаётся OPEN: причина прежнего full-only Workspace paste failure неизвестна, актуальные полные проверки ещё не выполнены. Исходные paste predicate/5s/assertion и failure diagnostics сохранены. Stop decision — **NEEDS-FIX для ready; PASS для обновления draft PR #314** в рамках прежней PR authorization. Полные/native результаты старой базы не переназначены новой. Video fallback и production-cause limitation сохраняются; merge/release/install не выполняются.
+
+Docs re-review нашёл LOW readability в decoded Importance child stdout (U+FFFD в русских footer labels). Raw logs сохранены локально без угадывания кодировки. Непубликовавшиеся нечитаемые копии заменены [JSON evidence из исходных child TRX](../docs/testing/task-card-status-recovery/integration-92cf-2026-10-05/importance-child-results.json): три names/outcomes/counts/times и SHA256TRX. Основной readable Importance log подтверждает3/3. Product/harness source и прошедшие tests не менялись; LOW CLOSED после проверки JSON/ссылок.
+
 ## Approval
 
 Получена точная фраза пользователя: «Спеку подтверждаю» (2026-10-02).
@@ -522,3 +542,4 @@ Depth checklist: scope/Non-Goals, AC/scenario matrix, denial versus storage fail
 | EXEC: menu re-review 2026-10-03 | Reload первым в ⚙; исправлен driver false-positive ожиданием error clear; actual binding/busy/Missing assertions | Full Headless 52/52, rendered 8/8, menu 1/1, Missing 1/1, layout 4/4, Desktop 0/0; native заблокирован отключённым desktop; full Main открыт | Commit/push и обновление draft PR #314; ready не подтверждать | Прямое уточнение и PR authorization действуют | Menu frames, логи, evidence README |
 | EXEC: main integration 2026-10-04 | Координатор передал следующий этап после emoji #315; merge main только в recovery-ветку | Main `5a780b2e`, 2 source conflicts resolved по смыслу; авторский wrapper-delete wait, main ShiftDelete/cache/API fixtures сохранены | Builds/review, затем обязательные checks по очереди после Importance | Прежние exact approval и PR authorization действуют; main merge не разрешён | Текущая SPEC, integration logs |
 | EXEC: integration validation 2026-10-05 | Full/native пройдены в своём слоте; source findings по hover/diagnostics закрыты, paste cause остаётся неизвестной | Main1229/1230, Headless52/52, native4/4 final, rendered8/8; isolated paste1/1 не закрывает Main gate | Обновить draft PR с evidence; новый full требует согласованного слота | Прежние exact approval и PR authorization действуют | Integration logs/PNG, source snapshots, transferable diagnostic patch |
+| EXEC: Importance union 2026-10-05 | Main92cf8c1e объединён после сохранения tested5a checkpoint35924686; source re-review PASS для draft | Новые buildsPASS; menu8/8, semantic3/3, Importance3/3, Headlessrecovery1/1, layout4/4; full/native92cf PENDING | Commit/push и обновить draft PR с точными границами evidence; ready gate OPEN | Прежние exact approval и PR authorization действуют | Отдельные integration-92cf logs/PNG/snapshot |

@@ -1,0 +1,13 @@
+{
+  "OS": "Microsoft Windows 10.0.22631",
+  "Runtime": ".NET 10.0.12",
+  "Avalonia": "12.0.3.0",
+  "Skia": "3.119.0.0",
+  "Font": "compositefont:fonts:Inter#Inter, $Default#Inter, $Default",
+  "FontSize": 12,
+  "Scale": 1,
+  "WindowWidth": 1400,
+  "WindowHeight": 900,
+  "Theme": "Dark",
+  "Culture": "ru"
+}
