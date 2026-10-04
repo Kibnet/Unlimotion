@@ -33,7 +33,17 @@ public class MainControlFilterToolbarResponsiveUiTests
     [Test]
     [Arguments(false)]
     [Arguments(true)]
-    public async Task Toolbar_EmojiFilters_TitleInputCreatesNewFilterAndPreservesOtherSelections(bool exclude)
+    public Task Toolbar_EmojiFilters_TitleInputCreatesNewFilterAndPreservesOtherSelections(bool exclude) =>
+        AssertEmojiTitleInputUpdatesFiltersAsync(exclude, "🧭", "🫶", "title");
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public Task Toolbar_EmojiFilters_ExistingTaskWizardToJellyfish_RemainsSelectable(bool exclude) =>
+        AssertEmojiTitleInputUpdatesFiltersAsync(exclude, "🧙‍♂️", "🪼", "jellyfish");
+
+    private static async Task AssertEmojiTitleInputUpdatesFiltersAsync(
+        bool exclude, string originalEmoji, string replacementEmoji, string capturePrefix)
     {
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(EmojiTitleTestAppBuilder));
         await session.DispatchAsync(async () =>
@@ -47,8 +57,8 @@ public class MainControlFilterToolbarResponsiveUiTests
                 // Seed before Connect so readiness does not depend on several unrelated live edits.
                 foreach (var (id, initialTitle) in new[]
                 {
-                    (MainWindowViewModelFixture.RootTask2Id, "🧭 Проект"),
-                    (MainWindowViewModelFixture.RootTask3Id, "🧭 Другой проект"),
+                    (MainWindowViewModelFixture.RootTask2Id, $"{originalEmoji} Проект"),
+                    (MainWindowViewModelFixture.RootTask3Id, $"{originalEmoji} Другой проект"),
                     (MainWindowViewModelFixture.RootTask4Id, "🧪 Независимый проект")
                 })
                 {
@@ -72,16 +82,16 @@ public class MainControlFilterToolbarResponsiveUiTests
                 var control = exclude ? controls.ExcludeControl : controls.IncludeControl;
                 var filters = exclude ? vm.EmojiExcludeFilters : vm.EmojiFilters;
                 if (!WaitFor(() => filters.Any(filter => filter.Emoji == "🧪") &&
-                    filters.Any(filter => filter.Emoji == "🧭")))
+                    filters.Any(filter => filter.Emoji == originalEmoji)))
                     throw new InvalidOperationException("Emoji fixture filters: " + string.Join(", ", filters.Select(filter => $"{filter.Emoji}:{filter.Title}")));
                 var independent = filters.Single(filter => filter.Emoji == "🧪");
                 independent.ShowTasks = true;
                 await OpenEmojiTitlePopupAsync(window, view, control);
-                SaveEmojiDiagnosticFrame(window, $"title-{exclude}-before");
+                SaveEmojiDiagnosticFrame(window, $"{capturePrefix}-{exclude}-before");
                 var child = TestHelpers.GetTask(vm, MainWindowViewModelFixture.SubTask22Id);
-                var previousEmoji = "🧭";
+                var previousEmoji = originalEmoji;
                 var changeIndex = 0;
-                foreach (var emoji in new[] { "🫶", "🐦‍🔥", "", "🧭" })
+                foreach (var emoji in new[] { replacementEmoji, "🐦‍🔥", "", originalEmoji })
                 {
                     changeIndex++;
                     if (IsEmojiDropDownOpen(control))
@@ -109,10 +119,10 @@ public class MainControlFilterToolbarResponsiveUiTests
                                 $"popup={IsEmojiDropDownOpen(control)}, list={list.Bounds}, " +
                                 $"visible=[{string.Join(", ", GetVisibleEmojiItemTexts(list))}]");
                     }
-                    if (previousEmoji.Length > 0 && previousEmoji != "🧭")
+                    if (previousEmoji.Length > 0 && previousEmoji != originalEmoji)
                         await Assert.That(GetEmojiFilterListItems(list).Any(filter => filter.Emoji == previousEmoji)).IsFalse();
-                    await Assert.That(GetEmojiFilterListItems(list).Any(filter => filter.Emoji == "🧭")).IsTrue();
-                    SaveEmojiDiagnosticFrame(window, $"title-{exclude}-{changeIndex}-after");
+                    await Assert.That(GetEmojiFilterListItems(list).Any(filter => filter.Emoji == originalEmoji)).IsTrue();
+                    SaveEmojiDiagnosticFrame(window, $"{capturePrefix}-{exclude}-{changeIndex}-after");
                     if (emoji.Length > 0)
                     {
                         var updated = filters.Single(filter => filter.Emoji == emoji);
@@ -140,7 +150,7 @@ public class MainControlFilterToolbarResponsiveUiTests
                     await Assert.That(await WaitForEmojiTitleRenderAsync(window, view,
                         () => IsRendered(parent.Id) == expectedVisible &&
                             IsRendered(child.Id) == expectedVisible)).IsTrue();
-                    SaveEmojiDiagnosticFrame(window, $"title-{exclude}-{changeIndex}-selected");
+                    SaveEmojiDiagnosticFrame(window, $"{capturePrefix}-{exclude}-{changeIndex}-selected");
                     await Assert.That(System.IO.File.ReadAllText(System.IO.Path.Combine(fixture.DefaultTasksFolderPath, parent.Id)))
                         .IsEqualTo(diskBefore);
                     previousEmoji = emoji;

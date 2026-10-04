@@ -237,7 +237,15 @@ public class MainControlTaskCardLayoutUiTests
     }
 
     [Test]
-    public async Task CurrentTaskCard_ParentEmojiTrail_TitleInputUpdatesChildrenAndGrandchildrenBeforeSave()
+    public Task CurrentTaskCard_ParentEmojiTrail_TitleInputUpdatesChildrenAndGrandchildrenBeforeSave() =>
+        AssertTitleInputUpdatesDescendantsAsync("🧭", "🫶", string.Empty);
+
+    [Test]
+    public Task CurrentTaskCard_ExistingTaskWizardToJellyfish_UpdatesChildrenAndGrandchildrenBeforeSave() =>
+        AssertTitleInputUpdatesDescendantsAsync("🧙‍♂️", "🪼", "jellyfish-");
+
+    private static async Task AssertTitleInputUpdatesDescendantsAsync(
+        string originalEmoji, string replacementEmoji, string capturePrefix)
     {
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(EmojiTitleTestAppBuilder));
         await session.DispatchAsync(async () =>
@@ -249,7 +257,7 @@ public class MainControlTaskCardLayoutUiTests
             {
                 foreach (var (id, initialTitle) in new[]
                 {
-                    (MainWindowViewModelFixture.RootTask2Id, "🧭 Проект"),
+                    (MainWindowViewModelFixture.RootTask2Id, $"{originalEmoji} Проект"),
                     (MainWindowViewModelFixture.RootTask3Id, "🛠 Вторая ветка")
                 })
                 {
@@ -282,12 +290,12 @@ public class MainControlTaskCardLayoutUiTests
                 RunLayoutJobs();
                 var beforeTrail = FindControlByAutomationId<EmojiTextBlock>(view, "CurrentTaskParentEmojiTrail");
                 await Assert.That(IsVisibleAndArranged(beforeTrail)).IsTrue();
-                await Assert.That(beforeTrail.EmojiText).Contains("🧭");
+                await Assert.That(beforeTrail.EmojiText).Contains(originalEmoji);
                 await Assert.That(beforeTrail.EmojiText).Contains("🛠");
-                SaveEmojiTitleFrame(window, "card-before");
+                SaveEmojiTitleFrame(window, capturePrefix + "card-before");
 
                 var changeIndex = 0;
-                foreach (var emoji in new[] { "🫶", "🐦‍🔥", "", "🧭" })
+                foreach (var emoji in new[] { replacementEmoji, "🐦‍🔥", "", originalEmoji })
                 {
                     changeIndex++;
                     TestHelpers.SetCurrentTask(vm, parent.Id);
@@ -304,7 +312,7 @@ public class MainControlTaskCardLayoutUiTests
                         var descendant = TestHelpers.SetCurrentTask(vm, descendantId);
                         RunLayoutJobs();
                         var trail = FindControlByAutomationId<EmojiTextBlock>(view, "CurrentTaskParentEmojiTrail");
-                        SaveEmojiTitleFrame(window, $"{changeIndex}-" + (descendantId == grandchildId ? "grandchild-after" : "card-after"));
+                        SaveEmojiTitleFrame(window, capturePrefix + $"{changeIndex}-" + (descendantId == grandchildId ? "grandchild-after" : "card-after"));
                         await Assert.That(IsVisibleAndArranged(trail)).IsTrue();
                         await Assert.That(trail.EmojiText).Contains("🛠");
                         if (emoji.Length > 0)

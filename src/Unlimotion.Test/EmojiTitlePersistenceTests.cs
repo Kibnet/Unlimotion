@@ -13,7 +13,14 @@ namespace Unlimotion.Test;
 public sealed class EmojiTitlePersistenceTests
 {
     [Test]
-    public async Task ChangedEmoji_SaveAndReloadPreserveTitleRelationsAndInheritedSequence()
+    public Task ChangedEmoji_SaveAndReloadPreserveTitleRelationsAndInheritedSequence() =>
+        AssertSaveAndReloadPreserveEmojiAsync("🧭", "🐦‍🔥");
+
+    [Test]
+    public Task ExistingTaskWizardToJellyfish_SaveAndReloadPreserveTitleRelationsAndInheritedSequence() =>
+        AssertSaveAndReloadPreserveEmojiAsync("🧙‍♂️", "🪼");
+
+    private static async Task AssertSaveAndReloadPreserveEmojiAsync(string originalEmoji, string replacementEmoji)
     {
         var directory = Path.Combine(Path.GetTempPath(), $"unlimotion-emoji-{Guid.NewGuid():N}");
         Directory.CreateDirectory(directory);
@@ -24,7 +31,7 @@ public sealed class EmojiTitlePersistenceTests
                 await storage.Save(new TaskItem
                 {
                     Id = "emoji-parent",
-                    Title = "🧭 Проект",
+                    Title = $"{originalEmoji} Проект",
                     Status = DomainTaskStatus.Prepared,
                     ContainsTasks = ["emoji-child"]
                 });
@@ -39,10 +46,12 @@ public sealed class EmojiTitlePersistenceTests
                 await repository.Init();
                 var parent = repository.Tasks.Lookup("emoji-parent").Value;
                 parent.IsInitializedProvider = () => true;
-                parent.Title = "🐦‍🔥 Проект";
+                await Assert.That(parent.Title).IsEqualTo($"{originalEmoji} Проект");
+                await Assert.That(parent.Emoji).IsEqualTo(originalEmoji);
+                parent.Title = $"{replacementEmoji} Проект";
                 await parent.SaveItemCommand.Execute().ToTask();
                 await Task.WhenAll(repository.Tasks.Items.Select(task => task.SealPendingSaves()));
-                await Assert.That((await storage.Load(parent.Id, forced: true))!.Title).IsEqualTo("🐦‍🔥 Проект");
+                await Assert.That((await storage.Load(parent.Id, forced: true))!.Title).IsEqualTo($"{replacementEmoji} Проект");
             }
 
             using var reloadedStorage = new FileStorage(directory);
@@ -50,12 +59,12 @@ public sealed class EmojiTitlePersistenceTests
             await reloaded.Init();
             var savedParent = reloaded.Tasks.Lookup("emoji-parent").Value;
             var child = reloaded.Tasks.Lookup("emoji-child").Value;
-            await Assert.That(savedParent.Title).IsEqualTo("🐦‍🔥 Проект");
-            await Assert.That(savedParent.Emoji).IsEqualTo("🐦‍🔥");
+            await Assert.That(savedParent.Title).IsEqualTo($"{replacementEmoji} Проект");
+            await Assert.That(savedParent.Emoji).IsEqualTo(replacementEmoji);
             await Assert.That(savedParent.ContainsTasks.Select(task => task.Id)).IsEquivalentTo([child.Id]);
             await Assert.That(child.ParentsTasks.Select(task => task.Id)).IsEquivalentTo([savedParent.Id]);
-            await Assert.That(child.ParentEmojiTrail).IsEqualTo("🐦‍🔥");
-            await Assert.That(child.GetAllEmoji).IsEqualTo("🐦‍🔥");
+            await Assert.That(child.ParentEmojiTrail).IsEqualTo(replacementEmoji);
+            await Assert.That(child.GetAllEmoji).IsEqualTo(replacementEmoji);
             await Task.WhenAll(reloaded.Tasks.Items.Select(task => task.SealPendingSaves()));
         }
         finally

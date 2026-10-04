@@ -58,6 +58,8 @@ public sealed class EmojiTextHelperTests
 
     [Test]
     [Arguments("🫶")]
+    [Arguments("🧙‍♂️")]
+    [Arguments("🪼")]
     [Arguments("🪿")]
     [Arguments("🛝")]
     [Arguments("🫩")]
