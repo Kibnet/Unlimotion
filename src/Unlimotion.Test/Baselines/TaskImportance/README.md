@@ -1,0 +1,15 @@
+# Эталоны Importance
+
+24 PNG просмотрены перед явным сохранением 02.10.2026; числа 0, 9 и 100 читаются, кнопки вертикальны. Просмотрены также полные кадры 360×844 и 1400×900 при шрифте 24.
+
+Среда: Windows x64, .NET SDK 10.0.401 (global.json), Avalonia 12.0.3, SkiaSharp 3.119.0, scale 1.0, Fluent Light/Dark, русский язык. App.WithCustomFont сохраняет Roboto и fallback приложения; фактический NumericUpDown использует Fluent composite Inter. Ресурсы шрифта применены методом App.ApplyFontSize; окно MainWindow содержит настоящее MainControl. Метаданные каждого состояния находятся в одноимённом JSON. Состояние без фокуса/caret/hover.
+
+Сравнение точное: размеры и все декодированные RGBA-пиксели. Допусков и масок нет. В другой ОС/renderer/font environment эти эталоны не считаются эквивалентными; изменение зависимостей требует отдельного просмотра. Мismatch сохраняет expected.png, actual.png, diff.png и metadata.json в output/artifacts/task-importance/<run>/<case>.
+
+В CI переменная `UNLIMOTION_IMPORTANCE_ARTIFACTS_DIRECTORY` задаёт отдельный каталог `artifacts/task-importance/<run_id>-<run_attempt>`. Parent и child сохраняют туда кадры, expected/actual/diff, metadata, layout, stdout/stderr, trace и дочерние TRX; workflow загружает каталог целиком вместе с Main Test Reports, в том числе при падении. Он находится вне `TEST_RESULTS_ROOT`, чтобы дочерние TRX не увеличивали общую статистику тестов повторно. Без переменной сохраняется локальный путь в output/artifacts/task-importance.
+
+Обычный тест/CI никогда не обновляет эталоны. Для намеренного изменения выполнить тест, изучить новые actual.png и полные card.png, затем отдельно скопировать только просмотренные изображения и метаданные из указанного run. Повторить тест после сборки, копирующей Baselines в output; включить diff PNG/JSON в review.
+
+Rendered-сценарии запускаются в отдельных процессах той же тестовой сборки: semantic Headless sessions не должны определять их backend. Каждое состояние матрицы открывает отдельную MainWindow/storage fixture; child имеет лимит 10 минут, а parent проверяет его exit code и сохраняет stdout/stderr/TRX. Изолированная fixture использует autosave debounce 250 ms и восстанавливает его после cleanup; production-настройки и общий bootstrap не меняются. В persistence-сценарии проверяются настоящий autosave, завершение текущего save и согласованность UI/VM/JSON перед следующим вводом. Home/End перед стрелками исключают поглощение клавиши перемещением каретки TextBox.
+
+Перед финальным сохранением эталонов выполнен повторный просмотр 24 PNG после стабилизации harness: focus на Wanted, указатель вне компонента, ожидание 250 ms и InvalidateVisual всех элементов Importance перед кадром. Это устранило зависимость снимка границы кнопок от частичной перерисовки; свежая карточка, матрица и reload дают одинаковые декодированные пиксели. Первые диагностические PNG сохранены в local artifacts, но не используются как эталоны. Comparator дополнительно проверяет metadata renderer/font/scale/theme/culture/размеров окна; точного совпадения версии Windows и .NET patch не требует, но ОС должна быть Windows.

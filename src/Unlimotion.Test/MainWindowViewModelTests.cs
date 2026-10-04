@@ -1430,7 +1430,17 @@ namespace Unlimotion.Test
 
                 ((NotificationManagerWrapperMock)viewModel.ManagerWrapper).AskResult = true;
 
-                await TestHelpers.ActionNotCreateItems(() => subWrapper.RemoveCommand.Execute(null), repository, -1);
+                // Wrapper removal schedules an async graph transaction; autosave debounce
+                // does not signal its completion. Require both cache and disk removal.
+                var countBefore = repository.Tasks.Count;
+                var subTaskPath = Path.Combine(projectionFixture.DefaultTasksFolderPath, MainWindowViewModelFixture.SubTask41Id);
+                subWrapper.RemoveCommand.Execute(null);
+                await Assert.That(await TestHelpers.WaitUntilAsync(() =>
+                {
+                    Dispatcher.UIThread.RunJobs();
+                    return repository.Tasks.Count == countBefore - 1 && !File.Exists(subTaskPath);
+                }, TimeSpan.FromSeconds(5))).IsTrue();
+                await Assert.That(repository.Tasks.Count).IsEqualTo(countBefore - 1);
 
                 var subStored = TestHelpers.GetStorageTaskItem(projectionFixture.DefaultTasksFolderPath, MainWindowViewModelFixture.SubTask41Id);
                 await Assert.That(subStored).IsNull();

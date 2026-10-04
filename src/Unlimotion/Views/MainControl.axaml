@@ -317,9 +317,28 @@
             <Setter Property="Margin" Value="0,0,6,4"/>
         </Style>
         <Style Selector="NumericUpDown.TaskHeaderImportanceInput">
-            <Setter Property="Width" Value="86"/>
-            <Setter Property="MinHeight" Value="32"/>
+            <Setter Property="Width" Value="110"/>
+            <Setter Property="MinHeight" Value="36"/>
+            <Setter Property="Padding" Value="6,3"/>
             <Setter Property="Margin" Value="0,0,6,4"/>
+        </Style>
+        <Style Selector="NumericUpDown.TaskHeaderImportanceInput /template/ ButtonSpinner#PART_Spinner /template/ StackPanel#PART_SpinnerPanel">
+            <Setter Property="Orientation" Value="Vertical"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="NumericUpDown.TaskHeaderImportanceInput /template/ ButtonSpinner#PART_Spinner /template/ RepeatButton">
+            <Setter Property="MinWidth" Value="24"/>
+            <Setter Property="Width" Value="24"/>
+            <Setter Property="MinHeight" Value="18"/>
+            <Setter Property="Height" Value="18"/>
+            <Setter Property="Padding" Value="0"/>
+        </Style>
+        <Style Selector="NumericUpDown.TaskHeaderImportanceInput /template/ ButtonSpinner#PART_Spinner /template/ RepeatButton#PART_DecreaseButton">
+            <Setter Property="BorderThickness" Value="1,1,0,0"/>
+        </Style>
+        <Style Selector="NumericUpDown.TaskHeaderImportanceInput /template/ ButtonSpinner#PART_Spinner /template/ RepeatButton PathIcon">
+            <Setter Property="Width" Value="10"/>
+            <Setter Property="Height" Value="5"/>
         </Style>
         <Style Selector="WrapPanel.TaskHeaderMetaRow">
             <Setter Property="Orientation" Value="Horizontal"/>
@@ -1843,6 +1862,7 @@
                                                            Maximum="100"
                                                            ToolTip.Tip="{DynamicResource Importance}"
                                                            PlaceholderText="{DynamicResource Importance}"
+                                                           AutomationProperties.Name="{DynamicResource Importance}"
                                                            AutomationProperties.AutomationId="CurrentTaskImportanceInput"/>
                                             <unlimotion:EmojiTextBlock Classes="TaskHeaderParentEmojiTrail"
                                                                         EmojiText="{Binding ParentEmojiTrail, Mode=OneWay}"
