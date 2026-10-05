@@ -482,7 +482,11 @@ namespace Unlimotion.ViewModel
                 }
 
                 await CurrentTaskItem.TryTransitionToStatusAsync(DomainTaskStatus.Completed);
-            }).AddToDisposeAndReturn(connectionDisposableList);
+            }, this.WhenAnyValue(model => model.CurrentTaskItem)
+                .Select(task => task is null
+                    ? Observable.Return(false)
+                    : task.WhenAnyValue(item => item.CanChangeTaskStatus))
+                .Switch()).AddToDisposeAndReturn(connectionDisposableList);
             ExpandCurrentNestedCommand = ReactiveCommand.Create(() =>
                 ExecuteTreeCommandAction?.Invoke(TreeCommandKind.ExpandCurrentNested))
                 .AddToDisposeAndReturn(connectionDisposableList);

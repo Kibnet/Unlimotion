@@ -56,7 +56,9 @@ public class MainControlTaskStatusIconUiTests
     }
 
     [Test]
-    public async Task TaskCardStatusRecovery_ExternalDeleteDuringReloadKeepsCopyableDraft()
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task TaskCardStatusRecovery_ExternalDeleteDuringReloadKeepsCopyableDraft(bool publishRemoval)
     {
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
@@ -69,7 +71,11 @@ public class MainControlTaskStatusIconUiTests
             {
                 var vm = fixture.MainWindowViewModelTest;
                 await vm.Connect();
-                var card = TestHelpers.GetTask(vm, MainWindowViewModelFixture.RootTask1Id);
+                var card = TestHelpers.GetTask(vm, MainWindowViewModelFixture.RootTask2Id);
+                var child = TestHelpers.GetTask(vm, MainWindowViewModelFixture.SubTask22Id);
+                var blocked = TestHelpers.GetTask(vm, MainWindowViewModelFixture.BlockedTask2Id);
+                await Assert.That(child.ParentsTasks.Any(task => task.Id == card.Id)).IsTrue();
+                await Assert.That(blocked.BlockedByTasks.Any(task => task.Id == card.Id)).IsTrue();
                 vm.CurrentTaskItem = card;
                 vm.DetailsAreOpen = true;
                 vm.SelectCurrentTask();
@@ -87,13 +93,14 @@ public class MainControlTaskStatusIconUiTests
                 await storage.ReadEntered.Task.WaitAsync(TimeSpan.FromSeconds(10));
                 System.IO.File.Delete(file);
                 // The same cache event is used by a confirmed watcher/hub deletion.
-                storage.PublishRemoved(card.Id);
+                if (publishRemoval) storage.PublishRemoved(card.Id);
                 Dispatcher.UIThread.RunJobs();
                 storage.ReleaseRead.TrySetResult();
-                await read.WaitAsync(TimeSpan.FromSeconds(10));
+                var result = await read.WaitAsync(TimeSpan.FromSeconds(10));
                 Dispatcher.UIThread.RunJobs();
                 using (Assert.Multiple())
                 {
+                    await Assert.That(result.Outcome).IsEqualTo(TaskReloadOutcome.Missing);
                     await Assert.That(vm.CurrentTaskItem).IsSameReferenceAs(card);
                     await Assert.That(card.IsMissingFromStorage).IsTrue();
                     await Assert.That(storage.ReadOnUiThread).IsFalse();
@@ -103,11 +110,15 @@ public class MainControlTaskStatusIconUiTests
                     await Assert.That(WaitForAutomationControl<TextBlock>(view, "CurrentTaskOperationErrorText").IsEffectivelyVisible).IsTrue();
                     await Assert.That(WaitForAutomationControl<Button>(view, "CurrentTaskStatusButton").IsEnabled).IsFalse();
                     await Assert.That(OpenTaskReloadMenu(view).IsEnabled).IsFalse();
+                    await Assert.That(GetTaskArchiveMenu(view).IsEnabled).IsFalse();
+                    await Assert.That(vm.CompleteCurrentTaskCommand.CanExecute(null)).IsFalse();
                     await Assert.That(vm.taskRepository!.Tasks.Lookup(card.Id).HasValue).IsFalse();
+                    await Assert.That(child.ParentsTasks.Any(task => task.Id == card.Id)).IsFalse();
+                    await Assert.That(blocked.BlockedByTasks.Any(task => task.Id == card.Id)).IsFalse();
                 }
                 await card.SealPendingSaves();
                 await Assert.That(System.IO.File.Exists(file)).IsFalse();
-                vm.CurrentTaskItem = TestHelpers.GetTask(vm, MainWindowViewModelFixture.RootTask2Id);
+                vm.CurrentTaskItem = TestHelpers.GetTask(vm, MainWindowViewModelFixture.RootTask1Id);
                 await Assert.That(vm.CurrentTaskItem).IsNotSameReferenceAs(card);
             }
             finally
@@ -282,15 +293,34 @@ public class MainControlTaskStatusIconUiTests
                 await Assert.That(reload.Command).IsSameReferenceAs(vm.CurrentTaskItem!.ReloadTaskCommand);
 
                 var card = vm.CurrentTaskItem!;
+                var archive = GetTaskArchiveMenu(view);
+                var completionKey = view.KeyBindings.Single(binding =>
+                    binding.Gesture?.Key == Key.D && binding.Gesture.KeyModifiers == KeyModifiers.Control);
+                await Assert.That(archive.IsEnabled).IsTrue();
+                await Assert.That(completionKey.Command).IsSameReferenceAs(vm.CompleteCurrentTaskCommand);
+                await Assert.That(completionKey.Command!.CanExecute(null)).IsTrue();
                 storage.BlockRead = true;
                 var busy = card.ReloadTaskAsync();
                 await storage.ReadEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
                 Dispatcher.UIThread.RunJobs();
-                await Assert.That(reload.IsEnabled).IsFalse();
+                using (Assert.Multiple())
+                {
+                    await Assert.That(reload.IsEnabled).IsFalse();
+                    await Assert.That(archive.IsEnabled).IsFalse();
+                    await Assert.That(completionKey.Command!.CanExecute(null)).IsFalse();
+                }
+                vm.CurrentTaskItem = TestHelpers.GetTask(vm, MainWindowViewModelFixture.RootTask2Id);
+                Dispatcher.UIThread.RunJobs();
+                await Assert.That(completionKey.Command!.CanExecute(null)).IsTrue();
+                vm.CurrentTaskItem = card;
+                Dispatcher.UIThread.RunJobs();
+                await Assert.That(completionKey.Command!.CanExecute(null)).IsFalse();
                 storage.ReleaseRead.TrySetResult();
                 await busy;
                 Dispatcher.UIThread.RunJobs();
                 await Assert.That(reload.IsEnabled).IsTrue();
+                await Assert.That(archive.IsEnabled).IsTrue();
+                await Assert.That(completionKey.Command!.CanExecute(null)).IsTrue();
             }
             finally
             {
@@ -310,6 +340,13 @@ public class MainControlTaskStatusIconUiTests
         Dispatcher.UIThread.RunJobs();
         return flyout.Items.OfType<MenuItem>().Single(item =>
             AutomationProperties.GetAutomationId(item) == "CurrentTaskReloadButton");
+    }
+
+    private static MenuItem GetTaskArchiveMenu(MainControl view)
+    {
+        var actions = WaitForAutomationControl<DropDownButton>(view, "CurrentTaskActionsMenuButton");
+        return ((MenuFlyout)actions.Flyout!).Items.OfType<MenuItem>().Single(item =>
+            AutomationProperties.GetAutomationId(item) == "CurrentTaskArchiveMenuItem");
     }
 
     [Test]

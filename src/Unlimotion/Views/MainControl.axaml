@@ -1973,6 +1973,7 @@
                                                             </MenuItem>
                                                             <MenuItem Header="{Binding ArchiveCommandTitle}"
                                                                       Command="{Binding ArchiveCommand}"
+                                                                      IsEnabled="{Binding CanChangeTaskStatus}"
                                                                       AutomationProperties.AutomationId="CurrentTaskArchiveMenuItem">
                                                                 <MenuItem.Icon>
                                                                     <TextBlock Text="📦"/>

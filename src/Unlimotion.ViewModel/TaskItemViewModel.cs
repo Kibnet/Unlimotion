@@ -618,7 +618,9 @@ namespace Unlimotion.ViewModel
             get => GetOrCreateCommand(ref archiveCommand, () => ReactiveCommand.CreateFromTask(
                 ExecuteTrackedArchiveCommandAsync,
                 ObserveProperty(nameof(Status), static task => task.Status)
-                    .Select(status => status != DomainTaskStatus.Completed)));
+                    .Select(status => status != DomainTaskStatus.Completed)
+                    .CombineLatest(ObserveProperty(nameof(CanChangeTaskStatus), static task => task.CanChangeTaskStatus),
+                        static (statusAllowsArchive, canChangeStatus) => statusAllowsArchive && canChangeStatus)));
             set { lock (commandInitializationLock) archiveCommand = value; }
         }
 
@@ -1433,9 +1435,13 @@ namespace Unlimotion.ViewModel
                 if (_isMissingFromStorage || Volatile.Read(ref _statusOperationCount) > 0) return;
 
                 saveTask = SaveItemCommand.Execute().ToTask();
-                _pendingSaves.Add(saveTask);
+                TrackPendingSave(saveTask);
             }
+        }
 
+        internal void TrackPendingSave(Task saveTask)
+        {
+            lock (_pendingSavesLock) _pendingSaves.Add(saveTask);
             _ = ObserveSaveCompletionAsync(saveTask);
         }
 
@@ -1445,7 +1451,13 @@ namespace Unlimotion.ViewModel
             lock (_pendingSavesLock)
             {
                 _acceptingSaves = false;
-                var pendingWrites = _pendingSaves.Concat(_pendingWriteProducers).ToArray();
+                // A successful retry can persist every edit before the earlier failed save's
+                // cleanup continuation runs. That settled failure must not poison teardown.
+                // Pending saves, unresolved edits and lifecycle producers still participate.
+                var hasPendingEdits = HasPendingEditableChanges;
+                var pendingWrites = _pendingSaves
+                    .Where(task => !task.IsCompleted || hasPendingEdits)
+                    .Concat(_pendingWriteProducers).ToArray();
                 sealedSnapshot = _sealedPendingSavesTask ??=
                     SealPendingSavesCoreAsync(pendingWrites);
             }
@@ -1600,7 +1612,10 @@ namespace Unlimotion.ViewModel
                 try { await Task.WhenAll(pending); } catch { /* Failed autosave remains dirty; reading can recover. */ }
                 if (_isDisposed) return TaskReloadResult.Failed(TaskReloadFailure.SourceUnavailable);
                 var result = await _taskStorage.ReloadTaskAsync(Id);
-                if (_isDisposed) return TaskReloadResult.Failed(TaskReloadFailure.SourceUnavailable);
+                if (_isDisposed)
+                    return result.Outcome == TaskReloadOutcome.Missing && _isMissingFromStorage
+                        ? result
+                        : TaskReloadResult.Failed(TaskReloadFailure.SourceUnavailable);
                 if (result.Outcome == TaskReloadOutcome.Loaded && result.Snapshot is { } task &&
                     string.Equals(task.Id, Id, StringComparison.Ordinal))
                 {

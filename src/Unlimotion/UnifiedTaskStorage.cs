@@ -446,6 +446,8 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
                             // Retain the card's editor text, but prevent autosave/final-save resurrection.
                             var cached = Tasks.Lookup(taskId);
                             if (cached.HasValue) cached.Value.MarkMissingFromStorage();
+                            RemoveTasksFromCache([taskId]);
+                            RefreshRelations();
                             AdvanceReloadEpoch(taskId);
                             applied = true;
                         }
@@ -460,10 +462,10 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
         finally { statusCommandGate.Release(); }
     }
 
-    private void AdvanceReloadEpoch(string taskId)
+    private long AdvanceReloadEpoch(string taskId)
     {
         lock (reloadEpochSync)
-            reloadEpochs.AddOrUpdate(taskId, 1, static (_, epoch) => epoch + 1);
+            return reloadEpochs.AddOrUpdate(taskId, 1, static (_, epoch) => epoch + 1);
     }
 
     public Task<TaskOperationResult> TryUnarchiveAsync(
@@ -1300,9 +1302,10 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
 
     private async void TaskStorageOnUpdating(object? sender, TaskStorageUpdateEventArgs e)
     {
-        AdvanceReloadEpoch(e.Id);
         try
         {
+            var taskId = isFileStorage ? new FileInfo(e.Id).Name : e.Id;
+            var updateEpoch = AdvanceReloadEpoch(taskId);
             switch (e.Type)
             {
                 case UpdateType.Saved:
@@ -1312,8 +1315,11 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
                     {
                         await RunOnCacheSynchronizationContextAsync(() =>
                         {
-                            HydrateCache(taskItem, create: true, e.StorageRevision);
-                            RefreshRelations();
+                            lock (reloadEpochSync)
+                            {
+                                if (disposed || reloadEpochs.GetValueOrDefault(taskId) != updateEpoch) return;
+                                if (HydrateCache(taskItem, create: true, e.StorageRevision)) RefreshRelations();
+                            }
                         }).ConfigureAwait(false);
                     }
                     break;

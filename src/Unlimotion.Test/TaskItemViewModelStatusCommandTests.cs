@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -79,6 +80,7 @@ public sealed class TaskItemViewModelStatusCommandTests
         vm.Title = "draft after unknown outcome";
         await vm.ReloadTaskAsync();
         await Assert.That(vm.CanChangeTaskStatus).IsFalse();
+        await Assert.That(vm.ArchiveCommand.CanExecute(null)).IsFalse();
         await Assert.That(async () => await vm.SealPendingSaves()).Throws<InvalidOperationException>();
         await Assert.That(storage.UpdateCount).IsEqualTo(0);
         await Assert.That(storage.Snapshot(task.Id).Status).IsEqualTo(DomainTaskStatus.Completed);
@@ -243,7 +245,9 @@ public sealed class TaskItemViewModelStatusCommandTests
     }
 
     [Test]
-    public async Task Reload_LateResultAfterDisposalCannotUpdateCard()
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task Reload_LateResultAfterDisposalCannotUpdateCard(bool missing)
     {
         using var storage = new ScriptedTaskStorage();
         var task = CreateTask("reload-disposed", DomainTaskStatus.Prepared);
@@ -253,7 +257,8 @@ public sealed class TaskItemViewModelStatusCommandTests
         var vm = new TaskItemViewModel(task, storage, () => false);
         var read = vm.ReloadTaskAsync();
         vm.Dispose();
-        release.SetResult(TaskReloadResult.Loaded(task with { Status = DomainTaskStatus.Completed }));
+        release.SetResult(missing ? TaskReloadResult.Missing()
+            : TaskReloadResult.Loaded(task with { Status = DomainTaskStatus.Completed }));
         var result = await read;
         await Assert.That(result.Outcome).IsEqualTo(TaskReloadOutcome.Failed);
         await Assert.That(vm.Status).IsEqualTo(DomainTaskStatus.Prepared);
@@ -626,6 +631,83 @@ public sealed class TaskItemViewModelStatusCommandTests
         await Assert.That(async () =>
                 await sealedSaves.WaitAsync(TimeSpan.FromSeconds(5)))
             .Throws<InvalidOperationException>();
+    }
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task LifecycleSeal_DelayedFailedSaveCleanupRequiresPersistedRetry(bool retry)
+    {
+        using var storage = new ScriptedTaskStorage();
+        var task = CreateTask("seal-delayed-failed-save-cleanup", DomainTaskStatus.Prepared);
+        storage.Seed(task);
+        var releaseSave = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        storage.UpdateHandler = async _ =>
+        {
+            await releaseSave.Task;
+            throw new InvalidOperationException("controlled autosave failure");
+        };
+        using var viewModel = new TaskItemViewModel(task, storage, () => true);
+        viewModel.Title = "Draft that must be persisted";
+        var context = new DelayedSaveCleanupContext();
+        var previousContext = SynchronizationContext.Current;
+        var failedSave = viewModel.SaveItemCommand.Execute().ToTask();
+        try
+        {
+            SynchronizationContext.SetSynchronizationContext(context);
+            // Capture only cleanup; the real save can finish while this context stays paused.
+            viewModel.TrackPendingSave(failedSave);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previousContext);
+        }
+
+        try
+        {
+            releaseSave.TrySetResult();
+            await Assert.That(async () => await failedSave.WaitAsync(TimeSpan.FromSeconds(5)))
+                .Throws<InvalidOperationException>();
+            await Assert.That(failedSave.IsFaulted).IsTrue();
+            // ObserveSaveCompletionAsync is queued but has not removed the failed task.
+            await Assert.That(viewModel.WaitForPendingSavesAsync().IsFaulted).IsTrue();
+            if (retry)
+            {
+                storage.UpdateHandler = null;
+                await viewModel.SaveItemCommand.Execute().ToTask().WaitAsync(TimeSpan.FromSeconds(5));
+                await Assert.That(storage.Snapshot(task.Id).Title).IsEqualTo("Draft that must be persisted");
+                await viewModel.SealPendingSaves().WaitAsync(TimeSpan.FromSeconds(5));
+            }
+            else
+            {
+                await Assert.That(async () => await viewModel.SealPendingSaves().WaitAsync(TimeSpan.FromSeconds(5)))
+                    .Throws<InvalidOperationException>();
+                await Assert.That(storage.Snapshot(task.Id).Title).IsEqualTo(task.Title);
+            }
+        }
+        finally
+        {
+            releaseSave.TrySetResult();
+            while (context.ExecuteOne(TimeSpan.Zero)) { }
+        }
+    }
+
+    private sealed class DelayedSaveCleanupContext : SynchronizationContext
+    {
+        private readonly BlockingCollection<(SendOrPostCallback Callback, object? State)> callbacks = new();
+        public override void Post(SendOrPostCallback callback, object? state) => callbacks.Add((callback, state));
+        public bool ExecuteOne(TimeSpan timeout)
+        {
+            if (!callbacks.TryTake(out var work, timeout)) return false;
+            var previousContext = Current;
+            try
+            {
+                SetSynchronizationContext(this);
+                work.Callback(work.State);
+            }
+            finally { SetSynchronizationContext(previousContext); }
+            return true;
+        }
     }
 
     [Test]

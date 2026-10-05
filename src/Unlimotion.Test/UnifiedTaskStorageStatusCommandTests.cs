@@ -44,6 +44,50 @@ public sealed class UnifiedTaskStorageStatusCommandTests
     }
 
     [Test]
+    public async Task Reload_MissingRejectsSavedSnapshotWhoseLoadStartedBeforeDeletion()
+    {
+        var task = CreateTask("reload-late-saved", DomainTaskStatus.Prepared);
+        var storage = new GenerationOrderingStorage(task);
+        var context = new PumpSynchronizationContext();
+        using var unified = new UnifiedTaskStorage(new TaskTreeManager(storage));
+        var previousContext = SynchronizationContext.Current;
+        Task init;
+        try
+        {
+            SynchronizationContext.SetSynchronizationContext(context);
+            init = unified.Init();
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previousContext);
+        }
+
+        PumpUntilCompleted(init, context);
+        await init;
+        var retainedCard = unified.Tasks.Lookup(task.Id).Value;
+        storage.BlockSavedLoad = true;
+        storage.PublishSaved(task, storageRevision: 0);
+        await storage.SavedLoadEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await storage.Remove(task.Id);
+        var reload = unified.ReloadTaskAsync(task.Id);
+        PumpUntilCompleted(reload, context);
+        var result = await reload;
+        await Assert.That(result.Outcome).IsEqualTo(TaskReloadOutcome.Missing);
+        await Assert.That(unified.Tasks.Lookup(task.Id).HasValue).IsFalse();
+
+        var postsBeforeSavedResponse = context.PostCount;
+        storage.ReleaseSavedLoad.TrySetResult();
+        await WaitUntilAsync(() => context.PostCount > postsBeforeSavedResponse, TimeSpan.FromSeconds(5));
+        await Assert.That(context.ExecuteOne(TimeSpan.FromSeconds(5))).IsTrue();
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(retainedCard.IsMissingFromStorage).IsTrue();
+            await Assert.That(unified.Tasks.Lookup(task.Id).HasValue).IsFalse();
+        }
+    }
+
+    [Test]
     public async Task Reload_LateResponseAfterSourceDisposalIsNotPublished()
     {
         var task = CreateTask("reload-source-disposed", DomainTaskStatus.Prepared);
@@ -669,6 +713,9 @@ public sealed class UnifiedTaskStorageStatusCommandTests
         public GenerationOrderingStorage(TaskItem task) => persisted = CloneTask(task);
 
         public bool BlockFirstReload { get; set; }
+        public bool BlockSavedLoad { get; set; }
+        public TaskCompletionSource SavedLoadEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource ReleaseSavedLoad { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public int ReloadCount { get; private set; }
         public TaskCompletionSource ReloadEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource ReleaseReload { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -708,8 +755,16 @@ public sealed class UnifiedTaskStorageStatusCommandTests
             return Task.FromResult(true);
         }
 
-        public Task<TaskItem?> Load(string itemId) =>
-            Task.FromResult(persisted == null ? null : CloneTask(persisted));
+        public async Task<TaskItem?> Load(string itemId)
+        {
+            var snapshot = persisted == null ? null : CloneTask(persisted);
+            if (BlockSavedLoad)
+            {
+                SavedLoadEntered.TrySetResult();
+                await ReleaseSavedLoad.Task;
+            }
+            return snapshot;
+        }
 
         public async IAsyncEnumerable<TaskItem> GetAll()
         {
