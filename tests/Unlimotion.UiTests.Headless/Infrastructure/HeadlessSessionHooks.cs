@@ -18,7 +18,7 @@ public static class HeadlessSessionHooks
     [Before(TestSession)]
     public static void SetupSession()
     {
-        _session = HeadlessUnitTestSession.StartNew(UnlimotionAppLaunchHost.AvaloniaAppType);
+        _session = HeadlessSessionFactory.StartNew(UnlimotionAppLaunchHost.AvaloniaAppType);
         HeadlessRuntime.SetSession(_session);
     }
 
@@ -36,7 +36,7 @@ public static class HeadlessSessionHooks
             _recoveryScope = typeof(AvaloniaLocator).GetMethod("EnterScope", BindingFlags.Public | BindingFlags.Static)
                 ?.Invoke(null, null) as IDisposable
                 ?? throw new NotSupportedException("Avalonia Headless locator scope API was not available.");
-            _session = HeadlessUnitTestSession.StartNew(typeof(RecoveryHeadlessEntryPoint),
+            _session = HeadlessSessionFactory.StartNew(typeof(RecoveryHeadlessEntryPoint),
                 AvaloniaTestIsolationLevel.PerAssembly);
             HeadlessRuntime.SetSession(_session);
             // Establish the dispatcher on its worker before VM timers can access it.
