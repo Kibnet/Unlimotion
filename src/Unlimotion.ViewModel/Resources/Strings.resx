@@ -622,6 +622,8 @@
   <data name="TaskHistoryEmptyList" xml:space="preserve"><value>Empty list</value></data>
   <data name="TaskHistoryEmptyObject" xml:space="preserve"><value>No fields</value></data>
   <data name="TaskHistoryMissingValue" xml:space="preserve"><value>Field was absent</value></data>
+  <data name="TaskHistoryReferencedTaskTip" xml:space="preserve"><value>Current task title: {0}
+ID: {1}</value></data>
   <data name="TaskHistoryNullValue" xml:space="preserve"><value>Not set</value></data>
   <data name="TaskHistoryEmptyString" xml:space="preserve"><value>Empty string</value></data>
   <data name="TaskHistoryOnlyMetadata" xml:space="preserve"><value>Only system fields changed. Enable system fields to view them.</value></data>

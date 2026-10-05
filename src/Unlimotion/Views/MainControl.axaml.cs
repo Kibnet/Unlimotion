@@ -148,6 +148,18 @@ namespace Unlimotion.Views
 
         public TaskHistoryPaneViewModel TaskHistory { get; }
 
+        internal string? ResolveTaskHistoryTaskTitle(string taskId)
+        {
+            if (DataContext is not MainWindowViewModel { CurrentTaskItem: { } current } vm || vm.taskRepository is null)
+                return null;
+
+            var task = vm.taskRepository.Tasks.Lookup(taskId);
+            return task.HasValue && !string.IsNullOrWhiteSpace(task.Value.Title) &&
+                   string.Equals(task.Value.SourceId, current.SourceId, StringComparison.Ordinal)
+                ? task.Value.Title
+                : null;
+        }
+
         public MainControl()
         {
             TaskHistory = new TaskHistoryPaneViewModel(new GitTaskHistoryProvider());

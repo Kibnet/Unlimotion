@@ -622,6 +622,8 @@
   <data name="TaskHistoryEmptyList" xml:space="preserve"><value>Пустой список</value></data>
   <data name="TaskHistoryEmptyObject" xml:space="preserve"><value>Нет полей</value></data>
   <data name="TaskHistoryMissingValue" xml:space="preserve"><value>Поля не было</value></data>
+  <data name="TaskHistoryReferencedTaskTip" xml:space="preserve"><value>Текущее название задачи: {0}
+ID: {1}</value></data>
   <data name="TaskHistoryNullValue" xml:space="preserve"><value>Не задано</value></data>
   <data name="TaskHistoryEmptyString" xml:space="preserve"><value>Пустая строка</value></data>
   <data name="TaskHistoryOnlyMetadata" xml:space="preserve"><value>Изменились только служебные поля. Включите их отображение.</value></data>

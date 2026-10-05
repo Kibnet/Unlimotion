@@ -544,6 +544,69 @@ public sealed class GitTaskHistoryProviderTests
     private static GitTaskHistoryProvider.TaskFileSnapshot Snapshot(string json) =>
         new(JObject.Parse(json), "task.json", "task.json", IsWorkingTree: false);
 
+    [Test]
+    public async Task DiffBuilder_ListChangesHideAbsentSideAndPreserveScalarComparison()
+    {
+        var changes = TaskHistoryDiffBuilder.Build(
+            Snapshot("""{"Id":"1","ParentTasks":["keep","removed"],"CompletionCriteria":[{"Id":"criterion","Text":"Old"}]}"""),
+            Snapshot("""{"Id":"1","ParentTasks":["keep","added"],"CompletionCriteria":[{"Id":"another","Text":"New"}],"Title":"New title","CustomList":["item"]}"""),
+            "repo", "root", "old", "new");
+        var removed = changes.Single(change => change.ReferencedTaskId == "removed");
+        var added = changes.Single(change => change.ReferencedTaskId == "added");
+        await Assert.That(removed.HasSingleValue).IsTrue();
+        await Assert.That(removed.NewValueDisplay).IsEmpty();
+        await Assert.That(removed.NewValueReference).IsNull();
+        await Assert.That(removed.OldValueReference!.JsonPath).IsEqualTo("ParentTasks[1]");
+        await Assert.That(added.HasSingleValue).IsTrue();
+        await Assert.That(added.OldValueDisplay).IsEmpty();
+        await Assert.That(added.OldValueReference).IsNull();
+        await Assert.That(added.NewValueReference!.JsonPath).IsEqualTo("ParentTasks[1]");
+        var criteria = changes.Where(change => change.FieldPath == "CompletionCriteria").ToArray();
+        await Assert.That(criteria.Length).IsEqualTo(2);
+        await Assert.That(criteria.All(change => change.HasSingleValue && change.ReferencedTaskId is null)).IsTrue();
+        await Assert.That(criteria.Single(change => change.ChangeType == TaskHistoryChangeType.Added).OldValueDisplay).IsEmpty();
+        await Assert.That(criteria.Single(change => change.ChangeType == TaskHistoryChangeType.Removed).NewValueDisplay).IsEmpty();
+        await Assert.That(changes.Single(change => change.FieldPath == "CustomList").HasSingleValue).IsTrue();
+        await Assert.That(changes.Single(change => change.FieldPath == "Title").HasSingleValue).IsFalse();
+        await Assert.That(changes.Single(change => change.FieldPath == "Title").OldValueDisplay)
+            .IsEqualTo(Unlimotion.ViewModel.Localization.Localization.Get("TaskHistoryMissingValue"));
+
+        var modified = TaskHistoryDiffBuilder.Build(
+            Snapshot("""{"Id":"1","CompletionCriteria":[{"Id":"criterion","Text":"Old"}]}"""),
+            Snapshot("""{"Id":"1","CompletionCriteria":[{"Id":"criterion","Text":"New"}]}"""),
+            "repo", "root", "old", "new").Single();
+        await Assert.That(modified.HasSingleValue).IsFalse();
+        await Assert.That(modified.OldValueReference!.JsonPath).IsEqualTo("CompletionCriteria[0]");
+        await Assert.That(modified.NewValueReference!.JsonPath).IsEqualTo("CompletionCriteria[0]");
+    }
+
+    [Test]
+    public async Task ReadValueAsync_ListItemLoadsOnlySelectedElement()
+    {
+        using var fixture = new GitHistoryFixture();
+        fixture.WriteTask("Task", "NotReady", "unchanged");
+        var path = Path.Combine(fixture.StoragePath, "task.json");
+        var json = JObject.Parse(File.ReadAllText(path));
+        var removed = new string('a', 420);
+        var added = new string('b', 460);
+        json["ParentTasks"] = new JArray("keep", removed);
+        File.WriteAllText(path, json.ToString());
+        fixture.Commit("old parents");
+        json["ParentTasks"] = new JArray("keep", added);
+        File.WriteAllText(path, json.ToString());
+        fixture.Commit("change parents");
+        var provider = new GitTaskHistoryProvider();
+        var page = await provider.GetPageAsync(
+            new TaskHistoryRequest(fixture.StoragePath, "local", fixture.TaskId, null), CancellationToken.None);
+        var changes = page.Entries.Single(entry => entry.Message == "change parents").Changes;
+        await Assert.That(await provider.ReadValueAsync(
+            changes.Single(change => change.ChangeType == TaskHistoryChangeType.Removed).OldValueReference!, CancellationToken.None))
+            .IsEqualTo(removed);
+        await Assert.That(await provider.ReadValueAsync(
+            changes.Single(change => change.ChangeType == TaskHistoryChangeType.Added).NewValueReference!, CancellationToken.None))
+            .IsEqualTo(added);
+    }
+
     private sealed class DelayedProvider : ITaskHistoryProvider
     {
         public TaskCompletionSource Started { get; } =

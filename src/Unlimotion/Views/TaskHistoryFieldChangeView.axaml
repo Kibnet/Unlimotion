@@ -20,10 +20,10 @@
     <StackPanel Spacing="3" Margin="0,3,0,2">
         <StackPanel x:Name="InlineRow" Orientation="Horizontal" Spacing="5">
             <TextBlock x:Name="InlineFieldName" FontWeight="SemiBold"/>
-            <SelectableTextBlock Text="{Binding OldValueDisplay}" MaxLines="2"
+            <SelectableTextBlock x:Name="InlineOldValue" MaxLines="2"
                                  Foreground="{DynamicResource TaskHistoryOldValueBrush}"/>
-            <TextBlock Text="→" Opacity="0.55"/>
-            <SelectableTextBlock Text="{Binding NewValueDisplay}" MaxLines="2"
+            <TextBlock x:Name="InlineArrow" Text="→" Opacity="0.55"/>
+            <SelectableTextBlock x:Name="InlineNewValue" MaxLines="2"
                                  Foreground="{DynamicResource TaskHistoryNewValueBrush}"/>
         </StackPanel>
         <StackPanel x:Name="ComparisonRow" Spacing="3">
@@ -36,11 +36,11 @@
             </Grid>
             <Grid x:Name="PreviewGrid" ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" ColumnSpacing="8" RowSpacing="3">
                 <TextBlock x:Name="PreviewOldLabel" Text="{DynamicResource TaskHistoryOldValue}" Opacity="0.6"/>
-                <SelectableTextBlock x:Name="PreviewOld" Grid.Column="1" Text="{Binding OldValueDisplay}"
+                <SelectableTextBlock x:Name="PreviewOld" Grid.Column="1"
                                      MaxLines="2" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
                                      Foreground="{DynamicResource TaskHistoryOldValueBrush}"/>
                 <TextBlock x:Name="PreviewNewLabel" Grid.Row="1" Text="{DynamicResource TaskHistoryNewValue}" Opacity="0.6"/>
-                <SelectableTextBlock x:Name="PreviewNew" Grid.Row="1" Grid.Column="1" Text="{Binding NewValueDisplay}"
+                <SelectableTextBlock x:Name="PreviewNew" Grid.Row="1" Grid.Column="1"
                                      MaxLines="2" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
                                      Foreground="{DynamicResource TaskHistoryNewValueBrush}"/>
             </Grid>
@@ -58,12 +58,14 @@
                 <TextBlock x:Name="FullOldLabel" Text="{DynamicResource TaskHistoryOldValue}" Opacity="0.6"/>
                 <ScrollViewer x:Name="FullOldViewer" Grid.Column="1" MaxHeight="160"
                               HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
-                    <SelectableTextBlock x:Name="FullOldValue" TextWrapping="Wrap"/>
+                    <SelectableTextBlock x:Name="FullOldValue" TextWrapping="Wrap"
+                                         Foreground="{DynamicResource TaskHistoryOldValueBrush}"/>
                 </ScrollViewer>
                 <TextBlock x:Name="FullNewLabel" Grid.Row="1" Text="{DynamicResource TaskHistoryNewValue}" Opacity="0.6"/>
                 <ScrollViewer x:Name="FullNewViewer" Grid.Row="1" Grid.Column="1" MaxHeight="160"
                               HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
-                    <SelectableTextBlock x:Name="FullNewValue" TextWrapping="Wrap"/>
+                    <SelectableTextBlock x:Name="FullNewValue" TextWrapping="Wrap"
+                                         Foreground="{DynamicResource TaskHistoryNewValueBrush}"/>
                 </ScrollViewer>
             </Grid>
         </StackPanel>

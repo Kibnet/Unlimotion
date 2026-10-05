@@ -32,8 +32,12 @@ public sealed record TaskHistoryFieldChange(
     TaskHistoryChangeType ChangeType,
     bool IsMetadata,
     TaskHistoryValueReference? OldValueReference = null,
-    TaskHistoryValueReference? NewValueReference = null)
+    TaskHistoryValueReference? NewValueReference = null,
+    bool IsCollectionChange = false,
+    string? ReferencedTaskId = null)
 {
+    public bool HasSingleValue => IsCollectionChange && ChangeType != TaskHistoryChangeType.Modified;
+
     public string Symbol => ChangeType switch
     {
         TaskHistoryChangeType.Added => "+",

@@ -29,7 +29,7 @@ public sealed class TaskHistoryFlaUiTests
             taskStoragePath,
             UnlimotionAppLaunchHost.GetCurrentTaskId(UnlimotionAutomationScenario.Smoke));
 
-        CreateHistory(taskStoragePath, currentTaskPath);
+        var referencedTask = CreateHistory(taskStoragePath, currentTaskPath);
 
         using var session = DesktopAppSession.Launch(options);
         session.MainWindow.Patterns.Window.Pattern.SetWindowVisualState(WindowVisualState.Maximized);
@@ -93,6 +93,8 @@ public sealed class TaskHistoryFlaUiTests
         Console.WriteLine("Task history automation names: " + string.Join(" | ", visibleNames));
         await Assert.That(visibleNames.Contains("Update task for history", StringComparer.Ordinal)).IsTrue();
         await Assert.That(visibleNames.Any(name => name!.Contains("ui-metadata-user", StringComparison.Ordinal))).IsFalse();
+        await Assert.That(visibleNames.Any(name => name!.Contains(referencedTask.Title, StringComparison.Ordinal) &&
+            name.Contains(referencedTask.Id, StringComparison.Ordinal))).IsTrue();
 
         var gitMode = Find(session, "TaskHistoryGitModeButton");
         var optionsButton = Find(session, "TaskHistoryOptionsButton");
@@ -152,7 +154,7 @@ public sealed class TaskHistoryFlaUiTests
             "The full text remained visible after collapsing the row.");
     }
 
-    private static void CreateHistory(string taskStoragePath, string currentTaskPath)
+    private static (string Id, string Title) CreateHistory(string taskStoragePath, string currentTaskPath)
     {
         Repository.Init(taskStoragePath);
         using var repository = new Repository(taskStoragePath);
@@ -163,12 +165,20 @@ public sealed class TaskHistoryFlaUiTests
 
         var original = JsonNode.Parse(File.ReadAllText(currentTaskPath))!.AsObject();
         original.Remove("PlannedDuration");
+        var task = original.DeepClone().AsObject();
+        var related = Directory.EnumerateFiles(taskStoragePath)
+            .Where(path => path != currentTaskPath)
+            .Select(path => JsonNode.Parse(File.ReadAllText(path))?.AsObject())
+            .First(candidate => candidate?["Id"] is not null && candidate["Title"] is not null &&
+                candidate["Id"]!.GetValue<string>() != original["Id"]!.GetValue<string>());
+        var reference = (Id: related!["Id"]!.GetValue<string>(), Title: related["Title"]!.GetValue<string>());
+        // The current task keeps its valid graph; only the old Git snapshot has this removed link.
+        original["ParentTasks"] = new JsonArray(reference.Id);
         File.WriteAllText(currentTaskPath, original.ToJsonString());
 
         Commands.Stage(repository, "*");
         repository.Commit("Initial task snapshot", signature, signature);
 
-        var task = JsonNode.Parse(File.ReadAllText(currentTaskPath))!.AsObject();
         task["Title"] = "History title after commit";
         task["Description"] = new string('h', 460);
         task["PlannedDuration"] = null;
@@ -181,6 +191,7 @@ public sealed class TaskHistoryFlaUiTests
 
         Commands.Stage(repository, "*");
         repository.Commit("Update task for history", signature, signature);
+        return reference;
     }
 
     private static AutomationElement? Find(DesktopAppSession session, string automationId) =>

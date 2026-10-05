@@ -912,26 +912,34 @@ internal static class TaskHistoryDiffBuilder
         Func<string, TaskHistoryValueReference?> oldReference,
         Func<string, TaskHistoryValueReference?> newReference)
     {
-        var oldItems = oldArray.Select(FormatFullValue).ToHashSet(StringComparer.Ordinal);
-        var newItems = newArray.Select(FormatFullValue).ToHashSet(StringComparer.Ordinal);
-        foreach (var removed in oldItems.Except(newItems, StringComparer.Ordinal).Order())
+        var oldItems = IndexedSetItems(oldArray);
+        var newItems = IndexedSetItems(newArray);
+        foreach (var removed in oldItems.Keys.Except(newItems.Keys, StringComparer.Ordinal).Order())
         {
             changes.Add(new TaskHistoryFieldChange(
                 path, DisplayName(rootProperty), Preview(removed),
-                Localization.Get("TaskHistoryMissingValue"),
+                string.Empty,
                 TaskHistoryChangeType.Removed, IsMetadata(rootProperty),
-                oldReference(path), newReference(path)));
+                oldReference($"{path}[{oldItems[removed].Index}]"), null,
+                IsCollectionChange: true, ReferencedTaskId: oldItems[removed].TaskId));
         }
 
-        foreach (var added in newItems.Except(oldItems, StringComparer.Ordinal).Order())
+        foreach (var added in newItems.Keys.Except(oldItems.Keys, StringComparer.Ordinal).Order())
         {
             changes.Add(new TaskHistoryFieldChange(
                 path, DisplayName(rootProperty),
-                Localization.Get("TaskHistoryMissingValue"), Preview(added),
+                string.Empty, Preview(added),
                 TaskHistoryChangeType.Added, IsMetadata(rootProperty),
-                oldReference(path), newReference(path)));
+                null, newReference($"{path}[{newItems[added].Index}]"),
+                IsCollectionChange: true, ReferencedTaskId: newItems[added].TaskId));
         }
     }
+
+    private static Dictionary<string, (int Index, string? TaskId)> IndexedSetItems(JArray array) =>
+        array.Select((token, index) => (Value: FormatFullValue(token), Index: index,
+                TaskId: token.Type == JTokenType.String && token.Value<string>() is { Length: <= 512 } id ? id : null))
+            .GroupBy(item => item.Value, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => (group.First().Index, group.First().TaskId), StringComparer.Ordinal);
 
     private static void CompareCriteria(
         JArray oldArray,
@@ -957,10 +965,10 @@ internal static class TaskHistoryDiffBuilder
                 continue;
 
             var oldDisplay = oldCriterion is null
-                ? Localization.Get("TaskHistoryMissingValue")
+                ? string.Empty
                 : CriterionDisplay(oldCriterion);
             var newDisplay = newCriterion is null
-                ? Localization.Get("TaskHistoryMissingValue")
+                ? string.Empty
                 : CriterionDisplay(newCriterion);
             if (oldCriterion is not null && newCriterion is not null &&
                 string.Equals(oldDisplay, newDisplay, StringComparison.Ordinal))
@@ -980,8 +988,9 @@ internal static class TaskHistoryDiffBuilder
                         ? TaskHistoryChangeType.Removed
                         : TaskHistoryChangeType.Modified,
                 IsMetadata: false,
-                oldReference(path),
-                newReference(path)));
+                oldCriterion is null ? null : oldReference($"{path}[{oldArray.IndexOf(oldCriterion)}]"),
+                newCriterion is null ? null : newReference($"{path}[{newArray.IndexOf(newCriterion)}]"),
+                IsCollectionChange: true));
         }
 
         var oldOrder = oldArray.OfType<JObject>().Select(item => item.Value<string>("Id")).ToArray();
@@ -1040,8 +1049,8 @@ internal static class TaskHistoryDiffBuilder
         changes.Add(new TaskHistoryFieldChange(
             path,
             DisplayName(string.IsNullOrWhiteSpace(path) ? rootProperty : path),
-            Preview(oldValue),
-            Preview(newValue),
+            (oldToken is null && newToken is JArray) ? string.Empty : Preview(oldValue),
+            (newToken is null && oldToken is JArray) ? string.Empty : Preview(newValue),
             oldToken is null
                 ? TaskHistoryChangeType.Added
                 : newToken is null
@@ -1051,7 +1060,8 @@ internal static class TaskHistoryDiffBuilder
             (!string.Equals(rootProperty, "IsCompleted", StringComparison.OrdinalIgnoreCase) &&
              ((oldToken is null && IsUnassigned(newToken)) || (newToken is null && IsUnassigned(oldToken)))),
             oldReference(path),
-            newReference(path)));
+            newReference(path),
+            IsCollectionChange: oldToken is JArray || newToken is JArray));
     }
 
     private static bool IsUnassigned(JToken? token) => token is not null &&

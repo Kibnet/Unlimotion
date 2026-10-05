@@ -23,6 +23,7 @@ using Avalonia.Skia;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using DynamicData;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Unlimotion.Domain;
@@ -1646,6 +1647,123 @@ public class MainControlTaskCardLayoutUiTests
             {
                 Application.Current.RequestedThemeVariant = previousTheme;
             }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task CurrentTaskCard_TaskHistory_ListChangesShowSingleColoredValueAndScopedTaskTitles()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            ResetTaskCardLayoutSharedState();
+            var previousTheme = Application.Current!.RequestedThemeVariant;
+            try
+            {
+                foreach (var theme in new[] { ThemeVariant.Light, ThemeVariant.Dark })
+                foreach (var width in new[] { 360d, 900d })
+                {
+                    Application.Current.RequestedThemeVariant = theme;
+                    var fixture = new MainWindowViewModelFixture();
+                    Window? window = null;
+                    TaskItemViewModel? foreign = null;
+                    try
+                    {
+                        var (view, created) = await CreateArrangedMainControlAsync(fixture, width, 900);
+                        window = created;
+                        var storage = fixture.MainWindowViewModelTest.taskRepository!;
+                        var title = "Known added task " + new string('x', 22) + "📝 " + new string('x', 80);
+                        storage.Tasks.Lookup(MainWindowViewModelFixture.RootTask3Id).Value.Title = title;
+                        await TestHelpers.WaitForPendingSavesAsync(storage);
+                        StopBackgroundTaskHistoryRefresh(view);
+                        foreign = new TaskItemViewModel(new TaskItem { Id = "foreign-task", Title = "Wrong source title" },
+                            storage, () => false, new TaskItemViewModelContext { SourceId = "foreign-source" });
+                        storage.Tasks.AddOrUpdate(foreign);
+
+                        var expander = FindControlByAutomationId<Expander>(view, "StatusHistoryExpander");
+                        view.TaskHistory.IsGitMode = false;
+                        expander.IsExpanded = true;
+                        RunLayoutJobs();
+                        view.TaskHistory.IsGitMode = true;
+                        var oldJson = new JObject { ["Id"] = "task", ["ParentTasks"] = new JArray(MainWindowViewModelFixture.SubTask22Id) };
+                        var newJson = new JObject { ["Id"] = "task", ["ParentTasks"] = new JArray(MainWindowViewModelFixture.RootTask3Id, "unknown-task", "foreign-task") };
+                        var changes = Services.TaskHistoryDiffBuilder.Build(
+                            new Services.GitTaskHistoryProvider.TaskFileSnapshot(oldJson, "task.json", "task.json", false),
+                            new Services.GitTaskHistoryProvider.TaskFileSnapshot(newJson, "task.json", "task.json", false),
+                            "repo", "root", "old", "new")
+                            .Select(change => change with { OldValueReference = null, NewValueReference = null }).ToArray();
+                        view.TaskHistory.Entries.Clear();
+                        view.TaskHistory.Entries.Add(new TaskHistoryEntry("1234567890", "User", DateTimeOffset.Now, "git", "Change parents", changes));
+                        RunLayoutJobs();
+                        var fields = view.GetVisualDescendants().OfType<TaskHistoryFieldChangeView>()
+                            .Where(field => field.IsEffectivelyVisible).ToArray();
+                        await Assert.That(fields.Length).IsEqualTo(4);
+                        foreach (var field in fields)
+                        {
+                            var change = (TaskHistoryFieldChange)field.DataContext!;
+                            var values = field.GetVisualDescendants().OfType<SelectableTextBlock>()
+                                .Where(value => value.IsEffectivelyVisible).ToArray();
+                            await Assert.That(values.Length).IsEqualTo(1);
+                            await Assert.That(values[0].Text!.Contains(change.ReferencedTaskId!, StringComparison.Ordinal)).IsTrue();
+                            await Assert.That(field.GetVisualDescendants().OfType<TextBlock>()
+                                .Any(label => label.IsEffectivelyVisible && label.Name is "InlineArrow" or "PreviewOldLabel" or "PreviewNewLabel")).IsFalse();
+                            await Assert.That(values[0].Text!.Contains(LocalizationService.Current.Get("TaskHistoryMissingValue"), StringComparison.Ordinal)).IsFalse();
+                            var color = ((ISolidColorBrush)values[0].Foreground!).Color;
+                            if (change.ChangeType == TaskHistoryChangeType.Removed)
+                            {
+                                await Assert.That(color.R > color.G).IsTrue();
+                                await Assert.That(values[0].Text!.Contains("Task 2.2", StringComparison.Ordinal)).IsTrue();
+                            }
+                            else
+                                await Assert.That(color.G > color.R).IsTrue();
+                        }
+
+                        var known = fields.Single(field => ((TaskHistoryFieldChange)field.DataContext!).ReferencedTaskId == MainWindowViewModelFixture.RootTask3Id);
+                        await Assert.That(known.GetVisualDescendants().OfType<SelectableTextBlock>()
+                            .Single(value => value.IsEffectivelyVisible).Text!.Contains("📝", StringComparison.Ordinal)).IsTrue();
+                        await Assert.That(ToolTip.GetTip(known)!.ToString()!.Contains(title, StringComparison.Ordinal)).IsTrue();
+                        var foreignField = fields.Single(field => ((TaskHistoryFieldChange)field.DataContext!).ReferencedTaskId == "foreign-task");
+                        await Assert.That(foreignField.GetVisualDescendants().OfType<SelectableTextBlock>()
+                            .Single(value => value.IsEffectivelyVisible).Text).IsEqualTo("foreign-task");
+                        await Assert.That(ToolTip.GetTip(foreignField)).IsNull();
+                        var show = known.GetVisualDescendants().OfType<Button>().Single(button => button.Name == "ShowDetailsButton");
+                        show.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                        for (var attempt = 0; attempt < 100 && !known.IsDetailsExpanded; attempt++)
+                            await Task.Delay(10);
+                        RunLayoutJobs();
+                        await Assert.That(known.IsDetailsExpanded).IsTrue();
+                        var fullValue = known.GetVisualDescendants().OfType<SelectableTextBlock>().Single(value => value.Name == "FullNewValue");
+                        await Assert.That(fullValue.Text).IsEqualTo($"{title} ({MainWindowViewModelFixture.RootTask3Id})");
+                        var fullColor = ((ISolidColorBrush)fullValue.Foreground!).Color;
+                        await Assert.That(fullColor.G > fullColor.R).IsTrue();
+                        await Assert.That(known.GetVisualDescendants().OfType<ScrollViewer>()
+                            .Single(scroll => scroll.Name == "FullOldViewer").IsVisible).IsFalse();
+                        known.GetVisualDescendants().OfType<Button>().Single(button => button.Name == "CollapseDetailsButton")
+                            .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                        RunLayoutJobs();
+                        await Assert.That(known.IsDetailsExpanded).IsFalse();
+
+                        var scalar = new TaskHistoryFieldChange("Title", "Title", LocalizationService.Current.Get("TaskHistoryMissingValue"),
+                            "New scalar value", TaskHistoryChangeType.Added, false);
+                        known.DataContext = scalar;
+                        RunLayoutJobs();
+                        var visible = known.GetVisualDescendants().OfType<SelectableTextBlock>().Where(value => value.IsEffectivelyVisible).ToArray();
+                        await Assert.That(visible.Length).IsEqualTo(2);
+                        await Assert.That(visible.Any(value => value.Text == scalar.OldValueDisplay)).IsTrue();
+                        await Assert.That(visible.Any(value => value.Text == scalar.NewValueDisplay)).IsTrue();
+                        await Assert.That(ToolTip.GetTip(known)).IsNull();
+                    }
+                    finally
+                    {
+                        CloseWindow(window);
+                        if (foreign is not null)
+                            fixture.MainWindowViewModelTest.taskRepository?.Tasks.Remove(foreign.Id);
+                        foreign?.Dispose();
+                        await fixture.CleanTasksAsync();
+                    }
+                }
+            }
+            finally { Application.Current.RequestedThemeVariant = previousTheme; }
         }, CancellationToken.None);
     }
 

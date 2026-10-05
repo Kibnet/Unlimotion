@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
@@ -6,6 +7,7 @@ using Avalonia.Media;
 using Avalonia.Media.TextFormatting;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Unlimotion.ViewModel.Localization;
 
 namespace Unlimotion.Views;
 
@@ -25,7 +27,11 @@ public partial class TaskHistoryFieldChangeView : UserControl
             CollapseDetails();
             Dispatcher.UIThread.Post(UpdateComparisonLayout);
         };
-        AttachedToVisualTree += (_, _) => _owner = this.FindAncestorOfType<MainControl>();
+        AttachedToVisualTree += (_, _) =>
+        {
+            _owner = this.FindAncestorOfType<MainControl>();
+            UpdateComparisonLayout();
+        };
         DetachedFromVisualTree += (_, _) =>
         {
             _owner?.CloseTaskHistoryDetails(this);
@@ -37,8 +43,10 @@ public partial class TaskHistoryFieldChangeView : UserControl
     internal void ExpandDetails(string oldValue, string newValue)
     {
         var restoreFocus = ShowDetailsButton.IsFocused;
-        FullOldValue.Text = oldValue;
-        FullNewValue.Text = newValue;
+        FullOldValue.Text = DataContext is TaskHistoryFieldChange oldChange
+            ? PresentValue(oldChange, oldValue, oldSide: true, preview: false) : oldValue;
+        FullNewValue.Text = DataContext is TaskHistoryFieldChange newChange
+            ? PresentValue(newChange, newValue, oldSide: false, preview: false) : newValue;
         FullOldViewer.Offset = default;
         FullNewViewer.Offset = default;
         DetailsPanel.IsVisible = true;
@@ -73,28 +81,55 @@ public partial class TaskHistoryFieldChangeView : UserControl
         InlineFieldName.Text = name + ":";
         ComparisonFieldName.Text = name;
         DetailsFieldName.Text = name;
-        var multiline = change.OldValueDisplay.Contains('\n') || change.NewValueDisplay.Contains('\n');
+        var oldValue = PresentValue(change, change.OldValueDisplay, oldSide: true, preview: true);
+        var newValue = PresentValue(change, change.NewValueDisplay, oldSide: false, preview: true);
+        InlineOldValue.Text = PreviewOld.Text = oldValue;
+        InlineNewValue.Text = PreviewNew.Text = newValue;
+        InlineOldValue.IsVisible = !change.HasSingleValue || change.ChangeType == TaskHistoryChangeType.Removed;
+        InlineNewValue.IsVisible = !change.HasSingleValue || change.ChangeType == TaskHistoryChangeType.Added;
+        InlineArrow.IsVisible = !change.HasSingleValue;
+        var taskTitle = RelatedTaskTitle(change);
+        var hasDetails = change.HasDetails || (taskTitle?.Length ?? 0) > 40;
+        ToolTip.SetTip(this, string.IsNullOrWhiteSpace(taskTitle) ? null :
+            Localization.Format("TaskHistoryReferencedTaskTip", taskTitle, change.ReferencedTaskId));
+        var multiline = oldValue.Contains('\n') || newValue.Contains('\n');
         double TextWidth(string text, FontWeight weight)
         {
             using var layout = new TextLayout(text, new Typeface(FontFamily, FontStyle, weight), FontSize, Foreground);
             return layout.WidthIncludingTrailingWhitespace;
         }
-        var inlineWidth = TextWidth(name + ":", FontWeight.SemiBold) + TextWidth(change.OldValueDisplay, FontWeight) +
-                          TextWidth("→", FontWeight) + TextWidth(change.NewValueDisplay, FontWeight) + 15;
-        var inline = !change.HasDetails && !multiline && Bounds.Width > 0 && inlineWidth <= Bounds.Width;
+        var inlineWidth = TextWidth(name + ":", FontWeight.SemiBold) + TextWidth(oldValue, FontWeight) +
+                          TextWidth(newValue, FontWeight) +
+                          (change.HasSingleValue ? 5 : TextWidth("→", FontWeight) + 15);
+        var inline = !hasDetails && !multiline && Bounds.Width > 0 && inlineWidth <= Bounds.Width;
         InlineRow.IsVisible = !IsDetailsExpanded && inline;
         ComparisonRow.IsVisible = !IsDetailsExpanded && !inline;
-        ShowDetailsButton.IsVisible = change.HasDetails || multiline ||
-                                      change.OldValueDisplay.Length > 40 || change.NewValueDisplay.Length > 40;
+        ShowDetailsButton.IsVisible = hasDetails || multiline || oldValue.Length > 40 || newValue.Length > 40;
         ArrangeValues(PreviewGrid, PreviewOldLabel, PreviewOld, PreviewNewLabel, PreviewNew);
         ArrangeValues(FullValueGrid, FullOldLabel, FullOldViewer, FullNewLabel, FullNewViewer);
     }
 
     private void ArrangeValues(Grid grid, Control oldLabel, Control oldValue, Control newLabel, Control newValue)
     {
+        if (DataContext is TaskHistoryFieldChange { HasSingleValue: true } change)
+        {
+            oldLabel.IsVisible = newLabel.IsVisible = false;
+            oldValue.IsVisible = change.ChangeType == TaskHistoryChangeType.Removed;
+            newValue.IsVisible = change.ChangeType == TaskHistoryChangeType.Added;
+            if (grid.ColumnDefinitions.Count != 1)
+                grid.ColumnDefinitions = new ColumnDefinitions("*");
+            Grid.SetRow(oldValue, 0);
+            Grid.SetColumn(oldValue, 0);
+            Grid.SetRow(newValue, 0);
+            Grid.SetColumn(newValue, 0);
+            return;
+        }
+
+        oldLabel.IsVisible = newLabel.IsVisible = oldValue.IsVisible = newValue.IsVisible = true;
         var wide = Bounds.Width >= 440;
         // Avoid invalidating layout again when only the row height changed.
-        if ((grid.ColumnDefinitions[0].Width.GridUnitType == GridUnitType.Star) == wide)
+        if (grid.ColumnDefinitions.Count == 2 &&
+            (grid.ColumnDefinitions[0].Width.GridUnitType == GridUnitType.Star) == wide)
             return;
         grid.ColumnDefinitions = new ColumnDefinitions(wide ? "*,*" : "Auto,*");
         Grid.SetRow(oldLabel, 0);
@@ -105,6 +140,34 @@ public partial class TaskHistoryFieldChangeView : UserControl
         Grid.SetColumn(newLabel, wide ? 1 : 0);
         Grid.SetRow(newValue, 1);
         Grid.SetColumn(newValue, 1);
+    }
+
+    private string? RelatedTaskTitle(TaskHistoryFieldChange change) =>
+        change.HasSingleValue && change.ReferencedTaskId is { } id
+            ? _owner?.ResolveTaskHistoryTaskTitle(id) : null;
+
+    private string PresentValue(TaskHistoryFieldChange change, string value, bool oldSide, bool preview)
+    {
+        if (oldSide != (change.ChangeType == TaskHistoryChangeType.Removed) ||
+            RelatedTaskTitle(change) is not { } title || string.IsNullOrWhiteSpace(title))
+            return value;
+
+        if (preview)
+        {
+            title = title.Replace('\r', ' ').Replace('\n', ' ').Trim();
+            if (title.Length > 40)
+            {
+                var elements = StringInfo.GetTextElementEnumerator(title);
+                var count = 0;
+                while (elements.MoveNext())
+                    if (count++ == 40)
+                    {
+                        title = title[..elements.ElementIndex] + "…";
+                        break;
+                    }
+            }
+        }
+        return $"{title} ({value})";
     }
 
     private async void ShowDetailsButton_OnClick(object? sender, RoutedEventArgs e)
