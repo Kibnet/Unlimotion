@@ -77,7 +77,7 @@
                                       HorizontalAlignment="Stretch"
                                       HorizontalContentAlignment="Left"
                                       VerticalContentAlignment="Center"
-                                      AutomationProperties.Name="{DynamicResource TaskHistory}"
+                                      AutomationProperties.Name="{TemplateBinding Header}"
                                       Background="Transparent"
                                       BorderThickness="0"
                                       Padding="0,5"

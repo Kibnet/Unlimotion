@@ -1648,6 +1648,46 @@ public class MainControlTaskCardLayoutUiTests
     }
 
     [Test]
+    public async Task CurrentTaskCard_TaskHistory_HeaderAutomationNameFollowsEachExpanderHeader()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            ResetTaskCardLayoutSharedState();
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+            try
+            {
+                var (view, createdWindow) = await CreateArrangedMainControlAsync(fixture, 900, 900);
+                window = createdWindow;
+                var history = FindControlByAutomationId<Expander>(view, "StatusHistoryExpander");
+                var details = new Expander { Header = "Operation details" };
+                details.Classes.Add("TaskStatusHistoryExpander");
+                ((Grid)view.Content!).Children.Add(details);
+                RunLayoutJobs();
+
+                var historyHeader = history.GetVisualDescendants().OfType<ToggleButton>()
+                    .Single(button => button.Name == "PART_HeaderSite");
+                var detailsHeader = details.GetVisualDescendants().OfType<ToggleButton>()
+                    .Single(button => button.Name == "PART_HeaderSite");
+                await Assert.That(AutomationProperties.GetName(historyHeader))
+                    .IsEqualTo(LocalizationService.Current.Get("TaskHistory"));
+                await Assert.That(AutomationProperties.GetName(detailsHeader)).IsEqualTo("Operation details");
+                details.Header = "Read failure details";
+                RunLayoutJobs();
+                await Assert.That(AutomationProperties.GetName(detailsHeader)).IsEqualTo("Read failure details");
+                await Assert.That(AutomationProperties.GetName(historyHeader))
+                    .IsEqualTo(LocalizationService.Current.Get("TaskHistory"));
+            }
+            finally
+            {
+                CloseWindow(window);
+                await fixture.CleanTasksAsync();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
     public async Task CurrentTaskCard_TaskHistory_CentersActionsAndScrollsSmoothlyWithinUnifiedBackground()
     {
         // Match the suite's drawing backend: cached glyphs from other Headless tests
