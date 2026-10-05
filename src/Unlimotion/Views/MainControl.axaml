@@ -1942,16 +1942,6 @@
                                                            PlaceholderText="{DynamicResource Importance}"
                                                            AutomationProperties.Name="{DynamicResource Importance}"
                                                            AutomationProperties.AutomationId="CurrentTaskImportanceInput"/>
-                                            <unlimotion:EmojiTextBlock Classes="TaskHeaderParentEmojiTrail"
-                                                                        EmojiText="{Binding ParentEmojiTrail, Mode=OneWay}"
-                                                                        IsVisible="{Binding HasParentEmojiTrail}"
-                                                                        ToolTip.Tip="{DynamicResource ParentsTasks}"
-                                                                        AutomationProperties.Name="{DynamicResource ParentsTasks}"
-                                                                        AutomationProperties.AutomationId="CurrentTaskParentEmojiTrail"/>
-                                            <TextBlock Classes="TaskHeaderIdMeta"
-                                                       Text="{Binding Id, Mode=OneWay}"
-                                                       ToolTip.Tip="{Binding Id}"
-                                                       AutomationProperties.AutomationId="CurrentTaskIdTextBlock"/>
                                             <WrapPanel Classes="TaskCommandBar"
                                                        IsVisible="{Binding ., Converter={x:Static ObjectConverters.IsNotNull}}"
                                                        AutomationProperties.ControlTypeOverride="Group"
@@ -1989,6 +1979,16 @@
                                                     </DropDownButton.Flyout>
                                                 </DropDownButton>
                                             </WrapPanel>
+                                            <unlimotion:EmojiTextBlock Classes="TaskHeaderParentEmojiTrail"
+                                                                        EmojiText="{Binding ParentEmojiTrail, Mode=OneWay}"
+                                                                        IsVisible="{Binding HasParentEmojiTrail}"
+                                                                        ToolTip.Tip="{DynamicResource ParentsTasks}"
+                                                                        AutomationProperties.Name="{DynamicResource ParentsTasks}"
+                                                                        AutomationProperties.AutomationId="CurrentTaskParentEmojiTrail"/>
+                                            <TextBlock Classes="TaskHeaderIdMeta"
+                                                       Text="{Binding Id, Mode=OneWay}"
+                                                       ToolTip.Tip="{Binding Id}"
+                                                       AutomationProperties.AutomationId="CurrentTaskIdTextBlock"/>
                                             <WrapPanel Classes="TaskHeaderDateMeta TaskHeaderMetaRow" IsVisible="{Binding CreatedDateTime, Converter={x:Static ObjectConverters.IsNotNull}}">
                                                 <Label Content="{DynamicResource CreatedPrefix}" Margin="0,0,2,0"/>
                                                 <Label Content="{Binding CreatedDateTime, StringFormat={}{0:yyyy.MM.dd HH:mm}}"/>

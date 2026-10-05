@@ -1128,6 +1128,8 @@ public class MainControlTaskCardLayoutUiTests
 
                 AssertNoHorizontalOverflow(scrollViewer, card);
                 AssertFirstPhoneViewportShowsHeader(scrollViewer, commandBar, header, title);
+                await Assert.That(GetTopEdge(scrollViewer, commandBar))
+                    .IsLessThanOrEqualTo(GetTopEdge(scrollViewer, parentEmojiTrail));
                 AssertTaskHeaderAlignment(header);
                 await Assert.That(IsVisibleAndArranged(parentEmojiTrail)).IsTrue();
                 await Assert.That(parentEmojiTrail.EmojiText).IsEqualTo(LongEmojiAncestorTrail);
