@@ -1,0 +1,42 @@
+
+████████╗██╗   ██╗███╗   ██╗██╗████████╗
+╚══██╔══╝██║   ██║████╗  ██║██║╚══██╔══╝
+   ██║   ██║   ██║██╔██╗ ██║██║   ██║
+   ██║   ██║   ██║██║╚██╗██║██║   ██║
+   ██║   ╚██████╔╝██║ ╚████║██║   ██║
+   ╚═╝    ╚═════╝ ╚═╝  ╚═══╝╚═╝   ╚═╝
+
+   TUnit v1.44.0.0 | 64-bit | Microsoft Windows 10.0.22631 | win-x64 | .NET 10.0.12 | Microsoft Testing Platform v2.2.2
+
+   Engine Mode: SourceGenerated
+
+пройдено Reload_RevisionZeroHubUpdateOrDeleteWinsOverDetachedResponse(False) (506ms)
+пройдено Reload_RevisionZeroHubUpdateOrDeleteWinsOverDetachedResponse(True) (6ms)
+пройдено Reload_MissingRejectsSavedSnapshotWhoseLoadStartedBeforeDeletion (158ms)
+пройдено Reload_LateResponseAfterSourceDisposalIsNotPublished (14ms)
+пройдено InMemoryDiagnosticRead_PreservesNullHistorySlots (20ms)
+пройдено SameStatusNoOp_HydratesStaleCacheFromAuthoritativeSnapshot (136ms)
+пройдено DeniedTransition_HydratesStaleCacheFromAuthoritativeSnapshot (37ms)
+пройдено Unarchive_UsesAuthoritativeHistoryAndHydratesStaleCachedHistory (36ms)
+пройдено SameStatusNoOp_RebuildsRelationsAfterAuthoritativeHydration (21ms)
+пройдено RepeatingCompletion_AddsCreatedCloneToCache (35ms)
+пройдено OutcomeUnknown_ReloadsAuthoritativeTaskInsteadOfUsingCommandSnapshot (95ms)
+пройдено OutcomeUnknown_WhenAuthoritativeReloadFails_LeavesCacheUntouched (2ms)
+пройдено ConcurrentStatusCommands_AreSerializedThroughCommandAndHydration (132ms)
+пройдено NewerWatcherDeleteTombstone_PreventsDelayedCommandFromRecreatingTask (601ms)
+пройдено OlderRemovalAfterNewerWatcherCreate_DoesNotDeleteTask (123ms)
+пройдено ConcurrentStatusCommands_KeepGateUntilCapturedContextHydrationCompletes (264ms)
+пройдено CacheHydration_PostsToSynchronizationContextCapturedDuringInit (125ms)
+пройдено DisposeDuringCommand_SkipsCacheHydrationWithoutBreakingCommandCompletion (3ms)
+HTML test report written to: <workspace>\artifacts\status-recovery\pre-merge-2026-10-05\green-unified\Unlimotion.Test-windows-net10.0-report.html
+
+  Созданные в процессе артефакты файлов:
+    - <workspace>\artifacts\status-recovery\pre-merge-2026-10-05\green-unified\Unlimotion.Test-windows-net10.0-report.html
+    - <workspace>\artifacts\status-recovery\pre-merge-2026-10-05\green-unified\<user>_<machine>_2026-10-05_18_01_07.9234780.trx
+
+Сводка тестового запуска: Пройден! - <workspace>\src\Unlimotion.Test\bin\Debug\net10.0\Unlimotion.Test.dll (net10.0|x64)
+  всего: 18
+  сбой: 0
+  успешно выполнено: 18
+  пропущено: 0
+  длительность: 3s 715ms

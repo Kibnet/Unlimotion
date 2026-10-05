@@ -1,0 +1,147 @@
+
+████████╗██╗   ██╗███╗   ██╗██╗████████╗
+╚══██╔══╝██║   ██║████╗  ██║██║╚══██╔══╝
+   ██║   ██║   ██║██╔██╗ ██║██║   ██║
+   ██║   ██║   ██║██║╚██╗██║██║   ██║
+   ██║   ╚██████╔╝██║ ╚████║██║   ██║
+   ╚═╝    ╚═════╝ ╚═╝  ╚═══╝╚═╝   ╚═╝
+
+   TUnit v1.44.0.0 | 64-bit | Microsoft Windows 10.0.22631 | win-x64 | .NET 10.0.12 | Microsoft Testing Platform v2.2.2
+
+   Engine Mode: SourceGenerated
+
+[TUnit] External span cap of 100 reached; subsequent spans will be dropped. Set TUNIT_OTEL_MAX_EXTERNAL_SPANS to raise the limit.
+passed Apply_RefreshesOpenDesktopProjection (12s 851ms)
+  Error output
+    [TUnit] External span cap of 100 reached; subsequent spans will be dropped. Set TUNIT_OTEL_MAX_EXTERNAL_SPANS to raise the limit.
+
+passed ExternalAliasIdChange_ReplacesOldDesktopProjection (5s 076ms)
+passed ExternalWriterCreateRelationAndDelete_RefreshOpenDesktopProjection (8s 262ms)
+passed CliChanges_RefreshOpenDesktopProjection (11s 225ms)
+passed DisposeCallback_CalledTwice_IsIdempotentAndAllowsControlSession (9s 268ms)
+passed LaunchFailure_AfterStorageCreation_PreservesPrimaryExceptionAndCleansSession (6s 879ms)
+passed DelayedWatcherEvent_AfterDispose_IsIgnoredAndDoesNotCrashHost (28s 537ms)
+passed Settings_ssh_backup_flow_shows_key_controls_for_ssh_remote (134ms)
+passed Card_blocking_relation_editor_can_be_opened_from_task_card (93ms)
+passed Card_relation_picker_can_be_opened_from_task_card (79ms)
+passed Main_window_loads_current_task_on_launch (17ms)
+passed Major_tabs_can_be_opened_from_main_window (522ms)
+passed Task_card_can_be_closed_and_reopened_from_details_toggle (66ms)
+passed Card_blocked_relation_editor_can_be_opened_from_task_card (95ms)
+passed Card_containing_relation_editor_can_be_opened_from_task_card (54ms)
+пройдено StatusContract_RussianDarkFutureAndBlocker (205ms)
+passed TaskCardStatusRecovery_FailureRefreshRetry (26s 920ms)
+passed StatusContract_TerminalPickerAndUnarchive (3s 242ms)
+passed Current_task_card_exposes_redesigned_sections_on_launch (82ms)
+passed Readme_demo_uses_capture_presentation_state (109ms)
+passed Card_blocking_relation_editor_can_be_opened_from_task_card (33ms)
+passed Card_containing_relation_editor_can_be_opened_from_task_card (78ms)
+passed Current_task_card_exposes_redesigned_sections_on_launch (57ms)
+passed Main_window_loads_current_task_on_launch (15ms)
+passed Major_tabs_can_be_opened_from_main_window (379ms)
+passed Settings_ssh_backup_flow_shows_key_controls_for_ssh_remote (80ms)
+passed Card_relation_picker_can_be_opened_from_task_card (55ms)
+passed Card_blocked_relation_editor_can_be_opened_from_task_card (50ms)
+passed Task_card_can_be_closed_and_reopened_from_details_toggle (53ms)
+пройдено Card_blocked_relation_editor_can_be_opened_from_task_card (52ms)
+пройдено Card_containing_relation_editor_can_be_opened_from_task_card (31ms)
+пройдено Card_blocking_relation_editor_can_be_opened_from_task_card (38ms)
+пройдено Card_relation_picker_can_be_opened_from_task_card (60ms)
+пройдено Current_task_card_exposes_redesigned_sections_on_launch (61ms)
+пройдено Major_tabs_can_be_opened_from_main_window (301ms)
+пройдено Readme_demo_uses_capture_presentation_state (151ms)
+пройдено Task_card_can_be_closed_and_reopened_from_details_toggle (169ms)
+пройдено Main_window_loads_current_task_on_launch (17ms)
+пройдено Settings_ssh_backup_flow_shows_key_controls_for_ssh_remote (385ms)
+passed Recovered_configuration_keeps_the_original_task_projection_in_headless_shell(True) (4s 889ms)
+passed Blocked_result_renders_only_recovery_controls_with_selectable_path(EmptyWithoutBackup) (1s 028ms)
+passed Blocked_result_renders_only_recovery_controls_with_selectable_path(TruncatedWithoutBackup) (187ms)
+passed Blocked_result_renders_only_recovery_controls_with_selectable_path(InvalidRootWithoutBackup) (191ms)
+passed Recovery_buttons_are_localized_keyboard_focusable_and_handle_folder_failure(en) (67ms)
+passed Recovery_buttons_are_localized_keyboard_focusable_and_handle_folder_failure(ru) (31ms)
+passed Recovered_configuration_keeps_the_original_task_projection_in_headless_shell(False) (3s 653ms)
+passed Blocked_result_renders_only_recovery_controls_with_selectable_path(MissingWithInvalidBackup) (166ms)
+passed Blocked_result_renders_only_recovery_controls_with_selectable_path(ValidWithRestrictedBackup) (156ms)
+passed Settings_refresh_metadata_fills_empty_remote_url_from_current_local_storage (216ms)
+passed Settings_remote_type_switch_creates_ssh_copy_for_single_http_remote (3s 465ms)
+passed Spaces_render_selector_and_settings_management_controls (820ms)
+passed Duplicate_catalog_renders_blocking_recovery_state_with_identifier (15ms)
+System.AggregateException: Errors occurred while disposing static properties (AfterTestSession hook failed: Object reference not set to an instance of an object.)
+ ---> TUnit.Core.Exceptions.AfterTestSessionException: AfterTestSession hook failed: Object reference not set to an instance of an object.
+ ---> System.NullReferenceException: Object reference not set to an instance of an object.
+   at Avalonia.Headless.HeadlessUnitTestSession.DisposeAsync()
+   at Unlimotion.UiTests.Headless.Infrastructure.HeadlessSessionHooks.DisposeCurrentSession() in <workspace>\tests\Unlimotion.UiTests.Headless\Infrastructure\HeadlessSessionHooks.cs:line 107
+   at Unlimotion.UiTests.Headless.Infrastructure.HeadlessSessionHooks.CleanupSession() in <workspace>\tests\Unlimotion.UiTests.Headless\Infrastructure\HeadlessSessionHooks.cs:line 113
+   at TUnit.Core.AsyncConvert.Convert(Func`1 action)
+   at TUnit.Generated.Hooks.Unlimotion_UiTests_Headless_Infrastructure_HeadlessSessionHooks_CleanupSession_After_TestSession.Unlimotion_UiTests_Headless_Infrastructure_HeadlessSessionHooks_CleanupSession_After_TestSessionInitializer.global_Unlimotion_UiTests_Headless_Infrastructure_HeadlessSessionHooks_CleanupSession_0Params_Body(TestSessionContext context, CancellationToken cancellationToken) in <workspace>\tests\Unlimotion.UiTests.Headless\obj\Debug\net10.0\TUnit.Core.SourceGenerator\TUnit.Core.SourceGenerator.Generators.HookMetadataGenerator\Unlimotion_UiTests_Headless_Infrastructure_HeadlessSessionHooks_CleanupSession_After_TestSession.Hook.g.cs:line 24
+   at TUnit.Engine.Helpers.HookTimeoutHelper.<CreateTimeoutHookAction>g__CreateTimeoutHookActionAsync|1_0[T](StaticHookMethod`1 hook, T context, Int32 timeoutMs, CancellationToken cancellationToken)
+   at TUnit.Engine.Services.HookExecutor.ExecuteHookWithActivityAsync[TContext](NamedHookDelegate`1 hook, TContext context, CancellationToken cancellationToken)
+   at TUnit.Engine.Services.HookExecutor.ExecuteAfterTestSessionHooksAsync(CancellationToken cancellationToken)
+   --- End of inner exception stack trace ---
+   --- End of inner exception stack trace ---
+   at TUnit.Engine.Services.StaticPropertyHandler.DisposeStaticPropertiesAsync(List`1 cleanupExceptions)
+   at TUnit.Engine.Scheduling.TestScheduler.ScheduleAndExecuteAsync(List`1 testList, CancellationToken cancellationToken)
+   at TUnit.Engine.TestSessionCoordinator.ExecuteTestsCore(List`1 testList, CancellationToken cancellationToken)
+   at TUnit.Engine.TestSessionCoordinator.ExecuteTests(IEnumerable`1 tests, ITestExecutionFilter filter, IMessageBus messageBus, CancellationToken cancellationToken)
+   at TUnit.Engine.TestSessionCoordinator.ExecuteTests(IEnumerable`1 tests, ITestExecutionFilter filter, IMessageBus messageBus, CancellationToken cancellationToken)
+   at TUnit.Engine.Framework.TestRequestHandler.HandleRunRequestAsync(TUnitServiceProvider serviceProvider, RunTestExecutionRequest request, ExecuteRequestContext context, ITestExecutionFilter testExecutionFilter)
+   at TUnit.Engine.Framework.TestRequestHandler.HandleRequestAsync(TestExecutionRequest request, TUnitServiceProvider serviceProvider, ExecuteRequestContext context, ITestExecutionFilter testExecutionFilter)
+   at TUnit.Engine.Framework.TUnitTestFramework.ExecuteRequestAsync(ExecuteRequestContext context)
+Test adapter test session failure
+failed Unhandled exception - AggregateException: Errors occurred while disposing static properties (AfterTestSession hook failed: Object reference not set to an instance of an object.)
+  System.AggregateException: Errors occurred while disposing static properties (AfterTestSession hook failed: Object reference not set to an instance of an object.)
+    at TUnit.Engine.Services.StaticPropertyHandler.DisposeStaticPropertiesAsync(List`1 cleanupExceptions)
+    at TUnit.Engine.Scheduling.TestScheduler.ScheduleAndExecuteAsync(List`1 testList, CancellationToken cancellationToken)
+    at TUnit.Engine.TestSessionCoordinator.ExecuteTestsCore(List`1 testList, CancellationToken cancellationToken)
+    at TUnit.Engine.TestSessionCoordinator.ExecuteTests(IEnumerable`1 tests, ITestExecutionFilter filter, IMessageBus messageBus, CancellationToken cancellationToken)
+    at TUnit.Engine.TestSessionCoordinator.ExecuteTests(IEnumerable`1 tests, ITestExecutionFilter filter, IMessageBus messageBus, CancellationToken cancellationToken)
+    at TUnit.Engine.Framework.TestRequestHandler.HandleRunRequestAsync(TUnitServiceProvider serviceProvider, RunTestExecutionRequest request, ExecuteRequestContext context, ITestExecutionFilter testExecutionFilter)
+    at TUnit.Engine.Framework.TestRequestHandler.HandleRequestAsync(TestExecutionRequest request, TUnitServiceProvider serviceProvider, ExecuteRequestContext context, ITestExecutionFilter testExecutionFilter)
+    at TUnit.Engine.Framework.TUnitTestFramework.ExecuteRequestAsync(ExecuteRequestContext context)
+  --->  AfterTestSession hook failed: Object reference not set to an instance of an object.
+  --->  System.NullReferenceException: Object reference not set to an instance of an object.
+    at Avalonia.Headless.HeadlessUnitTestSession.DisposeAsync()
+    at Unlimotion.UiTests.Headless.Infrastructure.HeadlessSessionHooks.DisposeCurrentSession() in <workspace>\tests\Unlimotion.UiTests.Headless\Infrastructure\HeadlessSessionHooks.cs:107
+    at Unlimotion.UiTests.Headless.Infrastructure.HeadlessSessionHooks.CleanupSession() in <workspace>\tests\Unlimotion.UiTests.Headless\Infrastructure\HeadlessSessionHooks.cs:113
+    at TUnit.Core.AsyncConvert.Convert(Func`1 action)
+    at TUnit.Generated.Hooks.Unlimotion_UiTests_Headless_Infrastructure_HeadlessSessionHooks_CleanupSession_After_TestSession.Unlimotion_UiTests_Headless_Infrastructure_HeadlessSessionHooks_CleanupSession_After_TestSessionInitializer.global_Unlimotion_UiTests_Headless_Infrastructure_HeadlessSessionHooks_CleanupSession_0Params_Body(TestSessionContext context, CancellationToken cancellationToken) in <workspace>\tests\Unlimotion.UiTests.Headless\obj\Debug\net10.0\TUnit.Core.SourceGenerator\TUnit.Core.SourceGenerator.Generators.HookMetadataGenerator\Unlimotion_UiTests_Headless_Infrastructure_HeadlessSessionHooks_CleanupSession_After_TestSession.Hook.g.cs:24
+    at TUnit.Engine.Helpers.HookTimeoutHelper.<CreateTimeoutHookAction>g__CreateTimeoutHookActionAsync|1_0[T](StaticHookMethod`1 hook, T context, Int32 timeoutMs, CancellationToken cancellationToken)
+    at TUnit.Engine.Services.HookExecutor.ExecuteHookWithActivityAsync[TContext](NamedHookDelegate`1 hook, TContext context, CancellationToken cancellationToken)
+    at TUnit.Engine.Services.HookExecutor.ExecuteAfterTestSessionHooksAsync(CancellationToken cancellationToken)
+HTML test report written to: <workspace>\artifacts\status-recovery\pre-merge-2026-10-05\headless-full\Unlimotion.UiTests.Headless-windows-net10.0-report.html
+Unhandled exception in AppDomain: System.InvalidOperationException: The test framework 'TUnit' with UID 'TUnitExtension' does not support the 'ITrxReportCapability' leading to missing or incomplete TRX reports
+   at Microsoft.Testing.Extensions.TrxReport.Abstractions.TrxReportEngine.GetClassAndMethodName(TestNode testNode) in /_/src/Platform/Microsoft.Testing.Extensions.TrxReport/TrxReportEngine.cs:line 648
+   at Microsoft.Testing.Extensions.TrxReport.Abstractions.TrxReportEngine.AddResults(TestNodeUpdateMessage[] testNodeUpdateMessages, String testAppModule, XElement testRun, String runDeploymentRoot, XElement testDefinitions, XElement testEntries) in /_/src/Platform/Microsoft.Testing.Extensions.TrxReport/TrxReportEngine.cs:line 603
+   at Microsoft.Testing.Extensions.TrxReport.Abstractions.TrxReportEngine.<>c__DisplayClass19_0.<<GenerateReportAsync>b__0>d.MoveNext() in /_/src/Platform/Microsoft.Testing.Extensions.TrxReport/TrxReportEngine.cs:line 143
+--- End of stack trace from previous location ---
+   at Microsoft.Testing.Extensions.TrxReport.Abstractions.TrxReportEngine.RetryWhenIOExceptionAsync(Func`1 func) in /_/src/Platform/Microsoft.Testing.Extensions.TrxReport/TrxReportEngine.cs:line 191
+   at Microsoft.Testing.Extensions.TrxReport.Abstractions.TrxReportEngine.GenerateReportAsync(TestNodeUpdateMessage[] testNodeUpdateMessages, String testHostCrashInfo, Boolean isTestHostCrashed) in /_/src/Platform/Microsoft.Testing.Extensions.TrxReport/TrxReportEngine.cs:line 106
+   at Microsoft.Testing.Extensions.TrxReport.Abstractions.TrxReportGenerator.OnTestSessionFinishingAsync(ITestSessionContext testSessionContext) in /_/src/Platform/Microsoft.Testing.Extensions.TrxReport/TrxDataConsumer.cs:line 197
+   at Microsoft.Testing.Platform.Hosts.CommonHost.NotifyTestSessionEndAsync(ITestSessionContext testSessionContext, BaseMessageBus baseMessageBus, ServiceProvider serviceProvider, IPlatformOpenTelemetryService otelService) in /_/src/Platform/Microsoft.Testing.Platform/Hosts/CommonTestHost.cs:line 283
+   at Microsoft.Testing.Platform.Hosts.CommonHost.ExecuteRequestAsync(ProxyOutputDevice outputDevice, ITestSessionContext testSessionInfo, ServiceProvider serviceProvider, BaseMessageBus baseMessageBus, ITestFramework testFramework, ClientInfo client) in /_/src/Platform/Microsoft.Testing.Platform/Hosts/CommonTestHost.cs:line 171
+   at Microsoft.Testing.Platform.Hosts.ConsoleTestHost.InternalRunAsync(CancellationToken cancellationToken) in /_/src/Platform/Microsoft.Testing.Platform/Hosts/ConsoleTestHost.cs:line 85
+   at Microsoft.Testing.Platform.Hosts.ConsoleTestHost.InternalRunAsync(CancellationToken cancellationToken) in /_/src/Platform/Microsoft.Testing.Platform/Hosts/ConsoleTestHost.cs:line 117
+   at Microsoft.Testing.Platform.Hosts.CommonHost.RunTestAppAsync(IPlatformOpenTelemetryService platformOTelService, CancellationToken testApplicationCancellationToken) in /_/src/Platform/Microsoft.Testing.Platform/Hosts/CommonTestHost.cs:line 130
+   at Microsoft.Testing.Platform.Hosts.CommonHost.RunAsync() in /_/src/Platform/Microsoft.Testing.Platform/Hosts/CommonTestHost.cs:line 44
+   at Microsoft.Testing.Platform.Hosts.CommonHost.RunAsync() in /_/src/Platform/Microsoft.Testing.Platform/Hosts/CommonTestHost.cs:line 83
+   at Microsoft.Testing.Platform.Builder.TestApplication.RunAsync() in /_/src/Platform/Microsoft.Testing.Platform/Builder/TestApplication.cs:line 223
+   at Unlimotion.UiTests.Headless.MicrosoftTestingPlatformEntryPoint.Main(String[] args) in <workspace>\tests\Unlimotion.UiTests.Headless\obj\Debug\net10.0\MicrosoftTestingPlatformEntryPoint.cs:line 18
+   at Unlimotion.UiTests.Headless.MicrosoftTestingPlatformEntryPoint.<Main>(String[] args)
+Unhandled exception. System.InvalidOperationException: The test framework 'TUnit' with UID 'TUnitExtension' does not support the 'ITrxReportCapability' leading to missing or incomplete TRX reports
+   at Microsoft.Testing.Extensions.TrxReport.Abstractions.TrxReportEngine.GetClassAndMethodName(TestNode testNode) in /_/src/Platform/Microsoft.Testing.Extensions.TrxReport/TrxReportEngine.cs:line 648
+   at Microsoft.Testing.Extensions.TrxReport.Abstractions.TrxReportEngine.AddResults(TestNodeUpdateMessage[] testNodeUpdateMessages, String testAppModule, XElement testRun, String runDeploymentRoot, XElement testDefinitions, XElement testEntries) in /_/src/Platform/Microsoft.Testing.Extensions.TrxReport/TrxReportEngine.cs:line 603
+   at Microsoft.Testing.Extensions.TrxReport.Abstractions.TrxReportEngine.<>c__DisplayClass19_0.<<GenerateReportAsync>b__0>d.MoveNext() in /_/src/Platform/Microsoft.Testing.Extensions.TrxReport/TrxReportEngine.cs:line 143
+--- End of stack trace from previous location ---
+   at Microsoft.Testing.Extensions.TrxReport.Abstractions.TrxReportEngine.RetryWhenIOExceptionAsync(Func`1 func) in /_/src/Platform/Microsoft.Testing.Extensions.TrxReport/TrxReportEngine.cs:line 191
+   at Microsoft.Testing.Extensions.TrxReport.Abstractions.TrxReportEngine.GenerateReportAsync(TestNodeUpdateMessage[] testNodeUpdateMessages, String testHostCrashInfo, Boolean isTestHostCrashed) in /_/src/Platform/Microsoft.Testing.Extensions.TrxReport/TrxReportEngine.cs:line 106
+   at Microsoft.Testing.Extensions.TrxReport.Abstractions.TrxReportGenerator.OnTestSessionFinishingAsync(ITestSessionContext testSessionContext) in /_/src/Platform/Microsoft.Testing.Extensions.TrxReport/TrxDataConsumer.cs:line 197
+   at Microsoft.Testing.Platform.Hosts.CommonHost.NotifyTestSessionEndAsync(ITestSessionContext testSessionContext, BaseMessageBus baseMessageBus, ServiceProvider serviceProvider, IPlatformOpenTelemetryService otelService) in /_/src/Platform/Microsoft.Testing.Platform/Hosts/CommonTestHost.cs:line 283
+   at Microsoft.Testing.Platform.Hosts.CommonHost.ExecuteRequestAsync(ProxyOutputDevice outputDevice, ITestSessionContext testSessionInfo, ServiceProvider serviceProvider, BaseMessageBus baseMessageBus, ITestFramework testFramework, ClientInfo client) in /_/src/Platform/Microsoft.Testing.Platform/Hosts/CommonTestHost.cs:line 171
+   at Microsoft.Testing.Platform.Hosts.ConsoleTestHost.InternalRunAsync(CancellationToken cancellationToken) in /_/src/Platform/Microsoft.Testing.Platform/Hosts/ConsoleTestHost.cs:line 85
+   at Microsoft.Testing.Platform.Hosts.ConsoleTestHost.InternalRunAsync(CancellationToken cancellationToken) in /_/src/Platform/Microsoft.Testing.Platform/Hosts/ConsoleTestHost.cs:line 117
+   at Microsoft.Testing.Platform.Hosts.CommonHost.RunTestAppAsync(IPlatformOpenTelemetryService platformOTelService, CancellationToken testApplicationCancellationToken) in /_/src/Platform/Microsoft.Testing.Platform/Hosts/CommonTestHost.cs:line 130
+   at Microsoft.Testing.Platform.Hosts.CommonHost.RunAsync() in /_/src/Platform/Microsoft.Testing.Platform/Hosts/CommonTestHost.cs:line 44
+   at Microsoft.Testing.Platform.Hosts.CommonHost.RunAsync() in /_/src/Platform/Microsoft.Testing.Platform/Hosts/CommonTestHost.cs:line 83
+   at Microsoft.Testing.Platform.Builder.TestApplication.RunAsync() in /_/src/Platform/Microsoft.Testing.Platform/Builder/TestApplication.cs:line 223
+   at Unlimotion.UiTests.Headless.MicrosoftTestingPlatformEntryPoint.Main(String[] args) in <workspace>\tests\Unlimotion.UiTests.Headless\obj\Debug\net10.0\MicrosoftTestingPlatformEntryPoint.cs:line 18
+   at Unlimotion.UiTests.Headless.MicrosoftTestingPlatformEntryPoint.<Main>(String[] args)

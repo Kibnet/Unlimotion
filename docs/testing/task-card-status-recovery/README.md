@@ -4,7 +4,29 @@
 
 Согласованный контракт и post-EXEC review: [SPEC](../../../specs/2026-10-02-task-card-status-recovery.md).
 
-## Финальная проверка на main 9150ac01, 5 октября
+## Проверка перед слиянием: исправления review, 5 октября
+
+Product/Main candidate — `72dfbccd`; Headless infrastructure candidate — `f2a77c79`, база main — `9150ac01`. Закрыты confirmed-Missing cache/Relations, доступность Archive и Ctrl+D, поздний Saved snapshot и lifecycle seal после успешного явного retry. Reload остаётся первым пунктом ⚙. Все исходные проверки хранения, dirty edits, source lifetime и explicit retry сохранены.
+
+| Новая проверка | Итог | Evidence |
+| --- | --- | --- |
+| Полный Main | **1274/1274 PASS**, exit0, 0 FAIL/SKIP, 42м28с | [Лог](pre-merge-2026-10-05/main-full.log) |
+| Полный Headless после исправления factory | **55/55 PASS**, exit0, 0 FAIL/SKIP, 4м04с | [Лог](pre-merge-2026-10-05/headless-full-final.log) |
+| VM / Unified storage | **44/44 + 18/18 PASS** | [VM](pre-merge-2026-10-05/green-vm-final.log), [storage](pre-merge-2026-10-05/green-unified.log) |
+| Actual menu / external deletion с watcher и без него | **1/1 + 2/2 PASS**; Archive/Ctrl+D disabled при read/Missing, Relations очищены, detached draft доступен | [Menu](pre-merge-2026-10-05/green-menu-final.log), [Missing](pre-merge-2026-10-05/green-missing.log) |
+| Headless factory lifecycle | **3/3 PASS**: worker identity, executing-action drain/ExecutionContext, propagation настоящего NRE | [Лог](pre-merge-2026-10-05/green-headless-factory.log) |
+| Builds | Main **62 warnings / 0 errors**; Desktop/FlaUI/первый Headless **0/0**; финальная Headless factory **0/0** | [Main](pre-merge-2026-10-05/build-main-final.log), [Headless](pre-merge-2026-10-05/build-headless-factory-final.log), [Desktop](pre-merge-2026-10-05/build-desktop-final.log), [FlaUI](pre-merge-2026-10-05/build-native-final.log) |
+| Свежий native recovery | **FAIL: input desktop unavailable**, 0/1; future/blocked/terminal пока не запускались | [Лог](pre-merge-2026-10-05/native-recovery.log) |
+
+[Validation snapshot](pre-merge-2026-10-05/validation-snapshot.json) содержит original TRX hashes/counters/test names, logs/invocation/result hashes, binary/source SHA256 и pendingStages. Raw originals сохранены локально. Main и native binaries неизменны после Main PASS. Для нового Headless harness восстановлены общие уже проверенные DLL/PDB из Main/native: rebuild изменил metadata текущего Git revision; replacement manifest сохраняет before/tested hashes. Product/Main/Authoring/TestHost/FlaUI source совпадает с `72dfbccd`; Headless factory — отдельный test-only adapter pinned Avalonia12.0.4.
+
+Первый Headless full напечатал52 Passed, но упал в AfterTestSession на await null worker Task, затем в TRX writer: **FAIL**, exit=-532462766, итогового TRX нет. Повтор без изменений **52/52 PASS** сохранён отдельно и не подменяет проверку исправления. Factory теперь присваивает cold Task до запуска, сохраняя pinned framework defaults; штатный DisposeAsync действительно ждёт worker, ошибки не подавляются. [Первый сбой](pre-merge-2026-10-05/headless-full.log), [неизменённый повтор](pre-merge-2026-10-05/headless-full-repeat.log), [финальный55/55](pre-merge-2026-10-05/headless-full-final.log).
+
+RED/intermediate failures не удалены: original P2 menu/Missing/unknown; late-Saved resurrection; lifecycle dirty-negative PASS и persisted-retry RED. Первый red-cleanup упал из-за настройки fixture, поэтому не назван business RED. Новые final targeted/full runs закрывают source regressions. Workspace paste в полном Main прошёл8.8892288s; причина прежнего исторического failure остаётся UNKNOWN.
+
+Все owned full/native процессы завершены, слот освобождён. **Merge gate пока открыт:** требуются все четыре targeted native flow (recovery, future, blocked, terminal/unarchive) при доступном input desktop и CI итоговой головы PR. Прежние native4/4 и шесть просмотренных PNG ниже относятся к предыдущему source, свежими не названы. Подтверждённой MP4 before/after pair нет: прежние recording attempts не прошли FPS/readiness/ffmpeg проверки; PNG/read-back/TRX fallback сохранён с этой границей evidence.
+
+## Предыдущая проверка на main 9150ac01, 5 октября
 
 Reload остаётся первым пунктом меню ⚙. После успешного чтения он снимает постоянную ошибку и сохраняет локальные правки; смена статуса требует явного повторного выбора. В no-journal fixture native driver проверяет неизменность JSON/text. Existing journal recovery по-прежнему может завершить ранее начатую транзакцию; отдельную status/save operation Reload не создаёт.
 

@@ -1,0 +1,27 @@
+
+████████╗██╗   ██╗███╗   ██╗██╗████████╗
+╚══██╔══╝██║   ██║████╗  ██║██║╚══██╔══╝
+   ██║   ██║   ██║██╔██╗ ██║██║   ██║
+   ██║   ██║   ██║██║╚██╗██║██║   ██║
+   ██║   ╚██████╔╝██║ ╚████║██║   ██║
+   ╚═╝    ╚═════╝ ╚═╝  ╚═══╝╚═╝   ╚═╝
+
+   TUnit v1.44.0.0 | 64-bit | Microsoft Windows 10.0.22631 | win-x64 | .NET 10.0.12 | Microsoft Testing Platform v2.2.2
+
+   Engine Mode: SourceGenerated
+
+пройдено Dispatch_UsesPublishedWorker_AndDisposeJoinsIt (187ms)
+пройдено Dispose_WaitsForExecutingAction_AndPreservesExecutionContext (6ms)
+пройдено Dispose_PropagatesWorkerNullReference_InsteadOfSuppressingIt (4ms)
+HTML test report written to: <workspace>\artifacts\status-recovery\pre-merge-2026-10-05\green-headless-factory\Unlimotion.UiTests.Headless-windows-net10.0-report.html
+
+  Созданные в процессе артефакты файлов:
+    - <workspace>\artifacts\status-recovery\pre-merge-2026-10-05\green-headless-factory\Unlimotion.UiTests.Headless-windows-net10.0-report.html
+    - <workspace>\artifacts\status-recovery\pre-merge-2026-10-05\green-headless-factory\<user>_<machine>_2026-10-05_19_19_05.6595983.trx
+
+Сводка тестового запуска: Пройден! - <workspace>\tests\Unlimotion.UiTests.Headless\bin\Debug\net10.0\Unlimotion.UiTests.Headless.dll (net10.0|x64)
+  всего: 3
+  сбой: 0
+  успешно выполнено: 3
+  пропущено: 0
+  длительность: 983ms

@@ -1,0 +1,30 @@
+
+████████╗██╗   ██╗███╗   ██╗██╗████████╗
+╚══██╔══╝██║   ██║████╗  ██║██║╚══██╔══╝
+   ██║   ██║   ██║██╔██╗ ██║██║   ██║
+   ██║   ██║   ██║██║╚██╗██║██║   ██║
+   ██║   ╚██████╔╝██║ ╚████║██║   ██║
+   ╚═╝    ╚═════╝ ╚═╝  ╚═══╝╚═╝   ╚═╝
+
+   TUnit v1.44.0.0 | 64-bit | Microsoft Windows 10.0.22631 | win-x64 | .NET 10.0.12 | Microsoft Testing Platform v2.2.2
+
+   Engine Mode: SourceGenerated
+
+[TUnit] External span cap of 100 reached; subsequent spans will be dropped. Set TUNIT_OTEL_MAX_EXTERNAL_SPANS to raise the limit.
+пройдено TaskCardStatusRecovery_ExternalDeleteDuringReloadKeepsCopyableDraft(False) (11s 071ms)
+  Вывод ошибок
+    [TUnit] External span cap of 100 reached; subsequent spans will be dropped. Set TUNIT_OTEL_MAX_EXTERNAL_SPANS to raise the limit.
+
+пройдено TaskCardStatusRecovery_ExternalDeleteDuringReloadKeepsCopyableDraft(True) (5s 841ms)
+HTML test report written to: <workspace>\artifacts\status-recovery\pre-merge-2026-10-05\green-missing\Unlimotion.Test-windows-net10.0-report.html
+
+  Созданные в процессе артефакты файлов:
+    - <workspace>\artifacts\status-recovery\pre-merge-2026-10-05\green-missing\Unlimotion.Test-windows-net10.0-report.html
+    - <workspace>\artifacts\status-recovery\pre-merge-2026-10-05\green-missing\<user>_<machine>_2026-10-05_18_02_19.9432623.trx
+
+Сводка тестового запуска: Пройден! - <workspace>\src\Unlimotion.Test\bin\Debug\net10.0\Unlimotion.Test.dll (net10.0|x64)
+  всего: 2
+  сбой: 0
+  успешно выполнено: 2
+  пропущено: 0
+  длительность: 18s 194ms

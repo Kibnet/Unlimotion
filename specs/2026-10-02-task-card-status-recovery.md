@@ -608,3 +608,29 @@ Test-only HeadlessSessionFactory присваивает cold `new Task` до `St
 Main/native product binaries сохранены без изменений. Headless rebuild поменял SourceLink metadata при новом HEAD; в Headless bin восстановлены исходные общие DLL/PDB из уже проверенных Main/native, новый Headless harness оставлен. Replacement manifest фиксирует before/tested SHA256; VM hash во всех трёх runtime `0460615280FEA5B1FF8CDC4821CD65798EB3983F17A401278976CD75366A54A5`. Production/Main/Authoring/TestHost/FlaUI source совпадает с72df. Полный Main повтор из-за отдельного Headless adapter не требуется.
 
 Отдельный adversarial `/root/spec_review`: source PASS, worker publication/drain HIGH CLOSED по source; новых findings нет. Фактический sandbox danger-full-access/approval never, проверка только чтением как fallback, технический read-only не обеспечен. Полный Headless на новой factory, native4 и fresh CI **PENDING**. PR остаётся draft, merge gate открыт.
+
+### Pre-merge: native input desktop blocker, 2026-10-05
+
+Новый full Headless на immutable `f2a77c79` завершился **55/55 PASS, 0 FAIL/SKIP**, штатный AfterTestSession, TRX, exit0 (4м04с). Production/Main/Authoring/TestHost/FlaUI исходники по git diff совпадают с72df; Main/native binaries неизменны, Headless common runtime явно восстановлен из них, provenance сохранён.
+
+Fresh targeted FlaUI recovery действительно запущен на f2a: **0/1 FAIL**, exit2. Primary failure `Win32Exception: The input desktop is unavailable` в WindowsPointerBackend.EnsureDesktopAvailable при OpenStatusPicker; product flow ещё не исполнен. Остальные три native case не запускались после этого environment failure. Нельзя выдать предыдущие native4/4/PNG за новые. Все owned full/native процессы завершены, общий слот явно освобождён. Пользователю отправлен запрос открыть input desktop; Windows/RDP не разблокировывается агентом.
+
+Source published в draft PR #314; fresh CI f2a запущен. CI старого0b не переназначен f2a. Evidence/public snapshot отражает completed55/55, failed session без TRX и native environment failure отдельно. Stop decision **NEEDS-FIX для merge/ready**, пока четыре mandatory native flow (recovery, future, blocked, terminal/unarchive) и fresh final-head CI не завершены. Прежние exact SPEC approval, PR authorization и прямое «Влей в мейн если всё ок» действуют; новых разрешений на merge не требуется.
+
+### Post-EXEC audit перед обновлением draft, 2026-10-05
+
+Отдельный adversarial `/root/spec_review` завершил полный pass: **source, completed Main/Headless и docs PASS; overall ready/merge NEEDS-FIX**. Actual sandbox danger-full-access/approval never, только чтение как fallback; enforced read-only отсутствует. Проверены210 original/public counters/hash/test entries,119 local links,26 sanitized logs,27 shared runtime hash comparisons,11 restored DLL и11 pairedPDB. PortablePdb document checksums MainWindowViewModel/TaskItemViewModel совпадают с текущими source SHA; восстановление проверенного runtime допустимо. Новых source findings нет.
+
+- Scope/Evidence: approved recovery outcome и уточнение ⚙ сохранены; текущий tracked diff перед delivery только SPEC/evidence, product/Main source72df и test-only Headless sourcef2a неизменны. Primary checkout и foreign worktrees не менялись.
+- Contract/AC: typed read, authoritative status/explicit retry, сохранение dirty draft, Missing/cache/Relations, source/revision/lifetime и completed-fault retry guards подтверждены адресными/full UI/storage tests. Обязательный native remainder не подменён прежними результатами.
+- Adversarial: stale-Saved resurrection, Archive/Ctrl+D во время busy/unknown/Missing, delayed failed-save cleanup и true Headless worker drain имеют source fix и passing coverage. Реальный worker NRE negative control распространяется.
+- Roles: workflow/UX/developer PASS по source и completed evidence; tester/delivery NEEDS-FIX по environment-dependent native4 и fresh final-head CI.
+- Depth: hidden storage schema/status policy изменений нет; lifecycle lock ordering/source epochs reviewed; current user scenario проверен Headless/actual Avalonia menu. Historical paste cause и индивидуальная production cause остаются UNKNOWN; raw-byte equality и свежие native PNG не заявлены. Video fallback ограничен ранее просмотренными PNG/read-back/TRX после объективных recording failures.
+
+| Severity | Area / finding | Required action | Status |
+| --- | --- | --- | --- |
+| HIGH | Native input desktop unavailable до product flow | Запустить recovery, future, blocked, terminal/unarchive при доступном Windows input desktop | OPEN |
+| HIGH | CI итоговой головы после docs commit отсутствует | Проверить exact final published-head CI, без переназначения старого green | OPEN |
+| LOW | nativePngs=[null]; не все remaining gates названы | Schema теперь[], все4native явно перечислены; re-review подтвердил | CLOSED |
+
+Live GH GraphQL на published f2a подтвердил все3original review threads isResolved=true. Read-only Win32 input desktop probe подтвердил недоступность, error5. Stop decision **PASS для разрешённого draft publication; NEEDS-FIX для ready/merge**. У пользователя запрошена только доступность desktop, не повторное разрешение на слияние. User authorization «Влей в мейн если всё ок» сохраняется.
