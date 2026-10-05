@@ -1926,7 +1926,7 @@
                                                  VerticalAlignment="Center"
                                                  VerticalContentAlignment="Center"/>
 
-                                        <WrapPanel Grid.Row="1"
+                                        <WrapPanel x:Name="TaskHeaderStateRowPanel" Grid.Row="1"
                                                    Grid.ColumnSpan="2"
                                                    Classes="TaskHeaderStateRow">
                                             <CheckBox IsChecked="{Binding WantedFromUi}"
@@ -1942,7 +1942,7 @@
                                                            PlaceholderText="{DynamicResource Importance}"
                                                            AutomationProperties.Name="{DynamicResource Importance}"
                                                            AutomationProperties.AutomationId="CurrentTaskImportanceInput"/>
-                                            <WrapPanel Classes="TaskCommandBar"
+                                            <WrapPanel x:Name="TaskHeaderCommands" Classes="TaskCommandBar"
                                                        IsVisible="{Binding ., Converter={x:Static ObjectConverters.IsNotNull}}"
                                                        AutomationProperties.ControlTypeOverride="Group"
                                                        AutomationProperties.IsControlElementOverride="True"
@@ -1979,13 +1979,13 @@
                                                     </DropDownButton.Flyout>
                                                 </DropDownButton>
                                             </WrapPanel>
-                                            <unlimotion:EmojiTextBlock Classes="TaskHeaderParentEmojiTrail"
+                                            <unlimotion:EmojiTextBlock x:Name="TaskHeaderAncestorTrail" Classes="TaskHeaderParentEmojiTrail"
                                                                         EmojiText="{Binding ParentEmojiTrail, Mode=OneWay}"
                                                                         IsVisible="{Binding HasParentEmojiTrail}"
                                                                         ToolTip.Tip="{DynamicResource ParentsTasks}"
                                                                         AutomationProperties.Name="{DynamicResource ParentsTasks}"
                                                                         AutomationProperties.AutomationId="CurrentTaskParentEmojiTrail"/>
-                                            <TextBlock Classes="TaskHeaderIdMeta"
+                                            <TextBlock x:Name="TaskHeaderId" Classes="TaskHeaderIdMeta"
                                                        Text="{Binding Id, Mode=OneWay}"
                                                        ToolTip.Tip="{Binding Id}"
                                                        AutomationProperties.AutomationId="CurrentTaskIdTextBlock"/>

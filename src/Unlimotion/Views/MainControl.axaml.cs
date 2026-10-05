@@ -360,7 +360,23 @@ namespace Unlimotion.Views
                 }
             }
 
+            ApplyTaskHeaderOrder(isCompact);
             ApplyTaskDetailsMeasuredWidths(detailsWidth, isCompact);
+        }
+
+        private void ApplyTaskHeaderOrder(bool isCompact)
+        {
+            // Keep actions on the first state row on phones; retain the familiar
+            // ancestor trail → ID → actions order when the card has enough width.
+            var children = TaskHeaderStateRowPanel.Children;
+            var currentIndex = children.IndexOf(TaskHeaderCommands);
+            var targetIndex = isCompact
+                ? children.IndexOf(TaskHeaderAncestorTrail)
+                : children.IndexOf(TaskHeaderId) + 1;
+            if (currentIndex < targetIndex)
+                targetIndex--;
+            if (currentIndex != targetIndex)
+                children.Move(currentIndex, targetIndex);
         }
 
         private void ApplyTaskDetailsMeasuredWidths(double detailsWidth, bool isCompact)

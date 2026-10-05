@@ -1181,6 +1181,62 @@ public class MainControlTaskCardLayoutUiTests
         }, CancellationToken.None);
     }
 
+    [Test]
+    public async Task CurrentTaskCard_HeaderActions_KeepTheirIdentityAcrossCompactAndWideResizes()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            ResetTaskCardLayoutSharedState();
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+            try
+            {
+                var (view, createdWindow) = await CreateArrangedMainControlAsync(
+                    fixture, 1400, 900, MainWindowViewModelFixture.SubTask22Id,
+                    task =>
+                    {
+                        foreach (var parent in task.ParentsTasks)
+                            parent.Title = "🧭 Short parent";
+                    });
+                window = createdWindow;
+                var actions = FindControlByAutomationId<DropDownButton>(view, "CurrentTaskActionsMenuButton");
+                AssertTaskActionsMenuSitsAfterIdBelowTitle(view);
+                foreach (var width in new[] { 360d, 1400d, 430d, 1400d })
+                {
+                    ArrangeMainControlForTest(window, view, width, 900);
+                    EnsureDetailsPaneArranged(window, view, width, 900);
+                    RunLayoutJobs();
+                    var scroll = FindControlByAutomationId<ScrollViewer>(view, "CurrentTaskDetailsScrollViewer");
+                    var card = FindControlByAutomationId<Control>(view, "CurrentTaskCard");
+                    await Assert.That(ReferenceEquals(actions,
+                        FindControlByAutomationId<DropDownButton>(view, "CurrentTaskActionsMenuButton"))).IsTrue();
+                    await Assert.That(view.GetVisualDescendants().OfType<DropDownButton>()
+                        .Count(button => AutomationProperties.GetAutomationId(button) == "CurrentTaskActionsMenuButton"))
+                        .IsEqualTo(1);
+                    AssertActionsMenuContainsTaskCommands(actions);
+                    AssertNoHorizontalOverflow(scroll, card);
+                    if (width <= 430)
+                    {
+                        var commandBar = FindControlByAutomationId<Control>(view, "CurrentTaskCommandBar");
+                        AssertFirstPhoneViewportShowsHeader(scroll, commandBar,
+                            FindControlByAutomationId<Control>(card, "CurrentTaskHeader"),
+                            FindControlByAutomationId<Control>(card, "CurrentTaskTitleTextBox"));
+                        await Assert.That(GetTopEdge(scroll, commandBar)).IsLessThanOrEqualTo(
+                            GetTopEdge(scroll, FindControlByAutomationId<EmojiTextBlock>(card, "CurrentTaskParentEmojiTrail")));
+                    }
+                    else
+                        AssertTaskActionsMenuSitsAfterIdBelowTitle(view);
+                }
+            }
+            finally
+            {
+                CloseWindow(window);
+                await fixture.CleanTasksAsync();
+            }
+        }, CancellationToken.None);
+    }
+
     private static void AssertFirstPhoneViewportShowsHeader(
         ScrollViewer scrollViewer,
         Control commandBar,
