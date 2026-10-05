@@ -591,4 +591,67 @@
   <data name="SettingsRecoveryClose" xml:space="preserve"><value>Close</value></data>
   <data name="SettingsRecoveryOpenFolderFailed" xml:space="preserve"><value>The folder could not be opened. Copy the path above and open it manually.</value></data>
   <data name="SettingsRecoveredWarning" xml:space="preserve"><value>Settings were restored from a backup. Your latest settings changes may not have been saved.</value></data>
+  <data name="TaskHistory" xml:space="preserve"><value>Change history</value></data>
+  <data name="TaskHistoryGitChanges" xml:space="preserve"><value>Git changes</value></data>
+  <data name="TaskHistoryMetadata" xml:space="preserve"><value>System fields</value></data>
+  <data name="TaskHistoryRefresh" xml:space="preserve"><value>Refresh history</value></data>
+  <data name="TaskHistoryHint" xml:space="preserve"><value>Git records task states at commit time.</value></data>
+  <data name="TaskHistoryLoading" xml:space="preserve"><value>Loading change history…</value></data>
+  <data name="TaskHistoryLoadMore" xml:space="preserve"><value>Show more</value></data>
+  <data name="TaskHistoryChangesMode" xml:space="preserve"><value>Changes</value></data>
+  <data name="TaskHistoryStatusesMode" xml:space="preserve"><value>Statuses</value></data>
+  <data name="TaskHistoryOptions" xml:space="preserve"><value>History options</value></data>
+  <data name="TaskHistoryCopyCommit" xml:space="preserve"><value>Copy commit hash</value></data>
+  <data name="TaskHistoryShowDetails" xml:space="preserve"><value>Full text</value></data>
+  <data name="TaskHistoryCloseDetails" xml:space="preserve"><value>Collapse</value></data>
+  <data name="TaskHistoryOldValue" xml:space="preserve"><value>Before</value></data>
+  <data name="TaskHistoryNewValue" xml:space="preserve"><value>After</value></data>
+  <data name="TaskHistoryUnavailableServer" xml:space="preserve"><value>Git history is available for local task spaces. Status history remains available.</value></data>
+  <data name="TaskHistoryUnavailableFolder" xml:space="preserve"><value>The local task-space folder is unavailable.</value></data>
+  <data name="TaskHistoryUnavailableGit" xml:space="preserve"><value>This task space is not inside a Git repository.</value></data>
+  <data name="TaskHistoryUnavailableBare" xml:space="preserve"><value>Task history requires a Git working tree.</value></data>
+  <data name="TaskHistoryUnavailableOutsideRepository" xml:space="preserve"><value>The task-space folder is outside the discovered Git working tree.</value></data>
+  <data name="TaskHistoryEmpty" xml:space="preserve"><value>This task has not been committed to Git yet.</value></data>
+  <data name="TaskHistoryUncommittedOnly" xml:space="preserve"><value>Only the current saved state is available; the repository has no commits.</value></data>
+  <data name="TaskHistoryChangedDuringPaging" xml:space="preserve"><value>Git history changed. Refresh the panel before loading more.</value></data>
+  <data name="TaskHistoryUnknownAuthor" xml:space="preserve"><value>Unknown author</value></data>
+  <data name="TaskHistoryGitSource" xml:space="preserve"><value>Git {0}</value></data>
+  <data name="TaskHistoryUnreadableRevision" xml:space="preserve"><value>Revision could not be read</value></data>
+  <data name="TaskHistoryUnavailableValue" xml:space="preserve"><value>Unavailable</value></data>
+  <data name="TaskHistoryPartial" xml:space="preserve"><value>Some revisions could not be read. Available changes are shown.</value></data>
+  <data name="TaskHistoryContinueSearch" xml:space="preserve"><value>No more task changes were found in this batch. Continue searching older commits.</value></data>
+  <data name="TaskHistoryInvalidCursor" xml:space="preserve"><value>The history continuation cursor is invalid.</value></data>
+  <data name="TaskHistoryWorkingTree" xml:space="preserve"><value>Changes without a commit</value></data>
+  <data name="TaskHistoryWorkingTreeHint" xml:space="preserve"><value>Saved task file compared with the latest commit. Unsaved editor text is not included.</value></data>
+  <data name="TaskHistoryValueChangedRefresh" xml:space="preserve"><value>The task file changed after this history was loaded. Refresh the history to see its current value.</value></data>
+  <data name="TaskHistoryDuplicateTaskFiles" xml:space="preserve"><value>More than one task file contains Id '{0}'. History is ambiguous.</value></data>
+  <data name="TaskHistoryBlobTooLarge" xml:space="preserve"><value>The task revision is too large to display safely.</value></data>
+  <data name="TaskHistoryEmptyRevision" xml:space="preserve"><value>The task revision contains an empty file.</value></data>
+  <data name="TaskHistoryEmptyList" xml:space="preserve"><value>Empty list</value></data>
+  <data name="TaskHistoryEmptyObject" xml:space="preserve"><value>No fields</value></data>
+  <data name="TaskHistoryMissingValue" xml:space="preserve"><value>Field was absent</value></data>
+  <data name="TaskHistoryReferencedTaskTip" xml:space="preserve"><value>Current task title: {0}
+ID: {1}</value></data>
+  <data name="TaskHistoryNullValue" xml:space="preserve"><value>Not set</value></data>
+  <data name="TaskHistoryEmptyString" xml:space="preserve"><value>Empty string</value></data>
+  <data name="TaskHistoryOnlyMetadata" xml:space="preserve"><value>Only system fields changed. Enable system fields to view them.</value></data>
+  <data name="TaskHistoryLoadFailed" xml:space="preserve"><value>Could not load change history: {0}</value></data>
+  <data name="TaskHistoryValueLoadFailed" xml:space="preserve"><value>Could not load the full value: {0}</value></data>
+  <data name="TaskHistoryCompletionCriterion" xml:space="preserve"><value>Completion criterion</value></data>
+  <data name="TaskHistoryFilePath" xml:space="preserve"><value>Task file path</value></data>
+  <data name="TaskHistoryFieldTitle" xml:space="preserve"><value>Title</value></data>
+  <data name="TaskHistoryFieldDescription" xml:space="preserve"><value>Description</value></data>
+  <data name="TaskHistoryFieldStatus" xml:space="preserve"><value>Status</value></data>
+  <data name="TaskHistoryFieldCompletedAt" xml:space="preserve"><value>Completed at</value></data>
+  <data name="TaskHistoryFieldArchivedAt" xml:space="preserve"><value>Archived at</value></data>
+  <data name="TaskHistoryFieldPlannedBegin" xml:space="preserve"><value>Planned start</value></data>
+  <data name="TaskHistoryFieldPlannedEnd" xml:space="preserve"><value>Planned end</value></data>
+  <data name="TaskHistoryFieldPlannedDuration" xml:space="preserve"><value>Planned duration</value></data>
+  <data name="TaskHistoryFieldContains" xml:space="preserve"><value>Contains</value></data>
+  <data name="TaskHistoryFieldParents" xml:space="preserve"><value>Parents</value></data>
+  <data name="TaskHistoryFieldBlocks" xml:space="preserve"><value>Blocks</value></data>
+  <data name="TaskHistoryFieldBlockedBy" xml:space="preserve"><value>Blocked by</value></data>
+  <data name="TaskHistoryFieldRepeater" xml:space="preserve"><value>Repeater</value></data>
+  <data name="TaskHistoryFieldImportance" xml:space="preserve"><value>Importance</value></data>
+  <data name="TaskHistoryFieldWanted" xml:space="preserve"><value>Wanted</value></data>  <data name="TaskHistoryMergeFirstParent" xml:space="preserve"><value>Merge commit: changes are compared with the first parent.</value></data>
 </root>

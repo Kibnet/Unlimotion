@@ -182,8 +182,17 @@ public class MainControlTaskStatusIconUiTests
                 await Assert.That(details.Header).IsEqualTo(language == "ru" ? "Подробности" : "Details");
                 details.IsExpanded = true;
                 Dispatcher.UIThread.RunJobs();
+                var detailsHeader = details.GetVisualDescendants().OfType<Avalonia.Controls.Primitives.ToggleButton>()
+                    .Single(button => button.Name == "PART_HeaderSite");
+                var history = WaitForAutomationControl<Expander>(view, "StatusHistoryExpander");
+                var historyHeader = history.GetVisualDescendants().OfType<Avalonia.Controls.Primitives.ToggleButton>()
+                    .Single(button => button.Name == "PART_HeaderSite");
                 using (Assert.Multiple())
                 {
+                    await Assert.That(AutomationProperties.GetName(detailsHeader))
+                        .IsEqualTo(language == "ru" ? "Подробности" : "Details");
+                    await Assert.That(AutomationProperties.GetName(historyHeader))
+                        .IsEqualTo(Unlimotion.ViewModel.Localization.LocalizationService.Current.Get("TaskHistory"));
                     await Assert.That(reload.IsEffectivelyVisible).IsTrue();
                     await Assert.That(reload.IsEnabled).IsTrue();
                     await Assert.That(AutomationProperties.GetName(reload))

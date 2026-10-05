@@ -591,4 +591,67 @@
   <data name="SettingsRecoveryClose" xml:space="preserve"><value>Закрыть</value></data>
   <data name="SettingsRecoveryOpenFolderFailed" xml:space="preserve"><value>Не удалось открыть папку. Скопируйте путь выше и откройте её вручную.</value></data>
   <data name="SettingsRecoveredWarning" xml:space="preserve"><value>Настройки восстановлены из резервной копии. Последние изменения настроек могли не сохраниться.</value></data>
+  <data name="TaskHistory" xml:space="preserve"><value>История изменений</value></data>
+  <data name="TaskHistoryGitChanges" xml:space="preserve"><value>Изменения Git</value></data>
+  <data name="TaskHistoryMetadata" xml:space="preserve"><value>Служебные поля</value></data>
+  <data name="TaskHistoryRefresh" xml:space="preserve"><value>Обновить историю</value></data>
+  <data name="TaskHistoryHint" xml:space="preserve"><value>Git хранит состояния задачи на момент коммита.</value></data>
+  <data name="TaskHistoryLoading" xml:space="preserve"><value>Загрузка истории изменений…</value></data>
+  <data name="TaskHistoryLoadMore" xml:space="preserve"><value>Показать ещё</value></data>
+  <data name="TaskHistoryChangesMode" xml:space="preserve"><value>Изменения</value></data>
+  <data name="TaskHistoryStatusesMode" xml:space="preserve"><value>Статусы</value></data>
+  <data name="TaskHistoryOptions" xml:space="preserve"><value>Настройки истории</value></data>
+  <data name="TaskHistoryCopyCommit" xml:space="preserve"><value>Копировать хеш коммита</value></data>
+  <data name="TaskHistoryShowDetails" xml:space="preserve"><value>Полный текст</value></data>
+  <data name="TaskHistoryCloseDetails" xml:space="preserve"><value>Свернуть</value></data>
+  <data name="TaskHistoryOldValue" xml:space="preserve"><value>Было</value></data>
+  <data name="TaskHistoryNewValue" xml:space="preserve"><value>Стало</value></data>
+  <data name="TaskHistoryUnavailableServer" xml:space="preserve"><value>История Git доступна для локальных пространств. История статусов остаётся доступной.</value></data>
+  <data name="TaskHistoryUnavailableFolder" xml:space="preserve"><value>Папка локального пространства задач недоступна.</value></data>
+  <data name="TaskHistoryUnavailableGit" xml:space="preserve"><value>Это пространство задач не находится в репозитории Git.</value></data>
+  <data name="TaskHistoryUnavailableBare" xml:space="preserve"><value>Для истории задачи нужна рабочая копия Git.</value></data>
+  <data name="TaskHistoryUnavailableOutsideRepository" xml:space="preserve"><value>Папка пространства задач находится вне найденной рабочей копии Git.</value></data>
+  <data name="TaskHistoryEmpty" xml:space="preserve"><value>Эта задача ещё не попадала в Git.</value></data>
+  <data name="TaskHistoryUncommittedOnly" xml:space="preserve"><value>Доступно только текущее сохранённое состояние: в репозитории ещё нет коммитов.</value></data>
+  <data name="TaskHistoryChangedDuringPaging" xml:space="preserve"><value>История Git изменилась. Обновите панель перед загрузкой следующих записей.</value></data>
+  <data name="TaskHistoryUnknownAuthor" xml:space="preserve"><value>Автор неизвестен</value></data>
+  <data name="TaskHistoryGitSource" xml:space="preserve"><value>Git {0}</value></data>
+  <data name="TaskHistoryUnreadableRevision" xml:space="preserve"><value>Не удалось прочитать версию</value></data>
+  <data name="TaskHistoryUnavailableValue" xml:space="preserve"><value>Недоступно</value></data>
+  <data name="TaskHistoryPartial" xml:space="preserve"><value>Некоторые версии не удалось прочитать. Доступные изменения показаны.</value></data>
+  <data name="TaskHistoryContinueSearch" xml:space="preserve"><value>В этой порции изменений задачи не найдено. Можно продолжить поиск в более старых коммитах.</value></data>
+  <data name="TaskHistoryInvalidCursor" xml:space="preserve"><value>Некорректная позиция продолжения истории.</value></data>
+  <data name="TaskHistoryWorkingTree" xml:space="preserve"><value>Изменения без коммита</value></data>
+  <data name="TaskHistoryWorkingTreeHint" xml:space="preserve"><value>Сохранённый файл задачи относительно последнего коммита. Несохранённый текст редактора сюда не входит.</value></data>
+  <data name="TaskHistoryValueChangedRefresh" xml:space="preserve"><value>Файл задачи изменился после загрузки истории. Обнови историю, чтобы увидеть актуальное значение.</value></data>
+  <data name="TaskHistoryDuplicateTaskFiles" xml:space="preserve"><value>Идентификатор '{0}' найден более чем в одном файле задачи. История неоднозначна.</value></data>
+  <data name="TaskHistoryBlobTooLarge" xml:space="preserve"><value>Версия задачи слишком велика для безопасного отображения.</value></data>
+  <data name="TaskHistoryEmptyRevision" xml:space="preserve"><value>Версия задачи содержит пустой файл.</value></data>
+  <data name="TaskHistoryEmptyList" xml:space="preserve"><value>Пустой список</value></data>
+  <data name="TaskHistoryEmptyObject" xml:space="preserve"><value>Нет полей</value></data>
+  <data name="TaskHistoryMissingValue" xml:space="preserve"><value>Поля не было</value></data>
+  <data name="TaskHistoryReferencedTaskTip" xml:space="preserve"><value>Текущее название задачи: {0}
+ID: {1}</value></data>
+  <data name="TaskHistoryNullValue" xml:space="preserve"><value>Не задано</value></data>
+  <data name="TaskHistoryEmptyString" xml:space="preserve"><value>Пустая строка</value></data>
+  <data name="TaskHistoryOnlyMetadata" xml:space="preserve"><value>Изменились только служебные поля. Включите их отображение.</value></data>
+  <data name="TaskHistoryLoadFailed" xml:space="preserve"><value>Не удалось загрузить историю изменений: {0}</value></data>
+  <data name="TaskHistoryValueLoadFailed" xml:space="preserve"><value>Не удалось загрузить полное значение: {0}</value></data>
+  <data name="TaskHistoryCompletionCriterion" xml:space="preserve"><value>Критерий завершения</value></data>
+  <data name="TaskHistoryFilePath" xml:space="preserve"><value>Путь файла задачи</value></data>
+  <data name="TaskHistoryFieldTitle" xml:space="preserve"><value>Название</value></data>
+  <data name="TaskHistoryFieldDescription" xml:space="preserve"><value>Описание</value></data>
+  <data name="TaskHistoryFieldStatus" xml:space="preserve"><value>Статус</value></data>
+  <data name="TaskHistoryFieldCompletedAt" xml:space="preserve"><value>Завершено</value></data>
+  <data name="TaskHistoryFieldArchivedAt" xml:space="preserve"><value>Архивировано</value></data>
+  <data name="TaskHistoryFieldPlannedBegin" xml:space="preserve"><value>Плановое начало</value></data>
+  <data name="TaskHistoryFieldPlannedEnd" xml:space="preserve"><value>Плановое окончание</value></data>
+  <data name="TaskHistoryFieldPlannedDuration" xml:space="preserve"><value>Плановая длительность</value></data>
+  <data name="TaskHistoryFieldContains" xml:space="preserve"><value>Содержит</value></data>
+  <data name="TaskHistoryFieldParents" xml:space="preserve"><value>Родители</value></data>
+  <data name="TaskHistoryFieldBlocks" xml:space="preserve"><value>Блокирует</value></data>
+  <data name="TaskHistoryFieldBlockedBy" xml:space="preserve"><value>Заблокирована</value></data>
+  <data name="TaskHistoryFieldRepeater" xml:space="preserve"><value>Повторение</value></data>
+  <data name="TaskHistoryFieldImportance" xml:space="preserve"><value>Важность</value></data>
+  <data name="TaskHistoryFieldWanted" xml:space="preserve"><value>Хочу</value></data>  <data name="TaskHistoryMergeFirstParent" xml:space="preserve"><value>Merge-коммит: изменения сопоставлены с первым родителем.</value></data>
 </root>

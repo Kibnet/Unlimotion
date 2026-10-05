@@ -1,0 +1,666 @@
+# История изменений задачи из Git в карточке
+
+## 0. Метаданные
+
+- Фаза: EXEC, пользователь подтвердил SPEC фразой «Спеку подтверждаю» 2026-09-25.
+- Форма: Expanded по центральному `templates/specs/_template.md`: новый UI и межмодульный read-only контракт чтения Git; short неприменим.
+- Тип: delivery-task; основной профиль `dotnet-desktop-client`, overlay `ui-automation-testing`; context `testing-dotnet`.
+- Владелец: Павел; authoring и будущая интеграция — основной агент.
+- Масштаб: large по числу взаимодействующих компонентов, умеренный риск для данных благодаря read-only реализации.
+- Baseline: центральный `model-behavior-baseline`; поверхность Codex desktop / Windows / PowerShell. Точный model ID и reasoning не проверялись, настройки модели не меняются. Model eval: не применимо, продуктовая .NET-фича.
+- Checkout: `63e5/Unlimotion`, исходный HEAD `0a94426d`, detached HEAD, исходное дерево чистое. До EXEC ветка не создаётся; планируемая рабочая ветка `feat/task-git-history` после Git preflight.
+- Проверен SDK `10.0.401`; `global.json` требует `10.0.400` с `latestPatch`; тесты TUnit/Microsoft.Testing.Platform.
+- Instruction stack: центральные `AGENTS.md`, `routing-matrix`, `creator-vibe-lens`, `model-behavior-baseline`, `tool-execution-baseline`, `collaboration-baseline`, `quest-governance`, `quest-mode`, `testing-baseline`, `testing-dotnet`, `dotnet-desktop-client`, `ui-automation-testing`, `spec-linter`, `spec-rubric`, `review-loops`; локальный `AGENTS.override.md`. Применён skill `creator-vibe` для интерпретации визуального референса.
+- Ограничения: на SPEC изменяется только этот документ. После approval — локальная реализация и проверки; публикация, push, PR, установка и релиз этим документом не разрешаются.
+
+## 1. Overview / Цель
+
+Исходное поручение: «Давай реализуем в карточке задачи полноценную историю изменений задачи на основе гит коммитов. Как это будет выглядеть можно позаимствовать в Arm, там есть хорошая реализация которая мне нравится визуально».
+
+Пользователь открывает задачу, раскрывает историю и видит, кто и когда зафиксировал изменения, какие поля изменились и их значения до/после. Визуальная основа — раскрываемая таблица истории из Arm, адаптированная к ширине карточки Unlimotion.
+
+Success means: все доступные в локальном Git коммиты выбранной задачи можно последовательно просмотреть; изменения полей читаются без разбора JSON; неизвестность, локальные незакоммиченные изменения и границы доступной истории обозначены явно.
+
+Итоговый артефакт EXEC: работающая панель в обычной карточке, read-only Git provider, семантический diff, локализация, unit/integration/UI tests и просмотренное визуальное evidence. SPEC-артефакт — этот документ с wireframe.
+
+Stop rules: SPEC останавливается после review и запроса exact approval. EXEC завершается только после обязательных проверок и post-EXEC review; блокеры/непроведённые проверки сообщаются как незавершённость. Дополнительные исследования прекращаются после закрытия конкретного риска.
+
+## 2. Текущее состояние (AS-IS)
+
+Проверено по локальному исходному коду:
+
+- `src/Unlimotion/Views/MainControl.axaml`: внизу карточки есть `CurrentTaskStatusHistorySection`, `StatusHistoryExpander`, `StatusHistoryItems`. Источник — `TaskItemViewModel.StatusHistory`; полной истории полей нет.
+- `src/Unlimotion.Domain/TaskItem.cs`: задача содержит название, описание, статус, критерии завершения, плановые даты/длительность, четыре вида связей, повторение, важность, желание, служебные даты, версию, `AgentExecution`, extension data. `StatusHistory` хранится в самой задаче.
+- `src/Unlimotion/Services/BackupViaGitService.cs`: уже используется LibGit2Sharp; `Push` может stage/commit сразу все изменения. Автор такого коммита — настроенная Git-подпись, а время — время создания коммита, не момент каждой пользовательской правки.
+- Путь Git backup берётся прежде всего из активного `FileStorage.Path`. `TaskSourceManager` переключает локальные/серверные пространства. `TaskItemViewModelContext.SourceId` определяет пространство задачи.
+- `src/Unlimotion.FileStorage/FileTaskStorage.cs`: задачи — файлы непосредственно в каталоге хранилища; имена могут отличаться от `Id`. Есть отображение `_taskFilePaths` и `ReadDirectoryAsync().FilesByTaskId`; разрешение пути сейчас приватное. Нельзя просто предполагать `<Id>.json`.
+- В `TaskItem`/вложенных моделях есть defaults и нормализация. Десериализация старого blob в live-модель не годится как единственный источник diff: может создать значения, которых в коммите не было.
+- Arm: `src/Arm.Client/MiniControls/StatusBar.axaml` и `.axaml.cs`, `src/Arm.Client.ViewModel/Models/ChangeLog.cs`, `FieldChange.cs`. Раскрываемая панель содержит таблицу «Кто менял / Когда менял / Источник / Изменения», значки типа изменения, selectable-текст, красное старое и зелёное новое значение, reload и переключатель `@` для метаданных.
+- Arm использует серверные revisions и Eremex. Здесь заимствуются композиция и способ чтения, зависимость на Arm/Eremex не добавляется. Референс исследован по XAML/моделям; живое окно Arm и screenshot не проверялись, pixel-perfect сходство не заявляется.
+- Проверены существующие `MainControlTaskCardLayoutUiTests`, `ReadmeDemoHeadlessTests`, AppAutomation TestHost, Headless/FlaUI authoring, `.github/workflows/tests.yml`, scripts записи UI evidence. Полные тесты/сборки в SPEC не запускались.
+
+## 3. Проблема
+
+Карточка показывает только переходы статуса. История остальных изменений уже может находиться в Git, но из карточки недоступна.
+
+## 4. Цели дизайна
+
+- Сохранить узнаваемую структуру истории Arm и читаемость узкой карточки.
+- Разделить чтение Git, сравнение JSON, форматирование и состояние UI.
+- Не блокировать UI, не выполнять сетевые или записывающие Git-операции при просмотре.
+- Не менять формат задач, семантику статусов и расписание backup.
+- Сделать воспроизводимыми history, error, paging и task/source-switch сценарии на синтетических репозиториях.
+
+## 5. Non-Goals
+
+- Восстановление/откат задачи или отдельных полей, checkout старой версии.
+- Новый журнал событий, коммит на каждое нажатие, изменение автокоммита или push/pull.
+- Серверная история без локального Git, remote fetch, поиск в других пространствах/репозиториях, недостижимых commits, reflog или удалённых ветках.
+- Отдельный экран глобальной истории/удалённых задач, поиск и фильтрация всего журнала, Git-граф веток.
+- Изменения Arm, зависимость на его UI-библиотеки, редизайн всей карточки.
+- Git-история не выдаётся за каждое промежуточное редактирование: несколько правок между коммитами восстановить из Git нельзя.
+
+## 6. Предлагаемое решение (TO-BE)
+
+### 6.1 Распределение ответственности
+
+- `ITaskHistoryProvider` и immutable DTO в `Unlimotion.ViewModel`: запрос страницы по захваченному source/task context, результат/diagnostics/cursor, CancellationToken; без типов LibGit2Sharp. DTO списка хранят preview и ссылки на immutable blob/path для раскрытия полного значения; загрузка полных значений отдельным запросом, чтобы paging не удерживал все большие JSON в памяти.
+- `GitTaskHistoryProvider` в `Unlimotion/Services`: определение локального источника, чтение commits/blobs в фоне, immutable HEAD snapshot, paging, обнаружение неполноты и изоляция источников.
+- `TaskHistoryDiffBuilder`: сравнение сырых JSON-токенов; стабильные field paths и типы изменений без UI и мутаций domain-моделей.
+- `TaskHistoryViewModel`: состояние одной открытой карточки, refresh/load-more, cancellation/version gate, выбор служебных полей, форматирование и безопасное представление длинного текста.
+- `TaskHistoryView.axaml`: раскрываемый блок и элементы строк, адаптивная раскладка, стабильные automation IDs.
+- `MainWindowViewModel` / `MainControl` / `App`: lifecycle открытой карточки, DI provider, реакция на выбор задачи и источника.
+
+### 6.2 Детальный дизайн и visual planning artifact
+
+Внизу карточки вместо одиночного блока истории статусов — общий раздел «История изменений». По умолчанию свёрнут. Два режима внутри: «Изменения Git» (по умолчанию) и «Статусы». Второй показывает прежний `StatusHistory` без потери записей и без требования Git. Действующие automation IDs статусов сохраняются у вложенного блока; тест ожидания прежнего положения обновляется по новому контракту.
+
+Wireframe (часть этой SPEC, не screenshot готового приложения):
+
+```text
+▾ История изменений                                  [↻]
+  [Изменения Git] [Статусы]        [ ] Служебные поля
+  Git хранит состояния на момент коммита.
+
+  Ещё не в Git
+  Описание: «Подготовить макет» → «Подготовить и согласовать макет»
+  ─────────────────────────────────────────────────────────────
+  Кто менял   Когда              Источник      Изменения
+  Павел       25.09.2026 12:40   Git a12bc34   Статус: Подготовлено → Выполняется
+                               Изменения      Срок: 26.09 → 27.09
+  ─────────────────────────────────────────────────────────────
+  Павел       24.09.2026 18:20   Git b23cd45   + Критерий: «Макет согласован»
+                                              − Блокирует: «Подготовить текст»
+  ─────────────────────────────────────────────────────────────
+  Показано 50 коммитов                         [Показать ещё]
+```
+
+Узкая карточка (ширина содержимого менее 700 DIP):
+
+```text
+▾ История изменений                          [↻]
+  [Изменения Git] [Статусы]
+  [ ] Служебные поля
+
+  Павел · 25.09.2026 12:40
+  Git a12bc34 · Изменения
+  Статус: Подготовлено → Выполняется
+  Срок: 26.09 → 27.09
+
+  Павел · 24.09.2026 18:20
+  Git b23cd45 · Добавлен критерий
+  + Критерий: «Макет согласован»
+                                      [Показать ещё]
+```
+
+- Признаки Arm, сохраняемые в обоих layouts: раскрытие внутри карточки, группировка полей по revision/commit, кто/когда/источник, «было → стало», знаки добавления/удаления, разные цвета старого/нового, обновление и служебные поля. Светлая/тёмная темы используют semantic resources. Цвет дополняет текст и символы.
+- Внутренний viewport истории ограничен примерно 420 DIP; строки виртуализированы. Размер шрифта наследуется от Unlimotion, не копируется мелкий FontSize=10 из Arm. Никакого обязательного горизонтального скролла на узкой карточке.
+- Длинные description/JSON значения имеют короткий preview и «Развернуть»; полный текст доступен для выделения/копирования, строки переносятся. Пустая строка, `null` и отсутствующее поле различимы («пустая строка», «не задано», «поле отсутствовало»).
+- Источник показывает Git + короткий SHA, message первой строкой. Полные SHA/message, Git author/committer и исходное время с offset доступны в раскрываемых деталях. Основной автор — `Author.Name`, время — `Author.When` в локальной зоне; подпись поясняет, что это данные Git. Не выводить автора правки из текущей учётной записи или message.
+- Совпадение авторов или имён не доказывает конкретное физическое лицо; поле называется «Автор коммита» в accessibility/подсказке.
+- Показ первых 50 подходящих commits; «Показать ещё» без искусственного общего лимита. Порядок — обратный топологический с временным приоритетом, чтобы потомки предшествовали родителям даже при неверных часах автора.
+- Отдельная первая строка «Ещё не в Git» сравнивает сохранённый файл на диске с HEAD. Без фиктивного SHA, автора и времени коммита. Она не включается в число commits. Несохранённый ввод редактора не объявляется сохранённой Git-историей; после фактического сохранения обновляется snapshot.
+- Только раскрытая панель загружает данные. Смена задачи/пространства отменяет запрос и немедленно убирает прежние строки; запоздалый ответ не применяется. Состояние `@`, выбранный режим и раскрытие можно сохранить на время сессии, но строки/cursor привязаны к source/task/HEAD.
+- Refresh заново захватывает текущий HEAD и файл. При повторном открытии проверяется актуальность snapshot. Изменение задачи помечает открытый snapshot устаревшим и обновляет local row с debounce; смена HEAD обнаруживается при refresh/reopen, без нового постоянного polling. Показывается время чтения и доступна явная кнопка обновления.
+- До/после video: на EXEC снять meaningful baseline существующего блока статусов и passing flow новой панели из автоматизированного UI test run на синтетических данных. Конкретные пути и invocation записать в §11/журнал. Если recorder недоступен, допустим только документированный объективный fallback со screenshots/logs и командой UI tests. Артефакты local-only, не коммитятся по умолчанию.
+
+### 6.3 User-Observable Scenarios
+
+| Scenario | Действие | Видимый результат | Evidence required | AC |
+| --- | --- | --- | --- | --- |
+| S1 | Раскрыть историю существующей задачи | Кто/когда/Git/изменённые поля, новые commits в начале | Реальный временный Git repo + UI screenshot/video | AC1, AC2 |
+| S2 | Изменить описание, сроки, связи и критерии; сохранить, затем закоммитить через fixture | Сначала «Ещё не в Git», после refresh — commit с точным diff | Integration + UI flow | AC2, AC3 |
+| S3 | Переключить задачу/пространство во время медленной загрузки | Ни одного чужого результата | Controlled delayed provider + UI test | AC4 |
+| S4 | Просмотреть >50 изменений, merge и rename | Последовательные страницы до конца доступной истории, корректные merge/rename подписи | Git fixtures + paging UI | AC5 |
+| S5 | Открыть без Git/в server mode/при ошибке | Понятная причина; статусы доступны; retry при ошибке | Negative UI tests | AC6 |
+| S6 | Читать длинное описание в узкой карточке/тёмной теме | Текст доступен полностью, поля не обрезаны, layout следует wireframe | 360/480/900 DIP, обе темы, просмотренные кадры | AC7 |
+| S7 | Включить служебные поля, открыть режим «Статусы» | Метаданные видны по запросу; прежние переходы статусов сохранены | Diff + headless UI + regression tests | AC8 |
+| S8 | Открыть неполную/повреждённую историю | Граница доступности/проблемный commit явно помечены; нет ложного «создания» | Shallow/missing/corrupt fixtures | AC5, AC6 |
+
+### 6.4 State / Interaction Matrix
+
+| Состояние | Триггер | Результат | Конкурентность/ошибка |
+| --- | --- | --- | --- |
+| Collapsed | Expand | Loading → Ready/Empty/Unavailable/Error | До раскрытия provider не вызывается |
+| Loading | Другая задача/источник, закрытие карточки | Cancel + clear | Проверка generation и source/task перед публикацией |
+| Ready | Load more | Append той же версии HEAD | Кнопка защищена от двойного запроса; ошибка сохраняет загруженные строки |
+| Ready | Refresh | Новый session/cursor и чтение текущего HEAD | Не смешивать страницы двух HEAD; прошлые строки обозначены как обновляемые |
+| Ready | Сохранение задачи | Обновление local row | Читать disk snapshot после завершения сохранения; частичный JSON → retry/error |
+| Empty | Истории commits нет | «Задача ещё не попадала в Git» | Отличается от отсутствующего Git и полностью отфильтрованных metadata |
+| Metadata-only | Служебные поля выключены | «Есть только служебные изменения» + включить | Не заявлять отсутствие истории; paging остаётся доступным |
+| Unavailable | Нет repo/сервер/неподдерживаемая native library | Причина + режим «Статусы» | Не выполнять init/clone/pull |
+| Error | Повторить | Новый запрос | Ошибка только истории, карточка и редактирование работают |
+| Partial | Нет родителя/нечитаемый blob | Пометка неполноты + доступные записи | Не сравнивать неизвестное состояние с пустой задачей |
+
+### 6.5 Decision Ledger
+
+| Решение | Owner | Выбор | Confidence | Риск предположения | Needs user before EXEC |
+| --- | --- | --- | ---: | --- | --- |
+| Визуальная основа | user | Таблица Arm, адаптивные строки при узкой карточке | 0.95 | Вкус уточняется по wireframe | Нет, включено в approval SPEC |
+| Сохранение истории статусов | agent | Второй режим в общем разделе | 0.9 | Лишний шаг до статусов; не теряем события между commits | Нет |
+| Полнота | agent | Все локальные commits, достижимые из зафиксированного HEAD, в пределах активного пространства | 0.95 | Недоступные/другие refs не показаны; граница явно описана | Нет |
+| Незакоммиченные изменения | agent | Отдельный read-only diff сохранённого файла к HEAD | 0.9 | Не охватывает несохранённый ввод | Нет |
+| Merge | agent | Один entry/commit; merge diff относительно первого родителя, явно подписан | 0.85 | Часть изменений также видна в commits ветки | Нет |
+| Restore/commit действия | agent | Вне просмотра истории | 0.95 | Это отдельные изменяющие данные функции | Нет |
+| Paging и VM lifetime | agent | 50 commits, snapshot cursor, VM на карточку | 0.9 | Требует полноты и cancellation tests | Нет |
+| Публикация | user | Не запрошена | 1.0 | Отдельный authorization scope | Нет, вне EXEC |
+
+### 6.6 Runtime / Config / Data Contract Matrix
+
+| Область | Source of truth | Изменение | Совместимость | Проверка |
+| --- | --- | --- | --- | --- |
+| Task/source identity | Выбранная задача + SourceId + её фактический FileStorage | Захват неизменяемого history context | Ни fallback на чужой активный source, ни общий cache по Id | Два пространства с одинаковым TaskId |
+| Git history | Repository текущего каталога/родительского repo и его HEAD | Только локальное чтение | .git directory/worktree file; задачи могут быть в subdirectory | Repo/worktree/subdirectory fixtures |
+| Task path | Реальное соответствие file↔JSON Id | Узкий read-only resolver на FileTaskStorage при необходимости | Не менять naming/writes; validation пути сохраняется | Имя без extension, отличающееся имя, traversal/ambiguity |
+| Исторические значения | Сырые blobs commit/parent | Diff calculated DTO | Не вызывать миграции, setters или генерацию defaults | Legacy + unknown field fixture |
+| Backup | Существующий BackupViaGitService | Просмотр не вызывает его mutation methods | Работа без remote и при BackupEnabled=false | HEAD/index/files/config read-back |
+| Persisted config/model | Текущая схема | Не меняется | Миграция отсутствует | Existing storage/serialization tests |
+
+## 7. Бизнес-правила / Алгоритмы
+
+1. По выбранной задаче захватить source ID, storage kind и canonical local path. Разрешить repository discovery, сохранив границу task-space directory: не искать совпадающий Id в соседних пространствах. Task path/Id проверяются до файлового доступа.
+2. Найти текущий файл через mapping storage, подтвердить JSON Id. Историческую identity определяет Id, а не расширение/текущее имя. При дубликатах — явная ошибка неоднозначности, не случайный выбор файла. Provider не вызывает `ReadDirectoryAsync`/`ReadGraphAsync`: они изменяют cache и могут создавать lock-файл. Нужен side-effect-free resolver/снимок mapping; при обнаружении stale mapping допустим read-only scan непосредственно task files с проверкой Id и уникальности. Недоступный файл и ещё не сохранённая новая задача различаются.
+3. Открыть собственный Repository на worker thread и зафиксировать HEAD SHA. Чтение objects не использует общий mutable Repository с backup. Не держать UI/shared write lock на время обхода истории. Не писать config/safe.directory, index, refs или рабочие файлы.
+4. Обойти DAG всех доступных ancestors HEAD в обратном топологическом порядке, каждый SHA один раз. В обычном commit сравнить blob задачи с его родителем; в merge — с первым родителем. Содержательные изменения в веточных commits сохраняются; merge с diff явно помечается «Слияние: относительно первого родителя». Совпадение с первым родителем не создаёт пустую строку merge.
+5. Rename отслеживать в пределах каталога пространства: mapping по Id через изменённые tree entries и blobs, а не только heuristic similarity. Поддержать смену имени/расширения и разные пути в merge parents. Уточнение 04.10: после delete/recreate с тем же Id показывать историю только текущего существования задачи, до доказанного отсутствия файла в родительской ревизии. Blob cache ограниченный на session; дерево целиком не десериализовать для каждого commit. Перенос между пространствами не объединяет их историю.
+6. Commit относится к задаче при изменении содержимого, создании/удалении либо rename её файла. Чистое форматирование JSON не создаёт изменения поля. Rename без изменения JSON — служебное изменение пути. Не связанный с задачей commit не показывается.
+7. Root с доказанно отсутствующим parent означает «Первое сохранение в Git», не дату создания задачи. Пустой repository с unborn HEAD означает отсутствие commits, при сохранённом файле доступна только строка «Ещё не в Git». Если parent отсутствует из-за shallow/missing object — «Предыдущее состояние недоступно», без выдуманного diff от пустого объекта. Повреждённые старые blobs дают diagnostic на соответствующем commit, история продолжается где возможно, без сравнения через разрыв.
+8. Сравнивать raw JSON рекурсивно по union свойств. Known поля получают локализованные названия/значения; unknown поля сохраняются с точным JSON path. Legacy `IsCompleted`, `CompletedDateTime`, `ArchiveDateTime` не превращать в выдуманные события современного StatusHistory. Реальные legacy-переходы показываются по умолчанию: `false` — «Не готово», `true` — «Выполнено», явный `null` — «Архивировано»; отсутствие свойства не равно `null`. Исходные значения и имена полей доступны в деталях. Даты завершения/архивации legacy тоже основные поля. При переходе legacy→современная схема только доказанно эквивалентная замена статуса/соответствующей даты считается служебной миграцией, без ложного бизнес-события; неэквивалентность и конфликт старых/новых полей остаются видимыми. Нормализация исключительно calculated, без записи в задачу.
+9. Основные поля: Title, Description, Status и legacy-статус/даты из п.8, CompletionCriteria, PlannedBeginDateTime, PlannedEndDateTime, PlannedDuration, ContainsTasks, ParentTasks, BlocksTasks, BlockedByTasks, Repeater, Importance, Wanted. Служебные по умолчанию скрыты: Id/UserId, Created/Updated/UnlockedDateTime, IsCanBeCompleted, Version, raw StatusHistory, AgentExecution, путь файла и только доказанно эквивалентные изменения схемы. Неизвестные поля не прятать автоматически.
+10. Связи сравнивать как множества Id: добавлено/удалено; перестановка не создаёт ложного diff. Для подписи использовать текущее название из того же пространства с доступным Id и пометкой «текущее название»; отсутствующая задача отображается по Id. Исторические названия не обещаются и не выдаются за восстановленные.
+11. Критерии сопоставлять по Id: добавление/удаление, текст и отметка; изменение порядка показывать отдельной строкой, если порядок изменён. При отсутствующих/повторных Id — достоверный fallback old/new JSON. Repeater сравнивать по полям; остальные массивы — предсказуемый структурный diff без выдуманных ключей.
+12. JSON reader допускает глубину до 64; structured diff — до 16, затем показывает изменённую ветку целиком с lazy old/new value. Preview — до 300 символов; полное значение раскрывается отдельно. Blob до 8 MiB читается в памяти; выше — diagnostic с размером/SHA и пометкой неполноты, без молчаливого пропуска. Невалидный/слишком глубокий JSON также получает diagnostic. Cache decoded blobs ограничен 32 MiB на открытый history session с вытеснением; DTO всех страниц хранят только bounded preview + SHA/JSON path, без ссылок на полные строки/JToken или вытесненные cache entries. Полные before/after значения открываются в одной общей области деталей выбранного поля; выбор другого поля/закрытие освобождает прежние значения. Кеш полных деталей также ограничен 32 MiB и не удерживается через DTO/closures; смена карточки освобождает session и детали. Размеры — внутренние начальные лимиты, уточняются по замерам без уменьшения заявленного coverage и без добавления пользовательских настроек.
+13. Cursor хранит source/path/task/HEAD и frontier обхода, не offset на изменяющемся HEAD. На страницу максимум 50 относящихся к задаче commits, на один background batch максимум 1000 посещённых commits. Если batch не нашёл 50, возвращается continuation и честное «Продолжить поиск», не «История закончилась». Cancellation проверяется между commits и чтениями blobs. UI virtualization ограничивает количество controls, DTO cache/объекты имеют lifecycle карточки.
+
+## 8. Точки интеграции и триггеры
+
+- Открытие истории при `CurrentTaskItem` и `DetailsAreOpen`; переключение режима Git/статусы.
+- Смена `CurrentTaskItem`, SourceId, активного storage/пространства и закрытие карточки: cancellation/dispose, сброс данных.
+- Refresh/load-more из панели. Событие завершённого сохранения/внешнего обновления выбранной задачи: актуализация local row, без вызова save.
+- DI `App` создаёт provider, `MainWindowViewModel` держит один coordinator истории; каждый `TaskItemViewModel` не получает тяжёлый Git cache.
+- В server mode provider возвращает unsupported context; lookup локального repo по запасному пути запрещён.
+
+## 9. Изменения модели данных / состояния
+
+Новых persisted полей и миграции нет. Новые calculated DTO: history context, entry, field change, page/cursor, diagnostics. Entry содержит SHA/parents, author/committer/time/message, change kind и JSON changes. Local row — отдельный вид без commit metadata. UI state: expanded/mode/include-metadata/loading/error/partial/has-more, generation и session snapshot.
+
+## 10. Миграция / Rollout / Rollback
+
+Первое раскрытие читает существующий Git; история появляется без переиндексации/импорта. Репозитории без remote и с выключенным backup работают. Откат — revert feature commits/возврат старой сборки; task files/Git data не требуют отката, поскольку просмотр их не меняет. Перед/после integration tests сравнивают task bytes, HEAD, index, refs и config.
+
+## 11. Тестирование и критерии приёмки
+
+- AC1: история открывается в карточке выбранной задачи; сохраняет перечисленные признаки Arm и доступ к StatusHistory.
+- AC2: для каждого поддерживаемого поля и unknown/legacy JSON показаны точные before/after; чужие commits и форматирование JSON не превращаются в изменения задачи.
+- AC3: local row отделён от commits; после создания commit и refresh нет двойной локальной записи. Просмотр не вызывает Git writes/network/save.
+- AC4: deferred results не попадают в другую карточку/пространство; ошибки не ломают редактор; UI thread не выполняет Git traversal.
+- AC5: доступна вся достижимая история порциями; merge, rename, root, delete/recreate, empty/shallow/missing/corrupt data обрабатываются согласно §7; paging не пропускает и не дублирует commits.
+- AC6: состояния loading/empty/metadata-only/unavailable/error/partial имеют различимые сообщения и recovery; история статусов работает без Git.
+- AC7: при ширине панели 360/480/900 DIP в светлой/тёмной теме читается полный раскрытый текст, нет наложения/обрезания controls; keyboard/copy доступны; ru/en локализованы.
+- AC8: переключатель служебных полей показывает raw metadata без потери исходных данных; прежние status tests и карточка сохраняют поведение с обновлённой композицией.
+- AC9: обычная desktop сборка, полный main test suite, полный Headless suite и targeted FlaUI flow проходят. Обязательное визуальное evidence просмотрено. Отсутствующий green не объявляется выполненным AC.
+
+### Acceptance-to-Test Matrix
+
+| AC | Automated test (план) | Visual/manual check | Evidence artifact (план) | Если не проверено |
+| --- | --- | --- | --- | --- |
+| AC1 | MainControlTaskHistoryUiTests + AppAutomation flow | Сопоставить открытые состояния с wireframes/признаками Arm | Screenshot + UI run video | SPEC: код ещё не написан |
+| AC2 | TaskHistoryDiffBuilderTests: все поля, unknown, legacy, null/missing, критерии, связи; UI legacy `false→true→null→false` при скрытых metadata и эквивалентная миграция в Status без ложного события | Проверить понятность русских названий и видимость старых переходов | Main suite report + legacy UI кадр | SPEC |
+| AC3 | GitTaskHistoryProviderTests: working-tree/HEAD и отсутствие writes; Headless refresh | «Ещё не в Git» до/после fixture commit | Test log + кадры | SPEC |
+| AC4 | TaskHistoryViewModelTests с delayed provider; Headless task/source switch | UI responsive во время traversal | Test log + video | SPEC |
+| AC5 | Временные repo: >120 task commits, >1000 unrelated, branches/merge/rename/delete/recreate/shallow/bad blob/worktree | End/continue/paging captions | Main suite report | SPEC |
+| AC6 | MainControlTaskHistoryUiTests: каждое состояние, retry/load-more failure | Открытые error/empty/server states | Кадры + report | SPEC |
+| AC7 | Layout tests 360/480/900, long values, ru/en; targeted FlaUI keyboard/copy | Светлая/тёмная темы, inspected screenshots | Кадры и passing flow video | SPEC |
+| AC8 | Diff metadata + existing status/card regression tests | Статусы доступны и Git отсутствует | Main/headless reports | SPEC |
+| AC9 | Build + full main/headless + targeted FlaUI | Обычный desktop запуск на временном source | Build/run logs и UI evidence | SPEC |
+
+Проверки выполняются последовательно, поскольку UI tests имеют общий mutable state. На EXEC применить skill `run-tunit-tests` до первого запуска. Targeted: `dotnet run --project src/Unlimotion.Test/Unlimotion.Test.csproj -- --treenode-filter "/*/*/GitTaskHistoryProviderTests/*"` и соответствующие классы diff/VM/UI. Команды discovery уточнить по установленному MTP без VSTest `--filter`.
+
+Обязательные команды после targeted checks:
+
+```powershell
+$taskHistoryResults = Join-Path 'artifacts/task-git-history/tests' ([DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss'))
+dotnet build src/Unlimotion.Desktop/Unlimotion.Desktop.csproj
+pwsh -File scripts/ci/Invoke-TestStage.ps1 -Stage restore -Project main -ResultsRoot $taskHistoryResults
+pwsh -File scripts/ci/Invoke-TestStage.ps1 -Stage build -Project main -ResultsRoot $taskHistoryResults
+pwsh -File scripts/ci/Invoke-TestStage.ps1 -Stage test -Project main -ResultsRoot $taskHistoryResults
+pwsh -File scripts/ci/Invoke-TestStage.ps1 -Stage restore -Project headless -ResultsRoot $taskHistoryResults
+pwsh -File scripts/ci/Invoke-TestStage.ps1 -Stage build -Project headless -ResultsRoot $taskHistoryResults
+pwsh -File scripts/ci/Invoke-TestStage.ps1 -Stage test -Project headless -ResultsRoot $taskHistoryResults
+dotnet run --project tests/Unlimotion.UiTests.FlaUI/Unlimotion.UiTests.FlaUI.csproj -- --treenode-filter "/*/*/TaskHistoryFlaUiTests/*"
+git diff --check
+```
+
+Полный main/headless обязателен из-за integration в общие VM/storage read contract и существующего CI gate. CI имеет 30-minute job timeout; локальную длительность не предполагаем. Перед long run проверить restore/runner, объявить команду и путь логов; при отсутствии прогресса исследовать evidence, не повторять timeout вслепую. Изменения вне desktop build не заявляются проверенными на Android/iOS без отдельного evidence.
+
+Performance: фиксировать elapsed и allocations/peak memory на deterministic fixture с 10 000 commits, из них 120 task changes. Отдельно — 160 task commits с различающимися описаниями по 512 KiB: измерения после 50/100/150 записей, последовательного открытия деталей и закрытия карточки. Проверить ограничение cache и отсутствие удержания полного текста/JToken DTO предыдущих страниц; ожидается рост только previews/metadata, не всех исходных descriptions. Проверяемые инварианты — zero provider calls для закрытой панели, отсутствие чтения полных деталей по UI запросу до раскрытия, ограниченный batch, cancellation и отсутствие Git work на UI thread. Не обещать миллисекундный SLA без измерения; записать фактические числа на EXEC.
+
+UI evidence план: `artifacts/task-git-history/ui/before-status.*`, `after-history.*`, `narrow-dark.png`, `error.png`, логи run. Запись должна быть привязана к automation run, не к ручному показу unrelated приложения. Использовать существующие patterns `record-status-contract-evidence.ps1`/FlaUI harness; новый небольшой wrapper допустим только если нужен этому flow. Screenshots/video на синтетических данных; реальное личное task storage не использовать. Baseline старых статусов meaningful; полного Git flow до реализации не существует.
+
+## 12. Риски и edge cases
+
+- Git metadata может содержать автоматическую подпись; не приписывать правки человеку без данных.
+- Старый/переписанный/неполный Git не является полным аудитом всех действий; подписи границ обязательны.
+- Rename и дубликаты Id: не объединять разные источники и неоднозначные файлы.
+- Raw JSON diff сохраняет факты, но legacy migration может быть многословной; служебный фильтр убирает шум без потери доступа.
+- Deep/large JSON, binary blobs, некорректные даты и невалидные enum не падают в UI; raw fallback/diagnostic с сохранением истины.
+- Concurrent commit/pull/GC: snapshot SHA/cursor, isolated repo reader, явный retry при исчезновении objects.
+- Цвета и truncation могут скрыть смысл; semantic contrast, знаки, wrapping и reveal/copy проверяются UI.
+
+### Expected User Review Objections
+
+| Замечание | Почему вероятно | Решение | Статус |
+| --- | --- | --- | --- |
+| «Покажи как в Arm, а не список SHA» | Явный референс | Группы field changes с автором/временем/источником, цвета и @, wireframe | mitigated |
+| «Куда делись статусы?» | Это уже существующая полезная история | Режим «Статусы» без Git, сохранённые записи | mitigated |
+| «Я только что изменил, а в истории пусто» | Коммиты периодические | Отдельный local row и пояснение гранулярности | mitigated |
+| «Показывает GUID вместо понятной задачи» | Связи — Id | Текущее название + идентификатор, честный fallback | mitigated |
+| «Старые записи обрезали после первых 50» | Pagination может стать скрытым лимитом | Продолжение до конца + bounded search batch без ложного end | mitigated |
+| «Слишком тесно в карточке» | Четыре колонки Arm широкие | Адаптивный layout, полные значения по раскрытию | mitigated |
+
+Rework Prevention Checklist: исходный сценарий, наблюдаемые состояния, допущения и evidence связаны в §6/11; вероятные замечания закрыты в границах scope; role review и результаты — §19. Ни тестов, ни visual evidence готовой функции пока нет.
+
+## 13. План выполнения
+
+1. После exact approval: branch/toolchain preflight; characterization текущих статусов и baseline UI evidence на synthetic source.
+2. Immutable history DTO/context + read-only file mapping; raw diff и integration Git fixtures, включая историю с branches/rename.
+3. Карточный coordinator/VM с cancellation, paging и states; новый control, localization и встраивание старой истории статусов.
+4. UI coverage в существующем Headless/FlaUI harness; targeted проверки → desktop build → полный обязательный набор.
+5. Просмотр кадров/video, замеры, independent/adversarial post-EXEC review, исправление findings и повтор только затронутых проверок. Заполнение фактической AC matrix.
+
+## 14. Открытые вопросы
+
+Блокирующих продуктовых вопросов не выявлено. Визуальная адаптация и границы чтения предложены явно в §6 и принимаются вместе со SPEC. Переход в EXEC ещё не разрешён.
+
+## 15. Соответствие профилю
+
+- .NET desktop: Git I/O вне UI, изолирован от VM, lifecycle/cancellation; build/test обязательны.
+- UI automation/local override: новые scenario tests и сохранение selectors, visual planning artifact, проверка доступности и обеих тем.
+- Testing: TUnit, staged validation, full main/headless из-за межмодульного влияния, targeted native flow и evidence; отсутствие проверок не называется PASS реализации.
+- QUEST: единственное изменение на SPEC — этот документ. ARM-PR правила неприменимы к реализации: Arm только read-only референс, его поведение не меняется.
+
+## 16. Таблица изменений файлов
+
+| Файл/область (план) | Изменение | Причина |
+| --- | --- | --- |
+| `src/Unlimotion.ViewModel/ITaskHistoryProvider.cs`, history DTO/VM | Read contract и состояние панели | UI без Git dependency |
+| `src/Unlimotion/Services/GitTaskHistoryProvider.cs`, `TaskHistoryDiffBuilder.cs` | Локальная история и diff | Реальные commits/blobs |
+| `src/Unlimotion.FileStorage/FileTaskStorage.cs` | Узкий read-only resolver текущего task path, если mapping нельзя получить без полного scan | Совпадение пути с текущим storage |
+| `src/Unlimotion/Views/TaskHistoryView.axaml` и code-behind | История и adaptive layout | Визуальные признаки Arm |
+| `src/Unlimotion/Views/MainControl.axaml`, `MainControl.axaml.cs` | Интеграция/старые статусы/события | Карточка задачи |
+| `src/Unlimotion.ViewModel/MainWindowViewModel.cs`, `src/Unlimotion/App.axaml.cs` | Provider wiring и lifecycle | Защита смены source/task |
+| `src/Unlimotion.ViewModel/Resources/Strings*.resx` | ru/en строки | Локализация |
+| `src/Unlimotion.Test/*History*Tests.cs`, `MainControlTaskCardLayoutUiTests.cs` | Diff/Git/VM/UI/regression | AC1–AC8 |
+| `tests/Unlimotion.AppAutomation.TestHost`, `tests/Unlimotion.UiTests.Authoring`, `tests/Unlimotion.UiTests.Headless`, `tests/Unlimotion.UiTests.FlaUI` | Один synthetic Git scenario и page/flow tests | Обычный пользовательский путь |
+| `scripts/record-task-history-evidence.ps1` (при необходимости) | Wrapper записи automation flow | Доказательство AC7/9 |
+| Текущая SPEC | План/фактические результаты и review | Traceability |
+
+Точный набор новых вспомогательных файлов уточняется в рамках того же outcome; общие файлы принадлежат основному агенту. Остальной код и Arm не меняются.
+
+## 17. Таблица соответствий (было → стало)
+
+| Область | Было | Стало |
+| --- | --- | --- |
+| Карточка | Только статусы | Общий блок Git-изменений и доступные статусы |
+| Before/after | Нет | Читаемые изменения всех полей |
+| Git backup | Источник сохранённых версий | Тот же backup, появляется read-only просмотр |
+| Без Git | Статусы | Статусы + честное объяснение недоступности Git |
+| Формат данных | Текущий JSON | Без изменения |
+
+## 18. Альтернативы и компромиссы
+
+- Копировать Arm control целиком: максимальная похожесть, но привносит Eremex/серверные assumptions и мелкий шрифт. Выбрана адаптация композиции средствами существующей Avalonia.
+- Список `git log`/сырой patch: проще, но плохо читается и не соответствует референсу. Выбран semantic diff с raw fallback для неизвестных данных.
+- Новый persisted audit log/коммит на каждую правку: подробнее, но меняет storage/write/backup contract и не восстанавливает прошлое. Не входит в запрос просмотра существующего Git.
+- Только first-parent history: проще и линейнее, но теряет содержательные коммиты слитых веток. Выбран DAG с явно подписанными merge относительно первого родителя.
+- Смешать StatusHistory и commits в общую временную ленту: события имеют разную гранулярность и могут дублироваться. Выбраны два режима в одном разделе.
+
+## 19. Результат quality gate и review
+
+### SPEC Linter Result
+
+| № | Блок/критерий | Статус | Evidence |
+| --- | --- | --- | --- |
+| 1 | A: Outcome | PASS | §1 и S1: история в реальной карточке |
+| 2 | A: AS-IS | PASS | §2: текущие task/storage/backup/Arm/UI files прочитаны |
+| 3 | A: Проблема | PASS | §3: недоступность Git-истории полей |
+| 4 | A: Цели дизайна | PASS | §4: reference fidelity, read-only, UI responsiveness |
+| 5 | A: Non-Goals | PASS | §5: restore, новый audit, другие sources/refs исключены |
+| 6 | B: Ответственности | PASS | §6.1: provider/diff/VM/view/DI |
+| 7 | B: Интеграция | PASS | §8: expand, selection, source switch, save, refresh |
+| 8 | B: Алгоритмы | PASS | §7: identity/DAG/merge/rename/raw diff/paging |
+| 9 | B: Ошибки/recovery | PASS | State matrix и S5/S8, retry/partial/empty |
+| 10 | B: Performance | PASS | Batch, cancellation, preview/blob cache, fixture с 10 000 commits |
+| 11 | C: Данные | PASS | §9: calculated DTO, persisted schema не меняется |
+| 12 | C: Совместимость | PASS | §6.6, §7: raw legacy JSON, старые статусы |
+| 13 | C: Rollback | PASS | §10: revert feature, данные не требуют миграции |
+| 14 | D: AC | PASS | AC1–AC9 проверяют наблюдаемые результаты |
+| 15 | D: Evidence mapping | PASS | S1–S8 → AC → positive/negative unit/integration/UI |
+| 16 | D: Команды/stop | PASS | §11: SDK/MTP/CI wrapper проверены, fresh logs, no-evidence/no-pass |
+| 17 | E: План/dependencies | PASS | §13: approved scope, characterization → feature → validation |
+| 18 | E: Решения | PASS | Decision Ledger; не требуется отдельный выбор помимо approval |
+| 19 | E: Форма/масштаб | PASS | §0: expanded, несколько модулей и новый read contract |
+| 20 | F: Профиль | PASS | §15: desktop/UI automation/local override |
+
+Итог: ГОТОВО. Все 20 критериев проверены; замечания отдельного reviewer устранены и прошли targeted re-review. Это gate SPEC, не готовность реализации.
+
+### SPEC Rubric Result
+
+| Критерий | Балл | Обоснование |
+| --- | ---: | --- |
+| Цель/границы | 5 | Исходное поручение и недопустимое расширение явно сохранены |
+| AS-IS | 5 | Прочитаны фактические controls/models/storage/backup и визуальный reference source |
+| Конкретность дизайна | 5 | Wireframes, state matrix, identity/DAG/paging/raw diff, limits |
+| Безопасность/rollback | 5 | Read-only snapshot, отсутствие network/writes, revert без миграции |
+| Проверяемость | 5 | Полевая diff matrix, временные repo, delayed VM, UI/full-suite evidence |
+| Автономность | 5 | Все implementation decisions определены; нужен только exact approval |
+
+Итог: 30/30, готово к автономной реализации после approval. Оценка не подменяет review, exact approval или фактическую проверку реализации.
+
+### Role-Based Review Result
+
+| Role | Applicability | Проверка | Verdict self-review | Изменения |
+| --- | --- | --- | --- | --- |
+| Business analyst / domain workflow | applicable | Не теряются статусы; commits не называются каждым действием | PASS | Local row, отдельный режим статусов, подпись гранулярности |
+| UX / designer | applicable | Признаки Arm и читаемость narrow/wide | PASS | Два wireframes, semantic colors, full reveal/copy, checked status labels |
+| Tester / validation | applicable | Каждый AC имеет verifier и negative fixtures | PASS | Fresh results path, full main/headless, native flow/evidence |
+| Developer / architect | applicable | Side-effect-free read, DAG/identity, async lifecycle, memory | PASS | Не использовать storage reads с lock side effects, preview DTO + bounded cache |
+| Delivery / operations / security | applicable | Чужой source, path escape, Git writes/network, rollback | PASS | Source identity, path checks, unchanged HEAD/index/config evidence |
+
+Отдельный reviewer `history_spec_review` работал только чтением, ownership SPEC сохранился у основного агента. Фактический child sandbox — `danger-full-access`, approval `never`: технически read-only independent review недоступен из-за effective runtime. Выполнен отдельный adversarial reviewer fallback, а не заявленный sandbox-enforced independent review. Его initial pass обнаружил два MEDIUM (legacy/memory); после исправлений targeted re-review вернул PASS. Дополнительных существенных нарушений source isolation, DAG/merge/rename, paging и UI-контракта не выявлено. Остаточное ограничение: независимость не обеспечена запретом записи на уровне sandbox; фактических записей reviewer не делал.
+
+### Post-SPEC Review
+
+Статус: PASS, можно запрашивать exact approval SPEC. Реализация не начата.
+
+- Scope reviewed: текущая SPEC, весь instruction stack §0, desktop/UI профили, AS-IS §2, open questions §14 и planned files §16.
+- Scope/Evidence pass: inspected `MainControl.axaml`, `TaskItem`, `TaskCompletionCriterion`, `RepeaterPattern`, `AgentExecutionRecord`, `TaskItemViewModelContext`, `BackupViaGitService.Push`/active path resolution, `FileTaskStorage` enumeration/JSON/mapping, `TaskSourceManager`, Arm StatusBar/FieldChange/RevisionJsonDiffCalculator, `MainControlTaskCardLayoutUiTests`, Headless ReadmeDemo, CI workflow/wrapper, recording wrappers, `global.json`, packages и SDK version.
+- Contract pass: сравнение исходного запроса с S1–S8/AC1–AC9, сохранены Arm-композиция, полная доступная Git-история и прежние статусы; не добавлены Git mutation/новый audit/публикация.
+- Adversarial risk pass: проверены контрпримеры filename≠Id, одинаковый Id в двух пространствах, частично сохранённый JSON, unborn/shallow HEAD, merge/rename, >1000 unrelated commits между task revisions, defaults старых моделей, late response, большие значения и повторный CI run.
+- Role-Based pass: таблица выше; отдельный adversarial reviewer проверил AS-IS и контракт, два MEDIUM закрыты targeted re-review.
+
+| Severity | Area | Finding | Required action | Status |
+| --- | --- | --- | --- | --- |
+| MEDIUM | Read-only contract | Существующий ReadDirectoryAsync может мутировать cache и lock file | Запретить этот путь в history; side-effect-free resolver | fixed, §7.2 |
+| MEDIUM | Performance | Ограничение blob cache не ограничивает большие значения, удержанные всеми DTO | Preview DTO + lazy full value, session disposal | fixed, §6.1/7.12 |
+| MEDIUM | Legacy/domain, reviewer | Legacy-поля могли скрыть реальные завершения/возвраты/архивации | Показывать legacy status/даты по умолчанию; скрывать только доказанную эквивалентную миграцию; diff/UI coverage | fixed, §7.8–9/11 |
+| MEDIUM | Performance, reviewer | Cache budget не исключал удержание больших раскрытых значений всеми строками | Запрет ссылок DTO на full values/JToken, одна область деталей, bounded detail cache, fixture с несколькими страницами больших описаний | fixed, §7.12/11 |
+| MEDIUM | Evidence | Повторный запуск CI wrapper с тем же ResultsRoot отклоняется | Новый timestamped ResultsRoot для каждой попытки | fixed, §11 |
+| LOW | UX/copy | Wireframe использовал несуществующие подписи статуса | Выровнять по Strings.ru.resx | fixed, §6.2 |
+
+- Fix and re-review: после правок повторно сопоставлены read path с `FileTaskStorage`, evidence commands с guard `invocation-test.json` в wrapper, примеры статусов с ресурсами, memory constraints с DTO lifetime. Unborn HEAD и лимиты чтения сделаны явными. Reviewer подтвердил исправления legacy visibility/эквивалентной миграции и ограничений full-value retention/тестового плана. Его дополнительное evidence: `UnifiedTaskStorage.cs` legacy migration / `ReadLegacyStatus`, migration tests, Arm StatusBar. Структура SPEC, парность fenced blocks, отсутствие trailing whitespace и единственность изменённого файла проверены отдельно.
+- Depth checklist: scope drift — только SPEC; AC/scenarios/decisions/objections связаны; validation заявлена планом, не выполненными тестами; unsupported live-Arm/performance claims отсутствуют; edge cases рассмотрены; docs/changelog вне SPEC не менялись; новый UI/read contract явный; manual-review challenge — доказать не только список commits, но и полноту branch/rename history, отсутствие чужих данных и доступность полного значения.
+- No-findings justification: initial findings перечислены и исправлены. В targeted re-review новых находок нет: legacy semantic changes включены в основной показ и AC2, отсутствие retained full values закреплено в DTO/detail contract и многопагинном performance fixture.
+- Residual risks: фактическое визуальное сходство/скорость/совместимость native Git требуют EXEC evidence; legacy/large/corrupt данные могут давать честную partial history. Эти риски не считаются закрытыми тестами на SPEC.
+- Needs human: только exact approval «Спеку подтверждаю»; дополнительных блокирующих продуктовых решений нет.
+- Stop decision: PASS на фазе SPEC; остановиться до approval, код/тесты/инфраструктуру не менять.
+
+### Согласованные доработки после UX/code review (26.09.2026)
+
+Пользователь согласовал все предложения review. В рамках прежнего outcome уточняем EXEC: история должна быть читаемой на 360/480/900 DIP в светлой и тёмной теме; старые/новые значения оформляются semantic brushes и перестраиваются в вертикальный вид на узкой панели. Выбор полного значения показывает его рядом с изменением или переводит фокус к видимой области. Строка рабочей копии называется «Изменения без коммита» и поясняет, что это сохранённый файл относительно HEAD. Toolbar объединяет режимы, а обновление остается доступным без лишнего визуального веса.
+
+Обновление после локальной записи или внешнего изменения запускается после завершённого сохранения, не на каждом PropertyChanged; при refresh уже показанные строки остаются до нового результата, режим «Статусы» не запускает Git traversal. Для деталей рабочей копии проверяется идентичность снимка перед показом полного значения, иначе предлагается обновить историю. Длинные списки используют виртуализацию; переход к следующей странице продолжает сохранённый обход без повторного пропуска уже прочитанных commits, ресурсы обхода освобождаются при смене задачи/сворачивании/refresh. Проверить эти контракты целевыми unit, Headless и FlaUI тестами, включая узкую ширину, тёмную тему, длинные значения, сохранение и пагинацию. Визуальное evidence должно быть достоверным; неудачный захват таковым не считать.
+### Post-EXEC Review
+
+Статус: реализация завершена, targeted gate PASS. Полный AC9 остаётся PARTIAL из-за независимой ошибки конфигурации полного Headless stage и отсутствия пригодного визуального кадра/видео.
+
+- Реализованы read-only Git provider, raw JSON diff, отдельная строка рабочей копии, frozen-HEAD cursor и paging 50/1000, lazy details, metadata filter, partial/unavailable states и source/task generation gate.
+- В карточке появился сворачиваемый раздел с режимами «Изменения Git» и «Статусы»; старый StatusHistory сохранён. Компоновка ограничена по высоте, адаптирует controls на узкой ширине, позволяет выделять старые/новые значения и показывает полные SHA/message в tooltip.
+- Review-loop исправил обход всего DAG в память, гонки detail/page responses, object/null/scalar diff, порядок критериев, legacy raw dates/status, lifecycle карточки, late errors, обновление после save, переход пути через rename с нечитаемой промежуточной ревизией, corrupt HEAD с исправленной рабочей копией и безопасную отмену delayed details.
+- `dotnet build src/Unlimotion.Desktop/Unlimotion.Desktop.csproj -c Release --no-restore`: PASS.
+- `GitTaskHistoryProviderTests`: 13/13 PASS, включая paging, corrupt data, corrupt HEAD + repaired working tree, rename → corrupt → repair и отмену delayed details.
+- `CurrentTaskCard_TaskHistory_ExposesGitChangesAndStatusModes`: 1/1 PASS (Avalonia.Headless).
+- `Task_history_expands_and_shows_git_commit_changes`: 1/1 PASS (FlaUI desktop, последовательный запуск).
+- Полный main suite через CI wrapper: 1121/1121 PASS до последних reviewer-исправлений; после них повторены затронутые provider/ViewModel, Headless, FlaUI и desktop build. Evidence: `artifacts/task-git-history/tests/20260925-123411/main/`.
+- Полный Headless CI wrapper не дошёл до тестов: существующая сборочная конфигурация `Unlimotion.Desktop/Program.cs` не видит `AppBuilder.WithDeveloperTools` (`CS1061`). Targeted Headless test проходит в Release.
+- Попытка снять визуальный кадр не дала достоверного состояния истории: кадр показывал список задач, хотя UI Automation подтверждал раскрытую историю. Поэтому screenshot/video не предъявляются как evidence.
+- Не измерялась производительность на отдельном fixture в 10 000 commits; changed-path traversal и лимит 1000 commits/page ограничивают работу, но численное performance evidence отсутствует.
+- Финальный узкий adversarial re-review: BLOCKER/HIGH не найдено; reviewer не изменял файлы. Технически read-only sandbox reviewer недоступен, поэтому это process-level fallback.
+
+### Проверка согласованных доработок (26.09.2026)
+
+- Готово: адаптивные строки до/после, семантические цвета для двух тем, единый блок режимов, компактное расположение подробностей над списком, читаемое имя рабочей копии и ограничение длинного текста по ширине.
+- Готово: обновление после завершённого SaveItemCommand и внешних raw-событий; в режиме статусов и скрытой карточке обход Git не запускается. Старые строки остаются видны до результата обновления.
+- Готово: хеш снимка рабочего файла проверяется перед открытием полного значения; состояние обхода Git и репозиторий сохраняются между страницами и освобождаются при сбросе; длинный список виртуализован.
+- Validation PASS: `GitTaskHistoryProviderTests` 16/16; два целевых Avalonia.Headless теста 2/2, включая 360/480/900 DIP в светлой/тёмной темах; `TaskHistoryFlaUiTests` 1/1, включая открытие полного 460-символьного значения; Desktop Release rebuild PASS.
+- Полный `Unlimotion.Test` дважды не дал полного зелёного результата: при общем параллельном прогоне один watcher-тест завершился по таймауту, а при ограничении 4 потоками другой Headless-тест упал при `DisposeAsync`; оба проходят изолированно 1/1. Оба общих прогона были остановлены после длительного отсутствия дальнейшего вывода. Не считать полный suite пройденным.
+- Визуальные кадры, снятые из реального desktop окна теста и просмотренные: `artifacts/ui-evidence/task-history/history-list.png`, `full-value.png`. Они локальные, исключены `.gitignore`; снимки показывают реальную компоновку, но не заменяют проверку на всех размерах и темах.
+
+### Коррекция плотности после пользовательского ревью (27.09.2026)
+
+Пользователь сообщил, что история стала хуже: слишком много пустого места и отступов, визуальная логика нарушена. Подтверждённый дефект: `OpenPaneLength` ограничен 600 DIP, а `IsWide` требовал 650 DIP, поэтому заявленная широкая строка фактически не показывалась. В обычном экране каждое поле занимало пять и более строк; отдельный блок полного значения появлялся над списком и терял связь с выбранным изменением. Скриншот `artifacts/ui-evidence/task-history/history-list.png` и текущая разметка — воспроизведение до правки. Это редакционная коррекция утверждённого UX-outcome, а не новая функция.
+
+Вместо двух веток шаблона оставить одну плотную строку `поле: старое → новое` со знаками изменения и переносом длинных предпросмотров. Группировка по коммитам/автору/времени сохраняется. Полное значение открыть в привязанной к выбранному полю панели/flyout без перемещения списка. Скрыть по умолчанию семантически пустой переход `отсутствует ↔ null` для необязательных дат завершения/архивации, сохранив его при включении служебных полей. Убрать постоянное пояснение и дублирование текста в строке рабочей копии; пояснения оставить в tooltip. Уплотнить toolbar и разделители. Общую ширину карточки не менять без доказательства, что она является причиной пустоты: справа максимум 600 DIP, слева пространство существующего списка задач.
+
+Acceptance: на 360/480/900 DIP обеих тем реальные Git-строки с несколькими полями доступны без горизонтальной прокрутки, короткая правка занимает одну строку или разумный перенос, полное значение открывается рядом с тем же полем и не сдвигает весь список, режим статусов и `@` работают; переход missing/null виден только с `@`. Проверить provider regression, Headless с Git-строками, FlaUI click/full text, Release build и реальный кадр до/после. Для scoped UI правки затронутые тесты и визуальная проверка обязательны; полный suite не повторять без новой области влияния (предыдущие два общих прогона не завершились, оба сторонних сбоя прошли изолированно).
+
+### Согласованная UX/UI коррекция (02.10.2026)
+
+Основание: пользователь принял визуальное ревью кадров `ux-review-20261002` словами «Отлично, сделай это всё». Это продолжение утверждённого outcome; Git/storage/schema остаются прежними. Правка заменяет неустойчивый WrapPanel и overlay деталей из предыдущего addendum.
+
+Целевая компоновка:
+
+```text
+▾ История изменений
+[ Изменения | Статусы ]                         ↻  ⋯
+Уточнить результат и критерии отчёта
+Пользователь · 02.10.2026 10:20          f31d9b2 (копировать)
+Статус: Не готова → В работе
+Описание                              Полный текст
+  широкая панель: Было       | Стало
+                   старое   | новое (до 2 строк)
+  узкая панель:  Было  старое (до 2 строк)
+                 Стало новое (до 2 строк)
+  раскрыто: те же подписи и полные значения · Свернуть
+```
+
+- Короткая пара остаётся одной строкой, если помещается; длинная пара сохраняет выравнивание. Preview ограничен двумя отрисованными строками; modified не получает дублирующую стрелку перед полем. Цвет дополняет подписи.
+- Компактные режимы «Изменения / Статусы», refresh с tooltip, «Служебные поля» в меню дополнительных действий. Заголовок с chevron без синей заливки всей секции; единственный цветовой акцент — выбранный режим.
+- Сообщение коммита — основной semibold текст, автор/дата вторичны; тихий SHA имеет явное действие копирования полного хеша.
+- Полный текст раскрывается внутри выбранного поля. Одновременно раскрыто одно поле, закрытие явно доступно; выбор другой задачи, режима, refresh, сворачивание секции и переиспользование строки удаляют полные значения.
+- Связи над историей: компактная строка «название + количество + добавить», пустое дерево не занимает высоту. Заполненные деревья и редакторы связей сохраняют прежние действия и AutomationId.
+
+Проверки: обновить Headless regression на 360/480/900 DIP и обе темы (нет горизонтального overflow, две строки preview, стабильные пары); inline full text/одна открытая строка/сворачивание/смена режима; metadata menu; существующие flow связей. Обновить и запустить FlaUI сценарий полного значения, Desktop Release build и provider tests. Скриншоты с теми же русскими данными, ширинами и темами сохранить отдельно и открыть для проверки. Область ограничена карточкой: полный suite не обязателен по scoped UI gate. Desktop capture в закрытой сессии ранее чёрный; next-best evidence — пиксельные Skia Headless PNG + UI assertions, видео в этом harness недоступно.
+
+Post-SPEC pass: просмотрены baseline PNG, шаблон MainControl, lazy detail/cancellation контракт и UI tests. Контрпример узкой панели закрыт stacked before/after, длинного поля — rendered line clamp и inline expansion; прежний недостижимый wide threshold не возвращается (440 DIP при pane max600). Остаток: визуальная приёмка новых кадров и проверки до завершения EXEC. Scope не включает публикацию.
+
+### Post-EXEC review: UX/UI коррекция 02.10.2026
+
+- **Scope/Evidence:** просмотрены diff/status, `TaskHistoryFieldChangeView`, MainControl template/lifecycle, detail cancellation в модели, ресурсы двух языков, обновлённые Headless/FlaUI tests. Git provider и storage формат не изменены. Остальной dirty diff — исходная согласованная реализация этой же истории; временный capture test вынесен обратно в ignored artifacts.
+- **Contract:** все пять согласованных UX пунктов выполнены, пустые связи имеют count и доступное добавление. Подтверждены обычные пользовательские сценарии: короткая правка одной строкой; длинная пара с подписями и двумя строками preview; inline full text, одно открытое поле, сворачивание, смена режима; metadata через меню; копирование полного SHA. Полные значения очищаются при закрытии и отмене pending read.
+- **Adversarial:** повторное использование строки/late response закрыты owner guard и отменой; wide branch проверен при фактической ширине строки ≥440, ниже — stacked. Нет горизонтального выхода значений, duplicated modified arrow или flyout, перекрывающего задачу. Проверка клавиатуры выявила потерю фокуса на новом контроле до layout: focus теперь переносится после layout только при открытии с фокусом на кнопке, закрытие возвращает его к действию. Полный suite не объявляется пройденным: изменена локальная UI поверхность и отмена деталей, storage/provider traversal не затронуты.
+- **Роли:** UX — открыты и сопоставлены baseline/final PNG на тех же русских данных, 360/900 DIP и двух темах; developer — view хранит только одну раскрытую пару, DTO не удерживает full text, обработчики освобождают её; tester — relevant UI/provider tests, build и визуальные состояния проверены; domain/operations — Git остаётся read-only, новых schema/publication действий нет.
+- **Fix and re-review:** preview regression сначала RED (`MaxLines: expected 2, found 0`); исправлен responsive renderer. По первому новому кадру исправлен белый заголовок на светлом фоне и смягчены разделители. По keyboard regression исправлен deferred focus; после этого три history Headless tests и FlaUI повторно PASS. Оставшиеся 23 проверки layout не затронуты focus fix.
+- **Validation:** `MainControlTaskCardLayoutUiTests` 26/26 PASS (`ux-layout-20261002.log`); финальный history scope 3/3 PASS (`ux-headless-final-20261002.log`); `MainControlRelationPickerUiTests` 5/5 PASS, включая открытие четырёх редакторов добавления и сохранение родительской связи; `GitTaskHistoryProviderTests` 18/18 PASS, включая закрытие pending detail read; `TaskHistoryFlaUiTests` 1/1 PASS в финальном прогоне; Desktop Release build PASS, `git diff --check` PASS. Логи: `artifacts/ui-evidence/task-history/ux-*-20261002.log`.
+- **Visual evidence:** открыты все восемь `ux-final-20261002/history-{Light|Dark}-{360|900}.png` и `details-{Light|Dark}-{360|900}.png`, сопоставлены с `ux-review-20261002`. Это пиксели области Avalonia Window, не системной рамки. Capture flow `dotnet test src/Unlimotion.Test/Unlimotion.Test.csproj -c Release --no-build --treenode-filter "/*/*/TaskHistoryUxReviewCaptureTests/*"` с `UNLIMOTION_UX_REVIEW_OUTPUT`; harness сохранён рядом с final PNG. Последующий focus fix не меняет layout/цвета этих состояний и проверен отдельно с активным окном. Desktop PNG/video в закрытой сессии не используются как визуальное доказательство; fallback — просмотренные Skia PNG + зелёный FlaUI сценарий.
+- **Expected objections / depth:** неустойчивая пара и лишние отступы закрыты; режимы и служебные поля доступны; header читается в Light/Dark; long text не перекрывает соседние области; четыре relationship действия сохранены. Нет unrelated scope, неподтверждённых perf/delivery claims, открытого обязательного AC или требуемого решения человека. Changelog/release не входят в запрос.
+- **Stop decision: PASS** для этой UX/UI коррекции. Независимый agent не привлекался: medium scoped UI addendum, Git/provider/storage контракт прежний. Остаток — прежние ограничения полной suite/video evidence из основного feature delivery; они не подменяются новым локальным PASS.
+
+### Полировка значка и рамки (по следующему запросу 02.10.2026)
+
+Пользователь принял результат и запросил commit, затем две точечные правки. Принятый вариант сохранён как `cd78e3d4`. Это short-sized редакционное продолжение EXEC в той же UI поверхности; новый feature/storage контракт не вводится.
+
+Цель: `[chevron 14×14 по центру] История изменений`, без прямоугольной рамки вокруг toolbar/list. Chevron — vector, одинаковый размер в двух состояниях, регулярный зазор 8 DIP; заголовок и icon по вертикали выровнены. Тонкие разделители между коммитами сохраняются, данные/действия не меняются.
+
+Проверки: regression на actual rendered content border и выравнивание/состояния icon в Light/Dark на 360/900 DIP; существующие три history UI tests, Desktop build, новый Skia кадр и просмотр. Provider/relationship behavior прежние, повторный полный suite не нужен. Video fallback прежний: закрытая desktop-сессия и Headless capture harness без recorder; next-best evidence — PNG + targeted UI tests. Пост-SPEC pass: границы/решение/AC→evidence/риск/rollback заданы; основной риск — theme trigger поверх template setter, проверяется actual border. Push/PR не входят в поручение.
+
+Пост-EXEC pass: meaningful RED обнаружил фактическую рамку `1,0,1,1`, которую Fluent theme накладывала на `#ExpanderContent`. Локальное имя `TaskHistoryContent` устранило коллизию; векторный chevron 14×14 выровнен с заголовком и имеет зазор 8 DIP в обоих состояниях. Новый regression проверяет фактическую компоновку в Light/Dark на 360/900 DIP. В existing inline-details test дата начала подготовлена в fixture storage, чтобы autosave не удалял синтетические строки истории; deferred focus ожидается явно. Проверка повёрнутого icon учитывает RenderTransform и допуск вычисления координат.
+
+Validation: четыре `CurrentTaskCard_TaskHistory_*` UI tests PASS (`chrome-headless-20261002.log`), Desktop Release build PASS (`chrome-build-20261002.log`), capture scenario 1/1 PASS (`chrome-capture-20261002.log`). Снимки в `chrome-after-20261002`: просмотрены четыре `history-{Light|Dark}-{360|900}.png` и `details-Light-900.png`; значок и заголовок выровнены, рамка отсутствует, детали сохраняют структуру. Capture выполнен последовательно через `--no-build`, harness сохранён рядом с PNG вне source. Изменены только template, UI tests и эта SPEC; provider/storage/relationship поведение прежнее. Scope/self-review/visual pass: PASS; обязательных незакрытых требований нет. Rollback — отдельный fix commit поверх принятой реализации `cd78e3d4`.
+
+### Закрепление истории в нижней части карточки (02.10.2026)
+
+Поручение: заголовок раскрытия и открытая история всегда видны у нижней границы карточки независимо от прокрутки полей задачи. Это short-sized продолжение утверждённого UI outcome; Git/storage контракт прежний, EXEC не сбрасывается. Применяются desktop/UI automation profile и локальный UI gate.
+
+Целевая схема: `карточка [ строки *,Auto ] → [прокручиваемые поля задачи] / [закреплённый заголовок + история]`. В свёрнутом виде нижняя строка занимает только заголовок. В раскрытом виде история ограничена 45% доступной высоты (максимум 480 DIP), имеет собственную прокрутку списка; toolbar и load-more сохраняют видимость, статусный список тоже прокручивается отдельно. При отсутствии текущей задачи секция скрыта. Общая ширина карточки, данные и действия не меняются; body и история не перекрываются.
+
+AC→evidence: Headless regression проверяет одинаковое положение footer при body-scroll 0/середина/конец, collapsed/expanded, оба режима, Light/Dark, 360/900 DIP и короткое окно 480 DIP; длинная история имеет собственный overflow, её прокрутка не двигает body. Existing layout/history/relationship tests и FlaUI flow обновляются и запускаются, Desktop Release build проходит. Новые Skia PNG открываются для проверки закреплённой панели. Риск — неограниченное измерение StackPanel и потеря responsive styles при переносе контейнера; покрываются фактическими bounds/viewport assertions и existing layout suite. Rollback — revert этой локальной разметки/тестов без миграции данных.
+
+Пост-SPEC pass: исходный симптом воспроизведён структурой XAML — expander находится внутри body ScrollViewer. Вынос в соседнюю нижнюю строку и конечный viewport закрывают сценарий без overlay и без изменения контракта истории. Scope/решения/AC/риск/rollback заданы; новых user-owned решений нет, PASS к реализации.
+
+### Post-EXEC review: закрепление истории 02.10.2026
+
+- **Scope / contract:** body ScrollViewer и история стали соседними строками Grid `*,Auto` внутри общей карточки. Оба режима истории получили конечный viewport; высота expander ограничивается доступной высотой карточки. Условия видимости, данные, provider/storage и действия истории сохранены. Responsive styles перенесены на Grid; ширины рассчитываются по фактическому viewport без повторного вычитания padding, breakpoint определяется по наружной ширине.
+- **Regression / fix:** новый тест на исходной разметке показал нижнюю границу истории 1998 DIP при высоте карточки 428 DIP. После переноса проверены body-scroll начало/середина/конец, collapsed/expanded, Git/статусы, Light/Dark, 360×480 и 900×900, независимая прокрутка 40 записей и скрытие без текущей задачи. Fixture заполняется до подключения storage, строки истории восстанавливаются после штатного dispose при сворачивании, выбирается ScrollViewer самого ListBox.
+- **Validation:** новый regression 1/1, repeater UI 5/5, relation UI 5/5 и обновлённый native FlaUI 1/1 PASS; Release build основного test-project и FlaUI/desktop зависимостей PASS. Полный класс разметки: 27/28 PASS, единственный IOException возник в миграции fixture до UI assertions; изолированный повтор `CurrentTaskCard_TaskHistory_AdaptsAtThreeWidthsInBothThemes` — 1/1 PASS. Геометрических ошибок в финальном прогоне нет; общий запуск не объявляется зелёным. Evidence — `artifacts/ui-evidence/task-history/dock-20261002/{red,dock-verified,repeater-verified,relations,flaui-verified-final,build-final-frame,layout-final-frame,layout-isolated-retry}.log`.
+- **Visual evidence:** сохранены 12 Skia PNG и capture harness в `dock-20261002/captures-final/`. Открыты все 12 кадров: начало/конец прокрутки Light/Dark на 360/900 DIP и inline details. В парных кадрах история остаётся на одной высоте, body не перекрывает её, полный текст прокручивается внутри списка. Старый Headless helper растягивал body поверх реального viewport; ограничение перенесено на наружный frame, ручное растягивание content удалено. Первые и промежуточные неудачные кадры/запуски сохранены отдельно и не являются финальным evidence.
+- **Review depth / residual:** изменены только XAML/code-behind, две UI-test поверхности и SPEC. Проверены finite measurement, responsive ширины, длинные списки/значения, низкое окно, оба режима и lifecycle без задачи. Initial failures исправлены и перепроверены; ошибка invocation `dotnet test -m:1` устранена раздельными build/test, она не была результатом теста. Video fallback прежний: закрытая desktop-сессия и отсутствие recorder в Skia harness; next-best evidence — просмотренные PNG плюс Headless bounds и native FlaUI assertions. Общий CI/full-suite и performance 10k остаются отдельными ограничениями исходной feature; их PASS не заявляется. Rollback — revert текущей локальной коррекции, без миграции данных.
+
+- **Stop decision: PASS** для локальной коррекции закрепления. Все затронутые UI-сценарии проверены; code/UX review и visual review не оставили обязательных исправлений. Остаётся нестабильная подготовка fixture с блокировкой файла в общем запуске; её устранение и полный CI не входят в эту правку разметки. Дальнейшие изменения или повтор полного suite без новых оснований не нужны.
+
+### Исправления читаемости и прокрутки (04.10.2026)
+
+#### Диагностика CI и интеграция main (04.10, продолжение)
+
+- CI `37208394598` на опубликованном `4a5bc0bf` завершился FAILURE: main 1177/1179, Headless 51/51. Падения: новая проверка плавного wheel (смещение осталось 0, события не дошли до expander) и существующая `TreeCommandUi_CtrlA_UsesFocusedRelationTree` (`Focus()` вернул false до Ctrl+A). Это не падения server/cache; предыдущие локальные PASS не заменяют этот результат полного CI.
+- Ребейз на main `5a780b2e` выполнен без конфликтов; включены upstream AppAutomation 1.9.0, emoji и общие test-fixture исправления. Последние не меняют падающий Ctrl+A setup.
+- План адресной проверки: воспроизвести оба сценария в Debug; установить готовность реально видимой области ввода/смонтированного дерева перед input, сохранить строгие проверки конечного и промежуточных смещений, выбора relation tree и изоляции остального дерева. Не переносить workspace presentation-декомпозицию ради setup. Native запуск и полный локальный suite — по общей очереди; уже идущие чужие прогоны не прерывать.
+- Scope остаётся утверждённой историей и необходимой интеграционной проверкой. Merge не разрешён; публикация исправления и обновление #312 опираются на прежнее поручение commit/push/PR.
+
+Фактическая диагностика: Ctrl+A воспроизведён в Debug; клик в середину всего дерева выбрал другую задачу без детей, `relationTree.IsEffectivelyVisible=false`, children=0. Исправлен setup: клик по inline title исходной RootTask2, assertions на сохранение её Id и видимость дерева, затем прежние проверки фокуса/выделения. Три Ctrl+A сценария прошли вместе 3/3 (`integration-ctrl-a-debug.log`).
+
+Wheel отдельно проходил 1/1, но после других тестов был получен повторяемый чёрный Skia PNG и пустой hit-test: class 30/31, history 5/6. Рендер-лог показал `InvalidCastException: HeadlessGlyphRunStub → Avalonia.Skia.GlyphRunImpl`; в одном процессе смешивались стандартный Headless drawing и Skia с сохранёнными текстовыми объектами. Ожидание геометрии и пробное завершение render-очереди не устранили причину; пробный cleanup удалён. Wheel-тест переведён на стандартный backend основного suite. Сохранены реальные `Window.MouseWheel`, точные конечные смещения 50/200, промежуточные значения, отмена прямой прокруткой, независимость body/full-text/status и центрирование. Перед вводом проверяются два стабильных положения composition scene и hit-test внутри нужного viewport; сохраняется диагностика ошибок рендера с восстановлением прежнего logger в finally. Скриншоты остаются отдельным свежим Skia-процессом, где другой backend не инициализируется. После исправления history 6/6 PASS (`integration-consistent-backend.log`); общий class и provider повторяются на текущем снимке, полного suite PASS пока нет.
+
+Источники framework contract: [изолированная Headless-сессия Avalonia 12.0.3](https://github.com/AvaloniaUI/Avalonia/blob/12.0.3/src/Headless/Avalonia.Headless/HeadlessUnitTestSession.cs), [render tick и backend options](https://github.com/AvaloniaUI/Avalonia/blob/12.0.3/src/Headless/Avalonia.Headless/AvaloniaHeadlessPlatform.cs). Ошибка backend доказана локальным render-log, а не предположением из документации. Ошибочные объединённые TUnit filters запускали 0 тестов и не считаются evidence; использованы отдельные методы/префиксы, minimum-expected-tests и результат discovery. Панель/provider/scroll production source совпадают с опубликованным `4a5bc0bf`; новых UX/API/storage изменений в этой CI-коррекции нет.
+
+**Post-EXEC scoped re-review CI-коррекции: PASS.** Bounded medium, self/adversarial pass; независимым review не называется. Scope/Evidence: rebased five commits, две test-поверхности и SPEC; range-diff сохранил продуктовые изменения, diff-check PASS, unrelated files отсутствуют. Developer/Tester: клик по конкретной строке сохраняет предмет сценария; input readiness проверяет реальную маршрутизацию, backend согласован с main suite, глобальный logger восстановлен в finally, старые assertions сохранены. UX: history source неизменён; просмотренные 16 PNG остаются evidence этих шести продуктовых исправлений. Чёрный диагностический PNG открыт и сохранён как failure evidence `polish-20261004/wheel-input-unavailable.png`, он не заменяет успешные визуальные кадры. Final Debug: карточка **31/31**, Ctrl+A **3/3**, provider **25/25**, build 0 errors (95 inherited warnings в полном build, 51 в incremental test build). Логи: `integration-layout-final-debug.log`, `integration-ctrl-a-debug.log`, `integration-provider-final-debug.log`, `integration-debug-build.log`, `integration-consistent-backend-build.log`.
+
+Delivery/limitations: опубликованный `4a5bc0bf` остаётся красным по старому CI; исправление готово к обновлению #312 и новому remote CI. Полный локальный suite и native пока не повторены: общий слот ещё удерживается предыдущими владельцами очереди Importance → status → CLI → history. Новые native assertions или hardware FPS PASS не заявляются. Прежний 1/1 native относится к неизменённым product history sources до ребейза; AppAutomation 1.9.0 включён из main, текущий native уровень требует отдельной проверки в свободном слоте. Эта scoped коррекция не закрывает оставшиеся original feature performance/full-suite AC. Rollback — revert test-коррекции; данных или Git-task repositories она не меняет. Remote main перед публикацией повторно проверен: `5a780b2e`; remote feature head: `4a5bc0bf`.
+
+Пользователь сообщил шесть недочётов принятой истории: нецентрированные кнопки, JSON-скобки в служебных значениях, шум инициализации пустых полей, коммиты до появления файла с ложной ошибкой размера, фон только внутри панели и рывки прокрутки. Продолжаем утверждённый outcome истории задачи в EXEC: локальные обратимые исправления отображения и достоверности чтения; storage/config/public API не меняются. Применяются прежние desktop/testing/UI profiles и appautomation. Уточнение пользователя о границе отсутствующего файла имеет приоритет над прежним показом удаления/повторного создания одной задачи как единой истории.
+
+Целевая схема: единый фон карточки охватывает `[заголовок] [режимы | обновить | меню] [прокручиваемая история]`, содержимое кнопок по центру; закрепление снизу сохраняется. Структуры отображаются читаемыми списками и парами «поле: значение», пустые структуры — словами. Изменение отсутствующего поля в null/пустое значение считается служебной инициализацией, но реальное очищение ранее заданного значения остаётся обычным изменением; legacy `IsCompleted:null` сохраняет смысл архивации. История текущего существования задачи заканчивается на доказанном отсутствии задачи в родительской ревизии; переименование с найденным тем же Id сохраняется, недоступная/повреждённая ревизия не считается доказанным отсутствием. Если задача ещё не была в HEAD, показывается только рабочая копия. Пустой blob не называется слишком большим. Прокрутка колёсиком плавно достигает конечного смещения, повторные события суммируются; scrollbar, клавиатура и вложенные текстовые области сохраняют самостоятельное управление.
+
+AC→evidence: unit/provider regressions на структуры, пустую инициализацию/реальное очищение, создание после старого репозитория, удаление/повторное создание, пустую известную ревизию, переименование/повреждение и paging; Headless UI на фактическое выравнивание и фон, промежуточные положения прокрутки и неизменный body/footer; existing history UI и native FlaUI; Release build. Свежие Skia снимки обоих режимов/служебных полей на узкой/широкой карточке в Light/Dark открываются и сравниваются. Video fallback прежний, при отсутствии recorder — PNG и временные bounds/offset assertions из UI run.
+
+Риск: нельзя подменить неизвестную повреждённую ревизию отсутствием или затереть настоящую смену статуса/очистку; animation должна отменяться при прямом управлении и закрытии панели. Rollback — revert локального исправления, миграций нет. Post-SPEC review: source/model/template и существующие provider/UI tests просмотрены; шесть симптомов связаны с решениями и проверками, новых пользовательских решений не требуется. Риск ограничен этой подсистемой, PASS к исправлению в прежней EXEC-фазе.
+
+### Post-EXEC review исправлений 04.10.2026
+
+Статус: **PASS для этой коррекции**. Scope reviewed: шесть замечаний пользователя, provider/diff formatter, две XAML views, новый `SmoothHistoryScroll`, ресурсы, provider/Headless/FlaUI regressions и текущий diff. Исходные ограничения общего suite/AC9/performance остаются; этот PASS их не закрывает. Новых миграций, сетевых операций чтения истории и изменений storage/history interfaces нет.
+
+Review passes:
+- Scope/Evidence: просмотрены исходный кадр `dock-20261002/captures-final/history-Light-900.png`, relevant diff, все 16 финальных Skia PNG и свежий native capture. В diff только история, её проверки и SPEC; временный capture harness перенесён к игнорируемым артефактам.
+- Contract: каждое из шести замечаний сопоставлено с правилом addendum и проверкой. Кнопки центрированы по фактическим границам текста; фон покрывает padding секции; исходный bottom dock сохранён. Структуры читаются словами, missing/empty скрыты только в обычном режиме; реальная очистка и legacy archive сохранены. История заканчивается на доказанном создании текущего файла.
+- Adversarial risk: проверены paging на границе создания, повторное создание и рабочая копия после удаления, merge с обеими ветками, прежние rename/corrupt/shallow cases, отдельная ошибка пустого blob, реальные очищения. При wheel повторные события суммируются; прямой offset отменяет анимацию; вложенный полный текст и статусы не прокручивают body/список коммитов. Скрытые внутренние scrollers не перехватываются.
+- Role-Based: domain — нет выдуманной более ранней истории; UX — единый фон и центрированные действия, читаемые значения; tester — реальные UI bounds, промежуточные offsets и свежие кадры; developer — read-only provider, освобождение timer/subscriptions, сохранение виртуализации; delivery — Conventional Commits, существующий PR, без merge и изменения ready/draft состояния.
+- Fix and re-review: исправлены ошибочное распознавание чужого пустого файла и phantom history, service initialization noise, JSON representation, accessibility record name и UI chrome. В тестах подготовлен текущий schema до подключения; deterministic history rows изолированы от фонового refresh. Позднее раскрытие Expander и отрисовка compositor scene учтены до физического Headless wheel input; выбран именно целевой field instance при виртуализации. Assertions не ослаблены.
+- Stop decision: scoped implementation/validation закончены; можно коммитить и обновлять ранее разрешённый PR. Independent pass не заявляется: это локальная коррекция принятой подсистемы, выполнен отдельный adversarial self-review.
+
+Validation evidence в `artifacts/ui-evidence/task-history/polish-20261004/`:
+- Provider: **25/25 PASS** (`provider-green.log`); baseline содержал 18 PASS и 6 ожидаемых новых failures, merge regression добавлен затем. Creation/empty/structured-value сценарии проверяют результат, а не детали реализации.
+- Общий класс карточки: **27/29 PASS** (`layout-green.log`), не объявляется единым зелёным прогоном. После исправлений пять прежних history scenarios прошли в целевом запуске **5/6** (`history-ui-diagnostics.log`); оставшийся wheel scenario после синхронизации scene и выбора правильного virtualized field прошёл отдельно **1/1** (`smooth-final.log`) на Light/Dark и 360/900 DIP. Таким образом все шесть затронутых UI scenarios имеют успешную финальную проверку; остальные 23 проверки карточки прошли в общем запуске.
+- Native desktop: **1/1 PASS** на последней сборке (`native-verified.log`), включая system fields без JSON syntax, menu/full value и сохранение bounds истории при прокрутке body. Desktop Release **PASS**, 0 warnings/errors (`desktop-final-build.log`); core/test Release builds и `git diff --check` PASS.
+- Capture harness: **1/1 PASS** (`capture-verified.log`); открыты все **16 PNG** в `captures-verified/`: Git, metadata, full text, statuses в Light/Dark на 360/900 DIP. Источник — реальные локальные Git commits синтетического task space; инициализационные writes drained, фоновые history notifications остановлены только в capture harness для устойчивого кадра. Harness сохранён рядом, в production/test delivery не включён.
+- Video fallback: Skia Headless harness не записывает video; native capture текущего desktop run обрезает правую часть окна при DPI/window capture и не показывает панель (`native-partial-history.png` просмотрен). Поэтому next-best evidence — просмотренные Skia PNG + native UIA assertions + временные bounds/offset assertions из UI run. Это не video/FPS и не подтверждение системной рамки. Ранние loading/неудачные кадры не финальное evidence.
+
+Depth checklist: scope drift/unrelated changes отсутствуют; сценарии/AC и прежние пользовательские возражения сверены с addendum; отдельные failed runs сохранены; полные suite, аппаратная плавность/FPS и 10k benchmark не заявлены. Документация о delete/recreate обновлена по последнему указанию. Формат задач и интерфейсы storage/provider не меняются. Review findings выше — fixed; обязательных незакрытых условий именно этой коррекции нет. Legacy enum labels в отдельном режиме статусов не изменялись этой коррекцией и не являются её новым regression. Rollback — revert двух correction commits, без миграции.
+
+### Native и совместимость после #316 (05.10.2026)
+
+- На опубликованном `824e0daf` свежая проверка GitHub подтвердила все checks SUCCESS, включая `All tests` run `37233873790`. Это подтверждение относится к базе `5a780b2e`, а не автоматически к новому main.
+- В main `92cf8c1eccdd6c91ba41e05cc31fe1f4e7d7e1a5` вошёл #316: поле важности шире/выше, spinner вертикальный, выставлен accessible name; напрямую footer/provider/scroll не изменены. Ребейз шести history-коммитов прошёл без конфликтов, текущий исходный снимок `167ffc41a50ab573e6a4a3c4a4513f6268bb95fe`.
+- Общий тестовый слот подтверждён свободным финальным сообщением CLI: main1217/1217, Headless51/51, «Слот полных проверок освобождён». Эти counts относятся к CLI-ветке и не являются validation #312. В текущем слоте: build Desktop/FlaUI, native history scenario; адресная проверка совместимости карточки/importance/history. Полные suite повторяются только при новой диагностической необходимости.
+- Read-only оценка порядка с #314 на `0da758f6`: сравнить hunks MainControl/resources/tests и storage/status/reload contracts; не переносить draft целиком и не объявлять его paste-failure закрытым. Предварительная граница: history работает по raw task JSON/Id и отдельному status history, read-only; #314 владеет статусными командами/восстановлением/reload. Итог совместимости и обязательные downstream checks записать после сравнения.
+- Результаты текущей фазы сохраняются в `artifacts/ui-evidence/task-history/integration-20261005/`. При окончании всех тестовых процессов освободить слот явной фразой в этом чате. Merge/release не разрешены.
+
+#### Совместимость и handoff
+
+- Обязательной зависимости #312 от #314 нет: Git provider читает raw JSON по Id, режим статусов использует сохранённый `StatusHistory`; команды изменения статуса и reload из #314 не требуются для этой истории. Допустимый порядок — history → status → workspace. Это оценка контракта и diff, не PASS объединённого приложения.
+- Read-only `git merge-tree` с #314 на `0da758f6de6bb0eb803822c222f7e21ada07fe85` прошёл без конфликтов, tree `3e61f3ece1621253b412c17b6ea47a01c005e97d` до коррекции generic header. Draft/paste-failure #314 здесь не исправлялись. После actual merge принимающая ветка должна проверить совместный flow, даже при отсутствии textual conflicts.
+- Устранён конкретный UIA finding: кнопка `PART_HeaderSite` общего Expander template теперь получает `AutomationProperties.Name` из `Header`, вместо фиксированного ресурса `TaskHistory`. UI regression создаёт в том же настоящем MainControl историю и другой Expander; проверяет разные имена и обновление второго заголовка без изменения первого. Existing шесть history assertions сохранены. В #314 остаётся только подключить свой `TaskOperationDetailsExpander` к этому шаблону; независимая копия исправления не нужна.
+- Совместные проверки после #314: reload success/missing/read failure при открытой истории; внешняя запись файла и замена snapshot во время async refresh/full-value load; рост блока ошибки без сдвига footer; статус/архив и working-copy diff; SourceId/Id alias. Reload должен оставлять видимую историю соответствующей текущей карточке. Для отсутствующего/повреждённого файла сохранять различие absence и unavailable. До исполнения этих flows их PASS не заявляется.
+- Для #285 владелец истории — конкретный `TaskCardDocumentViewModel(owner, task)` / `CardContext.Task`, а не глобальный `CurrentTaskItem`. `TaskCardView` использует `CardTaskItem`; provider, async cancellation, watcher subscriptions, refresh и full-value state нужны на каждую открытую карточку. Сохранить соседние строки `*,Auto`, отдельные body/Git/status/full-text scroll области и reset при смене task/закрытии. `CaptureViewState/RestoreViewState` остаются в `TaskPresentationControl`. `GoToHistoryEntryAsync` — навигационная история workspace, не замена Git/status панели. Новые UI test seams должны обращаться к объекту карточки, а не private watcher fields MainControl.
+
+#### Scoped post-EXEC review
+
+Scope: rebase принятой истории на #316, минимальное исправление имени generic template, соответствующий UI regression и адресная совместимость карточки. Новых изменений provider/storage/schema нет. Чтение истории остаётся read-only.
+
+Проверенные product/test sources закреплены в `123d7fb69274cbf7d4a8d1b6f6320575c6f0d316` (header correction поверх rebased `167ffc41`, база `92cf8c1e`). Последующая delivery-документация не меняет эти исходники.
+
+Evidence на rebased sources + header correction:
+- History UI: **7/7 PASS**, `history-ui-final.log`: все прежние шесть сценариев и новый generic-name regression. Проверены Light/Dark, узкая/широкая карточка, нижнее закрепление при прокрутке body, оба режима и детали; physical Headless wheel сохраняет промежуточные/конечные offsets, суммирование и изоляцию вложенных scrollers.
+- Importance visual matrix: **1/1 PASS с 24 cases**, `importance-matrix.log`; fresh child Skia process сравнил reviewed baselines для Light/Dark, 360/1400 DIP, font12/font24, 0/9/100. Raw artifacts/TRX скопированы в `importance-matrix/` и `importance-rendered-run/`. Открыты full-card PNG font24/360/9 и font24/1400/100: header истории остаётся в нижней части карточки.
+- Native desktop: **1/1 PASS до header correction** (`native-history.log`) и отдельно **1/1 PASS после** (`native-history-final.log`). Последний проверяет реальные Git commit/field values, metadata без JSON скобок, открытие/закрытие полного текста и неизменность bounds истории на body scroll 0/100. Desktop Release с последней разметкой — **PASS**, 0 warnings/errors (`desktop-header-build.log`); core/test builds также PASS с inherited analyzer warnings.
+- Native PNG текущего DPI обрезают правую/нижнюю часть окна, поэтому не являются подтверждением полного внешнего вида панели. Fresh full-card Skia capture/evidence фиксируется отдельно; video/FPS не заявляются. Полный локальный suite не повторялся: новый scope покрыт адресными проверками, опубликованный `824e0daf` имеет all checks SUCCESS, а CI после rebase должен подтвердить именно новый опубликованный head.
+- Fresh Skia capture harness **1/1 PASS**, `capture-reviewed.log`; открыты все 16 PNG в `captures-reviewed/`. 14 кадров показывают ожидаемую композицию; два metadata/360 кадра имеют cached-drawing artifact в строке «Стало» и исключены из визуального PASS. Их фактические layout bounds дают label x=15,width=40 и value x=63, без пересечения; отдельный repaint run дал корректный `captures-composition/metadata-Light-360.png` (открыт). Полный repaint и дополнительные composition ticks не обеспечили достоверность всех narrow multi-state кадров; pixel PASS тёмных узких метаданных не заявляется. Production layout ради дефекта capture backend не менялся; semantic UI/native assertions остаются отдельным подтверждением. Raw промежуточные кадры/diagnostics сохранены. Это ограничение визуального evidence, а не прохождение полного screenshot baseline gate.
+- Временный capture harness вынесен в игнорируемые артефакты; итоговый test build без него PASS (`final-delivery-build.log`). Все собственные test/build/native/child процессы завершены; общий слот освобождён явным сообщением в чате. Scope header correction прошёл contract/adversarial self-review и relevant UI/native checks; PASS для этой ограниченной коррекции, без объявления performance или совместного #314/#285 runtime PASS.
+
+Self-review: binding использует видимый Header, оба реальных templated controls проверены независимыми именами; dynamic Header update проверен, старые assertions не ослаблены. Контракт #314 проверен по исходникам; контракт карточки для #285 записан по переданному handoff. Absence textual conflicts не подменяет совместный runtime PASS. Rollback — revert header fix/UI regression или history commits без миграции данных. Original 10k/performance AC остаётся незамеренным; current targeted/native PASS не объявляется полным AC9/performance PASS. Independent reviewer для этой ограниченной коррекции не заявляется.
+
+### Списки и названия связанных задач (05.10.2026)
+
+Продолжаем принятую историю в EXEC по двум новым уточнениям пользователя. Outcome — компактная и понятная строка изменения списка, без изменения хранения, источника Git или навигации. Это конкретизация отображения в прежнем scope/risk, а не новый переход SPEC → EXEC.
+
+Контракт и visual planning: добавленный элемент показывается как `+ Родительские задачи: Подготовить отчёт (ID)` с зелёным значением; удалённый — `− Родительские задачи: Старая задача (ID)` с красным. Для таких строк скрыты отсутствующая сторона, стрелка и подписи «Было/Стало». Длинная строка переносится под название поля; полный текст раскрывается тем же способом, с одним значением. Modified элементы/поля сохраняют двухстороннее сравнение. Правило применяется к diff элементов связей и критериев; целиком добавленный/удалённый массив также не показывает отсутствующую сторону. Обычные scalar fields сохраняют различие absent/null/empty.
+
+Название добавляется только для строк известных task-reference списков `ParentTasks`, `ContainsTasks`, `BlocksTasks`, `BlockedByTasks`. Поиск — O(1) read-only lookup в уже загруженном task cache, с обязательным совпадением SourceId текущей карточки. ID остаётся в тексте; tooltip уточняет, что название текущее, и показывает полные название/ID. Неизвестная/удалённая задача, пустой title или другой источник дают исходный ID. GUID критерия и произвольные строки не считаются ссылками на задачи. Имена обновляются при обычном refresh истории; загрузка исторических названий и переход по ссылке здесь не добавляются.
+
+AC→evidence: provider regressions на added/removed set elements, критерии и scalar/modified отсутствие; lazy full-value reference относится к конкретному элементу массива. UI regression в реальном MainControl на narrow/wide и обе темы: только релевантная сторона/цвет, без missing-text/arrow/labels, найденное название+ID, неизвестный ID, изоляция источников, длинное значение и закрытие details. Existing history UI/native flow и Release build запускаются. Skia baseline/after снимки — отдельный свежий процесс; video fallback прежний (harness recorder отсутствует), next-best — PNG + bounds/semantic assertions. Общие full/native checks соблюдать по текущему свободному слоту; чужие процессы не прерывать.
+
+Сопутствующий regression после rebase на main: CI и локальный phone test подтверждают нижнюю границу command bar 170 DIP при допустимых 160 на ширине 360. Более широкий importance input из main переносит действия после ancestor trail/ID на дополнительную строку. Коррекция плотности прежнего scope: действия идут сразу после редактируемых state controls, перед metadata; размеры importance и прежний лимит теста сохраняются. AC — command bar остаётся в первых 160 DIP и перед ancestor metadata на всех трёх phone widths; тесты существующих importance controls также запускаются.
+
+Риски/rollback: название не должно выглядеть историческим, нельзя брать совпавший ID из другого источника; при recycling controls нужно восстанавливать обе стороны для modified/scalar rows. Long-value read не должен возвращать весь список вместо выбранного элемента. Rollback — revert локальной presentation-коррекции и её тестов, без миграции. Post-SPEC short review: причины в CompareSet/CompareCriteria и общей field-view подтверждены исходниками; результаты, решения, AC, существенные риски и fallback определены, новых user-owned решений нет. PASS к in-scope реализации.
+
+Реализация и post-EXEC scoped review: одиночный added/removed элемент имеет только релевантную сторону и её цвет, включая раскрытые детали; scalar и modified сравнения восстанавливаются после recycling. Task-reference IDs сохраняются отдельно только для четырёх известных списков и ограничены 512 символами; большие/неизвестные значения остаются raw display без enrichment. Lookup не читает диск/Git и не меняет cache; пустые названия и несовпадающий SourceId дают исходный ID. Preview сокращает название до 40 text elements без разрыва emoji, tooltip/full value показывают полное текущее название. Lazy reference выбирает конкретный элемент списка/критерий. Для workspace #285 lookup названия тоже должен использовать task/source конкретной карточки, вместе с прежним per-card provider handoff.
+
+Validation в `artifacts/ui-evidence/task-history/list-polish-20261005/`: provider **27/27** (`provider.log`), история UI **8/8** (`ui-final.log`), затем отдельный финальный **1/1** с emoji на границе обрезки (`ui-unicode.log`); phone **3/3** с неизменным лимитом 160 DIP (`phone-fixed.log`), importance matrix **1/1 / 24 состояния** (`importance.log`), native desktop **1/1** с найденными title+ID в настоящей Git-истории (`native.log`). Desktop Release **0 warnings/errors**; test/FlaUI builds успешны, analyzer warnings test project сохранены. Temporary capture test перенесён в ignored artifacts, final test project пересобран без него.
+
+Skia capture — четыре отдельных свежих процесса, каждый **1/1**. Все четыре `after/lists-{Light,Dark}-{360,900}.png` открыты: названия и ID читаемы, зелёное/красное значение единственное, absent side/arrow/labels скрыты; wide строки компактны, narrow строки переносятся внутри панели. Baseline `before/lists-Light-900.png` тоже открыт и показывает прежнюю лишнюю сторону. Video fallback прежний; hardware FPS и full suite локально не заявляются. Логи первого падения cleanup нового UI fixture и локального phone regression сохранены; cleanup исправлен удалением disposable foreign item из cache перед dispose. CI `110ef642` действительно упал в phone/360 (170 DIP), это не зелёная проверка; исправление воспроизведено и проверено локально, CI следующего опубликованного head оценивается отдельно.
+
+Self-review + отдельный adversarial self-pass: проверены scope/diff, AC, scalar/criteria fallback, source isolation, bounded ID retention, emoji, восстановление двух сторон и независимый footer. Найденные cleanup/phone/Unicode замечания устранены и имеют targeted evidence. Обязательных открытых условий этой коррекции нет; **PASS** к ранее разрешённому commit/push/обновлению PR, без merge/release.
+
+Native PNG последнего запуска взяты из `tests/Unlimotion.UiTests.FlaUI/bin/Release/net10.0-windows7.0/artifacts/ui-evidence/task-history/`, проверены по времени создания и открыты. Текущий DPI crop оставляет левую часть окна, поэтому эти кадры не подтверждают внешний вид истории; native результат подтверждён UIA, визуальный — четырьмя Skia PNG. Старые root-level native PNG не используются как evidence этой коррекции.
+
+### Подготовка слияния в main (05.10.2026)
+
+Пользователь разрешил merge: «Вливай в мейн». CI head `c6c4df6c` заблокировал merge: два wide-layout теста обнаружили, что общая перестановка actions нарушила прежний порядок ancestor trail → ID → actions. Это regression предыдущей in-scope коррекции плотности. Исправление: перенос actions перед metadata применяется только при compact width ≤430 DIP; на широком экране восстанавливается исходный порядок. Меняется порядок существующих controls, не создаются дубли меню; AutomationId/commands/состояние сохраняются. AC — обе wide проверки, phone/360–430 и resize wide→compact→wide с сохранением экземпляра кнопки. Обновляем UI coverage и запускаем весь task-card layout class, затем native flow; общий GitHub CI должен стать зелёным до merge.
+
+Третье падение — существующий emoji reentrant-source UI test с ошибкой индекса Avalonia list. На неизменённых sources изолированный запуск обоих вариантов прошёл **2/2** (`merge-20261005/emoji-isolated.log`); причина CI-падения пока не доказана. Этот тест не отключается и не ослабляется, его disposition проверяется повторным общим CI. Evidence сохраняется в `artifacts/ui-evidence/task-history/merge-20261005/`. Post-SPEC scoped self-review: контракт wide уже закреплён существующими тестами, compact сохраняет пользовательское улучшение, resize закрывает пропущенный сценарий. Продолжаем EXEC утверждённого outcome; до зелёного CI merge не выполнен.
+
+Post-EXEC correction review: compact/wide перестановка выполняется через Move существующего command panel; controls и bindings сохраняются, повторный layout не меняет уже правильный порядок. Весь layout class запущен: **33/34 PASS**, обе прежние wide failures, phone/360–430 и восемь history scenarios прошли. Единственный отказ — setup нового resize test: длинный ancestor trail естественно переносил actions на следующую строку даже в прежнем wide layout, а проверка необоснованно требовала одну строку. Сценарий resize приведён к коротким ancestors, как прежний wide contract; long-ancestor phone coverage сохранён без изменений. Финальный resize test **1/1 PASS** (`resize.log`), переходы 1400→360→1400→430→1400 сохраняют один экземпляр меню и команды. Исходный общий run не объявляется 34/34 PASS; окончательный full gate — новый CI.
+
+FlaUI первый запуск завершился timeout открытия details pane (**0/1**), неизменённый повтор **1/1 PASS** (`native-retry.log`); причина startup timeout не установлена, исходный failure сохранён в `native.log`. Сборки PASS, `git diff --check` чист. Два Skia capture runs **1/1 каждый**, `after/lists-Light-{360,900}.png` открыты: на wide actions после ID, на compact — перед metadata, история сохраняет компактное отображение. Harness снова вынесен в ignored artifacts, test project пересобран без него. Собственные test/desktop процессы завершены; пользовательские Debug/installed окна не закрывались. Scoped self-review + adversarial self-pass **PASS** для исправления, delivery остаётся **full CI pending** до реального merge.
+
+## Approval
+
+Получено: «Спеку подтверждаю».
+
+## 20. Журнал действий агента
+
+| Фаза / событие | Решение и основание | Evidence / остаток | Следующее действие | Решение человека | Артефакты |
+| --- | --- | --- | --- | --- | --- |
+| SPEC: исследование | Источник Git, визуальная композиция Arm, отдельный режим статусов | Прочитаны MainControl, TaskItem, storage/backup, Arm StatusBar/FieldChange, UI tests; код не менялся | Подготовить конкретный контракт | Исходный запрос реализации | Эта SPEC |
+| SPEC: проектирование | Raw diff, source isolation, DAG paging, local row, wireframes | Контракты/AC/test plan заданы; review ещё не пройден | Reviewer + self-review, исправить найденное | Exact approval отсутствует | Эта SPEC |
+| SPEC: review/rework | Уточнены legacy transitions, side-effect-free path, ограничение full-value retention и свежие test-result paths | Self-review + отдельный adversarial fallback; 2 reviewer MEDIUM закрыты targeted re-review PASS; только SPEC изменена | Запросить exact approval | «Спеку подтверждаю» ещё не получено | Эта SPEC |
+| EXEC: переход | Утверждённый outcome и границы переходят в реализацию | Пользователь прислал точную фразу «Спеку подтверждаю»; публикация/push/PR по-прежнему не разрешены | Создать рабочую ветку, реализовать и проверить AC | «Спеку подтверждаю» | Эта SPEC и будущие in-scope файлы |
+| EXEC: реализация | Добавлена история Git с raw diff, paging, working-tree row, metadata/details и сохранённым режимом статусов | Изменены provider/models/MainControl/resources; schema и Git state не мутируются | Выполнить targeted/full validation и review | «Спеку подтверждаю» | In-scope source/test files |
+| EXEC: validation/review | Targeted provider/headless/FlaUI и desktop build прошли; main suite 1121/1121 | Full Headless stage блокирован `WithDeveloperTools` CS1061; достоверного screenshot/video нет; performance 10k не измерен | Зафиксировать ограничения без объявления полного AC9 | Публикация не запрошена | Test reports и эта SPEC |
+| EXEC: коррекция плотности 27.09 | Устранён недостижимый «широкий» режим при панели максимум 600 DIP; единая компактная строка diff, детали во flyout выбранного поля, пустые даты скрыты до включения `@` | Release desktop build, 17 provider tests, 2 Headless UI tests на 360/480/900 DIP в Light/Dark и 1 FlaUI test прошли; в закрытой desktop-сессии FlaUI screenshots получаются полностью чёрными, семантический Headless renderer вернул `null` | Настроить пиксельный Skia Headless для визуального кадра | «Исправь» после UX review | Source/tests, test reports; baseline `artifacts/ui-evidence/task-history/before-history-list.png` |
+| EXEC: снимки AppAutomation 28.09 | Пиксельный Skia Headless builder, предпросмотр длинных значений 60 символов по результату просмотра первого кадра | Пройдены Headless layout test на 360/480/900 DIP в обеих темах, 17 provider tests и FlaUI test. Открыты и проверены PNG на 480/900 DIP и flyout с демонстрационными данными; это кадры Avalonia Window без системной рамки. FlaUI screenshot остаётся чёрным в закрытой desktop-сессии | Приложить просмотренные файлы пользователю | «Используя скилл appautomation сделай скриншоты» | `artifacts/ui-evidence/task-history/after-headless-history-480.png`, `after-headless-history-900.png`, `after-headless-full-value.png` |
+| EXEC: UX/UI коррекция 02.10 | Устойчивая пара before/after, compact toolbar, commit hierarchy, inline details, спокойный header, плотные связи/count | 26 layout + 5 relation UI tests, финальные 3 history UI tests, 18 provider tests, FlaUI 1/1, Desktop build и diff-check PASS; 8 final Skia PNG открыты и сопоставлены с baseline | Передать результат и кадры | «Отлично, сделай это всё» | `ux-final-20261002`, `ux-*-20261002.log`, source/tests |
+| EXEC: закрепление истории 02.10 | Body и история разделены на две строки карточки, оба списка имеют собственную прокрутку; устранено двойное вычитание padding | Layout 27/28 и отдельный успешный повтор 1/1 после fixture IOException; relation 5/5, native FlaUI 1/1, Release build PASS; просмотрены 12 final PNG | Commit и обновление существующего PR | Запрос закрепить историю; ранее разрешены commit/push/PR | dock-20261002, source/UI tests, эта SPEC |
+| EXEC: шесть исправлений 04.10 | Достоверная граница создания, читаемые структуры/empty metadata, центрированные действия, единый фон и плавный независимый wheel | Provider 25/25; все шесть UI scenarios имеют успешные final проверки, общий class 27/29 не объявлен зелёным; native 1/1, Release builds PASS, 16 PNG открыты; post-EXEC scoped PASS | Commit и обновление PR #312; порядок интеграции согласован с координатором, merge не разрешён | Последние шесть замечаний; прежнее разрешение commit/push/PR | polish-20261004, source/tests, эта SPEC |
+| EXEC: интеграция 05.10 | Rebase на #316/main92cf, имя общего Expander из Header, handoff status/workspace | UI7/7, native1/1 после header fix, importance24/24, Release builds PASS; 16 Skia PNG открыты, два narrow metadata artifacts исключены из visual PASS; процессы завершены, слот освобождён | Обновить ранее разрешённый PR #312; CI нового head отдельно, без merge | Прежнее разрешение rebase/commit/push/PR сохраняется | 123d7fb6, integration-20261005, эта SPEC |
+| EXEC: списки и названия 05.10 | Одна цветная сторона added/removed, текущие title+ID из cache с SourceId, item-level lazy reads; исправлен phone header regression после rebase | Provider27/27; UI8/8 плюс финальный Unicode1/1, phone3/3, importance24/24, native1/1; четыре Skia PNG открыты; Release build PASS; процессы завершены | Commit/push и обновить PR312; CI нового head отдельно | Последние два уточнения и прежнее разрешение commit/push/PR | list-polish-20261005, cd4e3192, source/tests, эта SPEC |
+| EXEC: merge gate 05.10 | Пользователь разрешил merge; устранены wide-order regressions через adaptive Move, добавлен resize flow | Local layout33/34 плюс исправленный resize1/1; emoji2/2; native0/1 затем1/1; два Skia PNG открыты; сборки PASS | Опубликовать correction, дождаться полного зелёного CI, выполнить merge точного head | Вливай в мейн | merge-20261005, source/tests, эта SPEC |

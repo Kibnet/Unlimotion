@@ -20,6 +20,8 @@
     <UserControl.Resources>
         <SolidColorBrush x:Key="CurrentTaskDetailsPanelBackgroundBrush" Color="{DynamicResource SystemChromeLowColor}"/>
         <SolidColorBrush x:Key="CurrentTaskDetailsPanelBorderBrush" Color="{DynamicResource SystemBaseMediumColor}"/>
+        <SolidColorBrush x:Key="TaskHistoryHeadingBrush" Color="{DynamicResource SystemBaseHighColor}"/>
+        <SolidColorBrush x:Key="TaskHistorySeparatorBrush" Color="{DynamicResource SystemBaseHighColor}" Opacity="0.15"/>
         <unlimotion:TimeSpanStringConverter x:Key="TimeSpanStringConverter"/>
         <unlimotion:EqualConverter x:Key="EqualConverter"/>
         <unlimotion:NotEqualConverter x:Key="NotEqualConverter"/>
@@ -65,27 +67,52 @@
         </Style>
         <Style Selector="Expander.TaskStatusHistoryExpander, Expander.TaskOperationDetailsExpander">
             <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Template">
                 <ControlTemplate>
                     <Grid MinWidth="{TemplateBinding MinWidth}"
                           MaxWidth="{TemplateBinding MaxWidth}"
-                          RowDefinitions="Auto,Auto">
+                          RowDefinitions="Auto,*">
                         <ToggleButton x:Name="PART_HeaderSite"
                                       HorizontalAlignment="Stretch"
                                       HorizontalContentAlignment="Left"
-                                      Content="{TemplateBinding Header}"
+                                      VerticalContentAlignment="Center"
+                                      AutomationProperties.Name="{TemplateBinding Header}"
+                                      Background="Transparent"
+                                      BorderThickness="0"
+                                      Padding="0,5"
+                                      MinHeight="28"
                                       CornerRadius="{TemplateBinding CornerRadius}"
                                       IsEnabled="{TemplateBinding IsEnabled}"
-                                      IsChecked="{TemplateBinding IsExpanded, Mode=TwoWay}"/>
+                                      IsChecked="{TemplateBinding IsExpanded, Mode=TwoWay}">
+                            <Grid ColumnDefinitions="14,*" ColumnSpacing="8" VerticalAlignment="Center">
+                                <PathIcon Width="14" Height="14" VerticalAlignment="Center"
+                                          Foreground="{DynamicResource TaskHistoryHeadingBrush}"
+                                          Data="M2,5 L3.4,3.6 L7,7.2 L10.6,3.6 L12,5 L7,10 Z"
+                                          IsVisible="{Binding !IsExpanded, RelativeSource={RelativeSource TemplatedParent}}">
+                                    <PathIcon.RenderTransform>
+                                        <RotateTransform Angle="-90"/>
+                                    </PathIcon.RenderTransform>
+                                </PathIcon>
+                                <PathIcon Width="14" Height="14" VerticalAlignment="Center"
+                                          Foreground="{DynamicResource TaskHistoryHeadingBrush}"
+                                          Data="M2,5 L3.4,3.6 L7,7.2 L10.6,3.6 L12,5 L7,10 Z"
+                                          IsVisible="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}}"/>
+                                <ContentPresenter x:Name="TaskHistoryHeading" Grid.Column="1"
+                                                  Content="{TemplateBinding Header}" VerticalAlignment="Center"
+                                                  Foreground="{DynamicResource TaskHistoryHeadingBrush}" FontWeight="SemiBold"/>
+                            </Grid>
+                        </ToggleButton>
+                        <!-- A custom name avoids Fluent's expanded-state border rule for #ExpanderContent. -->
                         <Border Grid.Row="1"
-                                x:Name="ExpanderContent"
+                                x:Name="TaskHistoryContent"
                                 IsVisible="{TemplateBinding IsExpanded}"
                                 Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="1,0,1,1"
+                                BorderBrush="Transparent"
+                                BorderThickness="0"
                                 MinHeight="{TemplateBinding MinHeight}"
                                 HorizontalAlignment="Stretch"
-                                Padding="8">
+                                Padding="0,2,0,0">
                             <ContentPresenter x:Name="PART_ContentPresenter"
                                               Content="{TemplateBinding Content}"
                                               ContentTemplate="{TemplateBinding ContentTemplate}"
@@ -95,6 +122,57 @@
                     </Grid>
                 </ControlTemplate>
             </Setter>
+        </Style>
+        <Style Selector="Expander.TaskStatusHistoryExpander /template/ ToggleButton#PART_HeaderSite:checked /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+        </Style>
+        <Style Selector="ToggleButton.HistoryMode">
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Padding" Value="8,3"/>
+            <Setter Property="MinHeight" Value="28"/>
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="CornerRadius" Value="4"/>
+        </Style>
+        <Style Selector="Button.HistoryIcon">
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Width" Value="28"/>
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="MinWidth" Value="28"/>
+            <Setter Property="MinHeight" Value="28"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+        <Style Selector="Button.HistoryCommit">
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="MinHeight" Value="20"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Opacity" Value="0.6"/>
+            <Setter Property="FontSize" Value="{DynamicResource AppSmallFontSize}"/>
+        </Style>
+        <Style Selector="ListBox.HistoryEntries">
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+        <Style Selector="ListBox.HistoryEntries ListBoxItem" x:DataType="unlimotion:TaskHistoryEntry">
+            <Setter Property="AutomationProperties.Name" Value="{Binding Heading}"/>
+            <Setter Property="Padding" Value="0,4"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+        </Style>
+        <Style Selector="ListBox.HistoryEntries /template/ ScrollViewer">
+            <Setter Property="VerticalSnapPointsType" Value="None"/>
         </Style>
         <Style Selector="Grid.FilterToolbar">
             <Setter Property="ColumnSpacing" Value="8"/>
@@ -148,13 +226,13 @@
         <Style Selector="PathIcon.FilterPanelResetIcon">
             <Setter Property="Margin" Value="0,0,8,0"/>
         </Style>
-        <Style Selector="StackPanel.TaskDetailsPanel">
+        <Style Selector="Grid.TaskDetailsPanel">
             <Setter Property="Margin" Value="8"/>
-            <Setter Property="Spacing" Value="8"/>
+            <Setter Property="RowSpacing" Value="8"/>
         </Style>
-        <Style Selector="StackPanel.TaskDetailsPanel.TaskDetailsCompact">
+        <Style Selector="Grid.TaskDetailsPanel.TaskDetailsCompact">
             <Setter Property="Margin" Value="6"/>
-            <Setter Property="Spacing" Value="6"/>
+            <Setter Property="RowSpacing" Value="6"/>
         </Style>
         <Style Selector="Border.CurrentTaskDetailsPanelFrame">
             <Setter Property="Background" Value="{DynamicResource CurrentTaskDetailsPanelBackgroundBrush}"/>
@@ -258,10 +336,10 @@
             <Setter Property="MinHeight" Value="44"/>
             <Setter Property="Padding" Value="12,10"/>
         </Style>
-        <Style Selector="StackPanel.TaskDetailsPanel.TaskDetailsCompact Button.TaskCommandSecondaryButton">
+        <Style Selector="Grid.TaskDetailsPanel.TaskDetailsCompact Button.TaskCommandSecondaryButton">
             <Setter Property="IsVisible" Value="False"/>
         </Style>
-        <Style Selector="StackPanel.TaskDetailsPanel.TaskDetailsCompact DropDownButton.TaskCommandOverflowButton">
+        <Style Selector="Grid.TaskDetailsPanel.TaskDetailsCompact DropDownButton.TaskCommandOverflowButton">
             <Setter Property="IsVisible" Value="True"/>
         </Style>
         <Style Selector="Button.MainTabsOverflowButton">
@@ -287,21 +365,21 @@
         <Style Selector="Border.CurrentTaskCard">
             <Setter Property="Padding" Value="10"/>
         </Style>
-        <Style Selector="StackPanel.TaskDetailsPanel.TaskDetailsCompact Border.CurrentTaskCard">
+        <Style Selector="Grid.TaskDetailsPanel.TaskDetailsCompact Border.CurrentTaskCard">
             <Setter Property="Padding" Value="8"/>
             <Setter Property="CornerRadius" Value="6"/>
         </Style>
         <Style Selector="StackPanel.CurrentTaskCardContent">
             <Setter Property="Spacing" Value="8"/>
         </Style>
-        <Style Selector="StackPanel.TaskDetailsPanel.TaskDetailsCompact StackPanel.CurrentTaskCardContent">
+        <Style Selector="Grid.TaskDetailsPanel.TaskDetailsCompact StackPanel.CurrentTaskCardContent">
             <Setter Property="Spacing" Value="6"/>
         </Style>
         <Style Selector="Grid.TaskCardHeader">
             <Setter Property="ColumnSpacing" Value="0"/>
             <Setter Property="RowSpacing" Value="6"/>
         </Style>
-        <Style Selector="StackPanel.TaskDetailsPanel.TaskDetailsCompact Grid.TaskCardHeader">
+        <Style Selector="Grid.TaskDetailsPanel.TaskDetailsCompact Grid.TaskCardHeader">
             <Setter Property="ColumnSpacing" Value="0"/>
             <Setter Property="RowSpacing" Value="6"/>
         </Style>
@@ -399,7 +477,7 @@
             <Setter Property="BorderBrush" Value="Transparent"/>
             <Setter Property="Background" Value="Transparent"/>
         </Style>
-        <Style Selector="StackPanel.TaskDetailsPanel.TaskDetailsCompact TextBox.CurrentTaskTitleEditor">
+        <Style Selector="Grid.TaskDetailsPanel.TaskDetailsCompact TextBox.CurrentTaskTitleEditor">
             <Setter Property="MinHeight" Value="34"/>
         </Style>
         <Style Selector="Border.TaskCardSection">
@@ -407,13 +485,13 @@
             <Setter Property="BorderThickness" Value="0,1,0,0"/>
             <Setter Property="Padding" Value="0,5,0,0"/>
         </Style>
-        <Style Selector="StackPanel.TaskDetailsPanel.TaskDetailsCompact Border.TaskCardSection">
+        <Style Selector="Grid.TaskDetailsPanel.TaskDetailsCompact Border.TaskCardSection">
             <Setter Property="Padding" Value="0,5,0,0"/>
         </Style>
         <Style Selector="StackPanel.TaskCardSectionContent">
             <Setter Property="Spacing" Value="5"/>
         </Style>
-        <Style Selector="StackPanel.TaskDetailsPanel.TaskDetailsCompact StackPanel.TaskCardSectionContent">
+        <Style Selector="Grid.TaskDetailsPanel.TaskDetailsCompact StackPanel.TaskCardSectionContent">
             <Setter Property="Spacing" Value="4"/>
         </Style>
         <Style Selector="TextBlock.TaskCardSectionTitle">
@@ -424,7 +502,7 @@
         <Style Selector="TextBox.TaskDescriptionEditor">
             <Setter Property="MinHeight" Value="82"/>
         </Style>
-        <Style Selector="StackPanel.TaskDetailsPanel.TaskDetailsCompact TextBox.TaskDescriptionEditor">
+        <Style Selector="Grid.TaskDetailsPanel.TaskDetailsCompact TextBox.TaskDescriptionEditor">
             <Setter Property="MinHeight" Value="72"/>
         </Style>
         <Style Selector="WrapPanel.TaskPlanningGroups">
@@ -497,8 +575,8 @@
         </Style>
         <Style Selector="Grid.RelationSectionHeader">
             <Setter Property="ColumnSpacing" Value="8"/>
-            <Setter Property="Margin" Value="0,3,0,0"/>
-            <Setter Property="MinHeight" Value="30"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="MinHeight" Value="26"/>
         </Style>
         <Style Selector="Grid.RelationSectionHeader Label">
             <Setter Property="Padding" Value="0"/>
@@ -508,10 +586,10 @@
             <Setter Property="Opacity" Value="0.76"/>
         </Style>
         <Style Selector="Button.RelationAddButton">
-            <Setter Property="Width" Value="32"/>
-            <Setter Property="Height" Value="32"/>
-            <Setter Property="MinWidth" Value="32"/>
-            <Setter Property="MinHeight" Value="32"/>
+            <Setter Property="Width" Value="26"/>
+            <Setter Property="Height" Value="26"/>
+            <Setter Property="MinWidth" Value="26"/>
+            <Setter Property="MinHeight" Value="26"/>
             <Setter Property="Padding" Value="0"/>
             <Setter Property="FontSize" Value="20"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
@@ -527,7 +605,7 @@
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="CornerRadius" Value="8"/>
         </Style>
-        <Style Selector="StackPanel.TaskDetailsPanel.TaskDetailsCompact Border.RelationEditorCard">
+        <Style Selector="Grid.TaskDetailsPanel.TaskDetailsCompact Border.RelationEditorCard">
             <Setter Property="Padding" Value="8"/>
             <Setter Property="CornerRadius" Value="6"/>
         </Style>
@@ -1813,20 +1891,20 @@
                             AutomationProperties.IsControlElementOverride="True"
                             AutomationProperties.AutomationId="CurrentTaskDetailsPanelFrame"
                             IsVisible="{Binding DetailsAreOpen}">
+                        <Grid x:Name="TaskDetailsPanelRoot" Classes="TaskDetailsPanel">
+                            <Border Classes="CurrentTaskCard"
+                                    AutomationProperties.ControlTypeOverride="Group"
+                                    AutomationProperties.IsControlElementOverride="True"
+                                    AutomationProperties.AutomationId="CurrentTaskCard"
+                                    IsVisible="{Binding CurrentTaskItem, Converter={x:Static ObjectConverters.IsNotNull}}">
+                                <Grid RowDefinitions="*,Auto" DataContext="{Binding CurrentTaskItem}">
                         <ScrollViewer x:Name="CurrentTaskDetailsScrollViewer"
                                       AutomationProperties.AutomationId="CurrentTaskDetailsScrollViewer"
                                       HorizontalScrollBarVisibility="Disabled"
                                       VerticalScrollBarVisibility="Auto"
                                       VerticalContentAlignment="Top"
                                       behavior:KeyboardAwareScrollViewer.IsEnabled="True">
-                            <StackPanel x:Name="TaskDetailsPanelRoot" Classes="TaskDetailsPanel">
-                            <Border Classes="CurrentTaskCard"
-                                    AutomationProperties.ControlTypeOverride="Group"
-                                    AutomationProperties.IsControlElementOverride="True"
-                                    AutomationProperties.AutomationId="CurrentTaskCard"
-                                    IsVisible="{Binding CurrentTaskItem, Converter={x:Static ObjectConverters.IsNotNull}}">
-                                <StackPanel Classes="CurrentTaskCardContent"
-                                            DataContext="{Binding CurrentTaskItem}">
+                                <StackPanel Classes="CurrentTaskCardContent">
                                     <Grid Classes="TaskCardHeader"
                                           ColumnDefinitions="Auto,*"
                                           RowDefinitions="Auto,Auto"
@@ -1848,7 +1926,7 @@
                                                  VerticalAlignment="Center"
                                                  VerticalContentAlignment="Center"/>
 
-                                        <WrapPanel Grid.Row="1"
+                                        <WrapPanel x:Name="TaskHeaderStateRowPanel" Grid.Row="1"
                                                    Grid.ColumnSpan="2"
                                                    Classes="TaskHeaderStateRow">
                                             <CheckBox IsChecked="{Binding WantedFromUi}"
@@ -1864,17 +1942,7 @@
                                                            PlaceholderText="{DynamicResource Importance}"
                                                            AutomationProperties.Name="{DynamicResource Importance}"
                                                            AutomationProperties.AutomationId="CurrentTaskImportanceInput"/>
-                                            <unlimotion:EmojiTextBlock Classes="TaskHeaderParentEmojiTrail"
-                                                                        EmojiText="{Binding ParentEmojiTrail, Mode=OneWay}"
-                                                                        IsVisible="{Binding HasParentEmojiTrail}"
-                                                                        ToolTip.Tip="{DynamicResource ParentsTasks}"
-                                                                        AutomationProperties.Name="{DynamicResource ParentsTasks}"
-                                                                        AutomationProperties.AutomationId="CurrentTaskParentEmojiTrail"/>
-                                            <TextBlock Classes="TaskHeaderIdMeta"
-                                                       Text="{Binding Id, Mode=OneWay}"
-                                                       ToolTip.Tip="{Binding Id}"
-                                                       AutomationProperties.AutomationId="CurrentTaskIdTextBlock"/>
-                                            <WrapPanel Classes="TaskCommandBar"
+                                            <WrapPanel x:Name="TaskHeaderCommands" Classes="TaskCommandBar"
                                                        IsVisible="{Binding ., Converter={x:Static ObjectConverters.IsNotNull}}"
                                                        AutomationProperties.ControlTypeOverride="Group"
                                                        AutomationProperties.IsControlElementOverride="True"
@@ -1921,6 +1989,16 @@
                                                     </DropDownButton.Flyout>
                                                 </DropDownButton>
                                             </WrapPanel>
+                                            <unlimotion:EmojiTextBlock x:Name="TaskHeaderAncestorTrail" Classes="TaskHeaderParentEmojiTrail"
+                                                                        EmojiText="{Binding ParentEmojiTrail, Mode=OneWay}"
+                                                                        IsVisible="{Binding HasParentEmojiTrail}"
+                                                                        ToolTip.Tip="{DynamicResource ParentsTasks}"
+                                                                        AutomationProperties.Name="{DynamicResource ParentsTasks}"
+                                                                        AutomationProperties.AutomationId="CurrentTaskParentEmojiTrail"/>
+                                            <TextBlock x:Name="TaskHeaderId" Classes="TaskHeaderIdMeta"
+                                                       Text="{Binding Id, Mode=OneWay}"
+                                                       ToolTip.Tip="{Binding Id}"
+                                                       AutomationProperties.AutomationId="CurrentTaskIdTextBlock"/>
                                             <WrapPanel Classes="TaskHeaderDateMeta TaskHeaderMetaRow" IsVisible="{Binding CreatedDateTime, Converter={x:Static ObjectConverters.IsNotNull}}">
                                                 <Label Content="{DynamicResource CreatedPrefix}" Margin="0,0,2,0"/>
                                                 <Label Content="{Binding CreatedDateTime, StringFormat={}{0:yyyy.MM.dd HH:mm}}"/>
@@ -2171,7 +2249,10 @@
                                             AutomationProperties.AutomationId="CurrentTaskRelationsSection">
                                         <StackPanel Classes="TaskCardSectionContent">
                                     <Grid Classes="RelationSectionHeader" ColumnDefinitions="*,Auto">
-                                        <Label Content="{DynamicResource ParentsTasks}"/>
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <Label Content="{DynamicResource ParentsTasks}"/>
+                                            <TextBlock Text="{Binding ItemCount, ElementName=CurrentItemParentsTree}" Opacity="0.5" VerticalAlignment="Center"/>
+                                        </StackPanel>
                                         <Button Grid.Column="1"
                                                 Classes="RelationAddButton TaskAccentOutlineButton"
                                                 Content="＋"
@@ -2214,6 +2295,7 @@
                                     </Border>
                                     <TreeView DataContext="{Binding MainWindow}"
                                               ItemsSource="{Binding CurrentItemParents.SubTasks}"
+                                              IsVisible="{Binding !!ItemCount, ElementName=CurrentItemParentsTree}"
                                               SelectionMode="Multiple"
                                               Classes="TaskTree RelationTaskTree"
                                               ScrollViewer.HorizontalScrollBarVisibility="Disabled"
@@ -2228,7 +2310,10 @@
                                     </TreeView>
 
                                     <Grid Classes="RelationSectionHeader" ColumnDefinitions="*,Auto">
-                                        <Label Content="{DynamicResource BlockingTasks}"/>
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <Label Content="{DynamicResource BlockingTasks}"/>
+                                            <TextBlock Text="{Binding ItemCount, ElementName=CurrentItemBlockedByTree}" Opacity="0.5" VerticalAlignment="Center"/>
+                                        </StackPanel>
                                         <Button Grid.Column="1"
                                                 Classes="RelationAddButton TaskAccentOutlineButton"
                                                 Content="＋"
@@ -2271,6 +2356,7 @@
                                     </Border>
                                     <TreeView DataContext="{Binding MainWindow}"
                                               ItemsSource="{Binding CurrentItemBlockedBy.SubTasks}"
+                                              IsVisible="{Binding !!ItemCount, ElementName=CurrentItemBlockedByTree}"
                                               SelectionMode="Multiple"
                                               Classes="TaskTree RelationTaskTree"
                                               ScrollViewer.HorizontalScrollBarVisibility="Disabled"
@@ -2285,7 +2371,10 @@
                                     </TreeView>
 
                                     <Grid Classes="RelationSectionHeader" ColumnDefinitions="*,Auto">
-                                        <Label Content="{DynamicResource ContainingTasks}"/>
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <Label Content="{DynamicResource ContainingTasks}"/>
+                                            <TextBlock Text="{Binding ItemCount, ElementName=CurrentItemContainsTree}" Opacity="0.5" VerticalAlignment="Center"/>
+                                        </StackPanel>
                                         <Button Grid.Column="1"
                                                 Classes="RelationAddButton TaskAccentOutlineButton"
                                                 Content="＋"
@@ -2328,6 +2417,7 @@
                                     </Border>
                                     <TreeView DataContext="{Binding MainWindow}"
                                               ItemsSource="{Binding CurrentItemContains.SubTasks}"
+                                              IsVisible="{Binding !!ItemCount, ElementName=CurrentItemContainsTree}"
                                               SelectionMode="Multiple"
                                               Classes="TaskTree RelationTaskTree"
                                               ScrollViewer.HorizontalScrollBarVisibility="Disabled"
@@ -2342,7 +2432,10 @@
                                     </TreeView>
 
                                     <Grid Classes="RelationSectionHeader" ColumnDefinitions="*,Auto">
-                                        <Label Content="{DynamicResource BlockedTasks}"/>
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <Label Content="{DynamicResource BlockedTasks}"/>
+                                            <TextBlock Text="{Binding ItemCount, ElementName=CurrentItemBlocksTree}" Opacity="0.5" VerticalAlignment="Center"/>
+                                        </StackPanel>
                                         <Button Grid.Column="1"
                                                 Classes="RelationAddButton TaskAccentOutlineButton"
                                                 Content="＋"
@@ -2385,6 +2478,7 @@
                                     </Border>
                                     <TreeView DataContext="{Binding MainWindow}"
                                               ItemsSource="{Binding CurrentItemBlocks.SubTasks}"
+                                              IsVisible="{Binding !!ItemCount, ElementName=CurrentItemBlocksTree}"
                                               SelectionMode="Multiple"
                                               Classes="TaskTree RelationTaskTree"
                                               ScrollViewer.HorizontalScrollBarVisibility="Disabled"
@@ -2401,23 +2495,134 @@
                                         </StackPanel>
                                     </Border>
 
-                                    <Border Classes="TaskCardSection"
+                                </StackPanel>
+                        </ScrollViewer>
+                                    <Border Grid.Row="1" Classes="TaskCardSection"
+                                            Background="{DynamicResource CurrentTaskDetailsPanelBackgroundBrush}"
                                             AutomationProperties.ControlTypeOverride="Group"
                                             AutomationProperties.IsControlElementOverride="True"
                                             AutomationProperties.AutomationId="CurrentTaskStatusHistorySection">
-                                        <Expander Header="{DynamicResource StatusHistory}"
+                                        <Expander x:Name="TaskHistoryExpander"
+                                                  Header="{DynamicResource TaskHistory}"
                                                   Classes="TaskStatusHistoryExpander"
+                                                  behavior:SmoothHistoryScroll.IsEnabled="True"
                                                   ExpandDirection="Down"
+                                                  Expanded="TaskHistoryExpander_OnExpanded"
+                                                  Collapsed="TaskHistoryExpander_OnCollapsed"
                                                   AutomationProperties.AutomationId="StatusHistoryExpander">
-                                            <ItemsControl ItemsSource="{Binding StatusHistory}"
-                                                          AutomationProperties.AutomationId="StatusHistoryItems"/>
+                                            <Grid RowDefinitions="Auto,*" RowSpacing="4">
+                                                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="4">
+                                                    <Border HorizontalAlignment="Left" Padding="2"
+                                                            Background="{DynamicResource CurrentTaskDetailsPanelBackgroundBrush}"
+                                                            CornerRadius="6">
+                                                        <StackPanel Orientation="Horizontal" Spacing="2">
+                                                            <ToggleButton Classes="HistoryMode" Content="{DynamicResource TaskHistoryChangesMode}"
+                                                                          ToolTip.Tip="{DynamicResource TaskHistoryHint}"
+                                                                          IsChecked="{Binding TaskHistory.IsGitMode, ElementName=mainControl}"
+                                                                          Click="TaskHistoryGitModeButton_OnClick"
+                                                                          AutomationProperties.AutomationId="TaskHistoryGitModeButton"/>
+                                                            <ToggleButton Classes="HistoryMode" Content="{DynamicResource TaskHistoryStatusesMode}"
+                                                                          IsChecked="{Binding TaskHistory.IsStatusMode, ElementName=mainControl}"
+                                                                          Click="TaskHistoryStatusModeButton_OnClick"
+                                                                          AutomationProperties.AutomationId="TaskHistoryStatusModeButton"/>
+                                                        </StackPanel>
+                                                    </Border>
+                                                    <Button Grid.Column="1" Classes="HistoryIcon"
+                                                            Content="↻" FontSize="20"
+                                                            ToolTip.Tip="{DynamicResource TaskHistoryRefresh}"
+                                                            AutomationProperties.Name="{DynamicResource TaskHistoryRefresh}"
+                                                            IsVisible="{Binding TaskHistory.IsGitMode, ElementName=mainControl}"
+                                                            Click="TaskHistoryRefreshButton_OnClick"
+                                                            AutomationProperties.AutomationId="TaskHistoryRefreshButton"/>
+                                                    <Button Grid.Column="2" Classes="HistoryIcon" Content="⋯" FontSize="20"
+                                                            ToolTip.Tip="{DynamicResource TaskHistoryOptions}"
+                                                            AutomationProperties.Name="{DynamicResource TaskHistoryOptions}"
+                                                            IsVisible="{Binding TaskHistory.IsGitMode, ElementName=mainControl}"
+                                                            AutomationProperties.AutomationId="TaskHistoryOptionsButton">
+                                                        <Button.Flyout>
+                                                            <Flyout>
+                                                                <CheckBox Content="{DynamicResource TaskHistoryMetadata}"
+                                                                          IsChecked="{Binding TaskHistory.ShowMetadata, ElementName=mainControl, Mode=TwoWay}"
+                                                                          AutomationProperties.AutomationId="TaskHistoryMetadataCheckBox"/>
+                                                            </Flyout>
+                                                        </Button.Flyout>
+                                                    </Button>
+                                                </Grid>
+                                                <Grid Grid.Row="1" IsVisible="{Binding TaskHistory.IsGitMode, ElementName=mainControl}"
+                                                            RowDefinitions="Auto,Auto,*,Auto" RowSpacing="4"
+                                                            x:CompileBindings="False"
+                                                            AutomationProperties.AutomationId="TaskGitHistoryPanel">
+                                                    <TextBlock Text="{Binding TaskHistory.StatusMessage, ElementName=mainControl}"
+                                                               IsVisible="{Binding TaskHistory.HasStatusMessage, ElementName=mainControl}"
+                                                               TextWrapping="Wrap"
+                                                               Opacity="0.78"
+                                                               AutomationProperties.AutomationId="TaskHistoryStatusMessage"/>
+                                                    <ProgressBar Grid.Row="1" IsIndeterminate="True"
+                                                                 IsVisible="{Binding TaskHistory.IsLoading, ElementName=mainControl}"
+                                                                 AutomationProperties.AutomationId="TaskHistoryProgressBar"/>
+                                                    <ListBox Grid.Row="2" Classes="HistoryEntries"
+                                                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                                             ItemsSource="{Binding TaskHistory.Entries, ElementName=mainControl}"
+                                                             AutomationProperties.AutomationId="TaskHistoryItems">
+                                                        <ListBox.ItemsPanel>
+                                                            <ItemsPanelTemplate>
+                                                                <VirtualizingStackPanel CacheLength="0.5"/>
+                                                            </ItemsPanelTemplate>
+                                                        </ListBox.ItemsPanel>
+                                                        <ListBox.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <Border BorderThickness="0,0,0,1"
+                                                                        BorderBrush="{DynamicResource TaskHistorySeparatorBrush}"
+                                                                        Padding="0,0,0,7">
+                                                                    <StackPanel Spacing="3">
+                                                                        <TextBlock Text="{Binding Heading}" FontWeight="SemiBold" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Message}"/>
+                                                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" IsVisible="{Binding HasCommit}">
+                                                                            <WrapPanel Orientation="Horizontal" Opacity="0.65">
+                                                                                <TextBlock Text="{Binding Author}" Margin="0,0,8,0"/>
+                                                                                <TextBlock Text="{Binding ChangedAtDisplay}"/>
+                                                                            </WrapPanel>
+                                                                            <Button Grid.Column="1" Classes="HistoryCommit" Content="{Binding ShortSha}"
+                                                                                    ToolTip.Tip="{Binding CommitToolTip}" Click="TaskHistoryCopyCommit_OnClick"
+                                                                                    AutomationProperties.Name="{DynamicResource TaskHistoryCopyCommit}"
+                                                                                    AutomationProperties.AutomationId="TaskHistoryCopyCommitButton"/>
+                                                                        </Grid>
+                                                                        <TextBlock Text="{Binding Notice}" IsVisible="{Binding HasNotice}" Opacity="0.68" FontStyle="Italic" TextWrapping="Wrap"/>
+                                                                        <ItemsControl ItemsSource="{Binding Changes}">
+                                                                            <ItemsControl.ItemTemplate>
+                                                                                <DataTemplate>
+                                                                                    <views:TaskHistoryFieldChangeView/>
+                                                                                </DataTemplate>
+                                                                            </ItemsControl.ItemTemplate>
+                                                                        </ItemsControl>
+                                                                    </StackPanel>
+                                                                </Border>
+                                                            </DataTemplate>
+                                                        </ListBox.ItemTemplate>
+                                                    </ListBox>
+                                                    <Button Grid.Row="3" Content="{DynamicResource TaskHistoryLoadMore}"
+                                                            HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                                            IsVisible="{Binding TaskHistory.CanLoadMore, ElementName=mainControl}"
+                                                            HorizontalAlignment="Left"
+                                                            Click="TaskHistoryLoadMoreButton_OnClick"
+                                                            AutomationProperties.AutomationId="TaskHistoryLoadMoreButton"/>
+
+                                                </Grid>
+
+                                                <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled"
+                                                              VerticalScrollBarVisibility="Auto"
+                                                              IsVisible="{Binding TaskHistory.IsStatusMode, ElementName=mainControl}"
+                                                              AutomationProperties.AutomationId="TaskHistoryStatusScrollViewer">
+                                                <ItemsControl ItemsSource="{Binding StatusHistory}"
+                                                              IsVisible="{Binding TaskHistory.IsStatusMode, ElementName=mainControl}"
+                                                              AutomationProperties.AutomationId="StatusHistoryItems"/>
+                                                </ScrollViewer>
+                                            </Grid>
                                         </Expander>
                                     </Border>
 
-                                </StackPanel>
+                                </Grid>
                             </Border>
-                            </StackPanel>
-                        </ScrollViewer>
+                        </Grid>
                     </Border>
                 </Grid>
             </SplitView.Pane>
