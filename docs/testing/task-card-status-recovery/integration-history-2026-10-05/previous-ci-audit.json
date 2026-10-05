@@ -1,0 +1,49 @@
+{
+  "pr": 314,
+  "head": "0da758f6de6bb0eb803822c222f7e21ada07fe85",
+  "baseAncestor": "92cf8c1eccdd6c91ba41e05cc31fe1f4e7d7e1a5",
+  "ciRun": 37239894285,
+  "ciUrl": "https://github.com/Kibnet/Unlimotion/actions/runs/37239894285",
+  "ciCheckout": "770a0b3ca820d7e95da0d1cec32e3a4e4dc3b1c6",
+  "exactSourceTree": "037cee096faf61af37558dad5681ce23b3fd9b0f",
+  "ciEnvironment": "Microsoft Windows Server 2025 10.0.26100 Datacenter, windows-2025-vs2026",
+  "main": {
+    "total": 1233,
+    "passed": 1233,
+    "failed": 0,
+    "skipped": 0,
+    "trxSha256": "C5EAB23C80CD28B6E4CCD6B4C50C086666DD2E9939F2C642AAFC7FFC0D408AB5"
+  },
+  "headless": {
+    "total": 52,
+    "passed": 52,
+    "failed": 0,
+    "skipped": 0,
+    "trxSha256": "1E2196EBABD0BA81D2EE3406921A55FD9DFCF16679AE681E2CC815FE226EC4B5"
+  },
+  "exactPasteTest": {
+    "className": "Unlimotion.Test.StormWorkspaceTreeCommandsExecutableSpecTests",
+    "testName": "WorkspaceTreeCommandsScenario_ExecutesFeatureSteps",
+    "outcome": "Passed",
+    "duration": "00:00:03.6855677",
+    "startedUtc": "2026-10-05T01:38:15.0181706+03:00"
+  },
+  "headlessStatusTests": [
+    {
+      "testName": "TaskCardStatusRecovery_FailureRefreshRetry",
+      "outcome": "Passed",
+      "duration": "00:00:27.0294419"
+    },
+    {
+      "testName": "StatusContract_TerminalPickerAndUnarchive",
+      "outcome": "Passed",
+      "duration": "00:00:03.2317102"
+    },
+    {
+      "testName": "StatusContract_RussianDarkFutureAndBlocker",
+      "outcome": "Passed",
+      "duration": "00:00:00.1317209"
+    }
+  ],
+  "applicability": "Previous published HEAD0da only. Final history union validation is recorded separately."
+}

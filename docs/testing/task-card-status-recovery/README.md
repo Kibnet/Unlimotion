@@ -4,7 +4,39 @@
 
 Согласованный контракт и post-EXEC review: [SPEC](../../../specs/2026-10-02-task-card-status-recovery.md).
 
-## Текущая база main 92cf8c1e, 5 октября
+## Финальная проверка на main 9150ac01, 5 октября
+
+Reload остаётся первым пунктом меню ⚙. После успешного чтения он снимает постоянную ошибку и сохраняет локальные правки; смена статуса требует явного повторного выбора. В no-journal fixture native driver проверяет неизменность JSON/text. Existing journal recovery по-прежнему может завершить ранее начатую транзакцию; отдельную status/save operation Reload не создаёт.
+
+Проверенный кандидат `8ff819b1` объединяет recovery и history `4a2f781e`. После реального merge #312 в main `9150ac01` ветка синхронизирована commit `136ac8ba`: полный tree **точно совпадает** с кандидатом, `555998d7c506bd4845fdb48bc1b72dc86d7fa226`. [Доказательство совпадения](integration-history-2026-10-05/main-sync.json). Runtime source после сборки не менялся; последующие правки относятся к SPEC/evidence.
+
+| Проверка финального кандидата | Итог | Evidence |
+| --- | --- | --- |
+| Полный Main | **1269/1269 PASS**, 0 FAIL/SKIP, 28м13с | [Лог](integration-history-2026-10-05/main-full.log) |
+| Полный Headless | **52/52 PASS**, 0 FAIL/SKIP, 2м43с | [Лог](integration-history-2026-10-05/headless-full.log), [recovery observations](integration-history-2026-10-05/headless-recovery-observations.json) |
+| Native recovery через ⚙ | **1/1 PASS**: permanent error исчезает до retry; JSON/text неизменен на Reload; NotReady и history +1 после явного повтора | [Лог](integration-history-2026-10-05/native-recovery.log), [observations](integration-history-2026-10-05/native-recovery-observations.json) |
+| Native RU Dark future/blocked, EN Light terminal/unarchive | **3/3 PASS**; blocked tooltip — настоящий owned popup | [Future](integration-history-2026-10-05/native-future.log), [Blocked](integration-history-2026-10-05/native-blocked.log), [Terminal](integration-history-2026-10-05/native-terminal.log) |
+| Resize 1400→360→1400→430→1400 | **1/1 PASS**: те же actions/flyout/Reload, Reload первым и с прежней command binding; compact/wide placement | [Лог](integration-history-2026-10-05/menu-resize.log) |
+| Rendered RU/EN × Light/Dark × 1400/760 | **8/8 PASS**; реальные Details/history HeaderSite имеют разные корректные имена; все восемь menu PNG просмотрены | [Лог](integration-history-2026-10-05/menu-rendered-matrix.log), [RU Dark](integration-history-2026-10-05/reload-menu-ru-Dark-1400.png) |
+| Builds | Main **95 warnings / 0 errors**, Desktop/Headless/FlaUI **0/0** | [Main](integration-history-2026-10-05/main-build.log), [Desktop](integration-history-2026-10-05/desktop-build.log), [Headless](integration-history-2026-10-05/headless-build.log), [FlaUI](integration-history-2026-10-05/flaui-build.log) |
+
+[Validation snapshot](integration-history-2026-10-05/validation-snapshot.json) извлечён из восьми оригинальных TRX: counters, selected tests, times, filters, binary/TRX/invocation hashes. Raw файлы сохранены локально в `artifacts/status-recovery/integration-history-2026-10-05/`; публичные logs маскируют workspace/user/machine paths и удаляют концевые пробелы/пустые строки. Ошибка PowerShell quoting в raw Main invocation tree field сохранена и прозрачно дополнена [source snapshot](integration-history-2026-10-05/source-snapshot.json). Два `U+FFFD` в Main log — намеренные invalid-surrogate параметры emoji test, а не повреждённый footer. Native/Headless recovery harness сравнивает `File.ReadAllText`; прежние формулировки «unchanged bytes» в этих разделах означают неизменность JSON/text, а не отдельное измерение raw-byte hash.
+
+Прежний `StormWorkspaceTreeCommandsExecutableSpecTests.WorkspaceTreeCommandsScenario_ExecutesFeatureSteps` в этом полном прогоне **Passed, 7.7011825s**. VM status41/41, typed reload9/9, Unified status17/17 также прошли; Importance24 states и input/persistence/negative controls входят в Main PASS. Исходные paste predicate/5s/assertion сохранены. Текущий full Main blocker закрыт, историческая причина старого отказа **UNKNOWN**: успешный повтор не доказывает causal fix. Ранее опубликованный `0da758f6` отдельно имел [CI1233/1233 +52/52 PASS](https://github.com/Kibnet/Unlimotion/actions/runs/37239894285), [проверенные counters/tree/TRX hashes](integration-history-2026-10-05/previous-ci-audit.json); это предыдущий source snapshot.
+
+Свежий native frame: постоянная ошибка и Reload первым пунктом ⚙.
+
+![Ошибка и Reload в настоящем desktop-приложении](integration-history-2026-10-05/native-recovery-error.png)
+
+После явного повторного выбора статуса:
+
+![Состояние после успешного повтора](integration-history-2026-10-05/native-recovery-after-retry.png)
+
+Все шесть native PNG просмотрены, включая [future](integration-history-2026-10-05/native-future.png), [blocked tooltip](integration-history-2026-10-05/native-blocked.png), [terminal](integration-history-2026-10-05/native-terminal.png), [unarchive](integration-history-2026-10-05/native-after-unarchive.png). Проверенной before/after MP4 pair нет: прежние recording attempts не прошли FPS/readiness/ffmpeg проверки. Fallback сохраняет [baseline PNG](before.png) и добавляет свежие native PNG/read-back, rendered matrix и logs из автоматизированных test runs. Это ограничение video evidence, не пропуск UI tests.
+
+Full/native processes завершены, **слот явно освобождён**. Local quality gates PASS; source/validation re-review выполнен отдельным read-only-in-practice adversarial fallback (`danger-full-access`, approval never). CI последней опубликованной головы PR оценивается отдельно; предыдущие CI и main CI не переназначаются финальной голове. Установленное приложение и пользовательские задачи не менялись.
+
+## Предыдущая база main 92cf8c1e, 5 октября
 
 Во время проверки предыдущего снимка main получил #316 Importance. Проверенный union с `5a780b2e` сохранён в локальном merge commit `35924686`, затем отдельно объединён `92cf8c1e`. Все входящие Importance styles, 24 baseline-пары, тесты, CI и canonical fixtures сохранены. Recovery storage/VM semantics, постоянная ошибка и Reload первым пунктом ⚙ не менялись.
 
@@ -25,7 +57,7 @@
 
 В raw Importance child stdout авторский parent process повредил кодировку русских footer labels. Исходные stdout сохранены локально без предполагаемой перекодировки; публичный основной лог читаемый. Child names/counts/times и SHA256 исходных TRX приведены в JSON, извлечённом из самих TRX; тесты и assertions не менялись.
 
-**Общий verdict остаётся NEEDS-FIX; публикация — draft.** Полный Main finding ниже остаётся открытым; полный Main/native повтор на `92cf8c1e` ожидает согласованного слота. Все полные/native результаты следующего раздела относятся к **5a780b2e**, а не к текущей базе. Source re-review нового union: PASS для draft; ready не подтверждён. Video fallback сохраняется: проверенной MP4 pair нет, доступны предыдущие native PNG/read-back и свежие rendered frames.
+На этом предыдущем этапе verdict был **NEEDS-FIX, draft**: полный Main finding ещё открыт, повтор ожидал слота. Полные/native результаты следующего раздела относятся к **5a780b2e**. Финальный прогон и disposition приведены выше; эта запись сохраняет границы прежнего evidence. Video fallback сохранялся: проверенной MP4 pair не было.
 
 ## Предыдущая интеграция main 5a780b2e, 4–5 октября
 
@@ -127,4 +159,4 @@ dotnet build tests/Unlimotion.UiTests.FlaUI/Unlimotion.UiTests.FlaUI.csproj --no
 
 ## Остаток до ready for review
 
-Установить причину `WorkspaceTreeCommandsScenario_ExecutesFeatureSteps` в полной серии и подтвердить новый полный Main на актуальном снимке. Headless и affected native flow подтверждены. Старый ShiftDelete finding снят canonical wait и успешным case в общей серии; текущий открытый finding относится к paste observation и сохраняется в draft PR.
+Подтвердить CI свежего опубликованного HEAD PR #314. Актуальные полные Main и Headless, а также четыре affected native flow прошли; local implementation/validation gate закрыт. Историческая причина `WorkspaceTreeCommandsScenario_ExecutesFeatureSteps` остаётся UNKNOWN как неблокирующий residual: последний полный Main содержит PASS этого case, causal fix не заявляется. PR сохраняется draft до подтверждения fresh CI.
