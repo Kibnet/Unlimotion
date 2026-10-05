@@ -2092,7 +2092,13 @@ public class MainControlTreeCommandsUiTests
                     await Assert.That(relationTree).IsNotNull();
                     await Assert.That(CountWrappers(vm.CurrentItemContains.SubTasks)).IsGreaterThan(0);
 
-                    await ClickControlAsync(window, allTasksTree!);
+                    // Clicking the whole tree's center can select an unrelated leaf and hide
+                    // the relation pane. Keep the task with children selected while focusing the tree.
+                    var taskTitle = WaitForInlineTitleTextBlock(view, MainWindowViewModelFixture.RootTask2Id, "AllTasksTree");
+                    await ClickControlAsync(window, taskTitle);
+                    await Assert.That(vm.CurrentTaskItem?.Id).IsEqualTo(MainWindowViewModelFixture.RootTask2Id);
+                    await Assert.That(await WaitForAsync(() => relationTree!.IsEffectivelyVisible &&
+                        CountWrappers(vm.CurrentItemContains.SubTasks) > 0, 2000)).IsTrue();
                     var focused = relationTree!.Focus();
                     Dispatcher.UIThread.RunJobs();
                     await Assert.That(focused).IsTrue();

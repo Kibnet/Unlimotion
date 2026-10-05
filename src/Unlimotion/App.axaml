@@ -10,6 +10,16 @@
             <ResourceDictionary.MergedDictionaries>
                 <ResourceInclude Source="avares://Nodify/Theme.axaml" />
             </ResourceDictionary.MergedDictionaries>
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Light">
+                    <SolidColorBrush x:Key="TaskHistoryOldValueBrush" Color="#A33737"/>
+                    <SolidColorBrush x:Key="TaskHistoryNewValueBrush" Color="#236B49"/>
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Dark">
+                    <SolidColorBrush x:Key="TaskHistoryOldValueBrush" Color="#FFB0A8"/>
+                    <SolidColorBrush x:Key="TaskHistoryNewValueBrush" Color="#9DDBB3"/>
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
             <x:Double x:Key="AppFontSize">12</x:Double>
             <x:Double x:Key="AppSmallFontSize">10</x:Double>
             <x:Double x:Key="AppTabFontSize">14</x:Double>
