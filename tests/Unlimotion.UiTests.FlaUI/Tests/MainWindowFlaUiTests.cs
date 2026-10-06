@@ -23,10 +23,12 @@ public sealed class MainWindowFlaUiTests
     : StatusContractScenariosBase<MainWindowFlaUiTests.FlaUiRuntimeSession>
 {
     private static int _physicalPixelDpiAwarenessConfigured;
+    private int _statusViewportPreparationCount;
 
     protected override FlaUiRuntimeSession LaunchSession()
     {
-        var isStatusContract = IsStatusContractScenarioTest;
+        var isStatusContract = IsStatusContractScenarioTest ||
+            TestContext.Current?.Metadata.TestName == nameof(StatusContract_PickerRestoresClippedHeader);
         if (isStatusContract)
         {
             EnsurePhysicalPixelDpiAwareness();
@@ -140,6 +142,39 @@ public sealed class MainWindowFlaUiTests
             timeoutMessage: "Status picker did not expose its first non-current option.");
     }
 
+    [Test]
+    [NotInParallel(DesktopUiConstraint)]
+    public async Task StatusContract_PickerRestoresClippedHeader()
+    {
+        WaitForCurrentTaskTitle(UnlimotionAutomationScenarioData.StatusContractTerminalTaskTitle);
+        var viewport = Session.Inner.MainWindow.FindFirstDescendant(
+            Session.Inner.ConditionFactory.ByAutomationId("CurrentTaskDetailsScrollViewer"))
+            ?? throw new InvalidOperationException("Task details viewport was unavailable.");
+        viewport.Patterns.Scroll.Pattern.SetScrollPercent(-1, 100);
+        _ = WaitUntil(
+            () => Session.Inner.MainWindow.FindFirstDescendant(
+                Session.Inner.ConditionFactory.ByAutomationId("CurrentTaskStatusButton")),
+            button => button is not null && button.BoundingRectangle.Width > 0 &&
+                button.BoundingRectangle.Height > 0 && viewport.BoundingRectangle.Width > 0 &&
+                viewport.BoundingRectangle.Height > 0 &&
+                button.BoundingRectangle.Top < viewport.BoundingRectangle.Top,
+            timeout: TimeSpan.FromSeconds(5),
+            timeoutMessage: "The regression fixture did not clip the task status header.");
+
+        var preparationsBefore = _statusViewportPreparationCount;
+        OpenStatusPicker();
+        await Assert.That(_statusViewportPreparationCount).IsEqualTo(preparationsBefore + 1);
+        await Assert.That(ObserveOpenStatusOption("TaskStatusOptionArchived").Visible).IsTrue();
+        CloseStatusPicker();
+        var visibleHeader = Session.Inner.MainWindow.FindFirstDescendant(
+            Session.Inner.ConditionFactory.ByAutomationId("CurrentTaskStatusButton"))!;
+        var headerBounds = visibleHeader.BoundingRectangle;
+        var viewportBounds = viewport.BoundingRectangle;
+        await Assert.That(headerBounds.Width > 0 && headerBounds.Height > 0 &&
+            headerBounds.Left >= viewportBounds.Left && headerBounds.Top >= viewportBounds.Top &&
+            headerBounds.Right <= viewportBounds.Right && headerBounds.Bottom <= viewportBounds.Bottom).IsTrue();
+    }
+
     private void PrepareStatusButtonInDetailsViewport()
     {
         var conditions = Session.Inner.ConditionFactory;
@@ -163,8 +198,10 @@ public sealed class MainWindowFlaUiTests
         // UIA can report IsOffscreen=false for a header clipped by this ancestor.
         // Prepare the owned viewport; status activation still uses a physical hit test.
         var artifacts = Environment.GetEnvironmentVariable(ArtifactDirectoryEnvironmentVariable);
+        var testName = TestContext.Current?.Metadata.TestName ?? "unknown";
+        var evidencePrefix = "status-contract-viewport-" + testName;
         if (!string.IsNullOrWhiteSpace(artifacts))
-            CaptureStatusContractScreenshot(Path.Combine(artifacts, "status-contract-clipped-before-scroll.png"));
+            CaptureStatusContractScreenshot(Path.Combine(artifacts, evidencePrefix + "-before-scroll.png"));
         var scroll = viewport.Patterns.Scroll.PatternOrDefault
             ?? throw new InvalidOperationException("Clipped task status has no scrollable details viewport.");
         scroll.SetScrollPercent(-1, 0);
@@ -174,12 +211,15 @@ public sealed class MainWindowFlaUiTests
             control => control is not null && IsInsideViewport(control),
             timeout: TimeSpan.FromSeconds(5),
             timeoutMessage: "Task status button stayed clipped after preparing its details viewport.")!;
+        _statusViewportPreparationCount++;
         if (!string.IsNullOrWhiteSpace(artifacts))
         {
-            CaptureStatusContractScreenshot(Path.Combine(artifacts, "status-contract-visible-after-scroll.png"));
-            File.WriteAllText(Path.Combine(artifacts, "status-contract-viewport-preparation.json"),
+            CaptureStatusContractScreenshot(Path.Combine(artifacts, evidencePrefix + "-after-scroll.png"));
+            File.WriteAllText(Path.Combine(artifacts, evidencePrefix + ".json"),
                 System.Text.Json.JsonSerializer.Serialize(new
                 {
+                    TestName = testName,
+                    PreparationCount = _statusViewportPreparationCount,
                     BeforeButton = beforeBounds,
                     BeforeCenterHit = beforeHit,
                     Viewport = viewportBounds,
