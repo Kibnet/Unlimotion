@@ -7,10 +7,14 @@ public sealed class TaskAvailabilityService
 {
     private readonly IReadOnlyList<TaskItem> _allTasks;
     private readonly IReadOnlyDictionary<string, TaskItem> _tasks;
+    private readonly DateTimeOffset? _evaluatedAt;
+    private readonly CancellationToken _cancellationToken;
 
-    public TaskAvailabilityService(IEnumerable<TaskItem> tasks)
+    public TaskAvailabilityService(IEnumerable<TaskItem> tasks, DateTimeOffset? evaluatedAt = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(tasks);
+        _evaluatedAt = evaluatedAt;
+        _cancellationToken = cancellationToken;
 
         _allTasks = tasks.ToArray();
         _tasks = _allTasks
@@ -45,6 +49,8 @@ public sealed class TaskAvailabilityService
     {
         ArgumentNullException.ThrowIfNull(task);
 
+        _cancellationToken.ThrowIfCancellationRequested();
+
         var reasons = new List<TaskAvailabilityReason>();
         CollectIncompleteContainedTasks(task, reasons);
         CollectIncompleteBlockers(task, inherited: false, reasons, new HashSet<string>(StringComparer.Ordinal));
@@ -61,7 +67,7 @@ public sealed class TaskAvailabilityService
             AddUnsatisfiedCriteriaReasons(task, reasons);
         }
 
-        var plannedBeginIsFuture = task.PlannedBeginDateTime > DateTimeOffset.UtcNow;
+        var plannedBeginIsFuture = task.PlannedBeginDateTime > (_evaluatedAt ?? DateTimeOffset.UtcNow);
         if (plannedBeginIsFuture)
         {
             reasons.Add(new TaskAvailabilityReason
@@ -143,6 +149,7 @@ public sealed class TaskAvailabilityService
         var referenceIssues = new List<TaskGraphReferenceIssue>();
         foreach (var task in _tasks.Values)
         {
+            _cancellationToken.ThrowIfCancellationRequested();
             ValidateCompletionCriteria(referenceIssues, task);
             ValidateRelation(referenceIssues, task, nameof(TaskItem.ContainsTasks), task.ContainsTasks, nameof(TaskItem.ParentTasks));
             ValidateRelation(referenceIssues, task, nameof(TaskItem.ParentTasks), task.ParentTasks, nameof(TaskItem.ContainsTasks));
@@ -200,6 +207,7 @@ public sealed class TaskAvailabilityService
             stack.Push(CreateContainmentFrame(start));
             while (stack.Count > 0)
             {
+                _cancellationToken.ThrowIfCancellationRequested();
                 var frame = stack.Pop();
                 if (frame.NextChildIndex >= frame.ChildIds.Length)
                 {
@@ -251,30 +259,29 @@ public sealed class TaskAvailabilityService
                 continue;
             }
 
-            Visit(start);
-        }
-
-        void Visit(TaskItem current)
-        {
-            states[current.Id] = 1;
-            foreach (var blockedId in (current.BlocksTasks ?? [])
-                         .Where(static id => !string.IsNullOrWhiteSpace(id))
-                         .Distinct(StringComparer.Ordinal)
-                         .OrderBy(static id => id, StringComparer.Ordinal))
+            var stack = new Stack<ContainmentTraversalFrame>();
+            states[start.Id] = 1;
+            stack.Push(Frame(start));
+            while (stack.TryPop(out var frame))
             {
-                if (!_tasks.TryGetValue(blockedId, out var blocked))
+                _cancellationToken.ThrowIfCancellationRequested();
+                if (frame.NextChildIndex == frame.ChildIds.Length)
                 {
+                    states[frame.TaskId] = 2;
                     continue;
                 }
-
+                stack.Push(frame with { NextChildIndex = frame.NextChildIndex + 1 });
+                var blockedId = frame.ChildIds[frame.NextChildIndex];
+                if (!_tasks.TryGetValue(blockedId, out var blocked)) continue;
                 if (!states.TryGetValue(blockedId, out var state))
                 {
-                    Visit(blocked);
+                    states[blockedId] = 1;
+                    stack.Push(Frame(blocked));
                     continue;
                 }
-
                 if (state == 1)
                 {
+                    var current = _tasks[frame.TaskId];
                     issues.Add(new TaskGraphReferenceIssue
                     {
                         Kind = TaskGraphReferenceIssueKind.DependencyCycle,
@@ -289,8 +296,9 @@ public sealed class TaskAvailabilityService
                 }
             }
 
-            states[current.Id] = 2;
         }
+        static ContainmentTraversalFrame Frame(TaskItem task) => new(task.Id,
+            DistinctIds(task.BlocksTasks).Order(StringComparer.Ordinal).ToArray(), 0);
     }
 
     private static ContainmentTraversalFrame CreateContainmentFrame(TaskItem task) => new(
@@ -430,37 +438,30 @@ public sealed class TaskAvailabilityService
         ICollection<TaskAvailabilityReason> reasons,
         ISet<string> visitedParentIds)
     {
-        foreach (var blockerId in DistinctIds(taskWithRelations.BlockedByTasks))
+        var pending = new Stack<(TaskItem Task, bool Inherited)>();
+        pending.Push((taskWithRelations, inherited));
+        var initial = true;
+        while (pending.TryPop(out var frame))
         {
-            if (!_tasks.TryGetValue(blockerId, out var blockerTask) || !blockerTask.Status.IsIncompleteForAvailability())
+            _cancellationToken.ThrowIfCancellationRequested();
+            if (!initial && !visitedParentIds.Add(frame.Task.Id)) continue;
+            initial = false;
+            foreach (var blockerId in DistinctIds(frame.Task.BlockedByTasks))
             {
-                continue;
+                if (!_tasks.TryGetValue(blockerId, out var blockerTask) || !blockerTask.Status.IsIncompleteForAvailability()) continue;
+                reasons.Add(new TaskAvailabilityReason
+                {
+                    Kind = frame.Inherited ? TaskAvailabilityReasonKind.IncompleteInheritedBlocker : TaskAvailabilityReasonKind.IncompleteDirectBlocker,
+                    SubjectId = blockerTask.Id,
+                    SubjectTitle = blockerTask.Title,
+                    SubjectStatus = blockerTask.Status,
+                    SourceTaskId = frame.Task.Id,
+                    SourceTaskTitle = frame.Task.Title,
+                    Details = frame.Inherited ? $"Parent task '{frame.Task.Id}' has incomplete blocker." : "Task has incomplete direct blocker."
+                });
             }
-
-            reasons.Add(new TaskAvailabilityReason
-            {
-                Kind = inherited
-                    ? TaskAvailabilityReasonKind.IncompleteInheritedBlocker
-                    : TaskAvailabilityReasonKind.IncompleteDirectBlocker,
-                SubjectId = blockerTask.Id,
-                SubjectTitle = blockerTask.Title,
-                SubjectStatus = blockerTask.Status,
-                SourceTaskId = taskWithRelations.Id,
-                SourceTaskTitle = taskWithRelations.Title,
-                Details = inherited
-                    ? $"Parent task '{taskWithRelations.Id}' has incomplete blocker."
-                    : "Task has incomplete direct blocker."
-            });
-        }
-
-        foreach (var parentId in DistinctIds(taskWithRelations.ParentTasks))
-        {
-            if (!visitedParentIds.Add(parentId) || !_tasks.TryGetValue(parentId, out var parentTask))
-            {
-                continue;
-            }
-
-            CollectIncompleteBlockers(parentTask, inherited: true, reasons, visitedParentIds);
+            foreach (var parentId in DistinctIds(frame.Task.ParentTasks).Reverse())
+                if (_tasks.TryGetValue(parentId, out var parentTask)) pending.Push((parentTask, true));
         }
     }
 

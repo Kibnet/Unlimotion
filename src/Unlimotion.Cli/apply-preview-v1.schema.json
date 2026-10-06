@@ -1,0 +1,353 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unlimotion.org/schemas/apply-preview-v1.schema.json",
+  "title": "Unlimotion complete application preview witness v1",
+  "description": "Maximum UTF-8 response size: 32 MiB. Generated timestamp objects are allowed only in documented generated after-value timestamp positions and must use applicationClock or nextUpdated. The CLI additionally recomputes semantic effectHash, validates duplicate change keys, protected invariants and request/source bindings. This artifact is not a signature or authorization.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "success": {
+      "const": true
+    },
+    "mode": {
+      "const": "preview"
+    },
+    "applicationId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "requestHash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "didMutate": {
+      "const": false
+    },
+    "changedTaskIds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "createdTaskIds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "operationResults": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "taskId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "outcome": {
+            "const": "wouldApply"
+          }
+        },
+        "required": [
+          "operationId",
+          "taskId",
+          "outcome"
+        ]
+      }
+    },
+    "receiptWritten": {
+      "const": false
+    },
+    "validation": {
+      "type": "object"
+    },
+    "authoritativeTasks": {
+      "type": "array",
+      "maxItems": 0
+    },
+    "preview": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "previewVersion": {
+          "const": 1
+        },
+        "requestHash": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "sourceKey": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "evaluatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "complete": {
+          "const": true
+        },
+        "contracts": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "application": {
+              "const": 1
+            },
+            "projection": {
+              "const": 1
+            },
+            "availability": {
+              "const": 1
+            },
+            "timeZone": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "application",
+            "projection",
+            "availability",
+            "timeZone"
+          ]
+        },
+        "changes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "taskId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "path": {
+                "type": "string",
+                "pattern": "^/"
+              },
+              "before": {},
+              "after": {},
+              "origin": {
+                "enum": [
+                  "explicit",
+                  "derived",
+                  "system"
+                ]
+              },
+              "operationIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "uniqueItems": true
+              },
+              "reasonTaskIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "uniqueItems": true
+              },
+              "cause": {
+                "const": "graphNormalization"
+              },
+              "canonicalEdge": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "contains",
+                      "blocks"
+                    ]
+                  },
+                  "fromTaskId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "toTaskId": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "kind",
+                  "fromTaskId",
+                  "toTaskId"
+                ]
+              }
+            },
+            "required": [
+              "taskId",
+              "path",
+              "before",
+              "after",
+              "origin",
+              "operationIds",
+              "reasonTaskIds"
+            ]
+          }
+        },
+        "affectedTaskIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "storedChangedTaskIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "createdTaskIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "etags": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "taskId": {
+                "type": "string"
+              },
+              "beforeEtag": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^sha256:[0-9a-f]{64}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "predictedAfterEtag": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              }
+            },
+            "required": [
+              "taskId",
+              "beforeEtag",
+              "predictedAfterEtag"
+            ]
+          }
+        },
+        "protectedExecution": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "changed": {
+              "const": false
+            },
+            "invariants": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "taskId": {
+                    "type": "string"
+                  },
+                  "executionHash": {
+                    "type": "string",
+                    "pattern": "^sha256:[0-9a-f]{64}$"
+                  },
+                  "descriptionSegmentHash": {
+                    "type": "string",
+                    "pattern": "^sha256:[0-9a-f]{64}$"
+                  }
+                },
+                "required": [
+                  "taskId",
+                  "executionHash",
+                  "descriptionSegmentHash"
+                ]
+              }
+            }
+          },
+          "required": [
+            "changed",
+            "invariants"
+          ]
+        },
+        "guard": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "version": {
+              "const": 1
+            },
+            "sourceManifestHash": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            "effectHash": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          },
+          "required": [
+            "version",
+            "sourceManifestHash",
+            "effectHash"
+          ]
+        }
+      },
+      "required": [
+        "previewVersion",
+        "requestHash",
+        "sourceKey",
+        "evaluatedAt",
+        "complete",
+        "contracts",
+        "changes",
+        "affectedTaskIds",
+        "storedChangedTaskIds",
+        "createdTaskIds",
+        "etags",
+        "protectedExecution",
+        "guard"
+      ]
+    }
+  },
+  "required": [
+    "success",
+    "mode",
+    "applicationId",
+    "requestHash",
+    "didMutate",
+    "changedTaskIds",
+    "createdTaskIds",
+    "operationResults",
+    "receiptWritten",
+    "authoritativeTasks",
+    "preview"
+  ]
+}

@@ -29,7 +29,7 @@
       <_Parameter1>UnlimotionBuildKind</_Parameter1>
       <_Parameter2>$(UnlimotionBuildKind)</_Parameter2>
     </AssemblyAttribute>
-    <EmbeddedResource Include="apply-request-v1.schema.json" />
+    <EmbeddedResource Include="*.schema.json" />
   </ItemGroup>
 
   <ItemGroup>

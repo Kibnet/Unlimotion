@@ -59,11 +59,11 @@ public sealed record TaskGraphValidationReport
     public IReadOnlyList<TaskGraphReferenceIssue> ReferenceIssues { get; init; } = Array.Empty<TaskGraphReferenceIssue>();
     public IReadOnlyList<TaskAvailabilityMismatch> AvailabilityMismatches { get; init; } = Array.Empty<TaskAvailabilityMismatch>();
 
-    public static TaskGraphValidationReport From(TaskGraphReadResult readResult)
+    public static TaskGraphValidationReport From(TaskGraphReadResult readResult, DateTimeOffset? evaluatedAt = null)
     {
         ArgumentNullException.ThrowIfNull(readResult);
 
-        var validation = new TaskAvailabilityService(readResult.Tasks).Validate();
+        var validation = new TaskAvailabilityService(readResult.Tasks, evaluatedAt).Validate();
         return new TaskGraphValidationReport
         {
             TaskCount = validation.TaskCount,

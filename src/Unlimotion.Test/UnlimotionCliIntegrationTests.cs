@@ -16,7 +16,7 @@ using IRecoverableTaskGraphWriteScope = global::Unlimotion.TaskTree.IRecoverable
 
 namespace Unlimotion.Test;
 
-public sealed class UnlimotionCliIntegrationTests
+public sealed partial class UnlimotionCliIntegrationTests
 {
     [Test]
     public async Task Status_UsesTasksEnvironmentWithoutExplicitPath()

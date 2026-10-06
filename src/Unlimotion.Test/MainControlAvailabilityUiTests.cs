@@ -20,6 +20,37 @@ namespace Unlimotion.Test;
 public class MainControlAvailabilityUiTests
 {
     [Test]
+    public async Task HistoricalAvailabilityObservation_DoesNotChangeCurrentStatusPicker()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var now = DateTimeOffset.UtcNow;
+            var model = new TaskItem
+            {
+                Id = "fixed-observation-picker", Title = "Доступна сейчас", Status = DomainTaskStatus.Prepared,
+                IsCanBeCompleted = true, PlannedBeginDateTime = now.AddDays(-1)
+            };
+            var historical = new TaskAvailabilityAnalyzer(new[] { model }, now.AddDays(-2)).Analyze(model);
+            using var repository = new UnifiedTaskStorage(new TaskTreeManager(new InMemoryStorage()));
+            using var task = new TaskItemViewModel(model, repository, () => false);
+            var picker = new TaskStatusPicker { Task = task };
+            var window = CreateWindow(picker);
+            try
+            {
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+                await Assert.That(historical.CanStart).IsFalse();
+                await Assert.That(task.StatusOptions.Single(option => option.Status == DomainTaskStatus.InProgress).IsEnabled).IsTrue();
+                await Assert.That(picker.Opacity).IsEqualTo(1d);
+                await Assert.That(new TaskAvailabilityAnalyzer(new[] { model }).Analyze(model).CanStart).IsTrue();
+                await Assert.That(model.PlannedBeginDateTime).IsEqualTo(now.AddDays(-1));
+            }
+            finally { window.Close(); }
+        }, CancellationToken.None);
+    }
+
+    [Test]
     public async Task FuturePlannedBegin_DisablesOnlyStartWithoutDimmingTask()
     {
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
