@@ -259,16 +259,34 @@ public class MainControlFilterToolbarResponsiveUiTests
                 SelectTab(view, 0);
                 var controls = FindVisibleToolbarEmojiFilterControls(FindVisibleFilterToolbar(view));
                 var control = exclude ? controls.ExcludeControl : controls.IncludeControl;
-                await ClickControlAsync(window, GetEmojiFilterInput(control));
+                // Establish the actual input target after layout, independent of pointer
+                // state left by earlier sessions in the full suite.
+                RenderEmojiToggleWindow(window, view);
+                await Assert.That(GetEmojiFilterInput(control).Focus()).IsTrue();
+                PressKey(window, Key.Enter, PhysicalKey.Enter);
+                await Assert.That(await TestHelpers.WaitUntilAsync(() =>
+                {
+                    RenderEmojiToggleWindow(window, view);
+                    var popupList = GetEmojiFilterList(control);
+                    return IsEmojiDropDownOpen(control) && popupList.IsVisible &&
+                        popupList.Bounds.Width > 0 && popupList.Bounds.Height > 0;
+                }, TimeSpan.FromSeconds(2))).IsTrue();
                 var list = GetEmojiFilterList(control);
                 var all = GetEmojiFilterListItems(list)[0];
                 list.SelectedItem = all;
-                list.Focus();
-                RunLayoutJobs();
                 RenderEmojiToggleWindow(window, view);
                 SaveEmojiDiagnosticFrame(window, $"{exclude}-before");
+                await Assert.That(list.Focus()).IsTrue();
+                await Assert.That(ReferenceEquals(list.SelectedItem, all)).IsTrue();
                 var filtersAtToggle = (exclude ? vm.EmojiExcludeFilters : vm.EmojiFilters).ToArray();
-                TestExecutionTrace.Write("emoji-state", "before-toggle", "observed", details: new { all.ShowTasks, filters = filtersAtToggle.Select(filter => new { filter.Emoji, filter.ShowTasks }).ToArray() });
+                TestExecutionTrace.Write("emoji-state", "before-toggle", "observed", details: new
+                {
+                    all.ShowTasks,
+                    popupOpen = IsEmojiDropDownOpen(control),
+                    list.IsFocused,
+                    listBounds = list.Bounds.ToString(),
+                    filters = filtersAtToggle.Select(filter => new { filter.Emoji, filter.ShowTasks }).ToArray()
+                });
                 armed = true;
                 PressKey(window, Key.Space, PhysicalKey.Space);
                 RunLayoutJobs();
