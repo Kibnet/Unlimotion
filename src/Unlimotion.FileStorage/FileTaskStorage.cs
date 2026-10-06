@@ -10,7 +10,7 @@ using Unlimotion.TaskTree;
 
 namespace Unlimotion.Storage;
 
-public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraphWriteLock, ITaskGraphWriteScopeStorage, ITaskReloadReader
+public partial class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraphWriteLock, ITaskGraphWriteScopeStorage, ITaskReloadReader, ITaskGraphObservationStorage, ITaskGraphObservedWriteGuardStorage
 {
     internal static readonly StringComparer FilePathComparer = OperatingSystem.IsWindows()
         ? StringComparer.OrdinalIgnoreCase
@@ -51,7 +51,10 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
             : options.Path;
 
         Path = System.IO.Path.GetFullPath(normalizedPath);
-        Directory.CreateDirectory(Path);
+        if (options.CreateDirectoryIfMissing)
+        {
+            Directory.CreateDirectory(Path);
+        }
         _options = options with { Path = Path };
     }
 
@@ -524,13 +527,21 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
     public Task<T> WithDirectoryLockAsync<T>(Func<Task<T>> operation) =>
         WithDirectoryLockAsync(operation, CancellationToken.None);
 
-    public async Task<T> WithDirectoryLockAsync<T>(
+    public Task<T> WithDirectoryLockAsync<T>(
         Func<Task<T>> operation,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken) =>
+        WithDirectoryLockCoreAsync(operation, cancellationToken, recoverPendingTransactions: true,
+            requireDirectoryLock: false);
+
+    private async Task<T> WithDirectoryLockCoreAsync<T>(
+        Func<Task<T>> operation,
+        CancellationToken cancellationToken,
+        bool recoverPendingTransactions,
+        bool requireDirectoryLock)
     {
         ArgumentNullException.ThrowIfNull(operation);
 
-        if (!_options.UseDirectoryLock)
+        if (!_options.UseDirectoryLock && !requireDirectoryLock)
         {
             return await operation();
         }
@@ -565,15 +576,21 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
             currentLocks.Add(lockPath);
             HeldDirectoryLocks.Value = currentLocks;
 
-            await RecoverPendingTransactionsAsync();
+            if (recoverPendingTransactions)
+            {
+                await RecoverPendingTransactionsAsync();
+            }
 
             return await operation();
         }
         finally
         {
             HeldDirectoryLocks.Value = previousLocks;
-            lockStream?.Dispose();
-            TryDelete(lockPath);
+            if (lockStream != null)
+            {
+                lockStream.Dispose();
+                TryDelete(lockPath);
+            }
             semaphore.Release();
         }
     }
@@ -607,7 +624,10 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
         var filePath = ResolveTaskFilePath(item.Id);
         var json = JsonConvert.SerializeObject(item, Formatting.Indented, CreateSerializerSettings());
         var content = json + Environment.NewLine;
-        var guardedSource = _activeLiveGraphGenerationGuard.Value != null
+        var observedGuard = _activeObservedWriteGuard.Value;
+        var guardedSource = observedGuard != null
+            ? await observedGuard.CheckBeforeWriteAsync(filePath)
+            : _activeLiveGraphGenerationGuard.Value != null
             ? CaptureGuardedSourceSnapshot(filePath)
             : null;
         if (_activeWriteScope.Value != null)
@@ -621,12 +641,12 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
             OnWritePrepared(item.Id, filePath, content);
             OnBeforeWrite(item.Id, filePath);
             EnsureActiveLiveGraphGenerationCurrent();
-            if (_activeLiveGraphGenerationGuard.Value != null)
+            if (guardedSource != null)
             {
                 guardedWrite = await AtomicWriteAllTextRetainingBackupAsync(filePath, content);
                 if (!guardedWrite.MatchesDisplacedSource(guardedSource!))
                 {
-                    InvalidateLiveGraph();
+                    if (_activeLiveGraphGenerationGuard.Value != null) InvalidateLiveGraph();
                     throw new LiveGraphInvalidatedException(
                         "Task file contents changed before the guarded write replaced them.");
                 }
@@ -635,6 +655,8 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
             {
                 await AtomicWriteAllTextAsync(filePath, content);
             }
+
+            observedGuard?.RecordWritten(filePath, SHA256.HashData(Encoding.UTF8.GetBytes(content)));
 
             EnsureActiveLiveGraphGenerationCurrent();
             OnAfterWritePersisted(item.Id, filePath);
@@ -1313,9 +1335,11 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
         private readonly FileTaskGraphWriteScope? _previous;
         private readonly HashSet<string> _attemptedTaskIds = new(StringComparer.Ordinal);
         private readonly RecoverableMutationJournal _journal = new();
+        private ObservedWriteGuard? _observedWriteGuard;
         private string? _journalPath;
         private bool _disposed;
         private bool _completed;
+        private bool _commitPersisted;
 
         public FileTaskGraphWriteScope(FileTaskStorage owner, FileTaskGraphWriteScope? previous)
         {
@@ -1342,6 +1366,8 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
             }
         }
 
+        public void UseObservedWriteGuard(ObservedWriteGuard guard) => _observedWriteGuard = guard;
+
         public async Task PrepareWriteAsync(string taskId, string filePath, string content)
         {
             Record(taskId);
@@ -1362,7 +1388,10 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
 
         public async Task CommitAsync()
         {
-            if (_completed || _journalPath == null)
+            if (_completed) return;
+            if (_observedWriteGuard != null)
+                await _observedWriteGuard.VerifyBeforeCommitAsync();
+            if (_journalPath == null)
             {
                 _completed = true;
                 return;
@@ -1383,10 +1412,16 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
                 return;
             }
 
-            await _owner.ApplyJournalImagesAsync(_journal, useAfterImages: _journal.Committed);
+            var externalChangesPreserved = false;
+            if (_observedWriteGuard != null)
+                externalChangesPreserved = await _owner.RollbackObservedJournalAsync(_journal, _commitPersisted);
+            else
+                await _owner.ApplyJournalImagesAsync(_journal, useAfterImages: _journal.Committed);
             _owner.DeleteTransactionJournal(_journalPath);
             _owner.InvalidateCachesAfterRecovery();
             _completed = true;
+            if (externalChangesPreserved)
+                throw new IOException("Guarded rollback preserved later external changes. The current journal was removed; read-back is required to determine the task state.");
         }
 
         private RecoverableMutationEntry GetOrCreateEntry(string taskId, string filePath)
@@ -1418,7 +1453,10 @@ public class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraph
                 $"{_journal.Id}.json");
             var json = JsonConvert.SerializeObject(_journal, Formatting.Indented) + Environment.NewLine;
             _owner.OnBeforeTransactionJournalPersist(_journalPath);
+            if (_journal.Committed && _observedWriteGuard != null)
+                await _observedWriteGuard.VerifyBeforeCommitAsync();
             await _owner.AtomicWriteAllTextAsync(_journalPath, json);
+            _commitPersisted = _journal.Committed;
             _owner.OnAfterTransactionJournalPersist(_journalPath);
         }
 

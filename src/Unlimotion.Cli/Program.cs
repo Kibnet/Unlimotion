@@ -18,6 +18,8 @@ public static class Program
         try
         {
             if (CliIntrospection.TryRun(args, out var introspectionCode)) return introspectionCode;
+            if (await NightAgentSnapshotCommands.TryRunAsync(args) is { } snapshotCode) return snapshotCode;
+            if (await NightAgentSearch.TryRunAsync(args) is { } searchCode) return searchCode;
             var options = CliOptions.Parse(args);
             if (options.ShowHelp)
             {
@@ -48,7 +50,8 @@ public static class Program
             {
                 Path = options.TasksPath,
                 UseDirectoryLock = true,
-                PreserveUnknownJson = true
+                PreserveUnknownJson = true,
+                CreateDirectoryIfMissing = false
             });
 
             return options.Command switch
@@ -72,6 +75,16 @@ public static class Program
             };
         }
         catch (CliException ex)
+        {
+            WriteError(args, ex.Kind, ex.Message, ex.ExitCode);
+            return ex.ExitCode;
+        }
+        catch (TaskGraphObservationException ex)
+        {
+            WriteError(args, ex.Kind, ex.Message, exitCode: 1);
+            return 1;
+        }
+        catch (NightAgentSnapshotException ex)
         {
             WriteError(args, ex.Kind, ex.Message, ex.ExitCode);
             return ex.ExitCode;
@@ -524,11 +537,32 @@ public static class Program
 
     private static async Task<int> RunApply(CliOptions options, FileTaskStorage storage)
     {
+        // Keep the approved physical source for observation, recovery, reconciliation and receipts.
+        // A caller's directory junction may change while reading the request or witness.
+        if (options.Diff == "full" || options.ExpectPreviewPath != null)
+            storage = new FileTaskStorage(new FileTaskStorageOptions
+            {
+                Path = NightAgentSnapshotCodec.ResolvePhysicalDirectory(storage.Path),
+                UseDirectoryLock = true,
+                PreserveUnknownJson = true,
+                CreateDirectoryIfMissing = false
+            });
         var (request, json) = await ReadApplicationRequest(options);
         var requestHash = RequestHash(json);
         if (options.ApplyCommand == "inspect") return await RunApplyInspect(options, storage, request, requestHash);
         TaskApplicationResult result;
         var receiptWritten = false;
+        TaskApplicationPreviewPayload? witness = null;
+        var sourceKey = options.Diff == "full" || options.ExpectPreviewPath != null
+            ? NightAgentSnapshotCodec.CreateSourceKey(storage.Path) : null;
+        if (options.ExpectPreviewPath != null)
+        {
+            var witnessFile = new FileInfo(options.ExpectPreviewPath);
+            if (!witnessFile.Exists || witnessFile.Length > 32 * 1024 * 1024)
+                throw new CliException("Preview witness is missing or exceeds 32 MiB.", 1, "previewInvalid");
+            witness = TaskApplicationPreview.ValidateWitness(await File.ReadAllTextAsync(witnessFile.FullName),
+                request.ApplicationId, requestHash, sourceKey!);
+        }
         if (!options.DryRun)
         {
             var receipts = new TaskApplicationReceiptStore(storage.Path);
@@ -553,7 +587,11 @@ public static class Program
             else
             {
                 var service = new TaskApplicationCommandService(storage, TaskEtag.Create);
-                result = await service.TryApplyAsync(request);
+                result = witness == null
+                    ? await service.TryApplyAsync(request)
+                    : await service.TryApplyAsync(request, plan =>
+                        TaskApplicationPreview.CheckGuard(witness, plan, request, requestHash,
+                            NightAgentSnapshotCodec.CreateSourceKey(storage.Path)));
                 if (result.Success)
                 {
                     await receipts.WriteAsync(new TaskApplicationReceipt
@@ -576,9 +614,20 @@ public static class Program
         }
         else
         {
-            result = await new TaskApplicationCommandService(storage, TaskEtag.Create).PreviewAsync(request);
+            var service = new TaskApplicationCommandService(storage, TaskEtag.Create);
+            result = options.Diff == "full"
+                ? await service.PreviewPlanAsync(request)
+                : await service.PreviewAsync(request);
         }
         var output = ApplicationCommandOutput.From(request.ApplicationId, requestHash, result, receiptWritten);
+        if (options.Diff == "full" && result.Success)
+        {
+            if (NightAgentSnapshotCodec.CreateSourceKey(storage.Path) != sourceKey)
+                throw new CliException("Task source directory alias changed during preview.", 1, "previewStale");
+            output = output with { Preview = TaskApplicationPreview.Create(result.Plan!, request, requestHash, sourceKey!) };
+            if (JsonSerializer.SerializeToUtf8Bytes(output, JsonOptions).Length > 32 * 1024 * 1024)
+                throw new CliException("Full preview exceeds 32 MiB. Split the request.", 1, "previewTooLarge");
+        }
         if (options.Format == OutputFormat.Json)
         {
             WriteJson(output);
@@ -586,6 +635,8 @@ public static class Program
         else if (result.Success)
         {
             Console.WriteLine($"{output.Mode}: {string.Join(", ", output.ChangedTaskIds)}");
+            if (output.Preview != null)
+                Console.WriteLine(TaskApplicationPreview.RenderText(output.Preview));
         }
         else
         {
@@ -922,7 +973,9 @@ public static class Program
     {
         if (WantsJson(args))
         {
-            WriteJson(ErrorOutput.Create(kind, message));
+            WriteJson(kind == "previewTooLarge"
+                ? (object)new { success = false, didMutate = false, complete = false, error = new { kind, message } }
+                : ErrorOutput.Create(kind, message));
             return;
         }
 
@@ -1011,6 +1064,8 @@ public sealed record CliOptions
     public string? Query { get; init; }
     public string? Cursor { get; init; }
     public bool DryRun { get; init; }
+    public string? Diff { get; init; }
+    public string? ExpectPreviewPath { get; init; }
     public IReadOnlySet<string> IncludeSections { get; init; } = new HashSet<string>(StringComparer.Ordinal);
     public DomainTaskStatus? ExpectedStatus { get; init; }
     public int? Limit { get; init; }
@@ -1078,6 +1133,8 @@ public sealed record CliOptions
         string? query = null;
         string? cursor = null;
         var dryRun = false;
+        string? diff = null;
+        string? expectPreviewPath = null;
         var includeSections = new HashSet<string>(StringComparer.Ordinal);
         DomainTaskStatus? expectedStatus = null;
         int? limit = null;
@@ -1171,6 +1228,15 @@ public sealed record CliOptions
                     suppliedOptions.Add(arg);
                     dryRun = true;
                     break;
+                case "--diff":
+                    suppliedOptions.Add(arg);
+                    diff = RequireValue(args, ref i, arg);
+                    if (diff != "full") throw new CliException("--diff supports only 'full'.");
+                    break;
+                case "--expect-preview":
+                    suppliedOptions.Add(arg);
+                    expectPreviewPath = RequireValue(args, ref i, arg);
+                    break;
                 case "--include":
                     suppliedOptions.Add(arg);
                     AddIncludeSections(includeSections, RequireValue(args, ref i, arg));
@@ -1216,6 +1282,10 @@ public sealed record CliOptions
         ValidateOptions(command, executionCommand, suppliedOptions);
         if (command == "apply" && applyCommand == "inspect" && dryRun)
             throw new CliException("apply inspect is read-only and does not accept --dry-run.");
+        if (diff != null && (!dryRun || applyCommand != null))
+            throw new CliException("--diff full requires apply --dry-run.");
+        if (expectPreviewPath != null && (dryRun || applyCommand != null))
+            throw new CliException("--expect-preview requires a real apply, without --dry-run or inspect.");
         if (suppliedOptions.Contains("--tasks") && string.IsNullOrWhiteSpace(tasksPath))
             throw new CliException("--tasks requires a non-empty path.");
 
@@ -1249,6 +1319,8 @@ public sealed record CliOptions
             Query = query,
             Cursor = cursor,
             DryRun = dryRun,
+            Diff = diff,
+            ExpectPreviewPath = expectPreviewPath,
             IncludeSections = includeSections,
             ExpectedStatus = expectedStatus,
             Limit = limit,
@@ -1323,7 +1395,7 @@ public sealed record CliOptions
             ("context", _) => new[] { "--tasks", "--format" },
             ("search", _) => new[] { "--tasks", "--query", "--status", "--root", "--limit", "--cursor", "--format" },
             ("unlocked", _) => new[] { "--tasks", "--root", "--format" },
-            ("apply", _) when executionCommand == null => new[] { "--tasks", "--request", "--dry-run", "--format" },
+            ("apply", _) when executionCommand == null => new[] { "--tasks", "--request", "--dry-run", "--diff", "--expect-preview", "--format" },
             ("candidates", _) => new[] { "--tasks", "--limit", "--status", "--startable", "--sort", "--format" },
             ("claim", _) => new[] { "--tasks", "--id", "--agent", "--expected-status", "--format" },
             ("task", _) => new[] { "--tasks", "--id", "--include", "--format" },
@@ -1776,6 +1848,8 @@ public sealed record RepeaterOutput
 
 public sealed record ApplicationCommandOutput
 {
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public TaskApplicationPreviewPayload? Preview { get; init; }
     public bool Success { get; init; }
     public string Mode { get; init; } = string.Empty;
     public string ApplicationId { get; init; } = string.Empty;
@@ -1826,6 +1900,14 @@ public sealed record ApplicationCommandOutput
         TaskApplicationErrorKind.IdempotencyConflict => "idempotencyConflict",
         TaskApplicationErrorKind.ReconciliationRequired => "reconciliationRequired",
         TaskApplicationErrorKind.OutcomeUnknown => "outcomeUnknown",
+        TaskApplicationErrorKind.PreviewInvalid => "previewInvalid",
+        TaskApplicationErrorKind.PreviewStale => "previewStale",
+        TaskApplicationErrorKind.PreviewTooLarge => "previewTooLarge",
+        TaskApplicationErrorKind.UnstablePrecondition => "unstablePrecondition",
+        TaskApplicationErrorKind.UnstableSource => "unstableSource",
+        TaskApplicationErrorKind.RecoveryRequired => "recoveryRequired",
+        TaskApplicationErrorKind.SnapshotUnstable => "snapshotUnstable",
+        TaskApplicationErrorKind.SnapshotTooLarge => "snapshotTooLarge",
         _ => "operationFailed"
     };
 }

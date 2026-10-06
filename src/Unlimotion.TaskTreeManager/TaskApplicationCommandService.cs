@@ -23,8 +23,15 @@ public sealed class TaskApplicationCommandService
     public Task<TaskApplicationResult> PreviewAsync(TaskApplicationRequest request) =>
         ExecuteAsync(request, dryRun: true);
 
+    public Task<TaskApplicationResult> PreviewPlanAsync(TaskApplicationRequest request) =>
+        ExecuteAsync(request, dryRun: true, includePlan: true);
+
     public Task<TaskApplicationResult> TryApplyAsync(TaskApplicationRequest request) =>
         ExecuteAsync(request, dryRun: false);
+
+    public Task<TaskApplicationResult> TryApplyAsync(TaskApplicationRequest request,
+        Func<TaskApplicationPlan, TaskApplicationError?> guard) =>
+        ExecuteAsync(request, dryRun: false, includePlan: true, guard);
 
     public async Task<TaskApplicationStateInspection> InspectAsync(TaskApplicationRequest request)
     {
@@ -34,7 +41,9 @@ public sealed class TaskApplicationCommandService
         var requestError = ValidateRequest(request);
         if (requestError?.Error != null)
             return new TaskApplicationStateInspection("unknown", false, [], [], requestError.Error);
-        var graph = await diagnostics.ReadGraphAsync();
+        var graph = _storage is ITaskGraphObservationStorage observationStorage
+            ? (await observationStorage.ReadObservationAsync()).Graph
+            : await diagnostics.ReadGraphAsync();
         var validation = TaskGraphValidationReport.From(graph);
         if (!validation.IsWriteSafe)
             return new TaskApplicationStateInspection("unknown", false,
@@ -49,7 +58,8 @@ public sealed class TaskApplicationCommandService
         return new TaskApplicationStateInspection(match, PreconditionsMatch(request, tasks), affected, created, null);
     }
 
-    private async Task<TaskApplicationResult> ExecuteAsync(TaskApplicationRequest request, bool dryRun)
+    private async Task<TaskApplicationResult> ExecuteAsync(TaskApplicationRequest request, bool dryRun,
+        bool includePlan = false, Func<TaskApplicationPlan, TaskApplicationError?>? guard = null)
     {
         if (_storage is not ITaskGraphDiagnosticStorage diagnostics)
         {
@@ -62,11 +72,17 @@ public sealed class TaskApplicationCommandService
             using var scope = dryRun ? null : (_storage as ITaskGraphWriteScopeStorage)?.BeginWriteScope();
             try
             {
-                var graph = await diagnostics.ReadGraphAsync();
-                var initialValidation = TaskGraphValidationReport.From(graph);
+                TaskGraphObservation? observation = null;
+                if ((dryRun || includePlan) && _storage is ITaskGraphObservationStorage observationStorage)
+                    observation = await observationStorage.ReadObservationAsync();
+                if (includePlan && observation == null)
+                    return Failed(TaskApplicationErrorKind.OperationFailed, "Storage does not support verified observations required for full preview.");
+                var graph = observation?.Graph ?? await diagnostics.ReadGraphAsync();
+                var now = observation?.EvaluatedAt ?? DateTimeOffset.UtcNow;
+                var initialValidation = TaskGraphValidationReport.From(graph, now);
                 if (!initialValidation.IsWriteSafe)
                 {
-                    return Failed(TaskApplicationErrorKind.ValidationFailed,
+                    return Failed(guard != null ? TaskApplicationErrorKind.PreviewStale : TaskApplicationErrorKind.ValidationFailed,
                         initialValidation.BuildWriteSafetyMessage(), validation: initialValidation);
                 }
 
@@ -98,16 +114,27 @@ public sealed class TaskApplicationCommandService
                     }
                 }
 
+                if (includePlan && observation != null)
+                {
+                    var unstablePrecondition = request.Preconditions.FirstOrDefault(item => observation.UnstableTaskIds.Contains(item.TaskId));
+                    if (unstablePrecondition != null)
+                        return Failed(TaskApplicationErrorKind.UnstablePrecondition,
+                            "Task has a load-time CreatedDateTime default; it cannot provide a stable precondition.", taskId: unstablePrecondition.TaskId);
+                }
+
                 var checkedPreconditions = new HashSet<string>(StringComparer.Ordinal);
                 var operationResults = new List<TaskApplicationOperationResult>();
 
                 foreach (var operation in request.Operations)
                 {
-                    var error = ApplyOperation(request, operation, original, staged, checkedPreconditions);
+                    var error = ApplyOperation(request, operation, original, staged, checkedPreconditions, now);
                     if (error != null)
                     {
                         return error with
                         {
+                            Error = guard != null && error.Error != null
+                                ? error.Error with { Kind = TaskApplicationErrorKind.PreviewStale }
+                                : error.Error,
                             OperationResults = operationResults.ToArray(),
                             AuthoritativeTasks = ToAuthoritativeTasks(original, error.Error?.TaskId)
                         };
@@ -121,7 +148,8 @@ public sealed class TaskApplicationCommandService
                     });
                 }
 
-                var now = DateTimeOffset.UtcNow;
+                var afterExplicit = includePlan ? staged.ToDictionary(pair => pair.Key,
+                    pair => TaskItemSnapshot.Clone(pair.Value), StringComparer.Ordinal) : null;
                 NormalizeAvailability(staged.Values, now, request.Author);
                 var invalidPlannedDates = staged.Values
                     .Where(task => task.PlannedBeginDateTime.HasValue && task.PlannedEndDateTime.HasValue &&
@@ -133,16 +161,16 @@ public sealed class TaskApplicationCommandService
                     .FirstOrDefault();
                 if (invalidPlannedDates != null)
                 {
-                    return Failed(TaskApplicationErrorKind.ValidationFailed,
+                    return Failed(guard != null ? TaskApplicationErrorKind.PreviewStale : TaskApplicationErrorKind.ValidationFailed,
                         $"Task '{invalidPlannedDates.Id}': planned end date '{invalidPlannedDates.PlannedEndDateTime:O}' cannot be earlier than planned begin date '{invalidPlannedDates.PlannedBeginDateTime:O}'.",
                         taskId: invalidPlannedDates.Id, operationResults: operationResults,
                         authoritativeTasks: ToAuthoritativeTasks(original, invalidPlannedDates.Id));
                 }
                 var finalGraph = CreateGraph(staged.Values);
-                var finalValidation = TaskGraphValidationReport.From(finalGraph);
+                var finalValidation = TaskGraphValidationReport.From(finalGraph, now);
                 if (!finalValidation.IsValid)
                 {
-                    return Failed(TaskApplicationErrorKind.ValidationFailed,
+                    return Failed(guard != null ? TaskApplicationErrorKind.PreviewStale : TaskApplicationErrorKind.ValidationFailed,
                         finalValidation.BuildWriteSafetyMessage(), validation: finalValidation,
                         operationResults: operationResults);
                 }
@@ -166,6 +194,21 @@ public sealed class TaskApplicationCommandService
                     .OrderBy(static id => id, StringComparer.Ordinal)
                     .ToArray();
 
+                TaskApplicationPlan? plan = null;
+                if (includePlan)
+                {
+                    var unstableWrite = changed.FirstOrDefault(task => observation!.UnstableTaskIds.Contains(task.Id));
+                    if (unstableWrite != null)
+                        return Failed(TaskApplicationErrorKind.UnstableSource,
+                            "Normalization would persist a load-time CreatedDateTime default.", taskId: unstableWrite.Id);
+                    plan = new TaskApplicationPlan(original, staged, afterExplicit!, now,
+                        observation!.SourceManifestHash, observation.UnstableTaskIds,
+                        changed.Select(task => task.Id).ToArray(), createdIds);
+                    var guardError = guard?.Invoke(plan);
+                    if (guardError != null)
+                        return new TaskApplicationResult { Error = guardError };
+                }
+
                 if (dryRun)
                 {
                     return new TaskApplicationResult
@@ -175,7 +218,8 @@ public sealed class TaskApplicationCommandService
                         ChangedTaskIds = changed.Select(static task => task.Id).ToArray(),
                         CreatedTaskIds = createdIds,
                         OperationResults = operationResults,
-                        Validation = finalValidation
+                        Validation = finalValidation,
+                        Plan = plan
                     };
                 }
 
@@ -185,6 +229,11 @@ public sealed class TaskApplicationCommandService
                         "Storage does not support recoverable write scopes required for application requests.");
                 }
 
+                if (guard != null && _storage is not ITaskGraphObservedWriteGuardStorage)
+                    return Failed(TaskApplicationErrorKind.OperationFailed,
+                        "Storage cannot protect the observed source while applying this preview.");
+                using var observedWriteGuard = guard != null
+                    ? ((ITaskGraphObservedWriteGuardStorage)_storage).BeginObservedWriteGuard(observation!) : null;
                 foreach (var task in changed)
                 {
                     await _storage.Save(task);
@@ -192,7 +241,7 @@ public sealed class TaskApplicationCommandService
 
                 await recoverableScope.CommitAsync();
                 var afterGraph = await diagnostics.ReadGraphAsync();
-                var afterValidation = TaskGraphValidationReport.From(afterGraph);
+                var afterValidation = TaskGraphValidationReport.From(afterGraph, now);
                 var postconditionsMatch = EvaluatePostconditions(request, afterGraph.TasksById);
                 if (!afterValidation.IsValid || postconditionsMatch != "all")
                 {
@@ -217,6 +266,13 @@ public sealed class TaskApplicationCommandService
                     AuthoritativeTasks = ToAuthoritativeTasks(afterGraph.TasksById, changed.Select(static task => task.Id))
                 };
             }
+            catch (TaskGraphObservationException ex)
+            {
+                return Failed(ex.Kind == "recoveryRequired" ? TaskApplicationErrorKind.RecoveryRequired
+                    : ex.Kind == "snapshotUnstable" ? TaskApplicationErrorKind.SnapshotUnstable
+                    : ex.Kind == "snapshotTooLarge" ? TaskApplicationErrorKind.SnapshotTooLarge
+                    : TaskApplicationErrorKind.OperationFailed, ex.Message);
+            }
             catch (Exception ex)
             {
                 if (scope is IRecoverableTaskGraphWriteScope recoverableScope)
@@ -227,7 +283,8 @@ public sealed class TaskApplicationCommandService
                     }
                     catch
                     {
-                        // The FileTaskStorage journal is deliberately left for the next locked access.
+                        // Conditional rollback can preserve external changes or leave a journal.
+                        // Both require read-back; a surviving journal is recovered by a write path.
                     }
                 }
 
@@ -236,7 +293,8 @@ public sealed class TaskApplicationCommandService
             }
         }
 
-        return _storage is ITaskGraphWriteLock writeLock
+        // Observation acquires its own lock without replaying pending write journals.
+        return !dryRun && _storage is ITaskGraphWriteLock writeLock
             ? await writeLock.WithWriteLockAsync(UnderLockAsync)
             : await UnderLockAsync();
     }
@@ -246,7 +304,7 @@ public sealed class TaskApplicationCommandService
         TaskApplicationOperation operation,
         IReadOnlyDictionary<string, TaskItem> original,
         IDictionary<string, TaskItem> staged,
-        ISet<string> checkedPreconditions)
+        ISet<string> checkedPreconditions, DateTimeOffset now)
     {
         TaskApplicationResult? RequireStaged(string? id, bool requireStatus = false)
         {
@@ -323,12 +381,12 @@ public sealed class TaskApplicationCommandService
                 return MutateRelation(staged[operation.FromTaskId!], staged[operation.ToTaskId!], operation);
             }
             case TaskApplicationOperationKind.CreateTask:
-                return CreateTask(request, operation, staged, RequireStaged);
+                return CreateTask(request, operation, staged, RequireStaged, now);
             case TaskApplicationOperationKind.SetStatus:
             {
                 var error = RequireStaged(operation.TaskId, requireStatus: true);
                 if (error != null) return error;
-                return SetStatus(new Dictionary<string, TaskItem>(staged, StringComparer.Ordinal), staged[operation.TaskId!], operation, request.Author);
+                return SetStatus(new Dictionary<string, TaskItem>(staged, StringComparer.Ordinal), staged[operation.TaskId!], operation, request.Author, now);
             }
             default:
                 return Failed(TaskApplicationErrorKind.InvalidArguments,
@@ -340,7 +398,7 @@ public sealed class TaskApplicationCommandService
         TaskApplicationRequest request,
         TaskApplicationOperation operation,
         IDictionary<string, TaskItem> staged,
-        Func<string?, bool, TaskApplicationResult?> requireStaged)
+        Func<string?, bool, TaskApplicationResult?> requireStaged, DateTimeOffset now)
     {
         var id = operation.NewTaskId;
         if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(operation.Title) ||
@@ -376,7 +434,6 @@ public sealed class TaskApplicationCommandService
                 "Create task description is too long or contains a reserved agent execution marker.", operation, id);
         }
 
-        var now = DateTimeOffset.UtcNow;
         var created = new TaskItem
         {
             Id = id,
@@ -548,7 +605,7 @@ public sealed class TaskApplicationCommandService
         IReadOnlyDictionary<string, TaskItem> staged,
         TaskItem task,
         TaskApplicationOperation operation,
-        string author)
+        string author, DateTimeOffset now)
     {
         if (!operation.Status.HasValue || operation.Status == DomainTaskStatus.InProgress)
             return Failed(TaskApplicationErrorKind.InvalidArguments, "Application status must be NotReady, Prepared, Completed, or Archived.", operation, task.Id);
@@ -561,20 +618,20 @@ public sealed class TaskApplicationCommandService
         if (task.AgentExecution?.State is AgentExecutionState.Active or AgentExecutionState.AwaitingInput && task.Status != operation.Status)
             return Failed(TaskApplicationErrorKind.BusinessRuleDenied, "Active agent execution owns task status.", operation, task.Id);
 
-        var rules = new TaskAvailabilityService(staged.Values);
+        var rules = new TaskAvailabilityService(staged.Values, now);
         var transition = rules.EvaluateStatusTransition(task, operation.Status.Value);
         if (!transition.Allowed)
             return Failed(TaskApplicationErrorKind.BusinessRuleDenied, transition.DenialMessage ?? "Status transition is denied.", operation, task.Id);
 
         if (task.Status != operation.Status.Value)
-            task.SetStatus(operation.Status.Value, DateTimeOffset.UtcNow, author);
+            task.SetStatus(operation.Status.Value, now, author);
         return null;
     }
 
     private static void NormalizeAvailability(IEnumerable<TaskItem> tasks, DateTimeOffset now, string author)
     {
         var list = tasks.ToArray();
-        var rules = new TaskAvailabilityService(list);
+        var rules = new TaskAvailabilityService(list, now);
         foreach (var task in list)
         {
             var analysis = rules.Analyze(task);
@@ -940,9 +997,9 @@ public sealed record TaskApplicationOperation
 }
 
 public enum TaskApplicationOperationKind { SetField, ClearField, AddCriterion, ReplaceCriterion, RemoveCriterion, SetCriterionSatisfied, AddRelation, RemoveRelation, CreateTask, SetStatus }
-public enum TaskApplicationErrorKind { InvalidArguments, NotFound, PreconditionFailed, ConflictingOperations, DescriptionMarkerConflict, BusinessRuleDenied, ValidationFailed, IdempotencyConflict, ReconciliationRequired, OutcomeUnknown, OperationFailed }
+public enum TaskApplicationErrorKind { InvalidArguments, NotFound, PreconditionFailed, ConflictingOperations, DescriptionMarkerConflict, BusinessRuleDenied, ValidationFailed, IdempotencyConflict, ReconciliationRequired, OutcomeUnknown, OperationFailed, PreviewInvalid, PreviewStale, PreviewTooLarge, UnstablePrecondition, UnstableSource, RecoveryRequired, SnapshotUnstable, SnapshotTooLarge }
 public sealed record TaskApplicationError { public TaskApplicationErrorKind Kind { get; init; } public string Message { get; init; } = string.Empty; public string? OperationId { get; init; } public string? TaskId { get; init; } public string? ExpectedEtag { get; init; } public string? ActualEtag { get; init; } }
 public sealed record TaskApplicationOperationResult { public string OperationId { get; init; } = string.Empty; public string? TaskId { get; init; } public string Outcome { get; init; } = string.Empty; }
-public sealed record TaskApplicationResult { public bool Success { get; init; } public string Mode { get; init; } = string.Empty; public bool DidMutate { get; init; } public IReadOnlyList<string> ChangedTaskIds { get; init; } = Array.Empty<string>(); public IReadOnlyList<string> CreatedTaskIds { get; init; } = Array.Empty<string>(); public IReadOnlyList<TaskApplicationOperationResult> OperationResults { get; init; } = Array.Empty<TaskApplicationOperationResult>(); public TaskApplicationError? Error { get; init; } public TaskGraphValidationReport? Validation { get; init; } public IReadOnlyList<TaskItem> AuthoritativeTasks { get; init; } = Array.Empty<TaskItem>(); }
+public sealed record TaskApplicationResult { public bool Success { get; init; } public string Mode { get; init; } = string.Empty; public bool DidMutate { get; init; } public IReadOnlyList<string> ChangedTaskIds { get; init; } = Array.Empty<string>(); public IReadOnlyList<string> CreatedTaskIds { get; init; } = Array.Empty<string>(); public IReadOnlyList<TaskApplicationOperationResult> OperationResults { get; init; } = Array.Empty<TaskApplicationOperationResult>(); public TaskApplicationError? Error { get; init; } public TaskGraphValidationReport? Validation { get; init; } public IReadOnlyList<TaskItem> AuthoritativeTasks { get; init; } = Array.Empty<TaskItem>(); public TaskApplicationPlan? Plan { get; init; } }
 public sealed record TaskApplicationStateInspection(string PostconditionsMatch, bool PreconditionsMatch,
     IReadOnlyList<string> AffectedTaskIds, IReadOnlyList<string> RequestedCreateTaskIds, TaskApplicationError? Error);

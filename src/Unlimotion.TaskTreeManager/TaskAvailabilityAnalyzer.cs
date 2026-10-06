@@ -6,9 +6,9 @@ public sealed class TaskAvailabilityAnalyzer
 {
     private readonly TaskAvailabilityService _service;
 
-    public TaskAvailabilityAnalyzer(IEnumerable<TaskItem> tasks)
+    public TaskAvailabilityAnalyzer(IEnumerable<TaskItem> tasks, DateTimeOffset? evaluatedAt = null, CancellationToken cancellationToken = default)
     {
-        _service = new TaskAvailabilityService(tasks);
+        _service = new TaskAvailabilityService(tasks, evaluatedAt, cancellationToken);
     }
 
     public IReadOnlyCollection<TaskItem> Tasks => _service.Tasks;
