@@ -1,6 +1,6 @@
 {
-  "candidateSourceHead": "e094ae89a1ecd4f3b4683a1427895d80860b7ce5",
-  "candidateSourceTree": "4b8655784bb1e2d2bd0e6720b30d2f5a913978cf",
+  "candidateSourceHead": "635c941eaae8f02f8d8c3ff21b88f965d0fdef58",
+  "candidateSourceTree": "67850ceb7d83c3fa03ea900b66d3d2f8c0c7dbe4",
   "sourceSha256": {
     "src/Unlimotion.ViewModel/TaskItemViewModel.cs": "3764ADAC75ECC2151A275B32BEEF111F79BF14491177548CC7F15552C607C5C6",
     "src/Unlimotion.ViewModel/MainWindowViewModel.cs": "BEEB91BE43B1809E5594A6396B7F64749C03F6F6F35B9766C137160A6A45788C",
@@ -14,9 +14,7 @@
     "tests/Unlimotion.UiTests.Headless/Tests/HeadlessSessionFactoryTests.cs": "2B63A92C8923C57140161F64FF9425AE034D544E029FA36A2D31D7D9881AD1CE",
     "tests/Unlimotion.UiTests.FlaUI/Tests/MainWindowFlaUiTests.cs": "7164C83B7676D055BBE597BE5F5D81F3BC31F238630E9198DCC7E34AF76303C2"
   },
-  "pendingStages": [
-    "native-final-five"
-  ],
+  "pendingStages": [],
   "headlessRuntimeProvenance": {
     "reason": "Preserve the already validated product/Main/native binaries when compiling only the new Headless adapter; normal rebuild changed SourceLink commit metadata.",
     "productionSourceHead": "72dfbccd972d1bb229f72aeefe6fb2d329260bc1",
@@ -110,6 +108,456 @@
     "checkedUtc": "2026-10-06T06:43:24.5980596Z",
     "inputDesktopAvailable": true,
     "win32Error": 0
+  },
+  "finalInputDesktopProbe": {
+    "checkedUtc": "2026-10-06T10:25:39.2874052Z",
+    "inputDesktopAvailable": true,
+    "win32Error": 0,
+    "access": "DESKTOP_SWITCHDESKTOP query only; no switch performed"
+  },
+  "finalNativeAudit": {
+    "checkedAtUtc": "2026-10-06T10:32:51.9255546Z",
+    "head": "635c941eaae8f02f8d8c3ff21b88f965d0fdef58",
+    "total": 5,
+    "passed": 5,
+    "failed": 0,
+    "skipped": 0,
+    "nativeRuns": [
+      {
+        "stage": "native-final-five-recovery",
+        "head": "635c941eaae8f02f8d8c3ff21b88f965d0fdef58",
+        "nativeAdapterSha256": "7164C83B7676D055BBE597BE5F5D81F3BC31F238630E9198DCC7E34AF76303C2",
+        "harnessSha256": "1818AA6AA2BF29B81C2553FCB6F3CD712E52DB4444C71BA7A9786B6DF4AC6D4D",
+        "exitCode": 0,
+        "durationMs": 80001.9198,
+        "originalTrxSha256": "C56DD462031DBF759BC22027677817038278E0F880AC335529A06B1A439351CD",
+        "tests": [
+          {
+            "testName": "TaskCardStatusRecovery_FailureRefreshRetry",
+            "outcome": "Passed",
+            "duration": "00:00:43.6616116"
+          }
+        ]
+      },
+      {
+        "stage": "native-final-five-future",
+        "head": "635c941eaae8f02f8d8c3ff21b88f965d0fdef58",
+        "nativeAdapterSha256": "7164C83B7676D055BBE597BE5F5D81F3BC31F238630E9198DCC7E34AF76303C2",
+        "harnessSha256": "1818AA6AA2BF29B81C2553FCB6F3CD712E52DB4444C71BA7A9786B6DF4AC6D4D",
+        "exitCode": 0,
+        "durationMs": 40404.0476,
+        "originalTrxSha256": "219D2F558CB95F6C54706D7D7550AE47D23331CB3691120DF12C4B49D0D18B8B",
+        "tests": [
+          {
+            "testName": "StatusContract_RussianDarkFuture",
+            "outcome": "Passed",
+            "duration": "00:00:09.7415753"
+          }
+        ]
+      },
+      {
+        "stage": "native-final-five-blocked",
+        "head": "635c941eaae8f02f8d8c3ff21b88f965d0fdef58",
+        "nativeAdapterSha256": "7164C83B7676D055BBE597BE5F5D81F3BC31F238630E9198DCC7E34AF76303C2",
+        "harnessSha256": "1818AA6AA2BF29B81C2553FCB6F3CD712E52DB4444C71BA7A9786B6DF4AC6D4D",
+        "exitCode": 0,
+        "durationMs": 42451.8561,
+        "originalTrxSha256": "7247CEC6A6C4DF968525C51ADB74317A9A503D5951D12D9E450F6A060884EDD3",
+        "tests": [
+          {
+            "testName": "StatusContract_RussianDarkBlocked",
+            "outcome": "Passed",
+            "duration": "00:00:14.4312391"
+          }
+        ]
+      },
+      {
+        "stage": "native-final-five-terminal",
+        "head": "635c941eaae8f02f8d8c3ff21b88f965d0fdef58",
+        "nativeAdapterSha256": "7164C83B7676D055BBE597BE5F5D81F3BC31F238630E9198DCC7E34AF76303C2",
+        "harnessSha256": "1818AA6AA2BF29B81C2553FCB6F3CD712E52DB4444C71BA7A9786B6DF4AC6D4D",
+        "exitCode": 0,
+        "durationMs": 50927.0096,
+        "originalTrxSha256": "25C1904678EAB3CAE855C584E71B2426BF50A9A717DEF70B4597FA158A476992",
+        "tests": [
+          {
+            "testName": "StatusContract_TerminalPickerAndUnarchive",
+            "outcome": "Passed",
+            "duration": "00:00:23.0634158"
+          }
+        ]
+      },
+      {
+        "stage": "native-final-five-clipped",
+        "head": "635c941eaae8f02f8d8c3ff21b88f965d0fdef58",
+        "nativeAdapterSha256": "7164C83B7676D055BBE597BE5F5D81F3BC31F238630E9198DCC7E34AF76303C2",
+        "harnessSha256": "1818AA6AA2BF29B81C2553FCB6F3CD712E52DB4444C71BA7A9786B6DF4AC6D4D",
+        "exitCode": 0,
+        "durationMs": 46743.799,
+        "originalTrxSha256": "875249F08B3580B0C60E2EFA556122F2C919A07DE98CC115EDC228685EEC9C0C",
+        "tests": [
+          {
+            "testName": "StatusContract_PickerRestoresClippedHeader",
+            "outcome": "Passed",
+            "duration": "00:00:07.4439527"
+          }
+        ]
+      }
+    ],
+    "initialFilterFailure": "native-final-five: 0 tests selected; original failure retained; no product flow executed",
+    "slotReleased": true
+  },
+  "finalNativeSlot": {
+    "reservedAtUtc": "2026-10-06T10:25:39.4862385Z",
+    "head": "635c941eaae8f02f8d8c3ff21b88f965d0fdef58",
+    "stage": "native-final-five",
+    "released": true,
+    "releasedAtUtc": "2026-10-06T10:32:51.6369525Z"
+  },
+  "currentPublishedHeadCi": {
+    "runId": "37427953000",
+    "head": "635c941eaae8f02f8d8c3ff21b88f965d0fdef58",
+    "url": "https://github.com/Kibnet/Unlimotion/actions/runs/37427953000",
+    "runAttempt": 1,
+    "conclusion": "success",
+    "results": [
+      {
+        "project": "main",
+        "head": "635c941eaae8f02f8d8c3ff21b88f965d0fdef58",
+        "checkout": "207701f6ffa51f6159bff9b0927fbc2c3b3eb018",
+        "tree": "67850ceb7d83c3fa03ea900b66d3d2f8c0c7dbe4",
+        "parents": [
+          "9150ac0170313c4a6068888c88b2d9f7e85bd0c7",
+          "635c941eaae8f02f8d8c3ff21b88f965d0fdef58"
+        ],
+        "invocation": {
+          "schemaVersion": 1,
+          "invocationId": "ce8d9f3143674cb1871c26ecdff023be",
+          "project": "main",
+          "arguments": [
+            "test",
+            "--project",
+            "src/Unlimotion.Test/Unlimotion.Test.csproj",
+            "-c",
+            "Debug",
+            "--no-build",
+            "--no-restore",
+            "--",
+            "--maximum-parallel-tests",
+            "1",
+            "--minimum-expected-tests",
+            "1",
+            "--output",
+            "Detailed",
+            "--report-trx",
+            "--results-directory=D:\\a\\Unlimotion\\Unlimotion\\artifacts\\test-results\\37427953000-1\\main"
+          ],
+          "startedUtc": "2026-10-06T10:12:43.7184171+03:00",
+          "repository": "Kibnet/Unlimotion",
+          "workflow": "Unlimotion Tests",
+          "runId": "37427953000",
+          "runAttempt": 1,
+          "event": "pull_request",
+          "ref": "refs/pull/314/merge",
+          "headSha": "635c941eaae8f02f8d8c3ff21b88f965d0fdef58",
+          "checkoutSha": "207701f6ffa51f6159bff9b0927fbc2c3b3eb018",
+          "treeSha": "67850ceb7d83c3fa03ea900b66d3d2f8c0c7dbe4",
+          "worktreeDirty": false,
+          "environment": {
+            "os": "Microsoft Windows 10.0.26100",
+            "runner": "Windows",
+            "image": "win25-vs2026",
+            "imageVersion": "20260925.250.1",
+            "sdk": "10.0.401",
+            "runtimes": [
+              "Microsoft.AspNetCore.App 8.0.6 [C:\\Program Files\\dotnet\\shared\\Microsoft.AspNetCore.App]",
+              "Microsoft.AspNetCore.App 8.0.22 [C:\\Program Files\\dotnet\\shared\\Microsoft.AspNetCore.App]",
+              "Microsoft.AspNetCore.App 8.0.31 [C:\\Program Files\\dotnet\\shared\\Microsoft.AspNetCore.App]",
+              "Microsoft.AspNetCore.App 9.0.6 [C:\\Program Files\\dotnet\\shared\\Microsoft.AspNetCore.App]",
+              "Microsoft.AspNetCore.App 9.0.20 [C:\\Program Files\\dotnet\\shared\\Microsoft.AspNetCore.App]",
+              "Microsoft.AspNetCore.App 10.0.8 [C:\\Program Files\\dotnet\\shared\\Microsoft.AspNetCore.App]",
+              "Microsoft.AspNetCore.App 10.0.11 [C:\\Program Files\\dotnet\\shared\\Microsoft.AspNetCore.App]",
+              "Microsoft.AspNetCore.App 10.0.12 [C:\\Program Files\\dotnet\\shared\\Microsoft.AspNetCore.App]",
+              "Microsoft.NETCore.App 8.0.6 [C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App]",
+              "Microsoft.NETCore.App 8.0.22 [C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App]",
+              "Microsoft.NETCore.App 8.0.31 [C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App]",
+              "Microsoft.NETCore.App 9.0.6 [C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App]",
+              "Microsoft.NETCore.App 9.0.20 [C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App]",
+              "Microsoft.NETCore.App 10.0.8 [C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App]",
+              "Microsoft.NETCore.App 10.0.11 [C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App]",
+              "Microsoft.NETCore.App 10.0.12 [C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App]",
+              "Microsoft.WindowsDesktop.App 8.0.6 [C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App]",
+              "Microsoft.WindowsDesktop.App 8.0.22 [C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App]",
+              "Microsoft.WindowsDesktop.App 8.0.31 [C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App]",
+              "Microsoft.WindowsDesktop.App 9.0.6 [C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App]",
+              "Microsoft.WindowsDesktop.App 9.0.20 [C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App]",
+              "Microsoft.WindowsDesktop.App 10.0.8 [C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App]",
+              "Microsoft.WindowsDesktop.App 10.0.11 [C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App]",
+              "Microsoft.WindowsDesktop.App 10.0.12 [C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App]"
+            ],
+            "tunit": "1.44.0",
+            "configuration": "Debug"
+          }
+        },
+        "stage": {
+          "stage": "test",
+          "project": "main",
+          "command": "dotnet",
+          "arguments": [
+            "test",
+            "--project",
+            "src/Unlimotion.Test/Unlimotion.Test.csproj",
+            "-c",
+            "Debug",
+            "--no-build",
+            "--no-restore",
+            "--",
+            "--maximum-parallel-tests",
+            "1",
+            "--minimum-expected-tests",
+            "1",
+            "--output",
+            "Detailed",
+            "--report-trx",
+            "--results-directory=D:\\a\\Unlimotion\\Unlimotion\\artifacts\\test-results\\37427953000-1\\main"
+          ],
+          "invocationId": "ce8d9f3143674cb1871c26ecdff023be",
+          "exitCode": 0,
+          "outcome": "success",
+          "startedUtc": "2026-10-06T10:12:42.0698376+03:00",
+          "finishedUtc": "2026-10-06T10:22:24.6525528+03:00",
+          "durationMs": 582566.8312,
+          "error": null
+        },
+        "originalTrxSha256": "CBAB99776006836E097D0D66E0788BE7CCAFAAAB6B67A52C7FBEBBB6474A5190",
+        "counters": {
+          "total": 1274,
+          "passed": 1274,
+          "failed": 0,
+          "skipped": 0
+        },
+        "selectedTests": [
+          {
+            "name": "HubAndReceiveTaskMolds_PreserveStatusContract",
+            "outcome": "Passed",
+            "duration": "00:00:00.0598850"
+          },
+          {
+            "name": "TaskCardStatusRecovery_ErrorAndReloadRemainVisible(en, Dark, 760)",
+            "outcome": "Passed",
+            "duration": "00:00:03.9732157"
+          },
+          {
+            "name": "TaskCardStatusRecovery_ErrorAndReloadRemainVisible(en, Light, 760)",
+            "outcome": "Passed",
+            "duration": "00:00:03.7302064"
+          },
+          {
+            "name": "TaskCardStatusRecovery_ErrorAndReloadRemainVisible(ru, Dark, 760)",
+            "outcome": "Passed",
+            "duration": "00:00:03.9014300"
+          },
+          {
+            "name": "TaskCardStatusRecovery_ErrorAndReloadRemainVisible(ru, Light, 760)",
+            "outcome": "Passed",
+            "duration": "00:00:04.0514105"
+          },
+          {
+            "name": "TaskCardStatusRecovery_HasAccessibleRefreshAction",
+            "outcome": "Passed",
+            "duration": "00:00:00.9224072"
+          },
+          {
+            "name": "TaskCardStatusRecovery_AuthoritativeReadRunsOffUiThread",
+            "outcome": "Passed",
+            "duration": "00:00:00.0099787"
+          },
+          {
+            "name": "TaskCardStatusRecovery_ExternalDeleteDuringReloadKeepsCopyableDraft(False)",
+            "outcome": "Passed",
+            "duration": "00:00:00.8993746"
+          },
+          {
+            "name": "TaskCardStatusRecovery_ExternalDeleteDuringReloadKeepsCopyableDraft(True)",
+            "outcome": "Passed",
+            "duration": "00:00:00.9158265"
+          },
+          {
+            "name": "TaskCardStatusRecovery_ErrorAndReloadRemainVisible(en, Light, 1400)",
+            "outcome": "Passed",
+            "duration": "00:00:04.1272965"
+          },
+          {
+            "name": "TaskCardStatusRecovery_ErrorAndReloadRemainVisible(ru, Light, 1400)",
+            "outcome": "Passed",
+            "duration": "00:00:04.3910945"
+          },
+          {
+            "name": "TaskCardStatusRecovery_ErrorAndReloadRemainVisible(ru, Dark, 1400)",
+            "outcome": "Passed",
+            "duration": "00:00:04.3730625"
+          },
+          {
+            "name": "TaskCardStatusRecovery_ErrorAndReloadRemainVisible(en, Dark, 1400)",
+            "outcome": "Passed",
+            "duration": "00:00:04.3635402"
+          },
+          {
+            "name": "WorkspaceTreeCommandsScenario_ExecutesFeatureSteps",
+            "outcome": "Passed",
+            "duration": "00:00:02.2781269"
+          }
+        ]
+      },
+      {
+        "project": "headless",
+        "head": "635c941eaae8f02f8d8c3ff21b88f965d0fdef58",
+        "checkout": "207701f6ffa51f6159bff9b0927fbc2c3b3eb018",
+        "tree": "67850ceb7d83c3fa03ea900b66d3d2f8c0c7dbe4",
+        "parents": [
+          "9150ac0170313c4a6068888c88b2d9f7e85bd0c7",
+          "635c941eaae8f02f8d8c3ff21b88f965d0fdef58"
+        ],
+        "invocation": {
+          "schemaVersion": 1,
+          "invocationId": "0eaf5f8ed7774d88bff27ed7bc5be532",
+          "project": "headless",
+          "arguments": [
+            "test",
+            "--project",
+            "tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj",
+            "-c",
+            "Debug",
+            "--no-build",
+            "--no-restore",
+            "--",
+            "--maximum-parallel-tests",
+            "1",
+            "--minimum-expected-tests",
+            "1",
+            "--output",
+            "Detailed",
+            "--report-trx",
+            "--results-directory=D:\\a\\Unlimotion\\Unlimotion\\artifacts\\test-results\\37427953000-1\\headless"
+          ],
+          "startedUtc": "2026-10-06T10:22:25.3370283+03:00",
+          "repository": "Kibnet/Unlimotion",
+          "workflow": "Unlimotion Tests",
+          "runId": "37427953000",
+          "runAttempt": 1,
+          "event": "pull_request",
+          "ref": "refs/pull/314/merge",
+          "headSha": "635c941eaae8f02f8d8c3ff21b88f965d0fdef58",
+          "checkoutSha": "207701f6ffa51f6159bff9b0927fbc2c3b3eb018",
+          "treeSha": "67850ceb7d83c3fa03ea900b66d3d2f8c0c7dbe4",
+          "worktreeDirty": false,
+          "environment": {
+            "os": "Microsoft Windows 10.0.26100",
+            "runner": "Windows",
+            "image": "win25-vs2026",
+            "imageVersion": "20260925.250.1",
+            "sdk": "10.0.401",
+            "runtimes": [
+              "Microsoft.AspNetCore.App 8.0.6 [C:\\Program Files\\dotnet\\shared\\Microsoft.AspNetCore.App]",
+              "Microsoft.AspNetCore.App 8.0.22 [C:\\Program Files\\dotnet\\shared\\Microsoft.AspNetCore.App]",
+              "Microsoft.AspNetCore.App 8.0.31 [C:\\Program Files\\dotnet\\shared\\Microsoft.AspNetCore.App]",
+              "Microsoft.AspNetCore.App 9.0.6 [C:\\Program Files\\dotnet\\shared\\Microsoft.AspNetCore.App]",
+              "Microsoft.AspNetCore.App 9.0.20 [C:\\Program Files\\dotnet\\shared\\Microsoft.AspNetCore.App]",
+              "Microsoft.AspNetCore.App 10.0.8 [C:\\Program Files\\dotnet\\shared\\Microsoft.AspNetCore.App]",
+              "Microsoft.AspNetCore.App 10.0.11 [C:\\Program Files\\dotnet\\shared\\Microsoft.AspNetCore.App]",
+              "Microsoft.AspNetCore.App 10.0.12 [C:\\Program Files\\dotnet\\shared\\Microsoft.AspNetCore.App]",
+              "Microsoft.NETCore.App 8.0.6 [C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App]",
+              "Microsoft.NETCore.App 8.0.22 [C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App]",
+              "Microsoft.NETCore.App 8.0.31 [C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App]",
+              "Microsoft.NETCore.App 9.0.6 [C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App]",
+              "Microsoft.NETCore.App 9.0.20 [C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App]",
+              "Microsoft.NETCore.App 10.0.8 [C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App]",
+              "Microsoft.NETCore.App 10.0.11 [C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App]",
+              "Microsoft.NETCore.App 10.0.12 [C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App]",
+              "Microsoft.WindowsDesktop.App 8.0.6 [C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App]",
+              "Microsoft.WindowsDesktop.App 8.0.22 [C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App]",
+              "Microsoft.WindowsDesktop.App 8.0.31 [C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App]",
+              "Microsoft.WindowsDesktop.App 9.0.6 [C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App]",
+              "Microsoft.WindowsDesktop.App 9.0.20 [C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App]",
+              "Microsoft.WindowsDesktop.App 10.0.8 [C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App]",
+              "Microsoft.WindowsDesktop.App 10.0.11 [C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App]",
+              "Microsoft.WindowsDesktop.App 10.0.12 [C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App]"
+            ],
+            "tunit": "1.44.0",
+            "configuration": "Debug"
+          }
+        },
+        "stage": {
+          "stage": "test",
+          "project": "headless",
+          "command": "dotnet",
+          "arguments": [
+            "test",
+            "--project",
+            "tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj",
+            "-c",
+            "Debug",
+            "--no-build",
+            "--no-restore",
+            "--",
+            "--maximum-parallel-tests",
+            "1",
+            "--minimum-expected-tests",
+            "1",
+            "--output",
+            "Detailed",
+            "--report-trx",
+            "--results-directory=D:\\a\\Unlimotion\\Unlimotion\\artifacts\\test-results\\37427953000-1\\headless"
+          ],
+          "invocationId": "0eaf5f8ed7774d88bff27ed7bc5be532",
+          "exitCode": 0,
+          "outcome": "success",
+          "startedUtc": "2026-10-06T10:22:25.007549+03:00",
+          "finishedUtc": "2026-10-06T10:24:03.7133149+03:00",
+          "durationMs": 98699.5018,
+          "error": null
+        },
+        "originalTrxSha256": "6B3AD5DEE0BC0ECA4E2C2645D44B47094EDF19D757284A7787D9FB83CDD501C1",
+        "counters": {
+          "total": 55,
+          "passed": 55,
+          "failed": 0,
+          "skipped": 0
+        },
+        "selectedTests": [
+          {
+            "name": "Dispose_PropagatesWorkerNullReference_InsteadOfSuppressingIt",
+            "outcome": "Passed",
+            "duration": "00:00:00.0035884"
+          },
+          {
+            "name": "Dispose_WaitsForExecutingAction_AndPreservesExecutionContext",
+            "outcome": "Passed",
+            "duration": "00:00:00.0017660"
+          },
+          {
+            "name": "Dispatch_UsesPublishedWorker_AndDisposeJoinsIt",
+            "outcome": "Passed",
+            "duration": "00:00:00.0126223"
+          },
+          {
+            "name": "TaskCardStatusRecovery_FailureRefreshRetry",
+            "outcome": "Passed",
+            "duration": "00:00:26.8350084"
+          },
+          {
+            "name": "StatusContract_RussianDarkFutureAndBlocker",
+            "outcome": "Passed",
+            "duration": "00:00:00.0819018"
+          },
+          {
+            "name": "StatusContract_TerminalPickerAndUnarchive",
+            "outcome": "Passed",
+            "duration": "00:00:03.1120226"
+          }
+        ]
+      }
+    ]
   },
   "previousPublishedHeadCi": {
     "runId": "37364841005",
@@ -536,6 +984,10 @@
     {
       "name": "native-final-five-candidate",
       "rawSha256": "EF7ECB5E00866B2777E655382A644B78F725DBDBB0240F2203BA19F373AD8147"
+    },
+    {
+      "name": "native-published-635c",
+      "rawSha256": "C90E05418DE143949C0B77B484E8E5F0E1A7979248D02B6A99F22EDCEB4C99D0"
     }
   ],
   "runs": [
@@ -9989,13 +10441,413 @@
         "outcome": "Failed",
         "duration": "00:00:00.7638614"
       }
+    },
+    {
+      "stage": "native-final-five",
+      "invocation": {
+        "stage": "native-final-five",
+        "project": "native",
+        "executable": "tests/Unlimotion.UiTests.FlaUI/bin/Debug/net10.0-windows7.0/Unlimotion.UiTests.FlaUI.exe",
+        "cwd": "<workspace>\\tests\\Unlimotion.UiTests.FlaUI\\bin\\Debug\\net10.0-windows7.0",
+        "arguments": [
+          "--maximum-parallel-tests",
+          "1",
+          "--minimum-expected-tests",
+          "5",
+          "--output",
+          "Detailed",
+          "--report-trx",
+          "--results-directory=<workspace>\\artifacts\\status-recovery\\pre-merge-2026-10-05\\native-final-five",
+          "--treenode-filter",
+          "/*/*/MainWindowFlaUiTests/(TaskCardStatusRecovery_FailureRefreshRetry)|(StatusContract_RussianDarkFuture)|(StatusContract_RussianDarkBlocked)|(StatusContract_TerminalPickerAndUnarchive)|(StatusContract_PickerRestoresClippedHeader)"
+        ],
+        "head": "635c941eaae8f02f8d8c3ff21b88f965d0fdef58",
+        "tree": "67850ceb7d83c3fa03ea900b66d3d2f8c0c7dbe4",
+        "parents": "e094ae89a1ecd4f3b4683a1427895d80860b7ce5",
+        "startedUtc": "2026-10-06T13:25:45.196014+03:00",
+        "desktopMonitor": "primary",
+        "nativeAdapterSha256": "7164C83B7676D055BBE597BE5F5D81F3BC31F238630E9198DCC7E34AF76303C2",
+        "binaryHashes": {
+          "Unlimotion.dll": "F01671A14C81F3FA2497069FF52CDD61043721519FECEAA1924A69928F094521",
+          "Unlimotion.UiTests.FlaUI.dll": "1818AA6AA2BF29B81C2553FCB6F3CD712E52DB4444C71BA7A9786B6DF4AC6D4D",
+          "Unlimotion.Interface.dll": "558F6481B924EED45AB31B0F9B397DE84F12F6550F8577B96A0601ED11D7582F",
+          "Unlimotion.TaskTree.dll": "B22D9B3A2505F193E6BCEFB28015BBB849C6739790AA2E843952489641314060",
+          "Unlimotion.UiTests.Authoring.dll": "C1ADD390184483CF70E65EC31472905B775AC5277B78544EEC50758EC48384A0",
+          "Unlimotion.ViewModel.dll": "F31E183989454C308236990A9A6353367AAF921C90812AFBEC51C828052E9219",
+          "Unlimotion.AppAutomation.TestHost.dll": "F36BF4CB630115362AC61C7A10F140BC808E0041BF5B77050C72D8B1849412FA",
+          "Unlimotion.Server.ServiceModel.dll": "4AE6F593D285FB7EBCB8E1322307CE965911EBB0C10D6A51D5D84BA47EC42FA6",
+          "Unlimotion.Domain.dll": "79327528BFF3556B492C2D72206F294E0072613033DDE3A48D8CC5A1ECBA8987",
+          "Unlimotion.FileStorage.dll": "27E08ADD8877112FAEB77BAB6FDB43A19B1B34725B031E0FC08B0DEBBE6D2185",
+          "Unlimotion.Desktop.dll": "6034F77C024289B594640D8ECE165D5F424E1A1F278D51801287B98A546484B7",
+          "Unlimotion.UiTests.FlaUI.exe": "9DED061A9542791024464B0782666F9880C4BF5C4AF1C45F20A9C82014B5D6D2"
+        },
+        "dirtyPaths": []
+      },
+      "result": {
+        "stage": "native-final-five",
+        "exitCode": 8,
+        "outcome": "failure",
+        "startedUtc": "2026-10-06T13:25:45.196014+03:00",
+        "finishedUtc": "2026-10-06T13:25:51.4726471+03:00",
+        "durationMs": 1757.084
+      },
+      "rawInvocationSha256": "02064D64AB638BCEC4798B124BC1D89169EFDD2AAAF3FCE2DBEE6E686579A439",
+      "rawResultSha256": "7ACC476C0988B9A1F9450F21D3591E443743CA2705AEB6EAD8C770FD688C7AC6",
+      "rawLogSha256": "FEAF8657E93DCD68025A3E85DA4F9B973D016D04B4C1FF06B1607E38D9CEA906",
+      "originalTrxSha256": "1D4F7C219FB13008E2A04D5909F65732FF2AE1D82F10F960527C2D0BA9F3494A",
+      "missingTrxReason": null,
+      "counters": {
+        "total": 0,
+        "passed": 0,
+        "failed": 0,
+        "skipped": 0
+      },
+      "tests": {
+        "name": null,
+        "outcome": null,
+        "duration": null
+      }
+    },
+    {
+      "stage": "native-final-five-recovery",
+      "invocation": {
+        "stage": "native-final-five-recovery",
+        "project": "native",
+        "executable": "tests/Unlimotion.UiTests.FlaUI/bin/Debug/net10.0-windows7.0/Unlimotion.UiTests.FlaUI.exe",
+        "cwd": "<workspace>\\tests\\Unlimotion.UiTests.FlaUI\\bin\\Debug\\net10.0-windows7.0",
+        "arguments": [
+          "--maximum-parallel-tests",
+          "1",
+          "--minimum-expected-tests",
+          "1",
+          "--output",
+          "Detailed",
+          "--report-trx",
+          "--results-directory=<workspace>\\artifacts\\status-recovery\\pre-merge-2026-10-05\\native-final-five-recovery",
+          "--treenode-filter",
+          "/*/*/MainWindowFlaUiTests/TaskCardStatusRecovery_FailureRefreshRetry"
+        ],
+        "head": "635c941eaae8f02f8d8c3ff21b88f965d0fdef58",
+        "tree": "67850ceb7d83c3fa03ea900b66d3d2f8c0c7dbe4",
+        "parents": "e094ae89a1ecd4f3b4683a1427895d80860b7ce5",
+        "startedUtc": "2026-10-06T13:27:16.3089868+03:00",
+        "desktopMonitor": "primary",
+        "nativeAdapterSha256": "7164C83B7676D055BBE597BE5F5D81F3BC31F238630E9198DCC7E34AF76303C2",
+        "binaryHashes": {
+          "Unlimotion.Domain.dll": "79327528BFF3556B492C2D72206F294E0072613033DDE3A48D8CC5A1ECBA8987",
+          "Unlimotion.TaskTree.dll": "B22D9B3A2505F193E6BCEFB28015BBB849C6739790AA2E843952489641314060",
+          "Unlimotion.UiTests.Authoring.dll": "C1ADD390184483CF70E65EC31472905B775AC5277B78544EEC50758EC48384A0",
+          "Unlimotion.FileStorage.dll": "27E08ADD8877112FAEB77BAB6FDB43A19B1B34725B031E0FC08B0DEBBE6D2185",
+          "Unlimotion.Server.ServiceModel.dll": "4AE6F593D285FB7EBCB8E1322307CE965911EBB0C10D6A51D5D84BA47EC42FA6",
+          "Unlimotion.AppAutomation.TestHost.dll": "F36BF4CB630115362AC61C7A10F140BC808E0041BF5B77050C72D8B1849412FA",
+          "Unlimotion.Interface.dll": "558F6481B924EED45AB31B0F9B397DE84F12F6550F8577B96A0601ED11D7582F",
+          "Unlimotion.ViewModel.dll": "F31E183989454C308236990A9A6353367AAF921C90812AFBEC51C828052E9219",
+          "Unlimotion.UiTests.FlaUI.dll": "1818AA6AA2BF29B81C2553FCB6F3CD712E52DB4444C71BA7A9786B6DF4AC6D4D",
+          "Unlimotion.Desktop.dll": "6034F77C024289B594640D8ECE165D5F424E1A1F278D51801287B98A546484B7",
+          "Unlimotion.UiTests.FlaUI.exe": "9DED061A9542791024464B0782666F9880C4BF5C4AF1C45F20A9C82014B5D6D2",
+          "Unlimotion.dll": "F01671A14C81F3FA2497069FF52CDD61043721519FECEAA1924A69928F094521"
+        },
+        "dirtyPaths": []
+      },
+      "result": {
+        "stage": "native-final-five-recovery",
+        "exitCode": 0,
+        "outcome": "success",
+        "startedUtc": "2026-10-06T13:27:16.3089868+03:00",
+        "finishedUtc": "2026-10-06T13:28:36.6596996+03:00",
+        "durationMs": 80001.9198
+      },
+      "rawInvocationSha256": "59223CD036A63BE22A59ACFCE66D26F9139D7625796CDC97F4CEB38CDEBA6A28",
+      "rawResultSha256": "C435950B3EA3CDEB8AFA5F7FF862C507C9B7BC4896E4094173123034EA1DB93E",
+      "rawLogSha256": "28947F73597BC3F2B11522707130CBBEA80D02FAA67C3062BB12C687010BD4B7",
+      "originalTrxSha256": "C56DD462031DBF759BC22027677817038278E0F880AC335529A06B1A439351CD",
+      "missingTrxReason": null,
+      "counters": {
+        "total": 1,
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0
+      },
+      "tests": {
+        "name": "TaskCardStatusRecovery_FailureRefreshRetry",
+        "outcome": "Passed",
+        "duration": "00:00:43.6616116"
+      }
+    },
+    {
+      "stage": "native-final-five-future",
+      "invocation": {
+        "stage": "native-final-five-future",
+        "project": "native",
+        "executable": "tests/Unlimotion.UiTests.FlaUI/bin/Debug/net10.0-windows7.0/Unlimotion.UiTests.FlaUI.exe",
+        "cwd": "<workspace>\\tests\\Unlimotion.UiTests.FlaUI\\bin\\Debug\\net10.0-windows7.0",
+        "arguments": [
+          "--maximum-parallel-tests",
+          "1",
+          "--minimum-expected-tests",
+          "1",
+          "--output",
+          "Detailed",
+          "--report-trx",
+          "--results-directory=<workspace>\\artifacts\\status-recovery\\pre-merge-2026-10-05\\native-final-five-future",
+          "--treenode-filter",
+          "/*/*/MainWindowFlaUiTests/StatusContract_RussianDarkFuture"
+        ],
+        "head": "635c941eaae8f02f8d8c3ff21b88f965d0fdef58",
+        "tree": "67850ceb7d83c3fa03ea900b66d3d2f8c0c7dbe4",
+        "parents": "e094ae89a1ecd4f3b4683a1427895d80860b7ce5",
+        "startedUtc": "2026-10-06T13:28:37.9880423+03:00",
+        "desktopMonitor": "primary",
+        "nativeAdapterSha256": "7164C83B7676D055BBE597BE5F5D81F3BC31F238630E9198DCC7E34AF76303C2",
+        "binaryHashes": {
+          "Unlimotion.Interface.dll": "558F6481B924EED45AB31B0F9B397DE84F12F6550F8577B96A0601ED11D7582F",
+          "Unlimotion.FileStorage.dll": "27E08ADD8877112FAEB77BAB6FDB43A19B1B34725B031E0FC08B0DEBBE6D2185",
+          "Unlimotion.dll": "F01671A14C81F3FA2497069FF52CDD61043721519FECEAA1924A69928F094521",
+          "Unlimotion.UiTests.Authoring.dll": "C1ADD390184483CF70E65EC31472905B775AC5277B78544EEC50758EC48384A0",
+          "Unlimotion.TaskTree.dll": "B22D9B3A2505F193E6BCEFB28015BBB849C6739790AA2E843952489641314060",
+          "Unlimotion.UiTests.FlaUI.exe": "9DED061A9542791024464B0782666F9880C4BF5C4AF1C45F20A9C82014B5D6D2",
+          "Unlimotion.Desktop.dll": "6034F77C024289B594640D8ECE165D5F424E1A1F278D51801287B98A546484B7",
+          "Unlimotion.Domain.dll": "79327528BFF3556B492C2D72206F294E0072613033DDE3A48D8CC5A1ECBA8987",
+          "Unlimotion.AppAutomation.TestHost.dll": "F36BF4CB630115362AC61C7A10F140BC808E0041BF5B77050C72D8B1849412FA",
+          "Unlimotion.UiTests.FlaUI.dll": "1818AA6AA2BF29B81C2553FCB6F3CD712E52DB4444C71BA7A9786B6DF4AC6D4D",
+          "Unlimotion.Server.ServiceModel.dll": "4AE6F593D285FB7EBCB8E1322307CE965911EBB0C10D6A51D5D84BA47EC42FA6",
+          "Unlimotion.ViewModel.dll": "F31E183989454C308236990A9A6353367AAF921C90812AFBEC51C828052E9219"
+        },
+        "dirtyPaths": []
+      },
+      "result": {
+        "stage": "native-final-five-future",
+        "exitCode": 0,
+        "outcome": "success",
+        "startedUtc": "2026-10-06T13:28:37.9880423+03:00",
+        "finishedUtc": "2026-10-06T13:29:18.6119012+03:00",
+        "durationMs": 40404.0476
+      },
+      "rawInvocationSha256": "F72F213AFB54FAD5847AD2511DD5B3FDCA08C844F579D0844495B6686ABD62FA",
+      "rawResultSha256": "C312523EDFF2BD4A57E54A4EC3DE8BA83E2305BCCFA19F3694AA8AC03BF39002",
+      "rawLogSha256": "736618390C1256F9AFCE9CC29D304C4C5AD5DE584DEA5F5458A7E13EF029C2BC",
+      "originalTrxSha256": "219D2F558CB95F6C54706D7D7550AE47D23331CB3691120DF12C4B49D0D18B8B",
+      "missingTrxReason": null,
+      "counters": {
+        "total": 1,
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0
+      },
+      "tests": {
+        "name": "StatusContract_RussianDarkFuture",
+        "outcome": "Passed",
+        "duration": "00:00:09.7415753"
+      }
+    },
+    {
+      "stage": "native-final-five-blocked",
+      "invocation": {
+        "stage": "native-final-five-blocked",
+        "project": "native",
+        "executable": "tests/Unlimotion.UiTests.FlaUI/bin/Debug/net10.0-windows7.0/Unlimotion.UiTests.FlaUI.exe",
+        "cwd": "<workspace>\\tests\\Unlimotion.UiTests.FlaUI\\bin\\Debug\\net10.0-windows7.0",
+        "arguments": [
+          "--maximum-parallel-tests",
+          "1",
+          "--minimum-expected-tests",
+          "1",
+          "--output",
+          "Detailed",
+          "--report-trx",
+          "--results-directory=<workspace>\\artifacts\\status-recovery\\pre-merge-2026-10-05\\native-final-five-blocked",
+          "--treenode-filter",
+          "/*/*/MainWindowFlaUiTests/StatusContract_RussianDarkBlocked"
+        ],
+        "head": "635c941eaae8f02f8d8c3ff21b88f965d0fdef58",
+        "tree": "67850ceb7d83c3fa03ea900b66d3d2f8c0c7dbe4",
+        "parents": "e094ae89a1ecd4f3b4683a1427895d80860b7ce5",
+        "startedUtc": "2026-10-06T13:29:19.8971682+03:00",
+        "desktopMonitor": "primary",
+        "nativeAdapterSha256": "7164C83B7676D055BBE597BE5F5D81F3BC31F238630E9198DCC7E34AF76303C2",
+        "binaryHashes": {
+          "Unlimotion.Domain.dll": "79327528BFF3556B492C2D72206F294E0072613033DDE3A48D8CC5A1ECBA8987",
+          "Unlimotion.UiTests.Authoring.dll": "C1ADD390184483CF70E65EC31472905B775AC5277B78544EEC50758EC48384A0",
+          "Unlimotion.UiTests.FlaUI.dll": "1818AA6AA2BF29B81C2553FCB6F3CD712E52DB4444C71BA7A9786B6DF4AC6D4D",
+          "Unlimotion.UiTests.FlaUI.exe": "9DED061A9542791024464B0782666F9880C4BF5C4AF1C45F20A9C82014B5D6D2",
+          "Unlimotion.ViewModel.dll": "F31E183989454C308236990A9A6353367AAF921C90812AFBEC51C828052E9219",
+          "Unlimotion.AppAutomation.TestHost.dll": "F36BF4CB630115362AC61C7A10F140BC808E0041BF5B77050C72D8B1849412FA",
+          "Unlimotion.Server.ServiceModel.dll": "4AE6F593D285FB7EBCB8E1322307CE965911EBB0C10D6A51D5D84BA47EC42FA6",
+          "Unlimotion.dll": "F01671A14C81F3FA2497069FF52CDD61043721519FECEAA1924A69928F094521",
+          "Unlimotion.Interface.dll": "558F6481B924EED45AB31B0F9B397DE84F12F6550F8577B96A0601ED11D7582F",
+          "Unlimotion.FileStorage.dll": "27E08ADD8877112FAEB77BAB6FDB43A19B1B34725B031E0FC08B0DEBBE6D2185",
+          "Unlimotion.TaskTree.dll": "B22D9B3A2505F193E6BCEFB28015BBB849C6739790AA2E843952489641314060",
+          "Unlimotion.Desktop.dll": "6034F77C024289B594640D8ECE165D5F424E1A1F278D51801287B98A546484B7"
+        },
+        "dirtyPaths": []
+      },
+      "result": {
+        "stage": "native-final-five-blocked",
+        "exitCode": 0,
+        "outcome": "success",
+        "startedUtc": "2026-10-06T13:29:19.8971682+03:00",
+        "finishedUtc": "2026-10-06T13:30:02.5638719+03:00",
+        "durationMs": 42451.8561
+      },
+      "rawInvocationSha256": "BBC61D535D0F079A67CFEEA24FEA7BD52B8F4810544DC6C7DFE3C86344C2B687",
+      "rawResultSha256": "A1488576F6C0890A9BB1EA54234D82E178A46EC346FCA7F67A79D942521D7A00",
+      "rawLogSha256": "5D83C7F9951D3B96B2659D4DDBCF6CBEC208BC06B07EB9D9F801CD2E0C42D9A8",
+      "originalTrxSha256": "7247CEC6A6C4DF968525C51ADB74317A9A503D5951D12D9E450F6A060884EDD3",
+      "missingTrxReason": null,
+      "counters": {
+        "total": 1,
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0
+      },
+      "tests": {
+        "name": "StatusContract_RussianDarkBlocked",
+        "outcome": "Passed",
+        "duration": "00:00:14.4312391"
+      }
+    },
+    {
+      "stage": "native-final-five-terminal",
+      "invocation": {
+        "stage": "native-final-five-terminal",
+        "project": "native",
+        "executable": "tests/Unlimotion.UiTests.FlaUI/bin/Debug/net10.0-windows7.0/Unlimotion.UiTests.FlaUI.exe",
+        "cwd": "<workspace>\\tests\\Unlimotion.UiTests.FlaUI\\bin\\Debug\\net10.0-windows7.0",
+        "arguments": [
+          "--maximum-parallel-tests",
+          "1",
+          "--minimum-expected-tests",
+          "1",
+          "--output",
+          "Detailed",
+          "--report-trx",
+          "--results-directory=<workspace>\\artifacts\\status-recovery\\pre-merge-2026-10-05\\native-final-five-terminal",
+          "--treenode-filter",
+          "/*/*/MainWindowFlaUiTests/StatusContract_TerminalPickerAndUnarchive"
+        ],
+        "head": "635c941eaae8f02f8d8c3ff21b88f965d0fdef58",
+        "tree": "67850ceb7d83c3fa03ea900b66d3d2f8c0c7dbe4",
+        "parents": "e094ae89a1ecd4f3b4683a1427895d80860b7ce5",
+        "startedUtc": "2026-10-06T13:30:03.8491025+03:00",
+        "desktopMonitor": "primary",
+        "nativeAdapterSha256": "7164C83B7676D055BBE597BE5F5D81F3BC31F238630E9198DCC7E34AF76303C2",
+        "binaryHashes": {
+          "Unlimotion.dll": "F01671A14C81F3FA2497069FF52CDD61043721519FECEAA1924A69928F094521",
+          "Unlimotion.UiTests.FlaUI.dll": "1818AA6AA2BF29B81C2553FCB6F3CD712E52DB4444C71BA7A9786B6DF4AC6D4D",
+          "Unlimotion.Domain.dll": "79327528BFF3556B492C2D72206F294E0072613033DDE3A48D8CC5A1ECBA8987",
+          "Unlimotion.TaskTree.dll": "B22D9B3A2505F193E6BCEFB28015BBB849C6739790AA2E843952489641314060",
+          "Unlimotion.Interface.dll": "558F6481B924EED45AB31B0F9B397DE84F12F6550F8577B96A0601ED11D7582F",
+          "Unlimotion.FileStorage.dll": "27E08ADD8877112FAEB77BAB6FDB43A19B1B34725B031E0FC08B0DEBBE6D2185",
+          "Unlimotion.UiTests.Authoring.dll": "C1ADD390184483CF70E65EC31472905B775AC5277B78544EEC50758EC48384A0",
+          "Unlimotion.Server.ServiceModel.dll": "4AE6F593D285FB7EBCB8E1322307CE965911EBB0C10D6A51D5D84BA47EC42FA6",
+          "Unlimotion.UiTests.FlaUI.exe": "9DED061A9542791024464B0782666F9880C4BF5C4AF1C45F20A9C82014B5D6D2",
+          "Unlimotion.Desktop.dll": "6034F77C024289B594640D8ECE165D5F424E1A1F278D51801287B98A546484B7",
+          "Unlimotion.ViewModel.dll": "F31E183989454C308236990A9A6353367AAF921C90812AFBEC51C828052E9219",
+          "Unlimotion.AppAutomation.TestHost.dll": "F36BF4CB630115362AC61C7A10F140BC808E0041BF5B77050C72D8B1849412FA"
+        },
+        "dirtyPaths": []
+      },
+      "result": {
+        "stage": "native-final-five-terminal",
+        "exitCode": 0,
+        "outcome": "success",
+        "startedUtc": "2026-10-06T13:30:03.8491025+03:00",
+        "finishedUtc": "2026-10-06T13:30:55.0112583+03:00",
+        "durationMs": 50927.0096
+      },
+      "rawInvocationSha256": "ED56382C96CAAC901D234B7F9155BAA3B8047CBE4768894EF94EFDC5A7E33F8C",
+      "rawResultSha256": "E83133B8402F53B9D22551FF404BF7D904911B36A6E5A66B7CEA6FD0B9320EFD",
+      "rawLogSha256": "90FD3C022B6D5A3634BB53C60A40A87ED9AE54F76FCD47C0D337D764ECF12510",
+      "originalTrxSha256": "25C1904678EAB3CAE855C584E71B2426BF50A9A717DEF70B4597FA158A476992",
+      "missingTrxReason": null,
+      "counters": {
+        "total": 1,
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0
+      },
+      "tests": {
+        "name": "StatusContract_TerminalPickerAndUnarchive",
+        "outcome": "Passed",
+        "duration": "00:00:23.0634158"
+      }
+    },
+    {
+      "stage": "native-final-five-clipped",
+      "invocation": {
+        "stage": "native-final-five-clipped",
+        "project": "native",
+        "executable": "tests/Unlimotion.UiTests.FlaUI/bin/Debug/net10.0-windows7.0/Unlimotion.UiTests.FlaUI.exe",
+        "cwd": "<workspace>\\tests\\Unlimotion.UiTests.FlaUI\\bin\\Debug\\net10.0-windows7.0",
+        "arguments": [
+          "--maximum-parallel-tests",
+          "1",
+          "--minimum-expected-tests",
+          "1",
+          "--output",
+          "Detailed",
+          "--report-trx",
+          "--results-directory=<workspace>\\artifacts\\status-recovery\\pre-merge-2026-10-05\\native-final-five-clipped",
+          "--treenode-filter",
+          "/*/*/MainWindowFlaUiTests/StatusContract_PickerRestoresClippedHeader"
+        ],
+        "head": "635c941eaae8f02f8d8c3ff21b88f965d0fdef58",
+        "tree": "67850ceb7d83c3fa03ea900b66d3d2f8c0c7dbe4",
+        "parents": "e094ae89a1ecd4f3b4683a1427895d80860b7ce5",
+        "startedUtc": "2026-10-06T13:30:56.3894124+03:00",
+        "desktopMonitor": "primary",
+        "nativeAdapterSha256": "7164C83B7676D055BBE597BE5F5D81F3BC31F238630E9198DCC7E34AF76303C2",
+        "binaryHashes": {
+          "Unlimotion.Domain.dll": "79327528BFF3556B492C2D72206F294E0072613033DDE3A48D8CC5A1ECBA8987",
+          "Unlimotion.FileStorage.dll": "27E08ADD8877112FAEB77BAB6FDB43A19B1B34725B031E0FC08B0DEBBE6D2185",
+          "Unlimotion.ViewModel.dll": "F31E183989454C308236990A9A6353367AAF921C90812AFBEC51C828052E9219",
+          "Unlimotion.Interface.dll": "558F6481B924EED45AB31B0F9B397DE84F12F6550F8577B96A0601ED11D7582F",
+          "Unlimotion.UiTests.Authoring.dll": "C1ADD390184483CF70E65EC31472905B775AC5277B78544EEC50758EC48384A0",
+          "Unlimotion.Desktop.dll": "6034F77C024289B594640D8ECE165D5F424E1A1F278D51801287B98A546484B7",
+          "Unlimotion.UiTests.FlaUI.dll": "1818AA6AA2BF29B81C2553FCB6F3CD712E52DB4444C71BA7A9786B6DF4AC6D4D",
+          "Unlimotion.UiTests.FlaUI.exe": "9DED061A9542791024464B0782666F9880C4BF5C4AF1C45F20A9C82014B5D6D2",
+          "Unlimotion.TaskTree.dll": "B22D9B3A2505F193E6BCEFB28015BBB849C6739790AA2E843952489641314060",
+          "Unlimotion.Server.ServiceModel.dll": "4AE6F593D285FB7EBCB8E1322307CE965911EBB0C10D6A51D5D84BA47EC42FA6",
+          "Unlimotion.dll": "F01671A14C81F3FA2497069FF52CDD61043721519FECEAA1924A69928F094521",
+          "Unlimotion.AppAutomation.TestHost.dll": "F36BF4CB630115362AC61C7A10F140BC808E0041BF5B77050C72D8B1849412FA"
+        },
+        "dirtyPaths": []
+      },
+      "result": {
+        "stage": "native-final-five-clipped",
+        "exitCode": 0,
+        "outcome": "success",
+        "startedUtc": "2026-10-06T13:30:56.3894124+03:00",
+        "finishedUtc": "2026-10-06T13:31:43.3766787+03:00",
+        "durationMs": 46743.799
+      },
+      "rawInvocationSha256": "C2A2800F3C2767FDEA5155E24F00855FCFCC859BA089218866FB7C7D6F783B58",
+      "rawResultSha256": "884EB909A792AE7B1F2FA18A045C7502B87B5444403162CFA101F2E80C049C6B",
+      "rawLogSha256": "F4540EA36841D8EB37F8ED61914B9F5817CC8A47AF89F93CEC81294B5F8A06B2",
+      "originalTrxSha256": "875249F08B3580B0C60E2EFA556122F2C919A07DE98CC115EDC228685EEC9C0C",
+      "missingTrxReason": null,
+      "counters": {
+        "total": 1,
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0
+      },
+      "tests": {
+        "name": "StatusContract_PickerRestoresClippedHeader",
+        "outcome": "Passed",
+        "duration": "00:00:07.4439527"
+      }
     }
   ],
   "nativePngs": [
-    "after-blocked.png",
-    "after-future-vs-blocked.png",
-    "status-contract-recovery-after-retry.png",
-    "status-contract-recovery-error.png"
+    "native-final-635c/after-blocked.png",
+    "native-final-635c/after-future-vs-blocked.png",
+    "native-final-635c/status-contract-after-unarchive.png",
+    "native-final-635c/status-contract-recovery-after-retry.png",
+    "native-final-635c/status-contract-recovery-error.png",
+    "native-final-635c/status-contract-terminal-picker.png",
+    "native-final-635c/status-contract-viewport-StatusContract_PickerRestoresClippedHeader-after-scroll.png",
+    "native-final-635c/status-contract-viewport-StatusContract_PickerRestoresClippedHeader-before-scroll.png"
   ],
   "observations": [
     {
@@ -10005,8 +10857,13 @@
     },
     {
       "project": "native",
-      "file": "native-status-contract-recovery-observations.png.json",
+      "file": "native-final-635c/native-status-contract-recovery-observations.png.json",
       "originalSha256": "9CAFA9288256718A97716AA462635E2FE02E74921027FCD94FBDF40068B0608E"
+    },
+    {
+      "project": "native",
+      "file": "native-final-635c/native-status-contract-viewport-StatusContract_PickerRestoresClippedHeader.json",
+      "originalSha256": "FEFCE99964421DAA3009C48D5D64662BF80E2670B57E1B3A979338629A71E061"
     }
   ]
 }

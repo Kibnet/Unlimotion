@@ -4,7 +4,31 @@
 
 Согласованный контракт и post-EXEC review: [SPEC](../../../specs/2026-10-02-task-card-status-recovery.md).
 
-## Возобновление native проверки, 6 октября
+## Финальные физические UI-сценарии, 6 октября
+
+На immutable `635c941eaae8f02f8d8c3ff21b88f965d0fdef58` все пять адресных native-сценариев прошли: **5/5 PASS**, exit0 в каждом запуске, 0 FAIL/SKIP. Это пять последовательных процессов с точными test-name filters и одной неизменной FlaUI DLL: SHA256 `1818AA6AA2BF29B81C2553FCB6F3CD712E52DB4444C71BA7A9786B6DF4AC6D4D`; adapter SHA256 `7164C83B7676D055BBE597BE5F5D81F3BC31F238630E9198DCC7E34AF76303C2`. Все invocation имеют clean source, HEAD635c и monitor=primary. Перед запуском пользователь подтвердил свободный desktop; после завершения общий слот освобождён.
+
+| Сценарий | Итог | Evidence |
+| --- | --- | --- |
+| Отказ → ⚙ → Reload → явный retry | **1/1 PASS**; Reload сохраняет JSON/text, снимает ошибку; retry пишет NotReady и ровно одну новую запись истории | [Лог](pre-merge-2026-10-05/native-final-five-recovery.log), [read-back observations](pre-merge-2026-10-05/native-final-635c/native-status-contract-recovery-observations.png.json) |
+| RU Dark: будущий старт | **1/1 PASS**; запрещённый переход объяснён | [Лог](pre-merge-2026-10-05/native-final-five-future.log), [PNG](pre-merge-2026-10-05/native-final-635c/after-future-vs-blocked.png) |
+| RU Dark: блокирующая задача | **1/1 PASS**; owned tooltip просмотрен | [Лог](pre-merge-2026-10-05/native-final-five-blocked.log), [PNG](pre-merge-2026-10-05/native-final-635c/after-blocked.png) |
+| Terminal picker / unarchive | **1/1 PASS** | [Лог](pre-merge-2026-10-05/native-final-five-terminal.log), [picker](pre-merge-2026-10-05/native-final-635c/status-contract-terminal-picker.png), [unarchive](pre-merge-2026-10-05/native-final-635c/status-contract-after-unarchive.png) |
+| Собственный viewport скрывает header → физический picker | **1/1 PASS**; positive bounds, PreparationCount=1, center hit false→true и fresh containment | [Лог](pre-merge-2026-10-05/native-final-five-clipped.log), [JSON](pre-merge-2026-10-05/native-final-635c/native-status-contract-viewport-StatusContract_PickerRestoresClippedHeader.json), [до](pre-merge-2026-10-05/native-final-635c/status-contract-viewport-StatusContract_PickerRestoresClippedHeader-before-scroll.png), [после](pre-merge-2026-10-05/native-final-635c/status-contract-viewport-StatusContract_PickerRestoresClippedHeader-after-scroll.png) |
+
+Все восемь свежих native PNG просмотрены. Текущий результат восстановления:
+
+![Ошибка и Reload в меню шестерёнки, source635c](pre-merge-2026-10-05/native-final-635c/status-contract-recovery-error.png)
+
+![После явного повторного выбора статуса, source635c](pre-merge-2026-10-05/native-final-635c/status-contract-recovery-after-retry.png)
+
+Первый batch `native-final-five` выбрал0 тестов из-за фильтра и завершился exit8/minimum-expected-tests5; [original failure](pre-merge-2026-10-05/native-final-five.log) сохранён. Это ошибка invocation, product flow не запускался. Приведённые выше пять точных filters действительно выполнили нужные cases; результаты не переназначены прежним версиям6a/356. Их четыре опубликованных кадра остаются по старым путям, а свежие635c размещены отдельно в `native-final-635c`.
+
+CI именно635c: **Main1274/1274 +Headless55/55 PASS**, exit0, 0 FAIL/SKIP; Android и CodeQL SUCCESS. [Tests](https://github.com/Kibnet/Unlimotion/actions/runs/37427953000), [Android](https://github.com/Kibnet/Unlimotion/actions/runs/37427953039), [CodeQL](https://github.com/Kibnet/Unlimotion/actions/runs/37427952784). Original merge checkout207701f6 имеет parents9150+635c и tree67850, равный branch tree. Эти results включены в [validation snapshot](pre-merge-2026-10-05/validation-snapshot.json); native pendingStages теперь[]. После публикации этого docs-only evidence требуется CI уже итогового HEAD; зелёный635c не переносится на новый SHA.
+
+Подтверждённой before/after MP4 pair по-прежнему нет: recording FPS/readiness/ffmpeg ограничения сохраняются; fallback — просмотренные automated PNG, read-back assertions и оригинальные TRX. Точная индивидуальная production cause остаётся UNKNOWN; synthetic failure/recovery не считается её доказательством. Product/Main/Headless source не менялся при закрытии native gate; новые полные локальные серии не запускались.
+
+## История возобновления native проверки, 6 октября
 
 Input desktop теперь доступен, Win32 error0. Published checkpoint `6a7b45fb` имеет exact-head CI **1274/1274 Main +55/55 Headless PASS**, Android и CodeQL SUCCESS: [Tests](https://github.com/Kibnet/Unlimotion/actions/runs/37364841005), [Android](https://github.com/Kibnet/Unlimotion/actions/runs/37364840983), [CodeQL](https://github.com/Kibnet/Unlimotion/actions/runs/37364841010). Original CI checkout `c9d31e42` имеет parents main9150+PR6a, treeb92f точно совпадает с branch tree; exit0, clean, 0 FAIL/SKIP. Это CI предыдущей опубликованной головы; новый native adapter требует fresh final-head CI.
 
