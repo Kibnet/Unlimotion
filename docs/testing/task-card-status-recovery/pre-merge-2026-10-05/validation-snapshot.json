@@ -1,6 +1,6 @@
 {
-  "candidateSourceHead": "635c941eaae8f02f8d8c3ff21b88f965d0fdef58",
-  "candidateSourceTree": "67850ceb7d83c3fa03ea900b66d3d2f8c0c7dbe4",
+  "candidateSourceHead": "97776e59ffb369aff644662c7115f86a55eb4342",
+  "candidateSourceTree": "bfa8f9ddc8b3b5896fd94b3090065ca2e5343a0d",
   "sourceSha256": {
     "src/Unlimotion.ViewModel/TaskItemViewModel.cs": "3764ADAC75ECC2151A275B32BEEF111F79BF14491177548CC7F15552C607C5C6",
     "src/Unlimotion.ViewModel/MainWindowViewModel.cs": "BEEB91BE43B1809E5594A6396B7F64749C03F6F6F35B9766C137160A6A45788C",
@@ -1055,11 +1055,13 @@
         "failed": 1,
         "skipped": 0
       },
-      "tests": {
-        "name": "TaskCardStatusRecovery_HasAccessibleRefreshAction",
-        "outcome": "Failed",
-        "duration": "00:00:11.9982151"
-      }
+      "tests": [
+        {
+          "name": "TaskCardStatusRecovery_HasAccessibleRefreshAction",
+          "outcome": "Failed",
+          "duration": "00:00:11.9982151"
+        }
+      ]
     },
     {
       "stage": "red-missing",
@@ -1202,11 +1204,13 @@
         "failed": 1,
         "skipped": 0
       },
-      "tests": {
-        "name": "Reload_UnknownThenFailedReadCannotUndoPersistedStatusOnEditOrSeal",
-        "outcome": "Failed",
-        "duration": "00:00:00.3739981"
-      }
+      "tests": [
+        {
+          "name": "Reload_UnknownThenFailedReadCannotUndoPersistedStatusOnEditOrSeal",
+          "outcome": "Failed",
+          "duration": "00:00:00.3739981"
+        }
+      ]
     },
     {
       "stage": "red-late-saved",
@@ -1276,11 +1280,13 @@
         "failed": 1,
         "skipped": 0
       },
-      "tests": {
-        "name": "Reload_MissingRejectsSavedSnapshotWhoseLoadStartedBeforeDeletion",
-        "outcome": "Failed",
-        "duration": "00:00:00.5046752"
-      }
+      "tests": [
+        {
+          "name": "Reload_MissingRejectsSavedSnapshotWhoseLoadStartedBeforeDeletion",
+          "outcome": "Failed",
+          "duration": "00:00:00.5046752"
+        }
+      ]
     },
     {
       "stage": "red-cleanup",
@@ -1514,11 +1520,13 @@
         "failed": 1,
         "skipped": 0
       },
-      "tests": {
-        "name": "TaskCardStatusRecovery_HasAccessibleRefreshAction",
-        "outcome": "Failed",
-        "duration": "00:00:09.8134675"
-      }
+      "tests": [
+        {
+          "name": "TaskCardStatusRecovery_HasAccessibleRefreshAction",
+          "outcome": "Failed",
+          "duration": "00:00:09.8134675"
+        }
+      ]
     },
     {
       "stage": "green-vm",
@@ -2152,11 +2160,13 @@
         "failed": 1,
         "skipped": 0
       },
-      "tests": {
-        "name": "EditorFlushFailureAfterSuccessfulStatusCommand_PreservesConfirmedResultAndRemainsRetryable",
-        "outcome": "Failed",
-        "duration": "00:00:00.3588787"
-      }
+      "tests": [
+        {
+          "name": "EditorFlushFailureAfterSuccessfulStatusCommand_PreservesConfirmedResultAndRemainsRetryable",
+          "outcome": "Failed",
+          "duration": "00:00:00.3588787"
+        }
+      ]
     },
     {
       "stage": "green-menu-final",
@@ -2227,11 +2237,13 @@
         "failed": 0,
         "skipped": 0
       },
-      "tests": {
-        "name": "TaskCardStatusRecovery_HasAccessibleRefreshAction",
-        "outcome": "Passed",
-        "duration": "00:00:09.0193747"
-      }
+      "tests": [
+        {
+          "name": "TaskCardStatusRecovery_HasAccessibleRefreshAction",
+          "outcome": "Passed",
+          "duration": "00:00:09.0193747"
+        }
+      ]
     },
     {
       "stage": "green-missing",
@@ -9252,7 +9264,7 @@
       "originalTrxSha256": null,
       "missingTrxReason": "52 testcase Passed lines followed by failing AfterTestSession NRE and secondary TRX writer crash. No completed session counters/TRX; run is FAIL.",
       "counters": null,
-      "tests": null
+      "tests": []
     },
     {
       "stage": "headless-full-repeat",
@@ -10048,11 +10060,13 @@
         "failed": 1,
         "skipped": 0
       },
-      "tests": {
-        "name": "TaskCardStatusRecovery_FailureRefreshRetry",
-        "outcome": "Failed",
-        "duration": "00:00:00.4659267"
-      }
+      "tests": [
+        {
+          "name": "TaskCardStatusRecovery_FailureRefreshRetry",
+          "outcome": "Failed",
+          "duration": "00:00:00.4659267"
+        }
+      ]
     },
     {
       "stage": "native-recovery-repeat",
@@ -10112,11 +10126,13 @@
         "failed": 1,
         "skipped": 0
       },
-      "tests": {
-        "name": "TaskCardStatusRecovery_FailureRefreshRetry",
-        "outcome": "Failed",
-        "duration": "00:00:37.7757137"
-      }
+      "tests": [
+        {
+          "name": "TaskCardStatusRecovery_FailureRefreshRetry",
+          "outcome": "Failed",
+          "duration": "00:00:37.7757137"
+        }
+      ]
     },
     {
       "stage": "native-future",
@@ -10176,11 +10192,13 @@
         "failed": 0,
         "skipped": 0
       },
-      "tests": {
-        "name": "StatusContract_RussianDarkFuture",
-        "outcome": "Passed",
-        "duration": "00:00:10.2417350"
-      }
+      "tests": [
+        {
+          "name": "StatusContract_RussianDarkFuture",
+          "outcome": "Passed",
+          "duration": "00:00:10.2417350"
+        }
+      ]
     },
     {
       "stage": "native-blocked",
@@ -10240,11 +10258,13 @@
         "failed": 0,
         "skipped": 0
       },
-      "tests": {
-        "name": "StatusContract_RussianDarkBlocked",
-        "outcome": "Passed",
-        "duration": "00:00:26.2741168"
-      }
+      "tests": [
+        {
+          "name": "StatusContract_RussianDarkBlocked",
+          "outcome": "Passed",
+          "duration": "00:00:26.2741168"
+        }
+      ]
     },
     {
       "stage": "native-terminal",
@@ -10304,11 +10324,13 @@
         "failed": 1,
         "skipped": 0
       },
-      "tests": {
-        "name": "StatusContract_TerminalPickerAndUnarchive",
-        "outcome": "Failed",
-        "duration": "00:00:00.0001166"
-      }
+      "tests": [
+        {
+          "name": "StatusContract_TerminalPickerAndUnarchive",
+          "outcome": "Failed",
+          "duration": "00:00:00.0001166"
+        }
+      ]
     },
     {
       "stage": "native-recovery-viewport",
@@ -10370,11 +10392,13 @@
         "failed": 0,
         "skipped": 0
       },
-      "tests": {
-        "name": "TaskCardStatusRecovery_FailureRefreshRetry",
-        "outcome": "Passed",
-        "duration": "00:00:47.3483190"
-      }
+      "tests": [
+        {
+          "name": "TaskCardStatusRecovery_FailureRefreshRetry",
+          "outcome": "Passed",
+          "duration": "00:00:47.3483190"
+        }
+      ]
     },
     {
       "stage": "native-future-viewport",
@@ -10436,11 +10460,13 @@
         "failed": 1,
         "skipped": 0
       },
-      "tests": {
-        "name": "StatusContract_RussianDarkFuture",
-        "outcome": "Failed",
-        "duration": "00:00:00.7638614"
-      }
+      "tests": [
+        {
+          "name": "StatusContract_RussianDarkFuture",
+          "outcome": "Failed",
+          "duration": "00:00:00.7638614"
+        }
+      ]
     },
     {
       "stage": "native-final-five",
@@ -10502,11 +10528,7 @@
         "failed": 0,
         "skipped": 0
       },
-      "tests": {
-        "name": null,
-        "outcome": null,
-        "duration": null
-      }
+      "tests": []
     },
     {
       "stage": "native-final-five-recovery",
@@ -10568,11 +10590,13 @@
         "failed": 0,
         "skipped": 0
       },
-      "tests": {
-        "name": "TaskCardStatusRecovery_FailureRefreshRetry",
-        "outcome": "Passed",
-        "duration": "00:00:43.6616116"
-      }
+      "tests": [
+        {
+          "name": "TaskCardStatusRecovery_FailureRefreshRetry",
+          "outcome": "Passed",
+          "duration": "00:00:43.6616116"
+        }
+      ]
     },
     {
       "stage": "native-final-five-future",
@@ -10634,11 +10658,13 @@
         "failed": 0,
         "skipped": 0
       },
-      "tests": {
-        "name": "StatusContract_RussianDarkFuture",
-        "outcome": "Passed",
-        "duration": "00:00:09.7415753"
-      }
+      "tests": [
+        {
+          "name": "StatusContract_RussianDarkFuture",
+          "outcome": "Passed",
+          "duration": "00:00:09.7415753"
+        }
+      ]
     },
     {
       "stage": "native-final-five-blocked",
@@ -10700,11 +10726,13 @@
         "failed": 0,
         "skipped": 0
       },
-      "tests": {
-        "name": "StatusContract_RussianDarkBlocked",
-        "outcome": "Passed",
-        "duration": "00:00:14.4312391"
-      }
+      "tests": [
+        {
+          "name": "StatusContract_RussianDarkBlocked",
+          "outcome": "Passed",
+          "duration": "00:00:14.4312391"
+        }
+      ]
     },
     {
       "stage": "native-final-five-terminal",
@@ -10766,11 +10794,13 @@
         "failed": 0,
         "skipped": 0
       },
-      "tests": {
-        "name": "StatusContract_TerminalPickerAndUnarchive",
-        "outcome": "Passed",
-        "duration": "00:00:23.0634158"
-      }
+      "tests": [
+        {
+          "name": "StatusContract_TerminalPickerAndUnarchive",
+          "outcome": "Passed",
+          "duration": "00:00:23.0634158"
+        }
+      ]
     },
     {
       "stage": "native-final-five-clipped",
@@ -10832,11 +10862,13 @@
         "failed": 0,
         "skipped": 0
       },
-      "tests": {
-        "name": "StatusContract_PickerRestoresClippedHeader",
-        "outcome": "Passed",
-        "duration": "00:00:07.4439527"
-      }
+      "tests": [
+        {
+          "name": "StatusContract_PickerRestoresClippedHeader",
+          "outcome": "Passed",
+          "duration": "00:00:07.4439527"
+        }
+      ]
     }
   ],
   "nativePngs": [
