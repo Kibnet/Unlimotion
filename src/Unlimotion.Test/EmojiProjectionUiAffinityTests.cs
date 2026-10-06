@@ -62,6 +62,9 @@ public class EmojiProjectionUiAffinityTests
                 var searchWrapper = vm.CurrentAllTasksItems.Single(item => item.TaskItem.Id == child.Id);
                 tree.SelectedItem = searchWrapper;
                 vm.CurrentAllTasksItem = searchWrapper;
+                await Assert.That(ReferenceEquals(vm.CurrentAllTasksItem, searchWrapper)).IsTrue();
+                await Assert.That(ReferenceEquals(tree.SelectedItem, searchWrapper)).IsTrue();
+                await Assert.That(vm.CurrentTaskItem?.Id).IsEqualTo(child.Id);
                 vm.CurrentTaskItem = null;
                 RecordSelection("search-established");
                 vm.Search.SearchText = string.Empty;
@@ -71,6 +74,8 @@ public class EmojiProjectionUiAffinityTests
                     vm.CurrentAllTasksItems.Any(item => ReferenceEquals(item, searchWrapper)), TimeSpan.FromSeconds(5))).IsTrue();
                 retries.RunAll(); // Both legacy retries complete before the late worker stage.
                 RecordSelection("ui-clear-before-worker");
+                await Assert.That(ReferenceEquals(vm.CurrentAllTasksItem, searchWrapper)).IsTrue();
+                await Assert.That(ReferenceEquals(tree.SelectedItem, searchWrapper)).IsTrue();
                 probe.RecordQuiescentSnapshot(vm.CurrentAllTasksItems);
                 probe.ClearEvents();
                 await Task.Run(timer.RunAll).WaitAsync(TimeSpan.FromSeconds(10));

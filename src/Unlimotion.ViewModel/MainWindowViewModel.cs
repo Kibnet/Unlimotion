@@ -2825,7 +2825,14 @@ namespace Unlimotion.ViewModel
             // TreeView can clear SelectedItem after processing search-clear collection changes.
             retryScheduler.Schedule(TimeSpan.FromMilliseconds(50), () =>
                 RestoreCurrentAllTasksSelection(useLastSelectedFallback: true));
-            return restored;
+            // The UI search stage can add the parents before the emoji stage removes
+            // the promoted search child. That old root wrapper is only a transient
+            // selection; retain the pending restore until the normal tree owns it.
+            var selected = CurrentAllTasksItem;
+            var promotedChildPendingRemoval = selected != null && selected.TaskItem.Parents.Count > 0 &&
+                EmojiFilters.All(filter => !filter.ShowTasks) &&
+                CurrentAllTasksItems.Any(item => ReferenceEquals(item, selected));
+            return restored && !promotedChildPendingRemoval;
         }
 
         private void ExpandParentNodesForTask(TaskItemViewModel? taskItem)
