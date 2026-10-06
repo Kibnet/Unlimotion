@@ -1,0 +1,73 @@
+
+████████╗██╗   ██╗███╗   ██╗██╗████████╗
+╚══██╔══╝██║   ██║████╗  ██║██║╚══██╔══╝
+   ██║   ██║   ██║██╔██╗ ██║██║   ██║
+   ██║   ██║   ██║██║╚██╗██║██║   ██║
+   ██║   ╚██████╔╝██║ ╚████║██║   ██║
+   ╚═╝    ╚═════╝ ╚═╝  ╚═══╝╚═╝   ╚═╝
+
+   TUnit v1.44.0.0 | 64-bit | Microsoft Windows 10.0.22631 | win-x64 | .NET 10.0.12 | Microsoft Testing Platform v2.2.2
+
+   Engine Mode: SourceGenerated
+
+пройдено TaskNotFoundDuringStatusCommand_BlocksDirtyEditorDrainAndLifecycleSave(False) (372ms)
+пройдено EditorFlushFailureBeforeStatusCommand_ReturnsControlledFailureAndRemainsRetryable (8ms)
+пройдено SealPendingSaves_FlushesThrottledEditorRevisionBeforeTeardown (1ms)
+пройдено SealPendingSaves_WhenFinalEditorFlushFails_FaultsTeardown (7ms)
+сбой EditorFlushFailureAfterSuccessfulStatusCommand_PreservesConfirmedResultAndRemainsRetryable (57ms)
+  TUnit.Engine.Exceptions.TestFailedException: [Test Failure] InvalidOperationException: controlled final editor save failure
+    в Unlimotion.Test.TaskItemViewModelStatusCommandTests.ScriptedTaskStorage.Update(TaskItem change) в <workspace>\src\Unlimotion.Test\TaskItemViewModelStatusCommandTests.cs:1602
+    в Unlimotion.ViewModel.TaskItemViewModel.<>c__DisplayClass108_0.<<Init>b__1>d.MoveNext() в <workspace>\src\Unlimotion.ViewModel\TaskItemViewModel.cs:226
+    --- End of stack trace from previous location ---
+    в Unlimotion.ViewModel.TaskItemViewModel.SealPendingSavesCoreAsync(IReadOnlyCollection`1 pendingWrites) в <workspace>\src\Unlimotion.ViewModel\TaskItemViewModel.cs:1468
+    в Unlimotion.Test.TaskItemViewModelStatusCommandTests.EditorFlushFailureAfterSuccessfulStatusCommand_PreservesConfirmedResultAndRemainsRetryable() в <workspace>\src\Unlimotion.Test\TaskItemViewModelStatusCommandTests.cs:673
+       --- TUnit internals omitted (run with --detailed-stacktrace for full trace) ---
+пройдено EditorFlushFailureAfterSuccessfulStatusCommand_FaultsConcurrentLifecycleSeal (5ms)
+пройдено RetryThatPersistsFailedRevisionBeforeProducerCompletion_AllowsLifecycleSeal (8ms)
+пройдено PendingArchiveConfirmation_IsCancelledAndDrainedByLifecycleSeal (31ms)
+пройдено LifecycleSeal_WaitsForCascadeChildAdmittedBeforeSeal (7ms)
+пройдено Unarchive_TransitionsParentBeforeSingleConfirmationAndProcessesEveryChildInOrder (9ms)
+пройдено Unarchive_StaleCachedHistoryUsesStorageResolvedTargetsForParentAndChild (12ms)
+пройдено Unarchive_AuthoritativeParentNoLongerArchivedStopsCascadeAndHydratesStatus (4ms)
+пройдено Unarchive_WithoutChildren_TransitionsParentWithoutConfirmation (3ms)
+пройдено Unarchive_WithoutNotificationManager_LeavesChildrenArchived (2ms)
+пройдено Unarchive_WhenConfirmationIsDeclined_LeavesChildrenArchived (2ms)
+пройдено Unarchive_WhenConfirmationFails_LeavesChildrenArchivedAndReportsFailure (3ms)
+пройдено StalePreview_CommandDenialHydratesAuthoritativeStatusWithoutOptimisticMutation (2ms)
+пройдено StorageFailureWithoutSnapshotKeepsCachedStatusAndUsesHonestRetryCopy (4ms)
+пройдено EditDuringStatusCommand_IsMergedAndDrainedBeforeCompletion(True) (18ms)
+пройдено EditDuringStatusCommand_IsMergedAndDrainedBeforeCompletion(False) (0ms)
+пройдено DelayedStatusResult_DoesNotOverwriteNewerStorageGeneration (6ms)
+пройдено SelectStatusOption_CurrentArchivedStatusDoesNotUnarchive (2ms)
+пройдено TaskNotFoundDuringStatusCommand_BlocksDirtyEditorDrainAndLifecycleSave(True) (8ms)
+пройдено Reload_UnknownThenFailedReadCannotUndoPersistedStatusOnEditOrSeal (6ms)
+пройдено Reload_UserAutosaveMaturingDuringReadResumesAfterLoaded (2s 026ms)
+пройдено Reload_DelayedMissingDecisionIsAwaitedBeforeLifecycleFinalSave (3ms)
+пройдено Reload_PreservesDirtyFieldsAndEditsDuringReadWithoutWriting (53ms)
+пройдено Reload_WaitsForRunningAutosaveEvenIfItFails(False) (5ms)
+пройдено Reload_WaitsForRunningAutosaveEvenIfItFails(True) (2ms)
+passed Reload_MissingPreservesTextAndCannotResurrectOnSeal (3ms)
+пройдено StaleGraphDenial_UsesAuthoritativeContainedDirectAndInheritedReasonsInEnglishAndRussian (14ms)
+пройдено Reload_LateResultAfterDisposalCannotUpdateCard(False) (19ms)
+пройдено Reload_UnknownOutcomeReadsActualStatusWithoutRetryOrDuplicateHistory (2ms)
+пройдено StatusFailure_ReportsSafeSpecificCause(ValidationFailed, TaskStatusGraphInvalid) (2ms)
+пройдено StatusFailure_ReportsSafeSpecificCause(ExecutionStateDenied, TaskStatusAgentActive) (1ms)
+пройдено StatusFailure_ReportsSafeSpecificCause(DescriptionMarkerConflict, TaskStatusMarkerInvalid) (0ms)
+пройдено StatusOperation_IsIncludedInSealAndNewOperationIsRejectedAfterSeal (10ms)
+пройдено StatusOptionSetter_RoutesThroughTrackedCommandWithoutOptimisticMutation (6ms)
+пройдено StatusOptionSetter_ArchiveConfirmationCascadesOnlyActiveContainedTasks (8ms)
+пройдено StatusOptionSetter_ArchiveDeclinedLeavesContainedTasksUnchanged (5ms)
+passed Reload_LateResultAfterDisposalCannotUpdateCard(True) (0ms)
+пройдено StatusPreview_DistinguishesAndPrioritizesContainedDirectAndInheritedBlockers (8ms)
+HTML test report written to: <workspace>\artifacts\status-recovery\pre-merge-2026-10-05\green-vm\Unlimotion.Test-windows-net10.0-report.html
+
+  Созданные в процессе артефакты файлов:
+    - <workspace>\artifacts\status-recovery\pre-merge-2026-10-05\green-vm\Unlimotion.Test-windows-net10.0-report.html
+    - <workspace>\artifacts\status-recovery\pre-merge-2026-10-05\green-vm\<user>_<machine>_2026-10-05_18_00_30.4952401.trx
+
+Сводка тестового запуска: Сбой! - <workspace>\src\Unlimotion.Test\bin\Debug\net10.0\Unlimotion.Test.dll (net10.0|x64)
+  всего: 42
+  сбой: 1
+  успешно выполнено: 41
+  пропущено: 0
+  длительность: 3s 805ms

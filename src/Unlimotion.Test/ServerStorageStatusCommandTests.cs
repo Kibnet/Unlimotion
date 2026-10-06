@@ -14,6 +14,46 @@ namespace Unlimotion.Test;
 public sealed class ServerStorageStatusCommandTests
 {
     [Test]
+    [Arguments(404, TaskReloadOutcome.Missing)]
+    [Arguments(401, TaskReloadOutcome.Failed)]
+    [Arguments(500, TaskReloadOutcome.Failed)]
+    public async Task Reload_OnlyConfirmedNotFoundMeansMissing(int statusCode, TaskReloadOutcome outcome)
+    {
+        var writes = 0;
+        var storage = CreateStorage(_ => Task.FromResult(new TaskItemPage()),
+            task => { writes++; return Task.FromResult(task); },
+            _ => Task.FromException<TaskItem?>(new ServiceStack.WebServiceException { StatusCode = statusCode }));
+        var result = await storage.ReloadTaskAsync("server-task");
+        await Assert.That(result.Outcome).IsEqualTo(outcome);
+        await Assert.That(writes).IsEqualTo(0);
+    }
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task Reload_NullOrTransportFailurePreservesUnknownState(bool transportFailure)
+    {
+        var storage = CreateStorage(_ => Task.FromResult(new TaskItemPage()), loadTask: _ => transportFailure
+            ? Task.FromException<TaskItem?>(new IOException("transport failure"))
+            : Task.FromResult<TaskItem?>(null));
+        await Assert.That((await storage.ReloadTaskAsync("server-task")).Outcome)
+            .IsEqualTo(TaskReloadOutcome.Failed);
+    }
+
+    [Test]
+    public async Task Reload_LoadedResultIsDetachedAndDoesNotWrite()
+    {
+        var task = CreateTask("server-task", DomainTaskStatus.Completed);
+        var storage = CreateStorage(_ => Task.FromResult(new TaskItemPage()),
+            _ => throw new InvalidOperationException("Reload must not save"),
+            _ => Task.FromResult<TaskItem?>(task));
+        var result = await storage.ReloadTaskAsync(task.Id);
+        result.Snapshot!.Title = "local change";
+        await Assert.That(task.Title).IsEqualTo("server-task");
+        await Assert.That(result.Outcome).IsEqualTo(TaskReloadOutcome.Loaded);
+    }
+
+    [Test]
     public async Task ReadGraph_UsesOneGetAllRequestAndMapsTasks()
     {
         var requestCount = 0;

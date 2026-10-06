@@ -198,7 +198,12 @@ public class MainControlTaskCardLayoutUiTests
                 await Assert.That(IsVisibleAndArranged(trail)).IsTrue();
                 await Assert.That(GetTopEdge(view, trail)).IsGreaterThanOrEqualTo(GetBottomEdge(view, title) - 1);
                 await Assert.That(GetRightEdge(view, trail)).IsLessThan(GetLeftEdge(view, id));
-                await Assert.That(GetLeftEdge(view, actions)).IsGreaterThan(GetRightEdge(view, id));
+                // The command group may wrap below the ID when its reload button does not fit.
+                // In either layout, keep the actions after the ID without overlapping it.
+                var actionsFollowId = GetLeftEdge(view, actions) > GetRightEdge(view, id)
+                    || GetTopEdge(view, actions) >= GetBottomEdge(view, id) - 1;
+                await Assert.That(actionsFollowId).IsTrue();
+                await Assert.That(IsVisibleAndArranged(actions)).IsTrue();
             }
             finally
             {
@@ -1201,6 +1206,13 @@ public class MainControlTaskCardLayoutUiTests
                     });
                 window = createdWindow;
                 var actions = FindControlByAutomationId<DropDownButton>(view, "CurrentTaskActionsMenuButton");
+                var menu = (MenuFlyout)actions.Flyout!;
+                menu.ShowAt(actions);
+                RunLayoutJobs();
+                var reload = menu.Items.OfType<MenuItem>().First();
+                await Assert.That(AutomationProperties.GetAutomationId(reload)).IsEqualTo("CurrentTaskReloadButton");
+                await Assert.That(reload.Command).IsSameReferenceAs(fixture.MainWindowViewModelTest.CurrentTaskItem!.ReloadTaskCommand);
+                menu.Hide();
                 AssertTaskActionsMenuSitsAfterIdBelowTitle(view);
                 foreach (var width in new[] { 360d, 1400d, 430d, 1400d })
                 {
@@ -1215,6 +1227,14 @@ public class MainControlTaskCardLayoutUiTests
                         .Count(button => AutomationProperties.GetAutomationId(button) == "CurrentTaskActionsMenuButton"))
                         .IsEqualTo(1);
                     AssertActionsMenuContainsTaskCommands(actions);
+                    await Assert.That(actions.Flyout).IsSameReferenceAs(menu);
+                    menu.ShowAt(actions);
+                    RunLayoutJobs();
+                    await Assert.That(menu.Items.OfType<MenuItem>().First()).IsSameReferenceAs(reload);
+                    await Assert.That(reload.Command).IsSameReferenceAs(fixture.MainWindowViewModelTest.CurrentTaskItem!.ReloadTaskCommand);
+                    await Assert.That(reload.IsEffectivelyVisible && reload.IsEnabled).IsTrue();
+                    menu.Hide();
+                    RunLayoutJobs();
                     AssertNoHorizontalOverflow(scroll, card);
                     if (width <= 430)
                     {
@@ -2813,6 +2833,7 @@ public class MainControlTaskCardLayoutUiTests
 
         string[] expectedAutomationIds =
         [
+            "CurrentTaskReloadButton",
             "CurrentTaskMoveToPathMenuItem",
             "CurrentTaskArchiveMenuItem",
             "CurrentTaskRemoveMenuItem"

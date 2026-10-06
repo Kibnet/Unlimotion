@@ -1,0 +1,61 @@
+
+████████╗██╗   ██╗███╗   ██╗██╗████████╗
+╚══██╔══╝██║   ██║████╗  ██║██║╚══██╔══╝
+   ██║   ██║   ██║██╔██╗ ██║██║   ██║
+   ██║   ██║   ██║██║╚██╗██║██║   ██║
+   ██║   ╚██████╔╝██║ ╚████║██║   ██║
+   ╚═╝    ╚═════╝ ╚═╝  ╚═══╝╚═╝   ╚═╝
+
+   TUnit v1.44.0.0 | 64-bit | Microsoft Windows 10.0.22631 | win-x64 | .NET 10.0.12 | Microsoft Testing Platform v2.2.2
+
+   Engine Mode: SourceGenerated
+
+[TUnit] External span cap of 100 reached; subsequent spans will be dropped. Set TUNIT_OTEL_MAX_EXTERNAL_SPANS to raise the limit.
+сбой TaskCardStatusRecovery_HasAccessibleRefreshAction (11s 998ms)
+  TUnit.Engine.Exceptions.TestFailedException: [Test Failure] AssertionException: Expected to be false
+  but found True
+
+  at Assert.That(archive.IsEnabled).IsFalse()
+
+  Expected to be false
+  but found True
+
+  at Assert.That(completionKey.Command!.CanExecute(null)).IsFalse()
+    в Unlimotion.Test.MainControlTaskStatusIconUiTests.<>c.<<TaskCardStatusRecovery_HasAccessibleRefreshAction>b__5_0>d.MoveNext() в <workspace>\src\Unlimotion.Test\MainControlTaskStatusIconUiTests.cs:304
+    в Unlimotion.Test.MainControlTaskStatusIconUiTests.<>c.<<TaskCardStatusRecovery_HasAccessibleRefreshAction>b__5_0>d.MoveNext()
+    --- End of stack trace from previous location ---
+    в Unlimotion.Test.MainControlTaskStatusIconUiTests.<>c.<<TaskCardStatusRecovery_HasAccessibleRefreshAction>b__5_0>d.MoveNext() в <workspace>\src\Unlimotion.Test\MainControlTaskStatusIconUiTests.cs:323
+    --- End of stack trace from previous location ---
+    в Unlimotion.Test.HeadlessSessionExtensions.<>c__DisplayClass1_0.<<DispatchAsync>b__1>d.MoveNext() в <workspace>\src\Unlimotion.Test\HeadlessSessionExtensions.cs:30
+    --- End of stack trace from previous location ---
+    в Unlimotion.Test.HeadlessSessionExtensions.<>c__DisplayClass1_0.<<DispatchAsync>g__DispatchAndThrowAsync|0>d.MoveNext() в <workspace>\src\Unlimotion.Test\HeadlessSessionExtensions.cs:42
+    --- End of stack trace from previous location ---
+    в Unlimotion.Test.MainControlTaskStatusIconUiTests.TaskCardStatusRecovery_HasAccessibleRefreshAction() в <workspace>\src\Unlimotion.Test\MainControlTaskStatusIconUiTests.cs:263
+    в Unlimotion.Test.MainControlTaskStatusIconUiTests.TaskCardStatusRecovery_HasAccessibleRefreshAction() в <workspace>\src\Unlimotion.Test\MainControlTaskStatusIconUiTests.cs:263
+       --- TUnit internals omitted (run with --detailed-stacktrace for full trace) ---
+  --->  One or more errors occurred. (Expected to be false
+  but found True
+
+  at Assert.That(archive.IsEnabled).IsFalse()) (Expected to be false
+  but found True
+
+  at Assert.That(completionKey.Command!.CanExecute(null)).IsFalse())
+  --->  Expected to be false
+  but found True
+
+  at Assert.That(archive.IsEnabled).IsFalse()
+  Вывод ошибок
+    [TUnit] External span cap of 100 reached; subsequent spans will be dropped. Set TUNIT_OTEL_MAX_EXTERNAL_SPANS to raise the limit.
+
+HTML test report written to: <workspace>\artifacts\status-recovery\pre-merge-2026-10-05\red-menu\Unlimotion.Test-windows-net10.0-report.html
+
+  Созданные в процессе артефакты файлов:
+    - <workspace>\artifacts\status-recovery\pre-merge-2026-10-05\red-menu\Unlimotion.Test-windows-net10.0-report.html
+    - <workspace>\artifacts\status-recovery\pre-merge-2026-10-05\red-menu\<user>_<machine>_2026-10-05_17_48_26.1010206.trx
+
+Сводка тестового запуска: Сбой! - <workspace>\src\Unlimotion.Test\bin\Debug\net10.0\Unlimotion.Test.dll (net10.0|x64)
+  всего: 1
+  сбой: 1
+  успешно выполнено: 0
+  пропущено: 0
+  длительность: 13s 663ms

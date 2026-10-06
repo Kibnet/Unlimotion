@@ -19,6 +19,100 @@ namespace Unlimotion.Test;
 public class FileStorageTaskStatusTests
 {
     [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task Reload_CorruptAliasedSourceIsReadFailureAndRepairCanRecover(bool empty)
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            using var watcher = new RecordingDatabaseWatcher();
+            using var storage = new CardReloadRaceFileStorage(tempDir, watcher);
+            var task = new TaskItem { Id = "alias-domain-id", Title = "original", Status = DomainTaskStatus.Prepared };
+            var alias = Path.Combine(tempDir, "alias.json");
+            var bytes = JsonConvert.SerializeObject(task);
+            await File.WriteAllTextAsync(alias, bytes);
+            using var unified = new UnifiedTaskStorage(new TaskTreeManager(storage));
+            await unified.Init();
+            var card = unified.Tasks.Lookup(task.Id).Value;
+            await File.WriteAllTextAsync(alias, empty ? string.Empty : "broken");
+            watcher.EmitRaw("alias.json", UpdateType.Saved);
+            await storage.TriggerUpdatingAsync("alias.json", UpdateType.Saved);
+            var failed = await card.ReloadTaskAsync();
+            await Assert.That(failed.Outcome).IsEqualTo(TaskReloadOutcome.Failed);
+            await Assert.That(card.IsMissingFromStorage).IsFalse();
+            await Assert.That(card.CanReloadTask).IsTrue();
+            await Assert.That(card.Title).IsEqualTo("original");
+            await Assert.That((await storage.ReadGraphAsync()).LoadErrors).IsNotEmpty();
+            await File.WriteAllTextAsync(alias, bytes);
+            watcher.EmitRaw("alias.json", UpdateType.Saved);
+            await Assert.That((await card.ReloadTaskAsync()).Outcome).IsEqualTo(TaskReloadOutcome.Loaded);
+            await Assert.That(File.Exists(Path.Combine(tempDir, task.Id))).IsFalse();
+        }
+        finally { TryDeleteDirectory(tempDir); }
+    }
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task Reload_RawWatcherRaceKeepsBothLiveGraphAndCardCurrent(bool delete)
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            using var watcher = new RecordingDatabaseWatcher();
+            using var storage = new CardReloadRaceFileStorage(tempDir, watcher);
+            var task = new TaskItem { Id = "reload-file-card", Title = "original", Status = DomainTaskStatus.Prepared };
+            await storage.Save(task);
+            using var unified = new UnifiedTaskStorage(new TaskTreeManager(storage));
+            await unified.Init();
+            var card = unified.Tasks.Lookup(task.Id).Value;
+            card.IsInitializedProvider = () => true;
+            card.Title = "local draft";
+            storage.AfterRead = () =>
+            {
+                var file = Path.Combine(tempDir, task.Id);
+                if (delete) File.Delete(file);
+                else File.WriteAllText(file, JsonConvert.SerializeObject(task with { Status = DomainTaskStatus.Completed }));
+                watcher.EmitRaw(task.Id, delete ? UpdateType.Removed : UpdateType.Saved);
+            };
+            var result = await card.ReloadTaskAsync();
+            var graph = await storage.ReadGraphAsync();
+            using (Assert.Multiple())
+            {
+                await Assert.That(result.Outcome).IsEqualTo(delete ? TaskReloadOutcome.Missing : TaskReloadOutcome.Loaded);
+                await Assert.That(card.Title).IsEqualTo("local draft");
+                if (delete)
+                {
+                    await Assert.That(graph.Tasks).IsEmpty();
+                    await Assert.That(card.IsMissingFromStorage).IsTrue();
+                    await card.SealPendingSaves();
+                    await Assert.That(File.Exists(Path.Combine(tempDir, task.Id))).IsFalse();
+                }
+                else
+                {
+                    await Assert.That(graph.Tasks.Single().Status).IsEqualTo(DomainTaskStatus.Completed);
+                    await Assert.That(card.Status).IsEqualTo(DomainTaskStatus.Completed);
+                }
+            }
+        }
+        finally { TryDeleteDirectory(tempDir); }
+    }
+
+    private sealed class CardReloadRaceFileStorage(string path, RecordingDatabaseWatcher watcher) : FileStorage(path, watcher)
+    {
+        public Task TriggerUpdatingAsync(string id, UpdateType type) =>
+            OnUpdatingAsync(new TaskStorageUpdateEventArgs { Id = id, Type = type });
+        public Action? AfterRead { get => afterRead; set => afterRead = value; }
+        protected override Task OnTaskReloadSnapshotReadAsync(string taskId)
+        {
+            Interlocked.Exchange(ref afterRead, null)?.Invoke();
+            return Task.CompletedTask;
+        }
+        private Action? afterRead;
+    }
+
+    [Test]
     public async Task ImmediateCriterionSatisfaction_IsFlushedBeforeCompletion()
     {
         var tempDir = CreateTempDirectory();
@@ -452,7 +546,7 @@ public class FileStorageTaskStatusTests
             using (Assert.Multiple())
             {
                 await Assert.That(result.Success).IsFalse();
-                await Assert.That(result.DeniedReason?.Kind).IsEqualTo(TaskOperationDeniedKind.TaskNotFound);
+                await Assert.That(result.DeniedReason?.Kind).IsEqualTo(TaskOperationDeniedKind.ValidationFailed);
                 await Assert.That(new FileInfo(filePath).Length).IsEqualTo(0);
                 await Assert.That(await storage.Load(taskId)).IsNull();
             }

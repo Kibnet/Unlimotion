@@ -1,0 +1,39 @@
+
+████████╗██╗   ██╗███╗   ██╗██╗████████╗
+╚══██╔══╝██║   ██║████╗  ██║██║╚══██╔══╝
+   ██║   ██║   ██║██╔██╗ ██║██║   ██║
+   ██║   ██║   ██║██║╚██╗██║██║   ██║
+   ██║   ╚██████╔╝██║ ╚████║██║   ██║
+   ╚═╝    ╚═════╝ ╚═╝  ╚═══╝╚═╝   ╚═╝
+
+   TUnit v1.44.0.0 | 64-bit | Microsoft Windows 10.0.22631 | win-x64 | .NET 10.0.12 | Microsoft Testing Platform v2.2.2
+
+   Engine Mode: SourceGenerated
+
+Rendered Headless test passed: Importance_All24States_MatchReviewedComponentBaselines. Logs/TRX: <worktree>\artifacts\status-recovery\integration-92cf-2026-10-05\importance-frames\600fa23bb56e44a8b16e1ac3f5415bf0\rendered-process-Importance_All24States_MatchReviewedComponentBaselines
+пройдено Importance_All24States_MatchReviewedComponentBaselines (1m 48s 097ms)
+  Стандартный вывод
+    Rendered Headless test passed: Importance_All24States_MatchReviewedComponentBaselines. Logs/TRX: <worktree>\artifacts\status-recovery\integration-92cf-2026-10-05\importance-frames\600fa23bb56e44a8b16e1ac3f5415bf0\rendered-process-Importance_All24States_MatchReviewedComponentBaselines
+
+Rendered Headless test passed: Importance_TypingMouseKeyboardAndReload_PreserveTheSavedValue. Logs/TRX: <worktree>\artifacts\status-recovery\integration-92cf-2026-10-05\importance-frames\f7fba1d7b9b8498397418efbb5482acf\rendered-process-Importance_TypingMouseKeyboardAndReload_PreserveTheSavedValue
+пройдено Importance_TypingMouseKeyboardAndReload_PreserveTheSavedValue (26s 158ms)
+  Стандартный вывод
+    Rendered Headless test passed: Importance_TypingMouseKeyboardAndReload_PreserveTheSavedValue. Logs/TRX: <worktree>\artifacts\status-recovery\integration-92cf-2026-10-05\importance-frames\f7fba1d7b9b8498397418efbb5482acf\rendered-process-Importance_TypingMouseKeyboardAndReload_PreserveTheSavedValue
+
+Rendered Headless test passed: Importance_ImageComparison_RejectsHiddenDigitAndHorizontalButtons. Logs/TRX: <worktree>\artifacts\status-recovery\integration-92cf-2026-10-05\importance-frames\52b0f2517f91468a97e17ac8e6d4b393\rendered-process-Importance_ImageComparison_RejectsHiddenDigitAndHorizontalButtons
+пройдено Importance_ImageComparison_RejectsHiddenDigitAndHorizontalButtons (12s 557ms)
+  Стандартный вывод
+    Rendered Headless test passed: Importance_ImageComparison_RejectsHiddenDigitAndHorizontalButtons. Logs/TRX: <worktree>\artifacts\status-recovery\integration-92cf-2026-10-05\importance-frames\52b0f2517f91468a97e17ac8e6d4b393\rendered-process-Importance_ImageComparison_RejectsHiddenDigitAndHorizontalButtons
+
+HTML test report written to: <worktree>\artifacts\status-recovery\integration-92cf-2026-10-05\importance\Unlimotion.Test-windows-net10.0-report.html
+
+  Созданные в процессе артефакты файлов:
+    - <worktree>\artifacts\status-recovery\integration-92cf-2026-10-05\importance\Unlimotion.Test-windows-net10.0-report.html
+    - <worktree>\artifacts\status-recovery\integration-92cf-2026-10-05\importance\Kibnet_DESKTOP-AUDO1TJ_2026-10-04_22_14_14.1422258.trx
+
+Сводка тестового запуска: Пройден! - <worktree>\src\Unlimotion.Test\bin\Debug\net10.0\Unlimotion.Test.dll (net10.0|x64)
+  всего: 3
+  сбой: 0
+  успешно выполнено: 3
+  пропущено: 0
+  длительность: 2m 28s 724ms

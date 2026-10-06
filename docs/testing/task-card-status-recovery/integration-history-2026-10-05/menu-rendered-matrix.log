@@ -1,0 +1,36 @@
+
+████████╗██╗   ██╗███╗   ██╗██╗████████╗
+╚══██╔══╝██║   ██║████╗  ██║██║╚══██╔══╝
+   ██║   ██║   ██║██╔██╗ ██║██║   ██║
+   ██║   ██║   ██║██║╚██╗██║██║   ██║
+   ██║   ╚██████╔╝██║ ╚████║██║   ██║
+   ╚═╝    ╚═════╝ ╚═╝  ╚═══╝╚═╝   ╚═╝
+
+   TUnit v1.44.0.0 | 64-bit | Microsoft Windows 10.0.22631 | win-x64 | .NET 10.0.12 | Microsoft Testing Platform v2.2.2
+
+   Engine Mode: SourceGenerated
+
+[TUnit] External span cap of 100 reached; subsequent spans will be dropped. Set TUNIT_OTEL_MAX_EXTERNAL_SPANS to raise the limit.
+пройдено TaskCardStatusRecovery_ErrorAndReloadRemainVisible(ru, Light, 1400) (13s 873ms)
+  Вывод ошибок
+    [TUnit] External span cap of 100 reached; subsequent spans will be dropped. Set TUNIT_OTEL_MAX_EXTERNAL_SPANS to raise the limit.
+
+пройдено TaskCardStatusRecovery_ErrorAndReloadRemainVisible(ru, Dark, 1400) (9s 141ms)
+пройдено TaskCardStatusRecovery_ErrorAndReloadRemainVisible(en, Light, 1400) (7s 875ms)
+пройдено TaskCardStatusRecovery_ErrorAndReloadRemainVisible(en, Dark, 1400) (7s 508ms)
+пройдено TaskCardStatusRecovery_ErrorAndReloadRemainVisible(ru, Light, 760) (9s 172ms)
+пройдено TaskCardStatusRecovery_ErrorAndReloadRemainVisible(ru, Dark, 760) (10s 713ms)
+пройдено TaskCardStatusRecovery_ErrorAndReloadRemainVisible(en, Light, 760) (12s 033ms)
+пройдено TaskCardStatusRecovery_ErrorAndReloadRemainVisible(en, Dark, 760) (9s 400ms)
+HTML test report written to: <workspace>\artifacts\status-recovery\integration-history-2026-10-05\menu-rendered-matrix\Unlimotion.Test-windows-net10.0-report.html
+
+  Созданные в процессе артефакты файлов:
+    - <workspace>\artifacts\status-recovery\integration-history-2026-10-05\menu-rendered-matrix\Unlimotion.Test-windows-net10.0-report.html
+    - <workspace>\artifacts\status-recovery\integration-history-2026-10-05\menu-rendered-matrix\<user>_<machine>_2026-10-05_14_31_43.9456657.trx
+
+Сводка тестового запуска: Пройден! - <workspace>\src\Unlimotion.Test\bin\Debug\net10.0\Unlimotion.Test.dll (net10.0|x64)
+  всего: 8
+  сбой: 0
+  успешно выполнено: 8
+  пропущено: 0
+  длительность: 1m 20s 849ms

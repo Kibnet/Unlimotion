@@ -47,6 +47,14 @@
   <data name="TaskStatusDirectBlockersBlocked" xml:space="preserve"><value>Сначала выполните прямые блокирующие задачи.</value></data>
   <data name="TaskStatusInheritedBlockersBlocked" xml:space="preserve"><value>Сначала выполните блокирующие задачи, унаследованные от родительских задач.</value></data>
   <data name="TaskStatusSaveFailed" xml:space="preserve"><value>Не удалось изменить статус задачи. Обновите задачу перед повторной попыткой.</value></data>
+  <data name="TaskReload" xml:space="preserve"><value>Обновить</value></data>
+  <data name="TaskReloadTip" xml:space="preserve"><value>Обновить задачу</value></data>
+  <data name="TaskReloadFailed" xml:space="preserve"><value>Не удалось прочитать задачу из хранилища. Локальные правки сохранены в карточке. Проверьте соединение или доступ к хранилищу и обновите задачу ещё раз.</value></data>
+  <data name="TaskReloadMissing" xml:space="preserve"><value>Задачи больше нет в хранилище. Сохранение и смена статуса отключены. Локальный текст можно скопировать.</value></data>
+  <data name="TaskOperationDetails" xml:space="preserve"><value>Подробности</value></data>
+  <data name="TaskStatusGraphInvalid" xml:space="preserve"><value>Не удалось изменить статус: данные или связи задач некорректны. Проверьте файлы и связи задач, затем обновите задачу.</value></data>
+  <data name="TaskStatusAgentActive" xml:space="preserve"><value>Нельзя изменить статус, пока агент выполняет задачу. Дождитесь завершения запуска или остановите его, затем обновите задачу.</value></data>
+  <data name="TaskStatusMarkerInvalid" xml:space="preserve"><value>Не удалось изменить статус: маркер агента в описании некорректен. Исправьте маркер, затем обновите задачу.</value></data>
   <data name="TaskStatusOutcomeUnknown" xml:space="preserve"><value>Итоговый статус неизвестен: проверка хранилища завершилась ошибкой. Обновите задачу перед повторной попыткой.</value></data>
   <data name="TaskStatusSourceChanged" xml:space="preserve"><value>Задача изменилась в хранилище, и её больше нельзя разархивировать. Текущий статус обновлён.</value></data>
   <data name="TaskStatusCascadeConfirmationFailed" xml:space="preserve"><value>Не удалось подтвердить изменение вложенных задач: {0}</value></data>

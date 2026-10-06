@@ -67,7 +67,9 @@ namespace Unlimotion.Test
 
         public const string RepeateTask9Id = "3445eef8-4382-4607-b2fb-37a820467f1c";
 
-        public MainWindowViewModelFixture()
+        public MainWindowViewModelFixture() : this(null) { }
+
+        public MainWindowViewModelFixture(Func<string, ITaskStorage>? taskStorageFactoryOverride)
         {
             guid = new ThreadLocal<Guid> { Value = Guid.NewGuid() };
             fixtureDirectory = Path.Combine(Environment.CurrentDirectory, $"MainWindowViewModelFixture_{UniquiId}");
@@ -101,7 +103,8 @@ namespace Unlimotion.Test
             // Create storage factory
             var storageFactory = new TaskStorageFactory(configuration, mapper, notificationManagerMock);
             // Create file storage
-            ownedTaskStorage = storageFactory.CreateFileStorage(DefaultTasksFolderPath);
+            ownedTaskStorage = taskStorageFactoryOverride?.Invoke(DefaultTasksFolderPath)
+                ?? storageFactory.CreateFileStorage(DefaultTasksFolderPath);
 
             // Create SettingsViewModel
             var settingsViewModel = new SettingsViewModel(configuration);

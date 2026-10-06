@@ -102,7 +102,7 @@ public class TaskStatusPicker : Button
     private void OpenStatusFlyout()
     {
         var task = GetEffectiveTask();
-        if (task == null)
+        if (task == null || !task.CanChangeTaskStatus)
         {
             return;
         }
@@ -154,7 +154,8 @@ public class TaskStatusPicker : Button
             e.PropertyName == nameof(TaskItemViewModel.IsCanBeCompleted) ||
             e.PropertyName == nameof(TaskItemViewModel.AvailabilityOpacity) ||
             e.PropertyName == nameof(TaskItemViewModel.StatusOption) ||
-            e.PropertyName == nameof(TaskItemViewModel.StatusToolTip))
+            e.PropertyName == nameof(TaskItemViewModel.StatusToolTip) ||
+            e.PropertyName == nameof(TaskItemViewModel.CanChangeTaskStatus))
         {
             if (Dispatcher.UIThread.CheckAccess())
             {
@@ -175,7 +176,8 @@ public class TaskStatusPicker : Button
 
     private void UpdateIcon(TaskItemViewModel? task)
     {
-        IsEnabled = task != null;
+        IsEnabled = task?.CanChangeTaskStatus == true;
+        if (!IsEnabled) Flyout?.Hide();
         Opacity = task?.AvailabilityOpacity ?? 1d;
         _icon.Status = task?.Status ?? TaskStatus.NotReady;
         ToolTip.SetTip(this, task?.StatusToolTip);
@@ -211,7 +213,7 @@ public class TaskStatusPicker : Button
             AutomationProperties.SetAutomationId(menuItem, $"TaskStatusOption{option.Status}");
             menuItem.Click += async (_, _) =>
             {
-                if (option.IsEnabled)
+                if (option.IsEnabled && task.CanChangeTaskStatus)
                 {
                     await task.TrySelectStatusOptionAsync(option.Status);
                 }

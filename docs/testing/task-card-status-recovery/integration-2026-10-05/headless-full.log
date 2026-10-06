@@ -1,0 +1,80 @@
+
+████████╗██╗   ██╗███╗   ██╗██╗████████╗
+╚══██╔══╝██║   ██║████╗  ██║██║╚══██╔══╝
+   ██║   ██║   ██║██╔██╗ ██║██║   ██║
+   ██║   ██║   ██║██║╚██╗██║██║   ██║
+   ██║   ╚██████╔╝██║ ╚████║██║   ██║
+   ╚═╝    ╚═════╝ ╚═╝  ╚═══╝╚═╝   ╚═╝
+
+   TUnit v1.44.0.0 | 64-bit | Microsoft Windows 10.0.22631 | win-x64 | .NET 10.0.12 | Microsoft Testing Platform v2.2.2
+
+   Engine Mode: SourceGenerated
+
+[TUnit] External span cap of 100 reached; subsequent spans will be dropped. Set TUNIT_OTEL_MAX_EXTERNAL_SPANS to raise the limit.
+passed Apply_RefreshesOpenDesktopProjection (13s 188ms)
+  Error output
+    [TUnit] External span cap of 100 reached; subsequent spans will be dropped. Set TUNIT_OTEL_MAX_EXTERNAL_SPANS to raise the limit.
+
+passed ExternalAliasIdChange_ReplacesOldDesktopProjection (3s 304ms)
+passed ExternalWriterCreateRelationAndDelete_RefreshOpenDesktopProjection (5s 963ms)
+passed CliChanges_RefreshOpenDesktopProjection (9s 974ms)
+passed DisposeCallback_CalledTwice_IsIdempotentAndAllowsControlSession (6s 271ms)
+passed LaunchFailure_AfterStorageCreation_PreservesPrimaryExceptionAndCleansSession (4s 875ms)
+passed DelayedWatcherEvent_AfterDispose_IsIgnoredAndDoesNotCrashHost (38s 974ms)
+passed Settings_ssh_backup_flow_shows_key_controls_for_ssh_remote (464ms)
+passed Card_blocking_relation_editor_can_be_opened_from_task_card (547ms)
+passed Card_relation_picker_can_be_opened_from_task_card (100ms)
+passed Main_window_loads_current_task_on_launch (15ms)
+passed Major_tabs_can_be_opened_from_main_window (2s 670ms)
+passed Task_card_can_be_closed_and_reopened_from_details_toggle (72ms)
+passed Card_blocked_relation_editor_can_be_opened_from_task_card (64ms)
+passed Card_containing_relation_editor_can_be_opened_from_task_card (69ms)
+пройдено StatusContract_RussianDarkFutureAndBlocker (300ms)
+passed TaskCardStatusRecovery_FailureRefreshRetry (26s 967ms)
+passed StatusContract_TerminalPickerAndUnarchive (3s 267ms)
+passed Current_task_card_exposes_redesigned_sections_on_launch (62ms)
+passed Readme_demo_uses_capture_presentation_state (139ms)
+passed Card_blocking_relation_editor_can_be_opened_from_task_card (45ms)
+passed Card_containing_relation_editor_can_be_opened_from_task_card (34ms)
+passed Current_task_card_exposes_redesigned_sections_on_launch (103ms)
+passed Main_window_loads_current_task_on_launch (22ms)
+passed Major_tabs_can_be_opened_from_main_window (227ms)
+passed Settings_ssh_backup_flow_shows_key_controls_for_ssh_remote (91ms)
+passed Card_relation_picker_can_be_opened_from_task_card (65ms)
+passed Card_blocked_relation_editor_can_be_opened_from_task_card (53ms)
+passed Task_card_can_be_closed_and_reopened_from_details_toggle (45ms)
+пройдено Card_blocked_relation_editor_can_be_opened_from_task_card (47ms)
+пройдено Card_containing_relation_editor_can_be_opened_from_task_card (29ms)
+пройдено Card_blocking_relation_editor_can_be_opened_from_task_card (47ms)
+пройдено Card_relation_picker_can_be_opened_from_task_card (129ms)
+пройдено Current_task_card_exposes_redesigned_sections_on_launch (43ms)
+пройдено Major_tabs_can_be_opened_from_main_window (235ms)
+пройдено Readme_demo_uses_capture_presentation_state (92ms)
+пройдено Task_card_can_be_closed_and_reopened_from_details_toggle (55ms)
+пройдено Main_window_loads_current_task_on_launch (15ms)
+пройдено Settings_ssh_backup_flow_shows_key_controls_for_ssh_remote (86ms)
+passed Recovered_configuration_keeps_the_original_task_projection_in_headless_shell(True) (2s 880ms)
+passed Blocked_result_renders_only_recovery_controls_with_selectable_path(EmptyWithoutBackup) (498ms)
+passed Blocked_result_renders_only_recovery_controls_with_selectable_path(TruncatedWithoutBackup) (101ms)
+passed Blocked_result_renders_only_recovery_controls_with_selectable_path(InvalidRootWithoutBackup) (76ms)
+passed Recovery_buttons_are_localized_keyboard_focusable_and_handle_folder_failure(en) (16ms)
+passed Recovery_buttons_are_localized_keyboard_focusable_and_handle_folder_failure(ru) (49ms)
+passed Recovered_configuration_keeps_the_original_task_projection_in_headless_shell(False) (2s 291ms)
+passed Blocked_result_renders_only_recovery_controls_with_selectable_path(MissingWithInvalidBackup) (75ms)
+passed Blocked_result_renders_only_recovery_controls_with_selectable_path(ValidWithRestrictedBackup) (108ms)
+passed Settings_refresh_metadata_fills_empty_remote_url_from_current_local_storage (156ms)
+passed Settings_remote_type_switch_creates_ssh_copy_for_single_http_remote (1s 739ms)
+passed Spaces_render_selector_and_settings_management_controls (570ms)
+passed Duplicate_catalog_renders_blocking_recovery_state_with_identifier (10ms)
+HTML test report written to: <worktree>\artifacts\status-recovery\integration-2026-10-04\headless\Unlimotion.UiTests.Headless-windows-net10.0-report.html
+
+  In process file artifacts produced:
+    - <worktree>\artifacts\status-recovery\integration-2026-10-04\headless\Unlimotion.UiTests.Headless-windows-net10.0-report.html
+    - <worktree>\artifacts\status-recovery\integration-2026-10-04\headless\Kibnet_DESKTOP-AUDO1TJ_2026-10-04_21_28_54.7791886.trx
+
+Test run summary: Passed! - <worktree>\tests\Unlimotion.UiTests.Headless\bin\Debug\net10.0\Unlimotion.UiTests.Headless.dll (net10.0|x64)
+  total: 52
+  failed: 0
+  succeeded: 52
+  skipped: 0
+  duration: 3m 53s 900ms

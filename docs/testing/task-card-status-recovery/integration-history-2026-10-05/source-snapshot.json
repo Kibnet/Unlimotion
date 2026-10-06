@@ -1,0 +1,8 @@
+{
+  "head": "8ff819b14ebbaec441fe07c8b7584da8d261ad8d",
+  "tree": "555998d7c506bd4845fdb48bc1b72dc86d7fa226",
+  "parents": "0da758f6de6bb0eb803822c222f7e21ada07fe85 4a2f781ed0bcf65fe039f50c59b01a08924bbd6c",
+  "trackedClean": true,
+  "recordedUtc": "2026-10-05T14:33:45.6822092+00:00",
+  "note": "Supplement to main-full invocation: unquoted HEAD^{tree} failed in PowerShell; raw invocation retained. Test executable/args/hashes captured correctly."
+}

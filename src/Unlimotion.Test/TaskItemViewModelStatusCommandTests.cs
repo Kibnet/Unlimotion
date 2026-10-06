@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -20,6 +21,289 @@ namespace Unlimotion.Test;
 [ParallelLimiter<SharedUiStateParallelLimit>]
 public sealed class TaskItemViewModelStatusCommandTests
 {
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task TaskNotFoundDuringStatusCommand_BlocksDirtyEditorDrainAndLifecycleSave(bool sealDuringCommand)
+    {
+        using var storage = new ScriptedTaskStorage();
+        var task = CreateTask("status-missing-dirty", DomainTaskStatus.Prepared);
+        storage.Seed(task);
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        storage.StatusHandler = async (id, status, author) =>
+        {
+            entered.SetResult();
+            await release.Task;
+            storage.RemoveWithoutNotification(id);
+            return TaskOperationResult.Denied(TaskOperationDeniedReason.Create(
+                TaskOperationDeniedKind.TaskNotFound, "confirmed missing", id, status));
+        };
+        using var vm = new TaskItemViewModel(task, storage, () => true);
+        var transition = vm.TryTransitionToStatusAsync(DomainTaskStatus.Completed);
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        vm.Title = "copyable edit while status is pending";
+        vm.Description = "copyable local description";
+        var seal = sealDuringCommand ? vm.SealPendingSaves() : Task.CompletedTask;
+        release.SetResult();
+        var result = await transition.WaitAsync(TimeSpan.FromSeconds(5));
+        await seal.WaitAsync(TimeSpan.FromSeconds(5));
+        await vm.SaveItemCommand.Execute().ToTask().WaitAsync(TimeSpan.FromSeconds(5));
+        await vm.SealPendingSaves().WaitAsync(TimeSpan.FromSeconds(5));
+        using (Assert.Multiple())
+        {
+            await Assert.That(result.DeniedReason?.Kind).IsEqualTo(TaskOperationDeniedKind.TaskNotFound);
+            await Assert.That(vm.IsMissingFromStorage).IsTrue();
+            await Assert.That(vm.CanChangeTaskStatus).IsFalse();
+            await Assert.That(vm.Title).IsEqualTo("copyable edit while status is pending");
+            await Assert.That(vm.Description).IsEqualTo("copyable local description");
+            await Assert.That(storage.UpdateCount).IsEqualTo(0);
+            await Assert.That(storage.Contains(task.Id)).IsFalse();
+        }
+    }
+
+    [Test]
+    public async Task Reload_UnknownThenFailedReadCannotUndoPersistedStatusOnEditOrSeal()
+    {
+        using var storage = new ScriptedTaskStorage();
+        var task = CreateTask("reload-uncertain-persisted", DomainTaskStatus.Prepared);
+        storage.Seed(task);
+        storage.StatusHandler = (id, status, author) =>
+        {
+            storage.CreateSuccess(id, status, author);
+            return Task.FromResult(TaskOperationResult.Denied(TaskOperationDeniedReason.Create(
+                TaskOperationDeniedKind.OutcomeUnknown, "verification failed", id, status)));
+        };
+        storage.ReloadHandler = _ => Task.FromResult(TaskReloadResult.Failed());
+        using var vm = new TaskItemViewModel(task, storage, () => true);
+        await vm.TryTransitionToStatusAsync(DomainTaskStatus.Completed);
+        vm.Title = "draft after unknown outcome";
+        await vm.ReloadTaskAsync();
+        await Assert.That(vm.CanChangeTaskStatus).IsFalse();
+        await Assert.That(vm.ArchiveCommand.CanExecute(null)).IsFalse();
+        await Assert.That(async () => await vm.SealPendingSaves()).Throws<InvalidOperationException>();
+        await Assert.That(storage.UpdateCount).IsEqualTo(0);
+        await Assert.That(storage.Snapshot(task.Id).Status).IsEqualTo(DomainTaskStatus.Completed);
+        await Assert.That(storage.Snapshot(task.Id).StatusHistory.Count).IsEqualTo(2);
+        await Assert.That(vm.Title).IsEqualTo("draft after unknown outcome");
+    }
+
+    [Test]
+    public async Task Reload_UserAutosaveMaturingDuringReadResumesAfterLoaded()
+    {
+        using var storage = new ScriptedTaskStorage();
+        var task = CreateTask("reload-deferred-save", DomainTaskStatus.Prepared);
+        storage.Seed(task);
+        var release = new TaskCompletionSource<TaskReloadResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        storage.ReloadHandler = _ => release.Task;
+        using var vm = new TaskItemViewModel(task, storage, () => true);
+        var reload = vm.ReloadTaskAsync();
+        vm.Title = "user edit while reading";
+        await Task.Delay(TaskItemViewModel.DefaultThrottleTime + TimeSpan.FromSeconds(2));
+        await Assert.That(storage.UpdateCount).IsEqualTo(0);
+        release.SetResult(TaskReloadResult.Loaded(task with { Status = DomainTaskStatus.NotReady }));
+        await reload;
+        await vm.WaitForPendingSavesAsync();
+        await Assert.That(storage.UpdateCount).IsEqualTo(1);
+        await Assert.That(storage.Snapshot(task.Id).Title).IsEqualTo("user edit while reading");
+        await Assert.That(storage.Snapshot(task.Id).Status).IsEqualTo(DomainTaskStatus.NotReady);
+    }
+
+    [Test]
+    public async Task Reload_DelayedMissingDecisionIsAwaitedBeforeLifecycleFinalSave()
+    {
+        using var storage = new ScriptedTaskStorage();
+        var task = CreateTask("reload-missing-seal", DomainTaskStatus.Prepared);
+        storage.Seed(task);
+        var release = new TaskCompletionSource<TaskReloadResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        storage.ReloadHandler = _ => release.Task;
+        using var vm = new TaskItemViewModel(task, storage, () => true);
+        vm.Title = "unsaved draft";
+        var read = vm.ReloadTaskAsync();
+        var seal = vm.SealPendingSaves();
+        await Assert.That(seal.IsCompleted).IsFalse();
+        await Assert.That(storage.UpdateCount).IsEqualTo(0);
+        release.SetResult(TaskReloadResult.Missing());
+        await Task.WhenAll(read, seal).WaitAsync(TimeSpan.FromSeconds(5));
+        await Assert.That(vm.IsMissingFromStorage).IsTrue();
+        await Assert.That(vm.Title).IsEqualTo("unsaved draft");
+        await Assert.That(storage.UpdateCount).IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task Reload_PreservesDirtyFieldsAndEditsDuringReadWithoutWriting()
+    {
+        using var storage = new ScriptedTaskStorage();
+        var task = CreateTask("reload-dirty", DomainTaskStatus.Prepared);
+        task.CompletionCriteria = [new TaskCompletionCriterion { Id = "local-criterion", Text = "original criterion" }];
+        storage.Seed(task);
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        storage.ReloadHandler = async _ =>
+        {
+            entered.SetResult();
+            await release.Task;
+            var snapshot = storage.Snapshot(task.Id);
+            snapshot.Status = DomainTaskStatus.NotReady;
+            snapshot.Title = "external title";
+            snapshot.Description = "external description";
+            return TaskReloadResult.Loaded(snapshot);
+        };
+        // This case verifies that reading does not produce a write. The separate
+        // maturing-autosave case covers user saves that become due during a read.
+        using var vm = CreateViewModelWithDeferredAutosave(task, storage);
+        vm.Title = "local title";
+        vm.Importance = 42;
+        vm.Wanted = false;
+        var plannedBegin = DateTime.Now.AddDays(2);
+        vm.PlannedBeginDateTime = plannedBegin;
+        vm.PlannedEndDateTime = plannedBegin.AddMinutes(37);
+        vm.PlannedDuration = TimeSpan.FromMinutes(37);
+        vm.Repeater = new RepeaterPatternViewModel { Type = RepeaterType.Daily, Period = 3 };
+        var reload = vm.ReloadTaskAsync();
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        vm.CompletionCriteria.Single().Text = "keep this criterion";
+        vm.Description = "typed during read";
+        var denied = await vm.TryTransitionToStatusAsync(DomainTaskStatus.Completed);
+        await Assert.That(vm.CanReloadTask).IsFalse();
+        await Assert.That(denied.Success).IsFalse();
+        release.SetResult();
+        await reload;
+        using (Assert.Multiple())
+        {
+            await Assert.That(vm.Title).IsEqualTo("local title");
+            await Assert.That(vm.Description).IsEqualTo("typed during read");
+            await Assert.That(vm.Importance).IsEqualTo(42);
+            await Assert.That(vm.PlannedDuration).IsEqualTo(TimeSpan.FromMinutes(37));
+            await Assert.That(vm.PlannedBeginDateTime).IsEqualTo(plannedBegin);
+            await Assert.That(vm.PlannedEndDateTime).IsEqualTo(plannedBegin.AddMinutes(37));
+            await Assert.That(vm.Wanted).IsFalse();
+            await Assert.That(vm.Repeater!.Period).IsEqualTo(3);
+            await Assert.That(vm.CompletionCriteria.Single().Text).IsEqualTo("keep this criterion");
+            await Assert.That(vm.Status).IsEqualTo(DomainTaskStatus.NotReady);
+            await Assert.That(vm.CanReloadTask).IsTrue();
+            await Assert.That(storage.UpdateCount).IsEqualTo(0);
+            await Assert.That(storage.StatusCalls).IsEmpty();
+        }
+        await vm.SaveItemCommand.Execute().ToTask();
+        await Assert.That(storage.Snapshot(task.Id).Title).IsEqualTo("local title");
+        await Assert.That(storage.Snapshot(task.Id).Description).IsEqualTo("typed during read");
+        await Assert.That(storage.Snapshot(task.Id).Status).IsEqualTo(DomainTaskStatus.NotReady);
+    }
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task Reload_WaitsForRunningAutosaveEvenIfItFails(bool failSave)
+    {
+        using var storage = new ScriptedTaskStorage();
+        var task = CreateTask("reload-running-save", DomainTaskStatus.Prepared);
+        storage.Seed(task);
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        storage.UpdateHandler = async _ =>
+        {
+            entered.TrySetResult();
+            await release.Task;
+            if (failSave) throw new InvalidOperationException("controlled save failure");
+        };
+        using var vm = new TaskItemViewModel(task, storage, () => true);
+        // Adding a criterion starts the existing immediate, tracked autosave producer.
+        vm.CompletionCriteria.Add(new TaskCompletionCriterion { Id = "pending", Text = "pending criterion" });
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var reload = vm.ReloadTaskAsync();
+        await Assert.That(storage.ReloadCount).IsEqualTo(0);
+        release.SetResult();
+        await reload.WaitAsync(TimeSpan.FromSeconds(5));
+        await Assert.That(storage.ReloadCount).IsEqualTo(1);
+        await Assert.That(storage.UpdateCount).IsEqualTo(1);
+        await Assert.That(vm.CompletionCriteria.Single().Text).IsEqualTo("pending criterion");
+    }
+
+    [Test]
+    public async Task Reload_MissingPreservesTextAndCannotResurrectOnSeal()
+    {
+        using var storage = new ScriptedTaskStorage();
+        var task = CreateTask("reload-missing", DomainTaskStatus.Prepared);
+        storage.Seed(task);
+        storage.ReloadHandler = _ => Task.FromResult(TaskReloadResult.Missing());
+        using var vm = new TaskItemViewModel(task, storage, () => true);
+        vm.Title = "copy this draft";
+        await vm.ReloadTaskAsync();
+        vm.Description = "copy this description";
+        await vm.SaveItemCommand.Execute().ToTask();
+        await vm.SealPendingSaves();
+        using (Assert.Multiple())
+        {
+            await Assert.That(vm.IsMissingFromStorage).IsTrue();
+            await Assert.That(vm.Title).IsEqualTo("copy this draft");
+            await Assert.That(vm.Description).IsEqualTo("copy this description");
+            await Assert.That(vm.CanChangeTaskStatus).IsFalse();
+            await Assert.That(storage.UpdateCount).IsEqualTo(0);
+            await Assert.That(vm.TaskOperationDetails).IsEqualTo("TaskNotFound");
+        }
+    }
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task Reload_LateResultAfterDisposalCannotUpdateCard(bool missing)
+    {
+        using var storage = new ScriptedTaskStorage();
+        var task = CreateTask("reload-disposed", DomainTaskStatus.Prepared);
+        storage.Seed(task);
+        var release = new TaskCompletionSource<TaskReloadResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        storage.ReloadHandler = _ => release.Task;
+        var vm = new TaskItemViewModel(task, storage, () => false);
+        var read = vm.ReloadTaskAsync();
+        vm.Dispose();
+        release.SetResult(missing ? TaskReloadResult.Missing()
+            : TaskReloadResult.Loaded(task with { Status = DomainTaskStatus.Completed }));
+        var result = await read;
+        await Assert.That(result.Outcome).IsEqualTo(TaskReloadOutcome.Failed);
+        await Assert.That(vm.Status).IsEqualTo(DomainTaskStatus.Prepared);
+    }
+
+    [Test]
+    public async Task Reload_UnknownOutcomeReadsActualStatusWithoutRetryOrDuplicateHistory()
+    {
+        using var storage = new ScriptedTaskStorage();
+        var task = CreateTask("reload-unknown", DomainTaskStatus.Prepared);
+        storage.Seed(task);
+        storage.StatusHandler = (id, status, author) =>
+        {
+            storage.CreateSuccess(id, status, author);
+            return Task.FromResult(TaskOperationResult.Denied(TaskOperationDeniedReason.Create(
+                TaskOperationDeniedKind.OutcomeUnknown, "secret exception", id, status)));
+        };
+        using var vm = new TaskItemViewModel(task, storage, () => false);
+        await vm.TryTransitionToStatusAsync(DomainTaskStatus.Completed);
+        await Assert.That(vm.TaskOperationDetails).IsEqualTo("OutcomeUnknown");
+        await vm.ReloadTaskAsync();
+        await Assert.That(vm.Status).IsEqualTo(DomainTaskStatus.Completed);
+        await Assert.That(vm.TaskOperationError).IsEmpty();
+        await Assert.That(storage.StatusCalls.Count).IsEqualTo(1);
+        await Assert.That(vm.StatusHistory.Count).IsEqualTo(storage.Snapshot(task.Id).StatusHistory.Count);
+    }
+
+    [Test]
+    [Arguments(TaskOperationDeniedKind.ValidationFailed, "TaskStatusGraphInvalid")]
+    [Arguments(TaskOperationDeniedKind.ExecutionStateDenied, "TaskStatusAgentActive")]
+    [Arguments(TaskOperationDeniedKind.DescriptionMarkerConflict, "TaskStatusMarkerInvalid")]
+    public async Task StatusFailure_ReportsSafeSpecificCause(TaskOperationDeniedKind kind, string key)
+    {
+        using var storage = new ScriptedTaskStorage();
+        var task = CreateTask("specific-denial", DomainTaskStatus.Prepared);
+        storage.Seed(task);
+        storage.StatusHandler = (id, status, _) => Task.FromResult(TaskOperationResult.Denied(
+            TaskOperationDeniedReason.Create(kind, "password=secret", id, status)));
+        using var vm = new TaskItemViewModel(task, storage, () => false);
+        await vm.TryTransitionToStatusAsync(DomainTaskStatus.Completed);
+        await Assert.That(vm.TaskOperationError).IsEqualTo(L10n.Get(key));
+        await Assert.That(vm.TaskOperationDetails).IsEqualTo(kind.ToString());
+        await Assert.That(vm.Status).IsEqualTo(DomainTaskStatus.Prepared);
+    }
+
     [Test]
     public async Task StatusOperation_IsIncludedInSealAndNewOperationIsRejectedAfterSeal()
     {
@@ -347,6 +631,83 @@ public sealed class TaskItemViewModelStatusCommandTests
         await Assert.That(async () =>
                 await sealedSaves.WaitAsync(TimeSpan.FromSeconds(5)))
             .Throws<InvalidOperationException>();
+    }
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task LifecycleSeal_DelayedFailedSaveCleanupRequiresPersistedRetry(bool retry)
+    {
+        using var storage = new ScriptedTaskStorage();
+        var task = CreateTask("seal-delayed-failed-save-cleanup", DomainTaskStatus.Prepared);
+        storage.Seed(task);
+        var releaseSave = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        storage.UpdateHandler = async _ =>
+        {
+            await releaseSave.Task;
+            throw new InvalidOperationException("controlled autosave failure");
+        };
+        using var viewModel = new TaskItemViewModel(task, storage, () => true);
+        viewModel.Title = "Draft that must be persisted";
+        var context = new DelayedSaveCleanupContext();
+        var previousContext = SynchronizationContext.Current;
+        var failedSave = viewModel.SaveItemCommand.Execute().ToTask();
+        try
+        {
+            SynchronizationContext.SetSynchronizationContext(context);
+            // Capture only cleanup; the real save can finish while this context stays paused.
+            viewModel.TrackPendingSave(failedSave);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previousContext);
+        }
+
+        try
+        {
+            releaseSave.TrySetResult();
+            await Assert.That(async () => await failedSave.WaitAsync(TimeSpan.FromSeconds(5)))
+                .Throws<InvalidOperationException>();
+            await Assert.That(failedSave.IsFaulted).IsTrue();
+            // ObserveSaveCompletionAsync is queued but has not removed the failed task.
+            await Assert.That(viewModel.WaitForPendingSavesAsync().IsFaulted).IsTrue();
+            if (retry)
+            {
+                storage.UpdateHandler = null;
+                await viewModel.SaveItemCommand.Execute().ToTask().WaitAsync(TimeSpan.FromSeconds(5));
+                await Assert.That(storage.Snapshot(task.Id).Title).IsEqualTo("Draft that must be persisted");
+                await viewModel.SealPendingSaves().WaitAsync(TimeSpan.FromSeconds(5));
+            }
+            else
+            {
+                await Assert.That(async () => await viewModel.SealPendingSaves().WaitAsync(TimeSpan.FromSeconds(5)))
+                    .Throws<InvalidOperationException>();
+                await Assert.That(storage.Snapshot(task.Id).Title).IsEqualTo(task.Title);
+            }
+        }
+        finally
+        {
+            releaseSave.TrySetResult();
+            while (context.ExecuteOne(TimeSpan.Zero)) { }
+        }
+    }
+
+    private sealed class DelayedSaveCleanupContext : SynchronizationContext
+    {
+        private readonly BlockingCollection<(SendOrPostCallback Callback, object? State)> callbacks = new();
+        public override void Post(SendOrPostCallback callback, object? state) => callbacks.Add((callback, state));
+        public bool ExecuteOne(TimeSpan timeout)
+        {
+            if (!callbacks.TryTake(out var work, timeout)) return false;
+            var previousContext = Current;
+            try
+            {
+                SetSynchronizationContext(this);
+                work.Callback(work.State);
+            }
+            finally { SetSynchronizationContext(previousContext); }
+            return true;
+        }
     }
 
     [Test]
@@ -1178,6 +1539,17 @@ public sealed class TaskItemViewModelStatusCommandTests
             ]
         };
 
+    private static TaskItemViewModel CreateViewModelWithDeferredAutosave(TaskItem task, ITaskStorage storage)
+    {
+        var previousThrottle = TaskItemViewModel.DefaultThrottleTime;
+        try
+        {
+            TaskItemViewModel.DefaultThrottleTime = TimeSpan.FromMinutes(1);
+            return new TaskItemViewModel(task, storage, () => true);
+        }
+        finally { TaskItemViewModel.DefaultThrottleTime = previousThrottle; }
+    }
+
     private sealed class ScriptedTaskStorage : ITaskStorage, IDisposable
     {
         private readonly Dictionary<string, TaskItem> _tasks = new(StringComparer.Ordinal);
@@ -1196,6 +1568,15 @@ public sealed class TaskItemViewModelStatusCommandTests
 
         public Func<TaskItem, Task>? UpdateHandler { get; set; }
 
+        public Func<string, Task<TaskReloadResult>>? ReloadHandler { get; set; }
+        public int UpdateCount { get; private set; }
+        public int ReloadCount { get; private set; }
+        public Task<TaskReloadResult> ReloadTaskAsync(string id)
+        {
+            ReloadCount++;
+            return ReloadHandler?.Invoke(id) ?? Task.FromResult(TaskReloadResult.Loaded(Snapshot(id)));
+        }
+
         public event EventHandler<EventArgs>? Initiated;
 
         public void Seed(params TaskItem[] tasks)
@@ -1207,6 +1588,10 @@ public sealed class TaskItemViewModelStatusCommandTests
         }
 
         public TaskItem Snapshot(string taskId) => Clone(_tasks[taskId]);
+
+        public bool Contains(string taskId) => _tasks.ContainsKey(taskId);
+
+        public void RemoveWithoutNotification(string taskId) => _tasks.Remove(taskId);
 
         public async Task<TaskOperationResult> TrySetStatusAsync(
             string taskId,
@@ -1289,6 +1674,7 @@ public sealed class TaskItemViewModelStatusCommandTests
 
         public async Task<TaskItemViewModel> Update(TaskItem change)
         {
+            UpdateCount++;
             if (UpdateHandler is not null)
             {
                 await UpdateHandler(Clone(change));

@@ -51,6 +51,8 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
 
     public IDatabaseWatcher? Watcher => _dbWatcher;
 
+    protected override Task PrepareTaskReloadAsync() => RefreshPendingFileChangesWithinWriteLockAsync();
+
     protected virtual async Task OnUpdatingAsync(TaskStorageUpdateEventArgs e)
     {
         _pendingWatcherUpdates.TryGetValue(e.Id, out var pendingWatcherUpdate);
@@ -71,7 +73,7 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
             var loadedTask = await Load(refreshedTaskId, forced: true);
             var graph = await ReadGraphAsync();
             var sourcePath = System.IO.Path.Combine(Path, e.Id);
-            var physicallyAbsent = !File.Exists(sourcePath) || new FileInfo(sourcePath).Length == 0;
+            var physicallyAbsent = IsConfirmedMissing(sourcePath);
             refreshedTaskId = loadedTask?.Id ?? taskId;
             return new FileRefreshResult(
                 graph.TasksById.GetValueOrDefault(refreshedTaskId),
@@ -119,6 +121,14 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
 
     protected override void OnBeforeWrite(string taskId, string filePath) =>
         _dbWatcher?.AddIgnoredTask(System.IO.Path.GetFileName(filePath));
+
+    private static bool IsConfirmedMissing(string sourcePath)
+    {
+        try { _ = File.GetAttributes(sourcePath); return false; }
+        catch (FileNotFoundException) { return true; }
+        catch (DirectoryNotFoundException) { return true; }
+        catch { return false; } // An access/read failure cannot confirm deletion.
+    }
 
     protected override void OnWritePrepared(string taskId, string filePath, string content)
     {

@@ -23,10 +23,12 @@ public sealed class MainWindowFlaUiTests
     : StatusContractScenariosBase<MainWindowFlaUiTests.FlaUiRuntimeSession>
 {
     private static int _physicalPixelDpiAwarenessConfigured;
+    private int _statusViewportPreparationCount;
 
     protected override FlaUiRuntimeSession LaunchSession()
     {
-        var isStatusContract = IsStatusContractScenarioTest;
+        var isStatusContract = IsStatusContractScenarioTest ||
+            TestContext.Current?.Metadata.TestName == nameof(StatusContract_PickerRestoresClippedHeader);
         if (isStatusContract)
         {
             EnsurePhysicalPixelDpiAwareness();
@@ -85,6 +87,9 @@ public sealed class MainWindowFlaUiTests
     protected override void CaptureStatusContractScreenshot(string outputPath)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+        // Capture is read-only: HoverAsync callbacks must not change foreground or
+        // focus, and an open recovery menu must stay open while taking its frame.
+        Thread.Sleep(TimeSpan.FromMilliseconds(200));
         using var bitmap = Session.Inner.MainWindow.Capture();
         bitmap.Save(outputPath);
         var screenshot = new FileInfo(outputPath);
@@ -128,12 +133,132 @@ public sealed class MainWindowFlaUiTests
 
     protected override void OpenStatusPicker()
     {
+        PrepareStatusButtonInDetailsViewport();
         ClickMainWindowElement("CurrentTaskStatusButton");
         _ = WaitUntil(
             IsAnyStatusOptionVisible,
             static visible => visible,
             timeout: TimeSpan.FromSeconds(10),
             timeoutMessage: "Status picker did not expose its first non-current option.");
+    }
+
+    [Test]
+    [NotInParallel(DesktopUiConstraint)]
+    public async Task StatusContract_PickerRestoresClippedHeader()
+    {
+        WaitForCurrentTaskTitle(UnlimotionAutomationScenarioData.StatusContractTerminalTaskTitle);
+        var viewport = Session.Inner.MainWindow.FindFirstDescendant(
+            Session.Inner.ConditionFactory.ByAutomationId("CurrentTaskDetailsScrollViewer"))
+            ?? throw new InvalidOperationException("Task details viewport was unavailable.");
+        viewport.Patterns.Scroll.Pattern.SetScrollPercent(-1, 100);
+        _ = WaitUntil(
+            () => Session.Inner.MainWindow.FindFirstDescendant(
+                Session.Inner.ConditionFactory.ByAutomationId("CurrentTaskStatusButton")),
+            button => button is not null && button.BoundingRectangle.Width > 0 &&
+                button.BoundingRectangle.Height > 0 && viewport.BoundingRectangle.Width > 0 &&
+                viewport.BoundingRectangle.Height > 0 &&
+                button.BoundingRectangle.Top < viewport.BoundingRectangle.Top,
+            timeout: TimeSpan.FromSeconds(5),
+            timeoutMessage: "The regression fixture did not clip the task status header.");
+
+        var preparationsBefore = _statusViewportPreparationCount;
+        OpenStatusPicker();
+        await Assert.That(_statusViewportPreparationCount).IsEqualTo(preparationsBefore + 1);
+        await Assert.That(ObserveOpenStatusOption("TaskStatusOptionArchived").Visible).IsTrue();
+        CloseStatusPicker();
+        var visibleHeader = Session.Inner.MainWindow.FindFirstDescendant(
+            Session.Inner.ConditionFactory.ByAutomationId("CurrentTaskStatusButton"))!;
+        var headerBounds = visibleHeader.BoundingRectangle;
+        var viewportBounds = viewport.BoundingRectangle;
+        await Assert.That(headerBounds.Width > 0 && headerBounds.Height > 0 &&
+            headerBounds.Left >= viewportBounds.Left && headerBounds.Top >= viewportBounds.Top &&
+            headerBounds.Right <= viewportBounds.Right && headerBounds.Bottom <= viewportBounds.Bottom).IsTrue();
+    }
+
+    private void PrepareStatusButtonInDetailsViewport()
+    {
+        var conditions = Session.Inner.ConditionFactory;
+        var viewport = WaitUntil(
+            () => Session.Inner.MainWindow.FindFirstDescendant(
+                conditions.ByAutomationId("CurrentTaskDetailsScrollViewer")),
+            control => control is not null && control.BoundingRectangle.Width > 0,
+            timeout: TimeSpan.FromSeconds(30),
+            timeoutMessage: "Task details viewport was unavailable.")!;
+        var button = WaitUntil(
+            () => Session.Inner.MainWindow.FindFirstDescendant(
+                conditions.ByAutomationId("CurrentTaskStatusButton")),
+            control => control is not null && control.IsEnabled && control.BoundingRectangle.Width > 0,
+            timeout: TimeSpan.FromSeconds(30),
+            timeoutMessage: "Task status button was unavailable.")!;
+        var viewportBounds = viewport.BoundingRectangle;
+        var beforeBounds = button.BoundingRectangle;
+        if (IsInsideViewport(button)) return;
+        var beforeHit = ObserveCenterHit(button);
+
+        // UIA can report IsOffscreen=false for a header clipped by this ancestor.
+        // Prepare the owned viewport; status activation still uses a physical hit test.
+        var artifacts = Environment.GetEnvironmentVariable(ArtifactDirectoryEnvironmentVariable);
+        var testName = TestContext.Current?.Metadata.TestName ?? "unknown";
+        var evidencePrefix = "status-contract-viewport-" + testName;
+        if (!string.IsNullOrWhiteSpace(artifacts))
+            CaptureStatusContractScreenshot(Path.Combine(artifacts, evidencePrefix + "-before-scroll.png"));
+        var scroll = viewport.Patterns.Scroll.PatternOrDefault
+            ?? throw new InvalidOperationException("Clipped task status has no scrollable details viewport.");
+        scroll.SetScrollPercent(-1, 0);
+        button = WaitUntil(
+            () => Session.Inner.MainWindow.FindFirstDescendant(
+                conditions.ByAutomationId("CurrentTaskStatusButton")),
+            control => control is not null && IsInsideViewport(control),
+            timeout: TimeSpan.FromSeconds(5),
+            timeoutMessage: "Task status button stayed clipped after preparing its details viewport.")!;
+        _statusViewportPreparationCount++;
+        if (!string.IsNullOrWhiteSpace(artifacts))
+        {
+            CaptureStatusContractScreenshot(Path.Combine(artifacts, evidencePrefix + "-after-scroll.png"));
+            File.WriteAllText(Path.Combine(artifacts, evidencePrefix + ".json"),
+                System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    TestName = testName,
+                    PreparationCount = _statusViewportPreparationCount,
+                    BeforeButton = beforeBounds,
+                    BeforeCenterHit = beforeHit,
+                    Viewport = viewportBounds,
+                    AfterButton = button.BoundingRectangle,
+                    AfterCenterHit = ObserveCenterHit(button),
+                    Prepared = true
+                }));
+        }
+
+        bool IsInsideViewport(AutomationElement control)
+        {
+            var bounds = control.BoundingRectangle;
+            var visible = viewport.BoundingRectangle;
+            return bounds.Width > 0 && bounds.Height > 0 &&
+                   bounds.Left >= visible.Left && bounds.Top >= visible.Top &&
+                   bounds.Right <= visible.Right && bounds.Bottom <= visible.Bottom;
+        }
+
+        object ObserveCenterHit(AutomationElement control)
+        {
+            var bounds = control.BoundingRectangle;
+            var point = new System.Drawing.Point(
+                (int)(bounds.Left + bounds.Width / 2), (int)(bounds.Top + bounds.Height / 2));
+            var hit = control.Automation.FromPoint(point);
+            var targetOrDescendant = false;
+            for (var current = hit; current is not null; current = current.Parent)
+            {
+                if (!current.Equals(control)) continue;
+                targetOrDescendant = true;
+                break;
+            }
+            return new
+            {
+                point.X, point.Y,
+                HitAutomationId = hit?.Properties.AutomationId.ValueOrDefault,
+                HitProcessId = hit?.Properties.ProcessId.ValueOrDefault,
+                TargetOrDescendant = targetOrDescendant
+            };
+        }
     }
 
     protected override StatusContractOptionObservation ObserveOpenStatusOption(string automationId)
@@ -201,7 +326,9 @@ public sealed class MainWindowFlaUiTests
                 ?? throw new InvalidOperationException("The disabled status option was not exposed for hover."),
             async cancellationToken =>
             {
-                await WaitForVisibleTooltipAsync(blockerReason, cancellationToken);
+                using var tooltipDeadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                tooltipDeadline.CancelAfter(TimeSpan.FromSeconds(15));
+                await WaitForVisibleTooltipAsync(blockerReason, tooltipDeadline.Token);
                 await Assert.That(HasVisibleProcessTooltip(blockerReason))
                     .IsTrue()
                     .Because("Pointer hover must expose the disabled status row's tooltip.");
@@ -209,7 +336,10 @@ public sealed class MainWindowFlaUiTests
                     ResolveArtifactDirectory(),
                     "after-blocked.png"));
             },
-            new PointerHoverOptions { Timeout = TimeSpan.FromSeconds(15) });
+            // The action includes owner validation and read-only UIA assertions/capture.
+            // Pointer restoration has a separate framework cleanup budget.
+            // The action deadline must outlive the tooltip wait.
+            new PointerHoverOptions { Timeout = TimeSpan.FromSeconds(30) });
         CloseStatusPicker();
 
         await Assert.That(renderedTheme)
@@ -269,6 +399,14 @@ public sealed class MainWindowFlaUiTests
         }
     }
 
+    protected override void InvokeOpenStatusOption(string automationId)
+    {
+        var option = WaitUntil(() => FindProcessElement(automationId),
+            static element => element is not null, timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: $"Status option '{automationId}' was unavailable.")!;
+        DesktopPointer.Click(option);
+    }
+
     private static bool IsOwnedTooltipPopup(
         AutomationElement text, int processId, IntPtr mainWindow, IntPtr rowWindow)
     {
@@ -314,6 +452,33 @@ public sealed class MainWindowFlaUiTests
                FindProcessElement("TaskStatusOptionInProgress") is not null ||
                FindProcessElement("TaskStatusOptionCompleted") is not null ||
                FindProcessElement("TaskStatusOptionArchived") is not null;
+    }
+
+    protected override bool OpenActionsAndFindReloadCommand()
+    {
+        InvokeMainWindowButton("CurrentTaskActionsMenuButton");
+        var deadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(5);
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            var item = FindProcessElement("CurrentTaskReloadButton");
+            if (item is not null && !item.Properties.IsOffscreen.ValueOrDefault) return true;
+            Thread.Sleep(100);
+        }
+        return false;
+    }
+
+    protected override bool IsRecoveryErrorCleared()
+    {
+        var error = FindProcessElement("CurrentTaskOperationErrorText");
+        return error is null || error.Properties.IsOffscreen.ValueOrDefault || string.IsNullOrWhiteSpace(error.Name);
+    }
+
+    protected override void InvokeReloadCommand()
+    {
+        var item = FindProcessElement("CurrentTaskReloadButton")
+            ?? throw new InvalidOperationException("Task actions menu did not expose reload.");
+        if (!item.IsEnabled) throw new InvalidOperationException("Task reload menu item was disabled.");
+        DesktopPointer.Click(item);
     }
 
     protected override string OpenActionsAndInvokeArchiveCommand()
@@ -503,10 +668,13 @@ public sealed class MainWindowFlaUiTests
 
     private void ClickMainWindowElement(string automationId)
     {
-        var element = Session.Inner.MainWindow.FindFirstDescendant(
-            Session.Inner.ConditionFactory.ByAutomationId(automationId))
-            ?? throw new InvalidOperationException(
-                $"Main window did not expose automation element '{automationId}'.");
+        var element = WaitUntil(
+            () => Session.Inner.MainWindow.FindFirstDescendant(
+                Session.Inner.ConditionFactory.ByAutomationId(automationId)),
+            static control => control is not null && control.IsEnabled &&
+                !control.Properties.IsOffscreen.ValueOrDefault,
+            timeout: TimeSpan.FromSeconds(30),
+            timeoutMessage: $"Main window button '{automationId}' did not become enabled and visible.")!;
         DesktopPointer.Click(element);
     }
 

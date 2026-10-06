@@ -482,7 +482,11 @@ namespace Unlimotion.ViewModel
                 }
 
                 await CurrentTaskItem.TryTransitionToStatusAsync(DomainTaskStatus.Completed);
-            }).AddToDisposeAndReturn(connectionDisposableList);
+            }, this.WhenAnyValue(model => model.CurrentTaskItem)
+                .Select(task => task is null
+                    ? Observable.Return(false)
+                    : task.WhenAnyValue(item => item.CanChangeTaskStatus))
+                .Switch()).AddToDisposeAndReturn(connectionDisposableList);
             ExpandCurrentNestedCommand = ReactiveCommand.Create(() =>
                 ExecuteTreeCommandAction?.Invoke(TreeCommandKind.ExpandCurrentNested))
                 .AddToDisposeAndReturn(connectionDisposableList);
@@ -803,12 +807,13 @@ namespace Unlimotion.ViewModel
                 }
                 taskRepository = taskStorage;
 
-                //Если из коллекции пропадает итем, то очищаем выделенный итем.
+                // Retain a missing open card so its detached local draft can still be copied.
+                // Explicit deletion/navigation clears the card through its existing commands.
                 taskRepository.Tasks.Connect()
                     .OnItemAdded(AttachTaskContext)
                     .OnItemRemoved(x =>
                     {
-                        if (CurrentTaskItem?.Id == x.Id) CurrentTaskItem = null;
+                        if (CurrentTaskItem?.Id == x.Id && !x.IsMissingFromStorage) CurrentTaskItem = null;
                     })
                     .OnItemUpdated((newItem, oldItem) =>
                     {

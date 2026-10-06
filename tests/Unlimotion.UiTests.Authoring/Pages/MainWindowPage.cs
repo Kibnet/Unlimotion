@@ -61,6 +61,8 @@ namespace Unlimotion.UiTests.Authoring.Pages;
 [UiControl("CurrentTaskHeader", UiControlType.AutomationElement, "CurrentTaskHeader")]
 [UiControl("CurrentTaskCommandBar", UiControlType.AutomationElement, "CurrentTaskCommandBar")]
 [UiControl("CurrentTaskStatusButton", UiControlType.Button, "CurrentTaskStatusButton")]
+[UiControl("CurrentTaskReloadButton", UiControlType.Button, "CurrentTaskReloadButton")]
+[UiControl("CurrentTaskOperationErrorText", UiControlType.Label, "CurrentTaskOperationErrorText")]
 [UiControl("TaskStatusOptionNotReady", UiControlType.AutomationElement, "TaskStatusOptionNotReady")]
 [UiControl("TaskStatusOptionPrepared", UiControlType.AutomationElement, "TaskStatusOptionPrepared")]
 [UiControl("TaskStatusOptionInProgress", UiControlType.AutomationElement, "TaskStatusOptionInProgress")]

@@ -30,6 +30,8 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
     private readonly CancellationTokenSource cacheLifetime = new();
     private readonly ConcurrentDictionary<string, long> appliedStorageRevisions =
         new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, long> reloadEpochs = new(StringComparer.Ordinal);
+    private readonly object reloadEpochSync = new();
     private SynchronizationContext? cacheSynchronizationContext;
     private volatile bool disposed;
 
@@ -378,7 +380,11 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
             var cached = Tasks.Lookup(task.Id);
             if (cached.HasValue)
             {
-                cached.Value.Update(task);
+                lock (reloadEpochSync)
+                {
+                    AdvanceReloadEpoch(task.Id);
+                    cached.Value.Update(task);
+                }
                 if (task.Id == last.Id)
                 {
                     lastViewModel = cached.Value;
@@ -406,6 +412,61 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
         ExecuteStatusCommandAsync(
             taskId,
             commandService => commandService.TrySetStatusAsync(taskId, requestedStatus, author));
+
+    public async Task<TaskReloadResult> ReloadTaskAsync(string taskId)
+    {
+        if (disposed) return TaskReloadResult.Failed(TaskReloadFailure.SourceUnavailable);
+        if (TaskTreeManager.Storage is not ITaskReloadReader reader)
+            return TaskReloadResult.Failed(TaskReloadFailure.Unsupported);
+        CaptureCacheSynchronizationContext();
+        await statusCommandGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            for (var attempt = 0; attempt < 3; attempt++)
+            {
+                if (disposed) return TaskReloadResult.Failed(TaskReloadFailure.SourceUnavailable);
+                long epoch;
+                lock (reloadEpochSync) epoch = reloadEpochs.GetValueOrDefault(taskId);
+                var result = await reader.ReloadTaskAsync(taskId).ConfigureAwait(false);
+                if (result.Outcome == TaskReloadOutcome.Failed) return result;
+                var applied = false;
+                await RunOnCacheSynchronizationContextAsync(() =>
+                {
+                    lock (reloadEpochSync)
+                    {
+                        if (disposed || reloadEpochs.GetValueOrDefault(taskId) != epoch) return;
+                        if (result.Outcome == TaskReloadOutcome.Loaded && result.Snapshot is { } snapshot)
+                        {
+                            applied = HydrateCache(snapshot, create: false, result.StorageRevision);
+                            if (applied) RefreshRelations();
+                        }
+                        else if (result.Outcome == TaskReloadOutcome.Missing &&
+                                 TryAcceptStorageRevision(taskId, result.StorageRevision))
+                        {
+                            // Retain the card's editor text, but prevent autosave/final-save resurrection.
+                            var cached = Tasks.Lookup(taskId);
+                            if (cached.HasValue) cached.Value.MarkMissingFromStorage();
+                            RemoveTasksFromCache([taskId]);
+                            RefreshRelations();
+                            AdvanceReloadEpoch(taskId);
+                            applied = true;
+                        }
+                    }
+                }).ConfigureAwait(false);
+                if (disposed) return TaskReloadResult.Failed(TaskReloadFailure.SourceUnavailable);
+                if (applied) return result with { AppliedToCache = true };
+            }
+            return TaskReloadResult.Failed(TaskReloadFailure.ChangedDuringRead);
+        }
+        catch (Exception) { return TaskReloadResult.Failed(); }
+        finally { statusCommandGate.Release(); }
+    }
+
+    private long AdvanceReloadEpoch(string taskId)
+    {
+        lock (reloadEpochSync)
+            return reloadEpochs.AddOrUpdate(taskId, 1, static (_, epoch) => epoch + 1);
+    }
 
     public Task<TaskOperationResult> TryUnarchiveAsync(
         string taskId,
@@ -1243,6 +1304,8 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
     {
         try
         {
+            var taskId = isFileStorage ? new FileInfo(e.Id).Name : e.Id;
+            var updateEpoch = AdvanceReloadEpoch(taskId);
             switch (e.Type)
             {
                 case UpdateType.Saved:
@@ -1252,8 +1315,11 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
                     {
                         await RunOnCacheSynchronizationContextAsync(() =>
                         {
-                            HydrateCache(taskItem, create: true, e.StorageRevision);
-                            RefreshRelations();
+                            lock (reloadEpochSync)
+                            {
+                                if (disposed || reloadEpochs.GetValueOrDefault(taskId) != updateEpoch) return;
+                                if (HydrateCache(taskItem, create: true, e.StorageRevision)) RefreshRelations();
+                            }
                         }).ConfigureAwait(false);
                     }
                     break;
@@ -1277,6 +1343,7 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
         var deletedItem = Tasks.Lookup(taskId);
         if (TryAcceptStorageRevision(taskId, e.StorageRevision) && deletedItem.HasValue)
         {
+            deletedItem.Value.MarkMissingFromStorage();
             RemoveTasksFromCache([taskId]);
             RefreshRelations();
         }
@@ -1308,6 +1375,8 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
         {
             return false;
         }
+
+        AdvanceReloadEpoch(task.Id);
 
         var vm = Tasks.Lookup(task.Id);
 

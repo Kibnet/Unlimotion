@@ -1,0 +1,24 @@
+  Unlimotion.Domain -> <workspace>\src\Unlimotion.Domain\bin\Debug\net10.0\Unlimotion.Domain.dll
+  Unlimotion.TaskTree -> <workspace>\src\Unlimotion.TaskTreeManager\bin\Debug\net10.0\Unlimotion.TaskTree.dll
+  Unlimotion.FileStorage -> <workspace>\src\Unlimotion.FileStorage\bin\Debug\net10.0\Unlimotion.FileStorage.dll
+  Unlimotion.ViewModel -> <workspace>\src\Unlimotion.ViewModel\bin\Debug\net10.0\Unlimotion.ViewModel.dll
+  Unlimotion.Server.ServiceModel -> <workspace>\src\Unlimotion.Server.ServiceModel\bin\Debug\net10.0\Unlimotion.Server.ServiceModel.dll
+  Unlimotion.Interface -> <workspace>\src\Unlimotion.Interface\bin\Debug\net10.0\Unlimotion.Interface.dll
+<workspace>\src\Unlimotion\ServerStorage.cs(76,9): warning SYSLIB0014: "ServicePointManager" является устаревшим: 'WebRequest, HttpWebRequest, ServicePoint, and WebClient are obsolete. Use HttpClient instead. Settings on ServicePointManager no longer affect SslStream or HttpClient.' (https://aka.ms/dotnet-warnings/SYSLIB0014) [<workspace>\src\Unlimotion\Unlimotion.csproj]
+<workspace>\src\Unlimotion\Services\TaskStorageBuilder.cs(11,13): warning CS9113: Параметр "mapper" не прочитан. [<workspace>\src\Unlimotion\Unlimotion.csproj]
+<workspace>\src\Unlimotion\Views/ConflictResolutionControl.axaml(208,66,208,66): Avalonia warning AVLN5001: 'TextBox.Watermark' is obsolete: Use PlaceholderText instead. [<workspace>\src\Unlimotion\Unlimotion.csproj]
+  Unlimotion -> <workspace>\src\Unlimotion\bin\Debug\net10.0\Unlimotion.dll
+  Unlimotion.Desktop -> <workspace>\src\Unlimotion.Desktop\bin\Debug\net10.0\Unlimotion.Desktop.dll
+  Unlimotion.AppAutomation.TestHost -> <workspace>\tests\Unlimotion.AppAutomation.TestHost\bin\Debug\net10.0\Unlimotion.AppAutomation.TestHost.dll
+  Unlimotion.UiTests.Authoring -> <workspace>\tests\Unlimotion.UiTests.Authoring\bin\Debug\net10.0\Unlimotion.UiTests.Authoring.dll
+  Unlimotion.UiTests.FlaUI -> <workspace>\tests\Unlimotion.UiTests.FlaUI\bin\Debug\net10.0-windows7.0\Unlimotion.UiTests.FlaUI.dll
+
+Сборка успешно завершена.
+
+<workspace>\src\Unlimotion\ServerStorage.cs(76,9): warning SYSLIB0014: "ServicePointManager" является устаревшим: 'WebRequest, HttpWebRequest, ServicePoint, and WebClient are obsolete. Use HttpClient instead. Settings on ServicePointManager no longer affect SslStream or HttpClient.' (https://aka.ms/dotnet-warnings/SYSLIB0014) [<workspace>\src\Unlimotion\Unlimotion.csproj]
+<workspace>\src\Unlimotion\Services\TaskStorageBuilder.cs(11,13): warning CS9113: Параметр "mapper" не прочитан. [<workspace>\src\Unlimotion\Unlimotion.csproj]
+<workspace>\src\Unlimotion\Views/ConflictResolutionControl.axaml(208,66,208,66): Avalonia warning AVLN5001: 'TextBox.Watermark' is obsolete: Use PlaceholderText instead. [<workspace>\src\Unlimotion\Unlimotion.csproj]
+    Предупреждений: 3
+    Ошибок: 0
+
+Прошло времени 00:00:12.54

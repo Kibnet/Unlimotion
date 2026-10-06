@@ -1,0 +1,18 @@
+  Unlimotion.Domain -> <worktree>\src\Unlimotion.Domain\bin\Debug\net10.0\Unlimotion.Domain.dll
+  Unlimotion.Interface -> <worktree>\src\Unlimotion.Interface\bin\Debug\net10.0\Unlimotion.Interface.dll
+  Unlimotion.Server.ServiceModel -> <worktree>\src\Unlimotion.Server.ServiceModel\bin\Debug\net10.0\Unlimotion.Server.ServiceModel.dll
+  Unlimotion.TaskTree -> <worktree>\src\Unlimotion.TaskTreeManager\bin\Debug\net10.0\Unlimotion.TaskTree.dll
+  Unlimotion.ViewModel -> <worktree>\src\Unlimotion.ViewModel\bin\Debug\net10.0\Unlimotion.ViewModel.dll
+  Unlimotion.FileStorage -> <worktree>\src\Unlimotion.FileStorage\bin\Debug\net10.0\Unlimotion.FileStorage.dll
+  Unlimotion.Cli -> <worktree>\src\Unlimotion.Cli\bin\Debug\net10.0\Unlimotion.Cli.dll
+  Unlimotion -> <worktree>\src\Unlimotion\bin\Debug\net10.0\Unlimotion.dll
+  Unlimotion.Desktop -> <worktree>\src\Unlimotion.Desktop\bin\Debug\net10.0\Unlimotion.Desktop.dll
+  Unlimotion.AppAutomation.TestHost -> <worktree>\tests\Unlimotion.AppAutomation.TestHost\bin\Debug\net10.0\Unlimotion.AppAutomation.TestHost.dll
+  Unlimotion.UiTests.Authoring -> <worktree>\tests\Unlimotion.UiTests.Authoring\bin\Debug\net10.0\Unlimotion.UiTests.Authoring.dll
+  Unlimotion.UiTests.Headless -> <worktree>\tests\Unlimotion.UiTests.Headless\bin\Debug\net10.0\Unlimotion.UiTests.Headless.dll
+
+Сборка успешно завершена.
+    Предупреждений: 0
+    Ошибок: 0
+
+Прошло времени 00:00:11.38

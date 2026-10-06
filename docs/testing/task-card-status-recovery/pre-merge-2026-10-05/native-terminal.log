@@ -1,0 +1,63 @@
+
+████████╗██╗   ██╗███╗   ██╗██╗████████╗
+╚══██╔══╝██║   ██║████╗  ██║██║╚══██╔══╝
+   ██║   ██║   ██║██╔██╗ ██║██║   ██║
+   ██║   ██║   ██║██║╚██╗██║██║   ██║
+   ██║   ╚██████╔╝██║ ╚████║██║   ██║
+   ╚═╝    ╚═════╝ ╚═╝  ╚═══╝╚═╝   ╚═╝
+
+   TUnit v1.44.0.0 | 64-bit | Microsoft Windows 10.0.22631 | win-x64 | .NET 10.0.12 | Microsoft Testing Platform v2.2.2
+
+   Engine Mode: SourceGenerated
+
+сбой StatusContract_TerminalPickerAndUnarchive (0ms)
+  TUnit.Engine.Exceptions.TestFailedException: [Test Failure] BeforeTestException: BeforeTest hook failed: Exception has been thrown by the target of an invocation.
+    в TUnit.Engine.Services.HookExecutor.ExecuteBeforeTestHooksCoreAsync(AbstractExecutableTest test, Type testClassType, IReadOnlyList`1 beforeEveryTestHooks, IReadOnlyList`1 cachedBeforeTestHooks, CancellationToken cancellationToken)
+    в TUnit.Engine.TestExecutor.ExecuteAsync(AbstractExecutableTest executableTest, TestInitializer testInitializer, CancellationToken cancellationToken, Nullable`1 testTimeout)
+    в TUnit.Engine.TestExecutor.ExecuteAsync(AbstractExecutableTest executableTest, TestInitializer testInitializer, CancellationToken cancellationToken, Nullable`1 testTimeout)
+    в TUnit.Engine.Services.TestExecution.TestCoordinator.ExecuteTestAsync(AbstractExecutableTest test, CancellationToken cancellationToken)
+    в TUnit.Engine.Services.TestExecution.TestCoordinator.ExecuteTestAsync(AbstractExecutableTest test, CancellationToken cancellationToken)
+  --->  System.Reflection.TargetInvocationException: Exception has been thrown by the target of an invocation.
+    в System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+    в System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+    в System.Reflection.MethodBase.Invoke(Object obj, Object[] parameters)
+    в TUnit.Generated.Hooks.AppAutomation_TUnit_UiTestBase____SetupUiSession_Before_Test.AppAutomation_TUnit_UiTestBase____SetupUiSession_Before_TestInitializer.global_AppAutomation_TUnit_UiTestBase_SetupUiSession_0Params_Body(Object instance, TestContext context, CancellationToken cancellationToken) в <workspace>\tests\Unlimotion.UiTests.Authoring\obj\Debug\net10.0\TUnit.Core.SourceGenerator\TUnit.Core.SourceGenerator.Generators.HookMetadataGenerator\AppAutomation_TUnit_UiTestBase____SetupUiSession_Before_Test.Hook.g.cs:30
+    в TUnit.Engine.Helpers.HookTimeoutHelper.<>c__DisplayClass3_0`1.<<CreateTimeoutHookAction>b__1>d.MoveNext()
+    --- End of stack trace from previous location ---
+    в TUnit.Engine.Services.HookDelegateBuilder.<>c__DisplayClass71_0.<<CreateInstanceHookDelegateAsync>b__0>d.MoveNext()
+    --- End of stack trace from previous location ---
+    в TUnit.Engine.Services.HookExecutor.ExecuteHookWithActivityAsync[TContext](NamedHookDelegate`1 hook, TContext context, CancellationToken cancellationToken)
+    в TUnit.Engine.Services.HookExecutor.ExecuteBeforeTestHooksCoreAsync(AbstractExecutableTest test, Type testClassType, IReadOnlyList`1 beforeEveryTestHooks, IReadOnlyList`1 cachedBeforeTestHooks, CancellationToken cancellationToken)
+  --->  System.InvalidOperationException: Desktop window placement failed. ExecutablePath=C:\Users\<user>\AppData\Local\Temp\AppAutomationDesktopBuild-p605536-DF690F9BF07C\bin\Unlimotion.Desktop\Debug\net10.0\Unlimotion.Desktop.exe, ProcessId=607300.
+  Window bounds did not reach requested placement within 90 seconds. Target=X=1280, Y=626, Width=1280, Height=800, Actual=X=1280, Y=626, Width=2880, Height=1497.
+  Requested placement: Monitor=Primary, Size=1280x800, Anchor=Center, Offset=0,0, UseWorkingArea=True, UnavailableBehavior=Fail
+  Available monitors:
+    [0] Primary=True, DeviceName=\\.\DISPLAY1, Bounds=X=0, Y=0, Width=3840, Height=2160, WorkingArea=X=0, Y=0, Width=3840, Height=2052
+    [1] Primary=False, DeviceName=\\.\DISPLAY2, Bounds=X=3840, Y=561, Width=1920, Height=1080, WorkingArea=X=3840, Y=561, Width=1920, Height=1020
+    в AppAutomation.FlaUI.Session.DesktopWindowPlacementService.Apply(Application application, Window mainWindow, DesktopAppLaunchOptions options)
+    в AppAutomation.FlaUI.Session.DesktopAppSession.Launch(DesktopAppLaunchOptions options)
+    --- End of stack trace from previous location ---
+    в AppAutomation.FlaUI.Session.DesktopAppSession.Launch(DesktopAppLaunchOptions options)
+    в Unlimotion.UiTests.FlaUI.Tests.MainWindowFlaUiTests.LaunchSession() в <workspace>\tests\Unlimotion.UiTests.FlaUI\Tests\MainWindowFlaUiTests.cs:35
+    в AppAutomation.TUnit.UiTestBase`2.SetupUiSession() в <workspace>\tests\Unlimotion.UiTests.Authoring\Infrastructure\UiTestBase.cs:166
+    в System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+    в System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+  --->  System.InvalidOperationException: Window bounds did not reach requested placement within 90 seconds. Target=X=1280, Y=626, Width=1280, Height=800, Actual=X=1280, Y=626, Width=2880, Height=1497.
+  Requested placement: Monitor=Primary, Size=1280x800, Anchor=Center, Offset=0,0, UseWorkingArea=True, UnavailableBehavior=Fail
+  Available monitors:
+    [0] Primary=True, DeviceName=\\.\DISPLAY1, Bounds=X=0, Y=0, Width=3840, Height=2160, WorkingArea=X=0, Y=0, Width=3840, Height=2052
+    [1] Primary=False, DeviceName=\\.\DISPLAY2, Bounds=X=3840, Y=561, Width=1920, Height=1080, WorkingArea=X=3840, Y=561, Width=1920, Height=1020
+    в AppAutomation.FlaUI.Session.DesktopWindowPlacementService.WaitForWindowRectangle(IntPtr windowHandle, Rectangle targetBounds, DesktopAppLaunchOptions options, IReadOnlyList`1 monitors, Boolean requireSizeMatch)
+    в AppAutomation.FlaUI.Session.DesktopWindowPlacementService.Apply(Application application, Window mainWindow, DesktopAppLaunchOptions options)
+HTML test report written to: <workspace>\artifacts\status-recovery\pre-merge-2026-10-05\native-terminal\Unlimotion.UiTests.FlaUI-windows-net10.0-report.html
+
+  Созданные в процессе артефакты файлов:
+    - <workspace>\artifacts\status-recovery\pre-merge-2026-10-05\native-terminal\Unlimotion.UiTests.FlaUI-windows-net10.0-report.html
+    - <workspace>\artifacts\status-recovery\pre-merge-2026-10-05\native-terminal\<user>_<machine>_2026-10-06_06_47_17.5998895.trx
+
+Сводка тестового запуска: Сбой! - <workspace>\tests\Unlimotion.UiTests.FlaUI\bin\Debug\net10.0-windows7.0\Unlimotion.UiTests.FlaUI.dll (net10.0|x64)
+  всего: 1
+  сбой: 1
+  успешно выполнено: 0
+  пропущено: 0
+  длительность: 2m 02s 358ms

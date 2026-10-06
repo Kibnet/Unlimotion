@@ -6,6 +6,12 @@ param(
 
     [string]$RecorderScriptPath,
 
+    [ValidateSet("StatusContract", "TaskCardStatusRecovery")]
+    [string]$Scenario = "StatusContract",
+
+    [ValidateRange(1, 60)]
+    [int]$Fps = 30,
+
     [Parameter(Mandatory = $true)]
     [ValidateNotNullOrEmpty()]
     [string]$OutputPath
@@ -15,20 +21,24 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $scenarioTimeoutSeconds = 90
-$windowReadyTimeoutSeconds = 120
+$windowReadyTimeoutSeconds = 300
 $recorderStartupTimeoutSeconds = 30
 $recorderDurationSeconds = $scenarioTimeoutSeconds + 15
 $recorderExitGraceSeconds = 30
 $testExitTimeoutSeconds = 60
 $expectedWidth = 1280
 $expectedHeight = 800
-$expectedFps = 30
+$expectedFps = $Fps
 $minimumAverageFpsRatio = 0.98
 $targetTestFilter = "/*/*/MainWindowFlaUiTests/StatusContract_TerminalPickerAndUnarchive"
 $expectedBeforeFailureIds = @(
     "TerminalInProgressWasEnabled",
     "UnarchiveDidNotRestorePrepared"
 )
+if ($Scenario -eq "TaskCardStatusRecovery") {
+    $targetTestFilter = "/*/*/MainWindowFlaUiTests/TaskCardStatusRecovery_FailureRefreshRetry"
+    $expectedBeforeFailureIds = @("RefreshUnavailable")
+}
 
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
 $testProjectPath = Join-Path $repoRoot "tests/Unlimotion.UiTests.FlaUI/Unlimotion.UiTests.FlaUI.csproj"
@@ -735,6 +745,7 @@ try {
         $testProjectPath,
         "-c", "Debug",
         "--no-build",
+        "--no-restore",
         "--",
         "--treenode-filter", $targetTestFilter,
         "--maximum-parallel-tests", "1",

@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Controls;
@@ -116,6 +118,56 @@ internal static class WorkspaceTreeCommandsUiContract
                         repository.Tasks.Items.Any(task => task.Title == "BDD tree command paste root") &&
                         repository.Tasks.Items.Any(task => task.Title == "BDD tree command paste child") &&
                         repository.Tasks.Items.Any(task => task.Title == "BDD tree command paste sibling"));
+                    if (!result.PasteOutlineCommandWorked)
+                    {
+                        // Capture the failed conjuncts at the original deadline, before
+                        // the next command or teardown can obscure an async-void import.
+                        var notifications = (NotificationManagerWrapperMock)vm.ManagerWrapper;
+                        var cachedTasks = repository.Tasks.Items.ToArray();
+                        var focused = window.FocusManager?.GetFocusedElement();
+                        var persistedPasteTasks = new List<string>();
+                        try
+                        {
+                            foreach (var file in Directory.EnumerateFiles(fixture.DefaultTasksFolderPath))
+                            {
+                                if (!Guid.TryParse(Path.GetFileName(file), out _)) continue;
+                                try
+                                {
+                                    var stored = TestHelpers.GetStorageTaskItem(
+                                        fixture.DefaultTasksFolderPath, Path.GetFileName(file));
+                                    if (stored?.Title?.StartsWith("BDD tree command paste ", StringComparison.Ordinal) == true)
+                                        persistedPasteTasks.Add($"{stored.Id}:{stored.Title}");
+                                }
+                                catch (Exception exception)
+                                {
+                                    persistedPasteTasks.Add($"{Path.GetFileName(file)}:<{exception.GetType().Name}>");
+                                }
+                            }
+                        }
+                        catch (Exception exception)
+                        {
+                            persistedPasteTasks.Add($"<directory:{exception.GetType().Name}>");
+                        }
+                        result.PasteOutlineDiagnostics = JsonSerializer.Serialize(new
+                        {
+                            ClipboardReadCount = clipboardReadCount,
+                            PreviewTaskCount = notifications.LastTaskOutlinePastePreview?.TaskCount,
+                            ConfirmationCount = notifications.TaskOutlinePasteConfirmationCount,
+                            Errors = notifications.ErrorMessages.ToArray(),
+                            CountBefore = countBeforePaste,
+                            ExpectedCount = countBeforePaste + 3,
+                            Count = cachedTasks.Length,
+                            CachedTasks = cachedTasks.Select(task => new { task.Id, task.Title }).ToArray(),
+                            PersistedPasteTasks = persistedPasteTasks.ToArray(),
+                            Focused = focused is Control control ? $"{control.GetType().Name}#{control.Name}" : focused?.GetType().Name,
+                            TreeHasFocus = allTasksTree!.IsKeyboardFocusWithin,
+                            SelectedTask = (allTasksTree.SelectedItem as TaskWrapperViewModel)?.TaskItem.Id,
+                            CurrentTask = vm.CurrentTaskItem?.Id,
+                            CurrentTreeTask = vm.CurrentAllTasksItem?.TaskItem.Id,
+                            ExpectedParent = parent.Id,
+                            ParentWrapperStillInRootProjection = vm.CurrentAllTasksItems.Any(wrapper => ReferenceEquals(wrapper, parentWrapper))
+                        });
+                    }
 
                     var deleteTarget = await CreateRootWithTitleAsync(
                         repository,
@@ -153,7 +205,7 @@ internal static class WorkspaceTreeCommandsUiContract
         await Assert.That(result.ExpandCurrentCommandWorked).IsTrue();
         await Assert.That(result.CollapseCurrentCommandWorked).IsTrue();
         await Assert.That(result.CopyOutlineCommandWorked).IsTrue();
-        await Assert.That(result.PasteOutlineCommandWorked).IsTrue();
+        await Assert.That(result.PasteOutlineCommandWorked).IsTrue().Because(result.PasteOutlineDiagnostics);
         await Assert.That(result.DeleteSelectionCommandWorked).IsTrue();
     }
 
@@ -295,6 +347,8 @@ internal sealed class WorkspaceTreeCommandsScenarioResult
     public bool CopyOutlineCommandWorked { get; set; }
 
     public bool PasteOutlineCommandWorked { get; set; }
+
+    public string PasteOutlineDiagnostics { get; set; } = string.Empty;
 
     public bool DeleteSelectionCommandWorked { get; set; }
 }

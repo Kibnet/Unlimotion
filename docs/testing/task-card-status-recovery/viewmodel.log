@@ -1,0 +1,65 @@
+
+████████╗██╗   ██╗███╗   ██╗██╗████████╗
+╚══██╔══╝██║   ██║████╗  ██║██║╚══██╔══╝
+   ██║   ██║   ██║██╔██╗ ██║██║   ██║
+   ██║   ██║   ██║██║╚██╗██║██║   ██║
+   ██║   ╚██████╔╝██║ ╚████║██║   ██║
+   ╚═╝    ╚═════╝ ╚═╝  ╚═══╝╚═╝   ╚═╝
+
+   TUnit v1.44.0.0 | 64-bit | Microsoft Windows 10.0.22631 | win-x64 | .NET 10.0.12 | Microsoft Testing Platform v2.2.2
+
+   Engine Mode: SourceGenerated
+
+пройдено TaskNotFoundDuringStatusCommand_BlocksDirtyEditorDrainAndLifecycleSave(False) (660ms)
+пройдено EditorFlushFailureBeforeStatusCommand_ReturnsControlledFailureAndRemainsRetryable (10ms)
+пройдено SealPendingSaves_FlushesThrottledEditorRevisionBeforeTeardown (1ms)
+пройдено SealPendingSaves_WhenFinalEditorFlushFails_FaultsTeardown (6ms)
+пройдено EditorFlushFailureAfterSuccessfulStatusCommand_PreservesConfirmedResultAndRemainsRetryable (51ms)
+пройдено EditorFlushFailureAfterSuccessfulStatusCommand_FaultsConcurrentLifecycleSeal (11ms)
+пройдено RetryThatPersistsFailedRevisionBeforeProducerCompletion_AllowsLifecycleSeal (24ms)
+пройдено PendingArchiveConfirmation_IsCancelledAndDrainedByLifecycleSeal (48ms)
+пройдено LifecycleSeal_WaitsForCascadeChildAdmittedBeforeSeal (7ms)
+пройдено Unarchive_TransitionsParentBeforeSingleConfirmationAndProcessesEveryChildInOrder (7ms)
+пройдено Unarchive_StaleCachedHistoryUsesStorageResolvedTargetsForParentAndChild (11ms)
+пройдено Unarchive_AuthoritativeParentNoLongerArchivedStopsCascadeAndHydratesStatus (2ms)
+пройдено Unarchive_WithoutChildren_TransitionsParentWithoutConfirmation (2ms)
+пройдено Unarchive_WithoutNotificationManager_LeavesChildrenArchived (3ms)
+пройдено Unarchive_WhenConfirmationIsDeclined_LeavesChildrenArchived (2ms)
+пройдено Unarchive_WhenConfirmationFails_LeavesChildrenArchivedAndReportsFailure (12ms)
+пройдено StalePreview_CommandDenialHydratesAuthoritativeStatusWithoutOptimisticMutation (2ms)
+пройдено StorageFailureWithoutSnapshotKeepsCachedStatusAndUsesHonestRetryCopy (3ms)
+passed EditDuringStatusCommand_IsMergedAndDrainedBeforeCompletion(True) (18ms)
+пройдено StaleGraphDenial_UsesAuthoritativeContainedDirectAndInheritedReasonsInEnglishAndRussian (23ms)
+пройдено EditDuringStatusCommand_IsMergedAndDrainedBeforeCompletion(False) (0ms)
+пройдено SelectStatusOption_CurrentArchivedStatusDoesNotUnarchive (1ms)
+пройдено TaskNotFoundDuringStatusCommand_BlocksDirtyEditorDrainAndLifecycleSave(True) (0ms)
+пройдено Reload_UnknownThenFailedReadCannotUndoPersistedStatusOnEditOrSeal (6ms)
+пройдено Reload_UserAutosaveMaturingDuringReadResumesAfterLoaded (2s 025ms)
+пройдено Reload_DelayedMissingDecisionIsAwaitedBeforeLifecycleFinalSave (2ms)
+пройдено Reload_PreservesDirtyFieldsAndEditsDuringReadWithoutWriting (45ms)
+пройдено Reload_WaitsForRunningAutosaveEvenIfItFails(False) (3ms)
+пройдено Reload_WaitsForRunningAutosaveEvenIfItFails(True) (2ms)
+пройдено Reload_MissingPreservesTextAndCannotResurrectOnSeal (2ms)
+пройдено Reload_LateResultAfterDisposalCannotUpdateCard (10ms)
+пройдено Reload_UnknownOutcomeReadsActualStatusWithoutRetryOrDuplicateHistory (3ms)
+пройдено StatusFailure_ReportsSafeSpecificCause(ValidationFailed, TaskStatusGraphInvalid) (1ms)
+пройдено StatusFailure_ReportsSafeSpecificCause(ExecutionStateDenied, TaskStatusAgentActive) (0ms)
+пройдено StatusFailure_ReportsSafeSpecificCause(DescriptionMarkerConflict, TaskStatusMarkerInvalid) (0ms)
+пройдено StatusOperation_IsIncludedInSealAndNewOperationIsRejectedAfterSeal (8ms)
+пройдено StatusOptionSetter_RoutesThroughTrackedCommandWithoutOptimisticMutation (3ms)
+пройдено StatusOptionSetter_ArchiveConfirmationCascadesOnlyActiveContainedTasks (4ms)
+пройдено StatusOptionSetter_ArchiveDeclinedLeavesContainedTasksUnchanged (2ms)
+пройдено DelayedStatusResult_DoesNotOverwriteNewerStorageGeneration (2ms)
+пройдено StatusPreview_DistinguishesAndPrioritizesContainedDirectAndInheritedBlockers (5ms)
+HTML test report written to: <worktree>\src\Unlimotion.Test\bin\Debug\net10.0\TestResults\Unlimotion.Test-windows-net10.0-report.html
+
+  Созданные в процессе артефакты файлов:
+    - <worktree>\src\Unlimotion.Test\bin\Debug\net10.0\TestResults\Unlimotion.Test-windows-net10.0-report.html
+    - <worktree>\src\Unlimotion.Test\bin\Debug\net10.0\TestResults\Kibnet_DESKTOP-AUDO1TJ_2026-10-03_19_48_43.0145973.trx
+
+Сводка тестового запуска: Пройден! - <worktree>\src\Unlimotion.Test\bin\Debug\net10.0\Unlimotion.Test.dll (net10.0|x64)
+  всего: 41
+  сбой: 0
+  успешно выполнено: 41
+  пропущено: 0
+  длительность: 4s 475ms

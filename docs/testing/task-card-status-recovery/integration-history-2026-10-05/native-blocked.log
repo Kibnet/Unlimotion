@@ -1,0 +1,25 @@
+
+████████╗██╗   ██╗███╗   ██╗██╗████████╗
+╚══██╔══╝██║   ██║████╗  ██║██║╚══██╔══╝
+   ██║   ██║   ██║██╔██╗ ██║██║   ██║
+   ██║   ██║   ██║██║╚██╗██║██║   ██║
+   ██║   ╚██████╔╝██║ ╚████║██║   ██║
+   ╚═╝    ╚═════╝ ╚═╝  ╚═══╝╚═╝   ╚═╝
+
+   TUnit v1.44.0.0 | 64-bit | Microsoft Windows 10.0.22631 | win-x64 | .NET 10.0.12 | Microsoft Testing Platform v2.2.2
+
+   Engine Mode: SourceGenerated
+
+пройдено StatusContract_RussianDarkBlocked (11s 425ms)
+HTML test report written to: <workspace>\artifacts\status-recovery\integration-history-2026-10-05\native-blocked\Unlimotion.UiTests.FlaUI-windows-net10.0-report.html
+
+  Созданные в процессе артефакты файлов:
+    - <workspace>\artifacts\status-recovery\integration-history-2026-10-05\native-blocked\Unlimotion.UiTests.FlaUI-windows-net10.0-report.html
+    - <workspace>\artifacts\status-recovery\integration-history-2026-10-05\native-blocked\<user>_<machine>_2026-10-05_15_06_59.9870930.trx
+
+Сводка тестового запуска: Пройден! - <workspace>\tests\Unlimotion.UiTests.FlaUI\bin\Debug\net10.0-windows7.0\Unlimotion.UiTests.FlaUI.dll (net10.0|x64)
+  всего: 1
+  сбой: 0
+  успешно выполнено: 1
+  пропущено: 0
+  длительность: 40s 361ms

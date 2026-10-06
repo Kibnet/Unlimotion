@@ -1,0 +1,32 @@
+
+████████╗██╗   ██╗███╗   ██╗██╗████████╗
+╚══██╔══╝██║   ██║████╗  ██║██║╚══██╔══╝
+   ██║   ██║   ██║██╔██╗ ██║██║   ██║
+   ██║   ██║   ██║██║╚██╗██║██║   ██║
+   ██║   ╚██████╔╝██║ ╚████║██║   ██║
+   ╚═╝    ╚═════╝ ╚═╝  ╚═══╝╚═╝   ╚═╝
+
+   TUnit v1.44.0.0 | 64-bit | Microsoft Windows 10.0.22631 | win-x64 | .NET 10.0.12 | Microsoft Testing Platform v2.2.2
+
+   Engine Mode: SourceGenerated
+
+сбой Reload_MissingRejectsSavedSnapshotWhoseLoadStartedBeforeDeletion (504ms)
+  TUnit.Engine.Exceptions.TestFailedException: [Test Failure] AssertionException: Expected to be false
+  but found True
+
+  at Assert.That(unified.Tasks.Lookup(task.Id).HasValue).IsFalse()
+    в Unlimotion.Test.UnifiedTaskStorageStatusCommandTests.Reload_MissingRejectsSavedSnapshotWhoseLoadStartedBeforeDeletion() в <workspace>\src\Unlimotion.Test\UnifiedTaskStorageStatusCommandTests.cs:87
+    в Unlimotion.Test.UnifiedTaskStorageStatusCommandTests.Reload_MissingRejectsSavedSnapshotWhoseLoadStartedBeforeDeletion()
+       --- TUnit internals omitted (run with --detailed-stacktrace for full trace) ---
+HTML test report written to: <workspace>\artifacts\status-recovery\pre-merge-2026-10-05\red-late-saved\Unlimotion.Test-windows-net10.0-report.html
+
+  Созданные в процессе артефакты файлов:
+    - <workspace>\artifacts\status-recovery\pre-merge-2026-10-05\red-late-saved\Unlimotion.Test-windows-net10.0-report.html
+    - <workspace>\artifacts\status-recovery\pre-merge-2026-10-05\red-late-saved\<user>_<machine>_2026-10-05_17_57_46.6508584.trx
+
+Сводка тестового запуска: Сбой! - <workspace>\src\Unlimotion.Test\bin\Debug\net10.0\Unlimotion.Test.dll (net10.0|x64)
+  всего: 1
+  сбой: 1
+  успешно выполнено: 0
+  пропущено: 0
+  длительность: 1s 329ms
