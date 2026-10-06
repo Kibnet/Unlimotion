@@ -1,8 +1,33 @@
 # Восстановление смены статуса из карточки
 
-Проверено на синтетических задачах 2–5 октября 2026 года, Windows x64, .NET SDK 10.0.401, Avalonia 12.0.4 и TUnit 1.44.0. Исходные прогоны использовали AppAutomation 1.6.0, интеграция свежего main — 1.9.0. Установленное приложение и пользовательское хранилище не изменялись. Точная причина индивидуального отказа пользователя не установлена.
+Проверено на синтетических задачах 2–6 октября 2026 года, Windows x64, .NET SDK 10.0.401, Avalonia 12.0.4 и TUnit 1.44.0. Исходные прогоны использовали AppAutomation 1.6.0, интеграция свежего main — 1.9.0. Установленное приложение и пользовательское хранилище не изменялись. Точная причина индивидуального отказа пользователя не установлена.
 
 Согласованный контракт и post-EXEC review: [SPEC](../../../specs/2026-10-02-task-card-status-recovery.md).
+
+## Возобновление native проверки, 6 октября
+
+Input desktop теперь доступен, Win32 error0. Published checkpoint `6a7b45fb` имеет exact-head CI **1274/1274 Main +55/55 Headless PASS**, Android и CodeQL SUCCESS: [Tests](https://github.com/Kibnet/Unlimotion/actions/runs/37364841005), [Android](https://github.com/Kibnet/Unlimotion/actions/runs/37364840983), [CodeQL](https://github.com/Kibnet/Unlimotion/actions/runs/37364841010). Original CI checkout `c9d31e42` имеет parents main9150+PR6a, treeb92f точно совпадает с branch tree; exit0, clean, 0 FAIL/SKIP. Это CI предыдущей опубликованной головы; новый native adapter требует fresh final-head CI.
+
+| Native invocation / source | Итог | Evidence |
+| --- | --- | --- |
+| Recovery повтор / clean6a | **0/1 FAIL**, physical hit не достиг status button после Reload; file/text read-back до отказа прошёл | [Лог](pre-merge-2026-10-05/native-recovery-repeat.log) |
+| RU Dark future и blocked / clean6a | **1/1 +1/1 PASS**, настоящий owned blocker tooltip | [Future](pre-merge-2026-10-05/native-future.log), [blocked](pre-merge-2026-10-05/native-blocked.log) |
+| Terminal / clean6a | **0/1 FAIL в BeforeTest**: placement1280x800physical против actual2880x1497 на основном4K мониторе; product flow не начат | [Лог](pre-merge-2026-10-05/native-terminal.log) |
+| Recovery / clean3566320d, envprimary | **1/1 PASS**: error clear, unchanged JSON/text после Reload, NotReady/history+1 после явного retry; preparation scroll branch не выполнялась | [Лог](pre-merge-2026-10-05/native-recovery-viewport.log), [observations](pre-merge-2026-10-05/native-status-contract-recovery-observations.png.json) |
+| Future / clean3566320d, envprimary | **0/1 FAIL**, PointerInterferenceException: другая программа закрыла target или владела foreground | [Лог](pre-merge-2026-10-05/native-future-viewport.log) |
+| Финальные четыре flow + clipped-header regression / e094ae89 | **PENDING**: требуется короткий промежуток без переключения окон/движения мыши | [Manifest и pendingStages](pre-merge-2026-10-05/validation-snapshot.json) |
+
+Новый native adapter сначала проверяет фактическое нахождение status button в собственной details viewport. Если header clipped, ScrollPattern возвращает его к началу; bounded fresh geometry проверяется до неизменённого DesktopPointer.Click с обязательным physical hit/owner guard. UIA может сообщать IsOffscreen=false при ancestor clipping; это объясняет соответствие первого отказа кадру, но causal confirmation новой preparation branch пока отсутствует. Адресный native-only тест намеренно клипует header и требует положительную геометрию, increment собственного preparation count, реально открытый picker и полностью видимый заголовок; per-test PNG/JSON не смешиваются между cases. Source re-review PASS, найденный MEDIUM coverage gap CLOSED; фактический sandbox danger-full-access/approval never, adversarial fallback только чтением, без enforced read-only.
+
+Для финального запуска выбран существующий `UNLIMOTION_AUTOMATION_DESKTOP_MONITOR=primary`: fixture800x400logical, размещение в центре основного монитора с сохранением текущего physical size. Проверка размещения/принадлежности монитору сохраняется; это не подтверждение1280x800physical. Display settings не меняются. Native harness пересобран, его binaries отличаются от checkpoint5октября; production/Main/Headless/Authoring/TestHost source неизменен. Финальная сборка candidate e094 —4 existing warnings/0 errors; промежуточные incremental builds0/0 сохранены отдельно. Все hashes/heads/counters относятся к собственной invocation.
+
+Просмотрены новые recovery error/retry кадры356 и future/blocked6a. Ни один из них не выдан за результат final harness e094. Подтверждённой before/after MP4 pair по-прежнему нет: прежние FPS/readiness/ffmpeg failures; fallback — automated native PNG + JSON/text read-back + original TRX.
+
+![Reload первым пунктом меню после реального отказа](pre-merge-2026-10-05/status-contract-recovery-error.png)
+
+![Состояние после явного повторного выбора статуса](pre-merge-2026-10-05/status-contract-recovery-after-retry.png)
+
+Все owned full/native процессы завершены, слот освобождён. **Ready/merge gate OPEN:** final native5 на одном adapter/hash и exact final-head CI. Пользователь прямо разрешил слияние; ожидается доступность спокойного desktop interval, повторное merge approval не требуется. Original environment/hit/placement/interference failures и прежние результаты ниже сохранены отдельно.
 
 ## Проверка перед слиянием: исправления review, 5 октября
 

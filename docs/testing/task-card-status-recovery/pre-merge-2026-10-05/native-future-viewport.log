@@ -1,0 +1,37 @@
+
+████████╗██╗   ██╗███╗   ██╗██╗████████╗
+╚══██╔══╝██║   ██║████╗  ██║██║╚══██╔══╝
+   ██║   ██║   ██║██╔██╗ ██║██║   ██║
+   ██║   ██║   ██║██║╚██╗██║██║   ██║
+   ██║   ╚██████╔╝██║ ╚████║██║   ██║
+   ╚═╝    ╚═════╝ ╚═╝  ╚═══╝╚═╝   ╚═╝
+
+   TUnit v1.44.0.0 | 64-bit | Microsoft Windows 10.0.22631 | win-x64 | .NET 10.0.12 | Microsoft Testing Platform v2.2.2
+
+   Engine Mode: SourceGenerated
+
+сбой StatusContract_RussianDarkFuture (763ms)
+  TUnit.Engine.Exceptions.TestFailedException: [Test Failure] PointerInterferenceException: The pointer target is covered by another application or no longer owns the foreground window.
+    в AppAutomation.FlaUI.Input.DesktopPointerTarget.ValidateOwner(Point point)
+    в AppAutomation.FlaUI.Input.DesktopPointerTarget.ValidateOwner()
+    в AppAutomation.FlaUI.Input.DesktopPointerTargetResolver.Resolve(Func`1 resolve, Boolean requireEnabled, Action`1 prepare, Func`2 pointFactory, Nullable`1 expectedProcessId, Boolean allowPreparation)
+    в AppAutomation.FlaUI.Input.DesktopPointer.<>c__DisplayClass14_0.<ClickCore>b__0(PointerOperation operation)
+    в AppAutomation.FlaUI.Input.DesktopPointerController.RunAsync(String kind, TimeSpan timeout, Func`2 action, CancellationToken cancellationToken, PointerSession session)
+    в AppAutomation.FlaUI.Input.DesktopPointerController.RunAsync(String kind, TimeSpan timeout, Func`2 action, CancellationToken cancellationToken, PointerSession session)
+    в AppAutomation.FlaUI.Input.DesktopPointer.Click(AutomationElement target, PointerClickOptions options)
+    в Unlimotion.UiTests.FlaUI.Tests.MainWindowFlaUiTests.ClickMainWindowElement(String automationId) в <workspace>\tests\Unlimotion.UiTests.FlaUI\Tests\MainWindowFlaUiTests.cs:638
+    в Unlimotion.UiTests.FlaUI.Tests.MainWindowFlaUiTests.OpenStatusPicker() в <workspace>\tests\Unlimotion.UiTests.FlaUI\Tests\MainWindowFlaUiTests.cs:135
+    в Unlimotion.UiTests.FlaUI.Tests.MainWindowFlaUiTests.StatusContract_RussianDarkFuture() в <workspace>\tests\Unlimotion.UiTests.FlaUI\Tests\MainWindowFlaUiTests.cs:254
+       --- TUnit internals omitted (run with --detailed-stacktrace for full trace) ---
+HTML test report written to: <workspace>\artifacts\status-recovery\pre-merge-2026-10-05\native-future-viewport\Unlimotion.UiTests.FlaUI-windows-net10.0-report.html
+
+  Созданные в процессе артефакты файлов:
+    - <workspace>\artifacts\status-recovery\pre-merge-2026-10-05\native-future-viewport\Unlimotion.UiTests.FlaUI-windows-net10.0-report.html
+    - <workspace>\artifacts\status-recovery\pre-merge-2026-10-05\native-future-viewport\<user>_<machine>_2026-10-06_06_54_16.9511405.trx
+
+Сводка тестового запуска: Сбой! - <workspace>\tests\Unlimotion.UiTests.FlaUI\bin\Debug\net10.0-windows7.0\Unlimotion.UiTests.FlaUI.dll (net10.0|x64)
+  всего: 1
+  сбой: 1
+  успешно выполнено: 0
+  пропущено: 0
+  длительность: 30s 696ms
