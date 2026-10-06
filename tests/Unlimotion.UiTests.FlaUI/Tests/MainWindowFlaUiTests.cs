@@ -131,12 +131,94 @@ public sealed class MainWindowFlaUiTests
 
     protected override void OpenStatusPicker()
     {
+        PrepareStatusButtonInDetailsViewport();
         ClickMainWindowElement("CurrentTaskStatusButton");
         _ = WaitUntil(
             IsAnyStatusOptionVisible,
             static visible => visible,
             timeout: TimeSpan.FromSeconds(10),
             timeoutMessage: "Status picker did not expose its first non-current option.");
+    }
+
+    private void PrepareStatusButtonInDetailsViewport()
+    {
+        var conditions = Session.Inner.ConditionFactory;
+        var viewport = WaitUntil(
+            () => Session.Inner.MainWindow.FindFirstDescendant(
+                conditions.ByAutomationId("CurrentTaskDetailsScrollViewer")),
+            control => control is not null && control.BoundingRectangle.Width > 0,
+            timeout: TimeSpan.FromSeconds(30),
+            timeoutMessage: "Task details viewport was unavailable.")!;
+        var button = WaitUntil(
+            () => Session.Inner.MainWindow.FindFirstDescendant(
+                conditions.ByAutomationId("CurrentTaskStatusButton")),
+            control => control is not null && control.IsEnabled && control.BoundingRectangle.Width > 0,
+            timeout: TimeSpan.FromSeconds(30),
+            timeoutMessage: "Task status button was unavailable.")!;
+        var viewportBounds = viewport.BoundingRectangle;
+        var beforeBounds = button.BoundingRectangle;
+        if (IsInsideViewport(button)) return;
+        var beforeHit = ObserveCenterHit(button);
+
+        // UIA can report IsOffscreen=false for a header clipped by this ancestor.
+        // Prepare the owned viewport; status activation still uses a physical hit test.
+        var artifacts = Environment.GetEnvironmentVariable(ArtifactDirectoryEnvironmentVariable);
+        if (!string.IsNullOrWhiteSpace(artifacts))
+            CaptureStatusContractScreenshot(Path.Combine(artifacts, "status-contract-clipped-before-scroll.png"));
+        var scroll = viewport.Patterns.Scroll.PatternOrDefault
+            ?? throw new InvalidOperationException("Clipped task status has no scrollable details viewport.");
+        scroll.SetScrollPercent(-1, 0);
+        button = WaitUntil(
+            () => Session.Inner.MainWindow.FindFirstDescendant(
+                conditions.ByAutomationId("CurrentTaskStatusButton")),
+            control => control is not null && IsInsideViewport(control),
+            timeout: TimeSpan.FromSeconds(5),
+            timeoutMessage: "Task status button stayed clipped after preparing its details viewport.")!;
+        if (!string.IsNullOrWhiteSpace(artifacts))
+        {
+            CaptureStatusContractScreenshot(Path.Combine(artifacts, "status-contract-visible-after-scroll.png"));
+            File.WriteAllText(Path.Combine(artifacts, "status-contract-viewport-preparation.json"),
+                System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    BeforeButton = beforeBounds,
+                    BeforeCenterHit = beforeHit,
+                    Viewport = viewportBounds,
+                    AfterButton = button.BoundingRectangle,
+                    AfterCenterHit = ObserveCenterHit(button),
+                    Prepared = true
+                }));
+        }
+
+        bool IsInsideViewport(AutomationElement control)
+        {
+            var bounds = control.BoundingRectangle;
+            var visible = viewport.BoundingRectangle;
+            return bounds.Width > 0 && bounds.Height > 0 &&
+                   bounds.Left >= visible.Left && bounds.Top >= visible.Top &&
+                   bounds.Right <= visible.Right && bounds.Bottom <= visible.Bottom;
+        }
+
+        object ObserveCenterHit(AutomationElement control)
+        {
+            var bounds = control.BoundingRectangle;
+            var point = new System.Drawing.Point(
+                (int)(bounds.Left + bounds.Width / 2), (int)(bounds.Top + bounds.Height / 2));
+            var hit = control.Automation.FromPoint(point);
+            var targetOrDescendant = false;
+            for (var current = hit; current is not null; current = current.Parent)
+            {
+                if (!current.Equals(control)) continue;
+                targetOrDescendant = true;
+                break;
+            }
+            return new
+            {
+                point.X, point.Y,
+                HitAutomationId = hit?.Properties.AutomationId.ValueOrDefault,
+                HitProcessId = hit?.Properties.ProcessId.ValueOrDefault,
+                TargetOrDescendant = targetOrDescendant
+            };
+        }
     }
 
     protected override StatusContractOptionObservation ObserveOpenStatusOption(string automationId)
