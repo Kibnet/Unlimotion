@@ -230,6 +230,8 @@ public class MainControlFilterToolbarResponsiveUiTests
             try
             {
                 var vm = fixture.MainWindowViewModelTest;
+                var probe = new RootNotificationProbe();
+                vm.RootCollectionFactory = () => probe;
                 await vm.Connect();
                 await SealControlledSourceSaves(vm);
                 vm.AllTasksMode = true;
@@ -284,6 +286,8 @@ public class MainControlFilterToolbarResponsiveUiTests
                 PressKey(window, Key.Escape, PhysicalKey.Escape);
                 RunLayoutJobs();
                 await Assert.That(IsEmojiDropDownOpen(control)).IsFalse();
+                probe.RecordQuiescentSnapshot(vm.CurrentAllTasksItems);
+                await probe.AssertUiDeliveryAsync();
             }
             finally
             {
@@ -1551,7 +1555,7 @@ public class MainControlFilterToolbarResponsiveUiTests
         }
     }
 
-    private static async Task PrepareEmojiFilterData(MainWindowViewModel vm)
+    internal static async Task PrepareEmojiFilterData(MainWindowViewModel vm)
     {
         var titlesById = new (string TaskId, string Title)[]
         {

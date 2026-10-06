@@ -10,6 +10,7 @@ using System.Linq;
 using System.Reactive.Concurrency;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using Unlimotion.ViewModel.Search;
@@ -36,6 +37,8 @@ namespace Unlimotion.ViewModel
     {
         public bool IsInitialized { get; private set; }
         private DisposableList connectionDisposableList = new DisposableListRealization();
+        internal Func<ObservableCollectionExtended<TaskWrapperViewModel>>? RootCollectionFactory { get; set; }
+        internal IScheduler? EmojiSearchRefreshScheduler { get; set; }
         private bool _isCompletedTabInitialized;
         private bool _isArchivedTabInitialized;
         private bool _isInProgressTabInitialized;
@@ -1095,10 +1098,11 @@ namespace Unlimotion.ViewModel
             #region Roots
 
             var wasAllTasksSearchActive = false;
+            var rootItems = RootCollectionFactory?.Invoke() ?? new ObservableCollectionExtended<TaskWrapperViewModel>();
             var emojiRootFilter = _emojiFilters.ToObservableChangeSet()
                 .AutoRefreshOnObservable(filter => filter.WhenAnyValue(e => e.ShowTasks))
                 .AutoRefreshOnObservable(filter => this.Search.WhenAnyValue(s => s.SearchText)
-                    .Throttle(TimeSpan.FromMilliseconds(SearchDefinition.DefaultThrottleMs))
+                    .Throttle(TimeSpan.FromMilliseconds(SearchDefinition.DefaultThrottleMs), EmojiSearchRefreshScheduler ?? DefaultScheduler.Instance)
                     .DistinctUntilChanged())
                 .ToCollection()
                 .Select(filter =>
@@ -1165,7 +1169,7 @@ namespace Unlimotion.ViewModel
                     return (Func<TaskItemViewModel, bool>)Predicate;
                 });
 
-            taskRepository.Tasks
+            var rootChanges = taskRepository.Tasks
                 .Connect()
                 .AutoRefreshOnObservable(m => m.Parents.ToObservableChangeSet())
                 .AutoRefreshOnObservable(m => m.WhenAny(
@@ -1190,12 +1194,13 @@ namespace Unlimotion.ViewModel
                     return wrapper;
                 })
                 .Sort(sortObservable)
-                .TreatMovesAsRemoveAdd()
+                .TreatMovesAsRemoveAdd();
+
+            DeliverRootProjection(rootChanges, RxSchedulers.MainThreadScheduler, Environment.CurrentManagedThreadId)
                 // Use the current-thread trampoline so the initial projection remains synchronous,
                 // while a task edit raised from CollectionChanged is queued until the current
                 // notification completes. This prevents nested Avalonia container mutations.
-                .ObserveOn(CurrentThreadScheduler.Instance)
-                .Bind(out _currentItems, resetThreshold: 1)
+                .Bind(rootItems, new SortedObservableCollectionAdaptor<TaskWrapperViewModel, string>(1))
                 .Subscribe(_ =>
                 {
                     var isSearchActive = !string.IsNullOrWhiteSpace(Search.SearchText);
@@ -1212,6 +1217,7 @@ namespace Unlimotion.ViewModel
                 })
                 .AddToDispose(connectionDisposableList);
 
+            _currentItems = new ReadOnlyObservableCollection<TaskWrapperViewModel>(rootItems);
             CurrentAllTasksItems = _currentItems;
 
             #endregion Roots
@@ -2862,6 +2868,9 @@ namespace Unlimotion.ViewModel
         private ReadOnlyObservableCollection<TaskWrapperViewModel> _currentItems = EmptyTaskWrappers;
         private TaskItemViewModel? _lastSelectedAllTasksItem;
         public ReadOnlyObservableCollection<TaskWrapperViewModel> CurrentAllTasksItems { get; set; }
+
+        internal static IObservable<T> DeliverRootProjection<T>(IObservable<T> source, IScheduler uiScheduler, int uiThreadId) =>
+            source.ObserveOn(CurrentThreadScheduler.Instance);
 
         private ReadOnlyObservableCollection<TaskWrapperViewModel> _unlockedItems = EmptyTaskWrappers;
         public ReadOnlyObservableCollection<TaskWrapperViewModel> UnlockedItems { get; set; }
