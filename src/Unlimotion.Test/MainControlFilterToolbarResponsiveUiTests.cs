@@ -429,6 +429,9 @@ public class MainControlFilterToolbarResponsiveUiTests
         }, CancellationToken.None);
     }
 
+    internal static MainWindowViewModelFixture CreateControlledEmojiFixture() => new(path =>
+        new UnifiedTaskStorage(new global::Unlimotion.TaskTree.TaskTreeManager(new FileStorage(path, watcher: false))));
+
     private static async Task SealControlledSourceSaves(MainWindowViewModel vm)
     {
         // These controlled scenarios own the upstream delivery schedule, not disk persistence.

@@ -40,6 +40,7 @@ namespace Unlimotion.ViewModel
         internal Func<ObservableCollectionExtended<TaskWrapperViewModel>>? RootCollectionFactory { get; set; }
         internal IScheduler? EmojiSearchRefreshScheduler { get; set; }
         internal IScheduler? RootUiDeliveryScheduler { get; set; }
+        internal IScheduler? RootSelectionRestoreScheduler { get; set; }
         internal Action<string, long>? RootDeliveryTrace { get; set; }
         private bool _isCompletedTabInitialized;
         private bool _isArchivedTabInitialized;
@@ -2818,10 +2819,11 @@ namespace Unlimotion.ViewModel
         private bool RestoreCurrentAllTasksSelectionAfterSearchClear()
         {
             var restored = RestoreCurrentAllTasksSelection(useLastSelectedFallback: true);
-            RxSchedulers.MainThreadScheduler.Schedule(() =>
+            var retryScheduler = RootSelectionRestoreScheduler ?? RxSchedulers.MainThreadScheduler;
+            retryScheduler.Schedule(() =>
                 RestoreCurrentAllTasksSelection(useLastSelectedFallback: true));
             // TreeView can clear SelectedItem after processing search-clear collection changes.
-            RxSchedulers.MainThreadScheduler.Schedule(TimeSpan.FromMilliseconds(50), () =>
+            retryScheduler.Schedule(TimeSpan.FromMilliseconds(50), () =>
                 RestoreCurrentAllTasksSelection(useLastSelectedFallback: true));
             return restored;
         }

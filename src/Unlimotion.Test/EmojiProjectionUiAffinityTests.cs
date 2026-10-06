@@ -11,10 +11,12 @@ using System.Reactive.Subjects;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Headless;
+using Avalonia.Controls;
 using Avalonia.Threading;
 using DynamicData.Binding;
 using TUnit.Assertions.Exceptions;
 using Unlimotion.ViewModel;
+using Unlimotion.Views;
 
 namespace Unlimotion.Test;
 
@@ -22,6 +24,97 @@ namespace Unlimotion.Test;
 [ParallelLimiter<SharedUiStateParallelLimit>]
 public class EmojiProjectionUiAffinityTests
 {
+    [Test]
+    public async Task RootProjection_ClearSearchLateWorkerBatch_RestoresCanonicalNestedSelection()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            await using var fixture = MainControlFilterToolbarResponsiveUiTests.CreateControlledEmojiFixture();
+            var vm = fixture.MainWindowViewModelTest;
+            var timer = new ControlledRootScheduler();
+            var retries = new ControlledRootScheduler();
+            var probe = new RootNotificationProbe();
+            vm.EmojiSearchRefreshScheduler = timer;
+            vm.RootSelectionRestoreScheduler = retries;
+            vm.RootCollectionFactory = () => probe;
+            vm.RootDeliveryTrace = probe.TraceBatch;
+            await vm.Connect();
+            await Task.WhenAll(vm.taskRepository!.Tasks.Items.Select(item => item.SealPendingSaves()));
+            vm.AllTasksMode = true;
+            vm.DetailsAreOpen = false;
+            var parent = TestHelpers.GetTask(vm, MainWindowViewModelFixture.RootTask2Id);
+            var child = TestHelpers.GetTask(vm, MainWindowViewModelFixture.SubTask22Id);
+            parent.Title = "Search parent";
+            child.Title = "Unique search target";
+            var view = new MainControl { DataContext = vm };
+            var window = new Window { Content = view, Width = 900, Height = 600 };
+            try
+            {
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+                var tree = view.FindControl<TreeView>("AllTasksTree")!;
+                vm.Search.SearchText = "Unique search target";
+                timer.RunAll();
+                await Assert.That(await TestHelpers.WaitUntilAsync(
+                    () => vm.CurrentAllTasksItems.Any(item => item.TaskItem.Id == child.Id), TimeSpan.FromSeconds(5))).IsTrue();
+                var searchWrapper = vm.CurrentAllTasksItems.Single(item => item.TaskItem.Id == child.Id);
+                tree.SelectedItem = searchWrapper;
+                vm.CurrentAllTasksItem = searchWrapper;
+                vm.CurrentTaskItem = null;
+                vm.Search.SearchText = string.Empty;
+                // Keep the emoji stage's old search predicate while the UI top stage clears.
+                await Assert.That(await TestHelpers.WaitUntilAsync(() =>
+                    vm.CurrentAllTasksItems.Any(item => item.TaskItem.Id == parent.Id) &&
+                    vm.CurrentAllTasksItems.Any(item => ReferenceEquals(item, searchWrapper)), TimeSpan.FromSeconds(5))).IsTrue();
+                retries.RunAll(); // Both legacy retries complete before the late worker stage.
+                probe.RecordQuiescentSnapshot(vm.CurrentAllTasksItems);
+                probe.ClearEvents();
+                await Task.Run(timer.RunAll).WaitAsync(TimeSpan.FromSeconds(10));
+                await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
+                var nested = vm.FindTaskWrapperViewModel(child, vm.CurrentAllTasksItems);
+                await Assert.That(nested).IsNotNull();
+                await Assert.That(ReferenceEquals(nested, searchWrapper)).IsFalse();
+                await Assert.That(ReferenceEquals(vm.CurrentAllTasksItem, nested)).IsTrue();
+                await Assert.That(ReferenceEquals(tree.SelectedItem, nested)).IsTrue();
+                probe.RecordQuiescentSnapshot(vm.CurrentAllTasksItems);
+                await probe.AssertUiDeliveryAsync();
+            }
+            finally { window.Close(); }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task RootProjection_SealedEditorLateDiskRefresh_ChangesTitleAndEmojiOnSameTask()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            await using var fixture = new MainWindowViewModelFixture();
+            var vm = fixture.MainWindowViewModelTest;
+            await vm.Connect();
+            await Task.WhenAll(vm.taskRepository!.Tasks.Items.Select(item => item.SealPendingSaves()));
+            var original = TestHelpers.GetTask(vm, MainWindowViewModelFixture.RootTask3Id);
+            var diskTitle = original.Title;
+            original.Title = "🧰 Beta tools target";
+            await Assert.That(vm.EmojiExcludeFilters.Any(filter => filter.Emoji == "🧰")).IsTrue();
+            var storage = (FileStorage)vm.taskRepository.TaskTreeManager.Storage;
+            storage.Watcher!.ForceUpdateFile(original.Id, global::Unlimotion.TaskTree.UpdateType.Saved);
+            await Assert.That(await TestHelpers.WaitUntilAsync(() => original.Title == diskTitle,
+                TimeSpan.FromSeconds(5))).IsTrue();
+            var current = TestHelpers.GetTask(vm, original.Id);
+            TestExecutionTrace.Write("emoji-data", "late-disk-refresh", "observed", details: new
+            {
+                current.Id, current.Title, current.Emoji,
+                sameIdentity = ReferenceEquals(current, original), diskTitle,
+                keys = vm.EmojiExcludeFilters.Select(filter => filter.Emoji).ToArray()
+            });
+            await Assert.That(ReferenceEquals(current, original)).IsTrue();
+            await Assert.That(current.Emoji).IsEqualTo(string.Empty);
+            await Assert.That(vm.EmojiExcludeFilters.Any(filter => filter.Emoji == "🧰")).IsFalse();
+        }, CancellationToken.None);
+    }
+
     [Test]
     public async Task RootReplay_UnknownResetCannotHideBadIndexBeforeKnownReset()
     {
