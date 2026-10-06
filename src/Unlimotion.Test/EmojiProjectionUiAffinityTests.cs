@@ -57,28 +57,42 @@ public class EmojiProjectionUiAffinityTests
                 vm.Search.SearchText = "Unique search target";
                 timer.RunAll();
                 await Assert.That(await TestHelpers.WaitUntilAsync(
-                    () => vm.CurrentAllTasksItems.Any(item => item.TaskItem.Id == child.Id), TimeSpan.FromSeconds(5))).IsTrue();
+                    () => vm.CurrentAllTasksItems.Count == 1 && vm.CurrentAllTasksItems[0].TaskItem.Id == child.Id,
+                    TimeSpan.FromSeconds(5))).IsTrue();
                 var searchWrapper = vm.CurrentAllTasksItems.Single(item => item.TaskItem.Id == child.Id);
                 tree.SelectedItem = searchWrapper;
                 vm.CurrentAllTasksItem = searchWrapper;
                 vm.CurrentTaskItem = null;
+                RecordSelection("search-established");
                 vm.Search.SearchText = string.Empty;
                 // Keep the emoji stage's old search predicate while the UI top stage clears.
                 await Assert.That(await TestHelpers.WaitUntilAsync(() =>
                     vm.CurrentAllTasksItems.Any(item => item.TaskItem.Id == parent.Id) &&
                     vm.CurrentAllTasksItems.Any(item => ReferenceEquals(item, searchWrapper)), TimeSpan.FromSeconds(5))).IsTrue();
                 retries.RunAll(); // Both legacy retries complete before the late worker stage.
+                RecordSelection("ui-clear-before-worker");
                 probe.RecordQuiescentSnapshot(vm.CurrentAllTasksItems);
                 probe.ClearEvents();
                 await Task.Run(timer.RunAll).WaitAsync(TimeSpan.FromSeconds(10));
                 await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
                 var nested = vm.FindTaskWrapperViewModel(child, vm.CurrentAllTasksItems);
+                RecordSelection("after-late-worker");
                 await Assert.That(nested).IsNotNull();
                 await Assert.That(ReferenceEquals(nested, searchWrapper)).IsFalse();
                 await Assert.That(ReferenceEquals(vm.CurrentAllTasksItem, nested)).IsTrue();
                 await Assert.That(ReferenceEquals(tree.SelectedItem, nested)).IsTrue();
                 probe.RecordQuiescentSnapshot(vm.CurrentAllTasksItems);
                 await probe.AssertUiDeliveryAsync();
+
+                void RecordSelection(string phase) => TestExecutionTrace.Write("emoji-selection", phase, "observed", details: new
+                {
+                    vm.Search.SearchText,
+                    rootIds = vm.CurrentAllTasksItems.Select(item => item.Id).ToArray(),
+                    currentId = vm.CurrentAllTasksItem?.Id,
+                    currentIsSearchWrapper = ReferenceEquals(vm.CurrentAllTasksItem, searchWrapper),
+                    treeId = (tree.SelectedItem as TaskWrapperViewModel)?.Id,
+                    treeIsSearchWrapper = ReferenceEquals(tree.SelectedItem, searchWrapper)
+                });
             }
             finally { window.Close(); }
         }, CancellationToken.None);
