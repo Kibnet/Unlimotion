@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia.Threading;
 using Unlimotion.Notes.Daily;
 using Unlimotion.Notes.Identity;
 using Unlimotion.Notes.Markdown;
@@ -187,6 +188,19 @@ public sealed class FeedCaptureRecoveryUiTests
             await Assert.That(feed.HasError).IsTrue();
             await Assert.That(feed.QuickCaptureText).IsEqualTo("Единственный черновик");
             target.Fail = false;
+            // The failed append can trigger a watcher refresh. Retry only when
+            // its real UI command is enabled, without clearing recovery/error state.
+            var retryDeadline = DateTime.UtcNow.AddSeconds(5);
+            while (!feed.CanCapture && DateTime.UtcNow < retryDeadline)
+            {
+                await Task.Delay(20);
+                Dispatcher.UIThread.RunJobs();
+            }
+            if (!feed.CanCapture)
+                throw new TimeoutException($"Capture retry never became enabled: IsBusy={feed.IsBusy}, " +
+                    $"CanCapture={feed.CanCapture}, HasError={feed.HasError}, ErrorMessage={feed.ErrorMessage}, " +
+                    $"HasPendingRecoveries={feed.HasPendingRecoveries}, Attempts={target.AttemptIds.Count}, " +
+                    $"Draft={feed.QuickCaptureText}");
             await feed.CaptureTaskAsync();
             await Assert.That(feed.HasError).IsFalse();
             await Assert.That(feed.HasQuickCaptureCreatedTask).IsTrue();

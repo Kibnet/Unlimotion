@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Linq;
@@ -12,9 +13,11 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
 using Unlimotion.ViewModel;
 using Unlimotion.ViewModel.Localization;
 using Unlimotion.ViewModel.Workspace;
+using Unlimotion.ViewModel.Feed;
 using ReactiveUI;
 
 namespace Unlimotion.Views;
@@ -40,9 +43,18 @@ public sealed class WorkspacePaneView : Border, IDisposable
         Content = "⌄", MinWidth = 44, MinHeight = 44, FontSize = 17
     };
     private readonly Border headerBorder = new();
-    private readonly MainControl tasksView;
+    private TaskPresentationControl? tasksView;
+    private string? taskObjectKey;
+    private IDisposable? taskTitleSubscription;
+    private ITaskStorage? observedTaskRepository;
+    private IDisposable? taskRepositorySubscription;
     private readonly FeedControl feedView;
     private readonly Grid routeContent = new();
+    private readonly TextBlock unavailableTask = new()
+    {
+        Text = Localization.Get("TaskDeepLinkTaskNotFound"), Margin = new Thickness(24), TextWrapping = TextWrapping.Wrap,
+        IsVisible = false
+    };
     private readonly ScrollViewer reviewView;
     private WorkspaceNavigationTabViewModel? observedTab;
     private readonly IDisposable[] ownerSubscriptions;
@@ -58,14 +70,14 @@ public sealed class WorkspacePaneView : Border, IDisposable
         AutomationProperties.SetControlTypeOverride(this, AutomationControlType.Group);
         AutomationProperties.SetIsControlElementOverride(this, true);
 
-        tasksView = new MainControl { DataContext = owner };
         feedView = new FeedControl { DataContext = owner.Feed, UseWorkspaceTabs = true };
         feedView.CloseWorkspaceTabRequested = async () =>
         {
             if (pane.ActiveTab is { } tab) await owner.CloseWorkspaceTabAsync(pane, tab);
         };
-        routeContent.Children.Add(tasksView);
         routeContent.Children.Add(feedView);
+        routeContent.Children.Add(unavailableTask);
+        AutomationProperties.SetAutomationId(unavailableTask, "WorkspaceTaskUnavailable");
         var review = new FeedReviewDialog { DataContext = owner.Feed };
         review.UseWorkspacePresentation();
         var sourceButton = new Button { Content = Localization.Get("WorkspaceGoToSource"), MinHeight = 44 };
@@ -101,9 +113,9 @@ public sealed class WorkspacePaneView : Border, IDisposable
         header.Children.Add(historyButton);
         foreach (var button in new[] { backButton, forwardButton, historyButton })
             button.Classes.Add("WorkspaceChromeButton");
-        backButton.IsVisible = false;
-        forwardButton.IsVisible = false;
-        historyButton.IsVisible = false;
+        AutomationProperties.SetAutomationId(backButton, "WorkspacePaneBackButton");
+        AutomationProperties.SetAutomationId(forwardButton, "WorkspacePaneForwardButton");
+        AutomationProperties.SetAutomationId(historyButton, "WorkspacePaneHistoryButton");
         backButton.Classes.Add("WorkspaceNavButton");
         forwardButton.Classes.Add("WorkspaceNavButton");
         headerBorder.Classes.Add("WorkspacePaneHeader");
@@ -127,8 +139,6 @@ public sealed class WorkspacePaneView : Border, IDisposable
         owner.WorkspaceNavigation.PropertyChanged += OnNavigationPropertyChanged;
         ownerSubscriptions =
         [
-            owner.WhenAnyValue(static viewModel => viewModel.CurrentTaskItem)
-                .Subscribe(_ => OnOwnerCurrentTaskChanged()),
             owner.WhenAnyValue(static viewModel => viewModel.SelectedWorkspaceMode)
                 .Subscribe(_ => UpdatePaneState()),
             owner.WhenAnyValue(static viewModel => viewModel.IsTasksLoading)
@@ -138,14 +148,60 @@ public sealed class WorkspacePaneView : Border, IDisposable
         UpdateView();
     }
 
-    public MainControl TasksView => tasksView;
+    public TaskPresentationControl? TasksView => tasksView;
     public FeedControl FeedView => feedView;
     public WorkspaceLocation? CaptureFeedLocation() => feedView.CaptureWorkspaceLocation();
+
+    public object? CaptureViewState(WorkspaceNavigationTabViewModel tab)
+    {
+        if (!ReferenceEquals(pane.ActiveTab, tab)) return tab.CurrentEntry?.ViewState;
+        return tasksView switch
+        {
+            TaskListDocumentView list when list.IsVisible => list.CaptureViewState(),
+            TaskCardView card when card.IsVisible => card.CaptureViewState(),
+            _ => feedView.CaptureWorkspaceLocation() is { } location
+                ? new FeedWorkspaceViewState(location, location.Kind == WorkspaceLocationKind.Feed
+                    ? owner.Feed.Days.ToDictionary(day => day.RelativePath, day => day.IsCollapsed)
+                    : new Dictionary<string, bool>())
+                : null
+        };
+    }
+
+    public void RestoreViewState(WorkspaceNavigationTabViewModel tab, object? state)
+    {
+        if (!ReferenceEquals(pane.ActiveTab, tab)) return;
+        UpdateRouteContent();
+        if (tasksView is TaskListDocumentView { IsVisible: true } list) list.RestoreViewState(state);
+        else if (tasksView is TaskCardView { IsVisible: true } card) card.RestoreViewState(state);
+        else if (state is FeedWorkspaceViewState feedState && tab.CurrentLocation is { } target)
+        {
+            var saved = feedState.Location;
+            if (target.Kind == WorkspaceLocationKind.Feed)
+                foreach (var day in owner.Feed.Days)
+                    if (feedState.CollapsedDays.TryGetValue(day.RelativePath, out var collapsed)) day.IsCollapsed = collapsed;
+            var restored = target with
+            {
+                StateKey = saved.StateKey,
+                ScrollOffset = target.HasExplicitLocator && target.LocatorKey != saved.LocatorKey
+                    ? target.ScrollOffset : saved.ScrollOffset
+            };
+            owner.WorkspaceNavigation.UpdateLocation(tab, restored);
+            feedView.SetWorkspaceRoute(tab.Id, restored, IsActivePane);
+        }
+    }
 
     private bool IsActivePane => ReferenceEquals(owner.WorkspaceNavigation.ActivePane, pane);
 
     private void OnPointerPressed(object? sender, PointerPressedEventArgs e)
     {
+        // Closing a background tab or opening its actions is not pane navigation.
+        for (var control = e.Source as Control; control is not null && !ReferenceEquals(control, this);
+             control = control.Parent as Control)
+        {
+            var id = AutomationProperties.GetAutomationId(control);
+            if (id?.StartsWith("WorkspaceClose", StringComparison.Ordinal) == true
+                || id?.StartsWith("WorkspaceTabActions-", StringComparison.Ordinal) == true) return;
+        }
         if (!IsActivePane) owner.ActivateWorkspacePane(pane);
     }
 
@@ -165,18 +221,6 @@ public sealed class WorkspacePaneView : Border, IDisposable
     {
         if (e.PropertyName is nameof(WorkspaceNavigationViewModel.ActivePane)
             or nameof(WorkspaceNavigationViewModel.SecondaryPane)) UpdatePaneState();
-    }
-
-    private void OnOwnerCurrentTaskChanged()
-    {
-        if (IsActivePane && owner.CurrentTaskItem is { } selected
-            && pane.ActiveTab?.CurrentLocation?.Mode == WorkspaceMode.Tasks)
-        {
-            var target = WorkspaceLocation.ForTask(selected.Id, selected.Title);
-            if (pane.ActiveTab.CurrentLocation?.ObjectKey != target.ObjectKey)
-                _ = owner.OpenWorkspaceLocationAsync(target);
-        }
-        UpdateRouteContent();
     }
 
     private void ObserveActiveTab()
@@ -256,12 +300,18 @@ public sealed class WorkspacePaneView : Border, IDisposable
                 actionsButton.ContextMenu = menu;
                 menu.Open(actionsButton);
             };
+            var closeButton = new Button { Content = "×", MinWidth = 32, MinHeight = 44, Padding = default };
+            closeButton.Classes.Add("WorkspaceChromeButton");
+            AutomationProperties.SetName(closeButton, Localization.Get("WorkspaceCloseTab"));
+            AutomationProperties.SetAutomationId(closeButton,
+                ReferenceEquals(tab, pane.ActiveTab) ? "WorkspaceCloseActiveTabButton" : "WorkspaceCloseTab-" + tab.Id.ToString("N"));
+            closeButton.Click += async (_, _) => await owner.CloseWorkspaceTabAsync(pane, tab);
             var tabShell = new Border
             {
                 Child = new StackPanel
                 {
                     Orientation = Orientation.Horizontal,
-                    Children = { tabButton, actionsButton }
+                    Children = { tabButton, actionsButton, closeButton }
                 }
             };
             tabShell.Classes.Add("WorkspaceTabShell");
@@ -325,19 +375,75 @@ public sealed class WorkspacePaneView : Border, IDisposable
 
     private void UpdateRouteContent()
     {
+        ObserveTaskRepository();
         var location = pane.ActiveTab?.CurrentLocation;
         var isReview = location?.Kind == WorkspaceLocationKind.Review;
         var isTasks = location?.Mode != WorkspaceMode.Feed;
-        tasksView.IsVisible = isTasks;
-        tasksView.DataContext = isTasks ? owner : null;
+        var routedTask = location?.Kind == WorkspaceLocationKind.Task
+            ? owner.ResolveTaskById(location.Id) : null;
+        if (!isTasks) ClearTaskView();
+        if (isTasks && location is not null && (taskObjectKey != location.ObjectKey ||
+            location.Kind == WorkspaceLocationKind.Task &&
+            !ReferenceEquals((tasksView as TaskCardView)?.RouteTaskItem, routedTask)))
+        {
+            ClearTaskView();
+            taskObjectKey = location.ObjectKey;
+            tasksView = location.Kind == WorkspaceLocationKind.Task
+                ? routedTask is not null ? new TaskCardView(owner, routedTask) : null
+                : new TaskListDocumentView(owner, location.TaskListKind);
+            if (tasksView is not null) routeContent.Children.Add(tasksView);
+            if (tasksView is TaskCardView && routedTask is not null)
+                taskTitleSubscription = routedTask.WhenAnyValue(task => task.Title).Subscribe(title =>
+                {
+                    if (pane.ActiveTab is { CurrentLocation: { Kind: WorkspaceLocationKind.Task } current } tab
+                        && current.Id == routedTask.Id && current.Title != title)
+                        owner.WorkspaceNavigation.UpdateLocation(tab, current with { Title = title });
+                });
+        }
+        unavailableTask.IsVisible = isTasks && location?.Kind == WorkspaceLocationKind.Task && tasksView is null;
+        if (unavailableTask.IsVisible) unavailableTask.Text = Localization.Format("TaskDeepLinkTaskNotFound", location!.Id);
+        if (tasksView is not null)
+        {
+            tasksView.IsVisible = isTasks;
+            if (tasksView is TaskListDocumentView list) list.Activate(IsActivePane && isTasks);
+            else if (tasksView is TaskCardView card) card.Activate(IsActivePane && isTasks);
+        }
         feedView.IsVisible = !isTasks && !isReview;
         feedView.DataContext = isTasks || isReview ? null : owner.Feed;
         reviewView.IsVisible = isReview;
         feedView.SetWorkspaceRoute(pane.ActiveTab?.Id ?? Guid.Empty, location, IsActivePane);
-        tasksView.SetWorkspaceTaskRoute(location, IsActivePane);
-        tasksView.RouteTaskItem = location?.Kind == WorkspaceLocationKind.Task
-            ? owner.ResolveTaskById(location.Id)
-            : null;
+    }
+
+    private void ObserveTaskRepository()
+    {
+        if (ReferenceEquals(observedTaskRepository, owner.taskRepository)) return;
+        taskRepositorySubscription?.Dispose();
+        observedTaskRepository = owner.taskRepository;
+        var repository = observedTaskRepository;
+        taskRepositorySubscription = repository?.Tasks.Connect().Subscribe(changes =>
+        {
+            if (pane.ActiveTab?.CurrentLocation is not { Kind: WorkspaceLocationKind.Task } target ||
+                !changes.Any(change => change.Key == target.Id)) return;
+            var revision = owner.WorkspaceNavigation.ScopeRevision;
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (!disposed && revision == owner.WorkspaceNavigation.ScopeRevision &&
+                    ReferenceEquals(repository, owner.taskRepository)) UpdateRouteContent();
+            });
+        });
+    }
+
+    private void ClearTaskView()
+    {
+        taskTitleSubscription?.Dispose();
+        taskTitleSubscription = null;
+        if (tasksView is not null)
+        {
+            routeContent.Children.Remove(tasksView);
+            tasksView.Dispose();
+            tasksView = null;
+        }
+        taskObjectKey = null;
     }
 
     public void Dispose()
@@ -348,6 +454,9 @@ public sealed class WorkspacePaneView : Border, IDisposable
         pane.Tabs.CollectionChanged -= OnTabsChanged;
         owner.WorkspaceNavigation.PropertyChanged -= OnNavigationPropertyChanged;
         foreach (var subscription in ownerSubscriptions) subscription.Dispose();
+        taskRepositorySubscription?.Dispose();
+        observedTaskRepository = null;
+        ClearTaskView();
         if (observedTab is not null)
         {
             observedTab.PropertyChanged -= OnTabPropertyChanged;

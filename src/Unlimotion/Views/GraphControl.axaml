@@ -374,6 +374,7 @@
                                 <Grid Grid.Column="3"
                                       DataContext="{Binding TaskItem}"
                                       Background="Transparent"
+                                      ColumnDefinitions="*,Auto"
                                       AutomationProperties.AutomationId="RoadmapInlineTaskTitleSurface">
                                     <TextBlock Text="{Binding TitleWithoutEmoji}"
                                                TextWrapping="Wrap"
@@ -383,6 +384,12 @@
                                                Classes.highlighted="{Binding IsHighlighted}"
                                                Classes.IsWanted="{Binding Wanted}"
                                                Classes.IsCanBeCompleted="{Binding !IsCanBeCompleted}" />
+                                    <Button Grid.Column="1" Content="⋯" MinWidth="32" MinHeight="32" Padding="0"
+                                            Margin="4,0,0,0" Background="Transparent" BorderBrush="Transparent"
+                                            ToolTip.Tip="{DynamicResource WorkspaceOpenActions}"
+                                            AutomationProperties.Name="{DynamicResource WorkspaceOpenActions}"
+                                            AutomationProperties.AutomationId="{Binding Id, StringFormat='RoadmapTaskOpenActions_{0}'}"
+                                            Click="RoadmapTaskOpenActions_OnClick"/>
                                 </Grid>
                             </Grid>
                         </Border>

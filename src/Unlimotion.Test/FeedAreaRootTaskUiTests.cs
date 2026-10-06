@@ -125,12 +125,22 @@ public sealed class FeedAreaRootTaskUiTests
             var area = await model.CreateRootAsync("Исходная");
             model.DraftName = "Сохранено автоматически";
 
-            await Task.Delay(650);
-            Dispatcher.UIThread.RunJobs();
             var saved = await store.LoadAsync();
+            var deadline = DateTimeOffset.UtcNow.AddSeconds(5);
+            while (DateTimeOffset.UtcNow < deadline
+                && (saved.Catalog.Areas.Single(item => item.Id == area.Id).Name != "Сохранено автоматически"
+                    || model.IsDraftDirty || model.IsBusy))
+            {
+                // The 400ms debounce starts a separate asynchronous disk write. A fixed
+                // delay does not establish that this write has completed on a loaded runner.
+                await Task.Delay(20);
+                Dispatcher.UIThread.RunJobs();
+                saved = await store.LoadAsync();
+            }
             await Assert.That(saved.Catalog.Areas.Single(item => item.Id == area.Id).Name)
                 .IsEqualTo("Сохранено автоматически");
             await Assert.That(model.IsDraftDirty).IsFalse();
+            await Assert.That(model.IsBusy).IsFalse();
         }, CancellationToken.None);
     }
 

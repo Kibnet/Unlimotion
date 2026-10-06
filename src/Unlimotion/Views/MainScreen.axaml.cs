@@ -14,6 +14,7 @@ using Avalonia.VisualTree;
 using Unlimotion.ViewModel;
 using Unlimotion.ViewModel.Feed;
 using Unlimotion.ViewModel.Workspace;
+using Unlimotion.Notes.Search;
 using L10n = Unlimotion.ViewModel.Localization.Localization;
 
 namespace Unlimotion.Views
@@ -27,21 +28,34 @@ namespace Unlimotion.Views
         private INotifyCollectionChanged? _taskSpacesNotifier;
         private bool _shellLayoutUpdatePending;
         private bool _isAttached;
+        private TopLevel? _keyboardHost;
         private MainWindowViewModel? _workspaceOwner;
         private WorkspacePaneView? _primaryPaneView;
         private WorkspacePaneView? _secondaryPaneView;
         private WorkspacePaneViewModel? _primaryPaneModel;
         private WorkspacePaneViewModel? _secondaryPaneModel;
         private WorkspaceOpenDisposition _pendingGlobalSearchDisposition = WorkspaceOpenDisposition.CurrentTab;
+        private WorkspaceOpenDisposition _pendingRailDisposition = WorkspaceOpenDisposition.CurrentTab;
+        private WorkspacePaneView? _layoutPrimaryPane;
+        private WorkspacePaneView? _layoutSecondaryPane;
+        private bool _layoutIsNarrow;
+        private WorkspacePaneViewModel? _layoutActivePane;
 
         public MainScreen()
         {
             InitializeComponent();
+            // The shell also runs in non-MainWindow hosts (including mobile).
+            AddHandler(InputElement.KeyDownEvent, OnShellKeyDown, RoutingStrategies.Tunnel);
+            ShellHotkeyHelpPanel.CloseRequested += (_, _) => SetHotkeyHelpVisibility(false);
             AttachedToVisualTree += OnAttachedToVisualTree;
             DetachedFromVisualTree += OnDetachedFromVisualTree;
             SizeChanged += (_, _) => ScheduleShellLayoutUpdate();
             SizeChanged += (_, _) => UpdateWorkspacePaneLayout();
             DataContextChanged += OnDataContextChanged;
+            WorkspaceNavigationRail.AddHandler(InputElement.PointerPressedEvent, (_, e) =>
+                _pendingRailDisposition = e.KeyModifiers.HasFlag(KeyModifiers.Control)
+                    ? WorkspaceOpenDisposition.NewTab : WorkspaceOpenDisposition.CurrentTab,
+                RoutingStrategies.Tunnel, handledEventsToo: true);
             foreach (var control in new Control[]
                      {
                          GlobalCreateMenuButton,
@@ -57,16 +71,40 @@ namespace Unlimotion.Views
             }
             if (GlobalOverflowMenuButton.Flyout is MenuFlyout overflowFlyout)
             {
-                overflowFlyout.Opening += (_, _) => PopulateTaskSpaceOverflow();
+                overflowFlyout.Opening += (_, _) =>
+                {
+                    PopulateWorkspaceOpeningMenus();
+                    PopulateTaskSpaceOverflow();
+                };
             }
         }
 
         private void OnAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
         {
             _isAttached = true;
+            if (TopLevel.GetTopLevel(this) is { } host && host is not MainWindow)
+            {
+                _keyboardHost = host;
+                host.AddHandler(InputElement.KeyDownEvent, OnShellKeyDown, RoutingStrategies.Tunnel);
+            }
             if (DataContext is MainWindowViewModel owner) owner.IsWorkspaceShellAttached = true;
             AttachShellLayoutSources();
+            EnsureWorkspacePaneViews();
+            UpdateWorkspacePaneLayout();
+            RestoreAttachedPaneState(_primaryPaneView, _primaryPaneModel);
+            RestoreAttachedPaneState(_secondaryPaneView, _secondaryPaneModel);
             ScheduleShellLayoutUpdate();
+        }
+
+        private static void RestoreAttachedPaneState(WorkspacePaneView? view, WorkspacePaneViewModel? pane)
+        {
+            if (view is not null && pane?.ActiveTab is { CurrentEntry: { ViewState: { } state } } tab)
+                view.RestoreViewState(tab, state);
+        }
+
+        private void OnShellKeyDown(object? sender, KeyEventArgs e)
+        {
+            if (!e.Handled && (TryHandleShellHotkey(e) || TryHandleHotkeyHelpKey(e))) e.Handled = true;
         }
 
         private void OnDataContextChanged(object? sender, EventArgs e)
@@ -109,7 +147,6 @@ namespace Unlimotion.Views
 
             _shellFeedNotifier.PropertyChanged += OnShellLayoutSourceChanged;
             _workspaceNavigationNotifier.PropertyChanged += OnWorkspaceNavigationChanged;
-            viewModel.WorkspaceNavigation.History.CollectionChanged += OnWorkspaceHistoryChanged;
             UpdateWorkspaceHistoryControls();
 
             _taskSpacesNotifier.CollectionChanged += OnTaskSpacesChanged;
@@ -142,8 +179,6 @@ namespace Unlimotion.Views
 
             if (_workspaceNavigationNotifier is not null)
                 _workspaceNavigationNotifier.PropertyChanged -= OnWorkspaceNavigationChanged;
-            if (_workspaceNavigationNotifier is WorkspaceNavigationViewModel navigation)
-                navigation.History.CollectionChanged -= OnWorkspaceHistoryChanged;
 
             _shellViewModelNotifier = null;
             _shellSettingsNotifier = null;
@@ -165,10 +200,14 @@ namespace Unlimotion.Views
             if (e.PropertyName is nameof(WorkspaceNavigationViewModel.CurrentIndex)
                 or nameof(WorkspaceNavigationViewModel.CanGoBack)
                 or nameof(WorkspaceNavigationViewModel.CanGoForward))
+            {
                 UpdateWorkspaceHistoryControls();
+                UpdateWorkspaceRailLayout();
+            }
             if (e.PropertyName == nameof(WorkspaceNavigationViewModel.ActivePane))
                 UpdateWorkspaceRailLayout();
-            if (e.PropertyName is nameof(WorkspaceNavigationViewModel.SecondaryPane)
+            if (e.PropertyName is nameof(WorkspaceNavigationViewModel.PrimaryPane)
+                or nameof(WorkspaceNavigationViewModel.SecondaryPane)
                 or nameof(WorkspaceNavigationViewModel.HasSecondaryPane))
             {
                 EnsureWorkspacePaneViews();
@@ -233,7 +272,12 @@ namespace Unlimotion.Views
             var owner = DataContext as MainWindowViewModel;
             if (!ReferenceEquals(_workspaceOwner, owner))
             {
-                if (_workspaceOwner is not null) _workspaceOwner.CaptureActiveFeedLocation = null;
+                if (_workspaceOwner is not null)
+                {
+                    _workspaceOwner.CaptureActiveFeedLocation = null;
+                    _workspaceOwner.CaptureWorkspaceTabState = null;
+                    _workspaceOwner.RestoreWorkspaceTabState = null;
+                }
                 _primaryPaneView?.Dispose();
                 _secondaryPaneView?.Dispose();
                 _primaryPaneView = null;
@@ -248,6 +292,16 @@ namespace Unlimotion.Views
                     owner.WorkspaceNavigation.ActivePane, owner.WorkspaceNavigation.PrimaryPane)
                 ? _primaryPaneView?.CaptureFeedLocation()
                 : _secondaryPaneView?.CaptureFeedLocation();
+            owner.CaptureWorkspaceTabState = tab =>
+                _primaryPaneModel?.ActiveTab == tab ? _primaryPaneView?.CaptureViewState(tab)
+                : _secondaryPaneModel?.ActiveTab == tab ? _secondaryPaneView?.CaptureViewState(tab)
+                : tab.CurrentEntry?.ViewState;
+            owner.RestoreWorkspaceTabState = (tab, state) =>
+            {
+                EnsureWorkspacePaneViews();
+                if (_primaryPaneModel?.ActiveTab == tab) _primaryPaneView?.RestoreViewState(tab, state);
+                else if (_secondaryPaneModel?.ActiveTab == tab) _secondaryPaneView?.RestoreViewState(tab, state);
+            };
             if (!ReferenceEquals(_primaryPaneModel, owner.WorkspaceNavigation.PrimaryPane))
             {
                 _primaryPaneView?.Dispose();
@@ -268,9 +322,17 @@ namespace Unlimotion.Views
         {
             if (WorkspacePanesHost is null || _primaryPaneView is null) return;
             UpdateWorkspaceRailLayout();
-            WorkspacePanesHost.Children.Clear();
             var secondary = _secondaryPaneView;
             var narrow = secondary is not null && Bounds.Width > 0 && Bounds.Width < 900;
+            var activePane = _workspaceOwner?.WorkspaceNavigation.ActivePane;
+            if (ReferenceEquals(_layoutPrimaryPane, _primaryPaneView)
+                && ReferenceEquals(_layoutSecondaryPane, secondary) && _layoutIsNarrow == narrow
+                && (!narrow || ReferenceEquals(_layoutActivePane, activePane))) return;
+            _layoutPrimaryPane = _primaryPaneView;
+            _layoutSecondaryPane = secondary;
+            _layoutIsNarrow = narrow;
+            _layoutActivePane = activePane;
+            WorkspacePanesHost.Children.Clear();
             if (narrow)
             {
                 WorkspacePanesHost.ColumnDefinitions = new ColumnDefinitions("*");
@@ -358,6 +420,16 @@ namespace Unlimotion.Views
             WorkspaceRailNotesLabel.IsVisible = expanded;
             WorkspaceRailTaskCategories.IsVisible = expanded;
             if (DataContext is not MainWindowViewModel owner) return;
+            WorkspaceRailFeedButton.ContextMenu = WorkspaceOpenMenu.Create(owner, WorkspaceLocation.FeedRoot);
+            WorkspaceRailTasksButton.ContextMenu = CreateTaskViewsMenu(owner);
+            foreach (var button in WorkspaceRailTaskCategories.Children.OfType<Button>())
+            {
+                if (button.Tag is not string index || !int.TryParse(index, out var kind)) continue;
+                var target = WorkspaceLocation.ForTaskList((TaskListKind)kind);
+                button.ContextMenu = WorkspaceOpenMenu.Create(owner, target);
+                button.Classes.Set("WorkspaceRailActive", owner.WorkspaceNavigation.ActivePane.ActiveTab?.CurrentLocation is
+                    { Kind: WorkspaceLocationKind.Tasks } current && current.TaskListKind == (TaskListKind)kind);
+            }
             WorkspaceRailNotesButton.IsVisible = owner.Settings.IsFeedEnabled;
             WorkspacePinnedNotesPanel.Children.Clear();
             GlobalPinnedNotesMenuItem.Items.Clear();
@@ -375,12 +447,17 @@ namespace Unlimotion.Views
                 AutomationProperties.SetName(button, pin.Title);
                 AutomationProperties.SetAutomationId(button, "WorkspacePin-" + pin.RelativePath);
                 ToolTip.SetTip(button, pin.RelativePath);
+                var target = WorkspaceLocation.ForNote(pin.RelativePath, pin.Title);
+                button.Command = null;
+                button.Click += async (_, _) => await owner.OpenWorkspaceLocationAsync(target, TakeRailDisposition());
                 var remove = new MenuItem { Header = L10n.Get("WorkspaceUnpinNote") };
                 remove.Click += (_, _) => owner.ToggleNotePin(pin.RelativePath);
-                button.ContextMenu = new ContextMenu { Items = { remove } };
+                button.ContextMenu = WorkspaceOpenMenu.Create(owner, target);
+                button.ContextMenu.Items.Add(new Separator());
+                button.ContextMenu.Items.Add(remove);
                 WorkspacePinnedNotesPanel.Children.Add(button);
                 var item = new MenuItem { Header = pin.Title };
-                item.Items.Add(new MenuItem { Header = L10n.Get("WorkspaceOpenHere"), Command = owner.OpenPinnedNoteCommand, CommandParameter = pin });
+                foreach (var command in WorkspaceOpenMenu.TakeItems(WorkspaceOpenMenu.Create(owner, target))) item.Items.Add(command);
                 var unpin = new MenuItem { Header = L10n.Get("WorkspaceUnpinNote"), MinHeight = 44 };
                 unpin.Click += (_, _) => owner.ToggleNotePin(pin.RelativePath);
                 item.Items.Add(unpin);
@@ -390,6 +467,46 @@ namespace Unlimotion.Views
             WorkspaceRailFeedButton.IsVisible = owner.Settings.IsFeedEnabled;
             WorkspaceRailFeedButton.Classes.Set("WorkspaceRailActive", owner.IsFeedMode);
             WorkspaceRailTasksButton.Classes.Set("WorkspaceRailActive", owner.IsTasksMode);
+        }
+
+        private ContextMenu CreateTaskViewsMenu(MainWindowViewModel owner)
+        {
+            var menu = WorkspaceOpenMenu.Create(owner, WorkspaceLocation.TasksRoot);
+            menu.Items.Add(new Separator());
+            foreach (var kind in Enum.GetValues<TaskListKind>())
+            {
+                var target = WorkspaceLocation.ForTaskList(kind);
+                var item = new MenuItem { Header = target.Title, MinHeight = 44 };
+                item.Click += async (_, e) =>
+                {
+                    if (ReferenceEquals(e.Source, item)) await owner.OpenWorkspaceLocationAsync(target);
+                };
+                foreach (var command in WorkspaceOpenMenu.TakeItems(WorkspaceOpenMenu.Create(owner, target))) item.Items.Add(command);
+                menu.Items.Add(item);
+            }
+            return menu;
+        }
+
+        private void OnWorkspaceRailActionsClick(object? sender, RoutedEventArgs e)
+        {
+            if (sender is not Button button || DataContext is not MainWindowViewModel owner) return;
+            var menu = CreateTaskViewsMenu(owner);
+            if (owner.Settings.IsFeedEnabled)
+            {
+                var feed = new MenuItem { Header = L10n.Get("FeedMode"), MinHeight = 44 };
+                foreach (var command in WorkspaceOpenMenu.TakeItems(WorkspaceOpenMenu.Create(owner, WorkspaceLocation.FeedRoot)))
+                    feed.Items.Add(command);
+                menu.Items.Add(feed);
+            }
+            button.ContextMenu = menu;
+            menu.Open(button);
+        }
+
+        private WorkspaceOpenDisposition TakeRailDisposition()
+        {
+            var disposition = _pendingRailDisposition;
+            _pendingRailDisposition = WorkspaceOpenDisposition.CurrentTab;
+            return disposition;
         }
 
         private void OnTaskSpacesChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -442,6 +559,7 @@ namespace Unlimotion.Views
             // The rail is the mode selector on desktop. Keep the radio selector only where
             // the rail is hidden, so both navigation systems do not compete in the app bar.
             ShellModeSelector.IsVisible = Bounds.Width < 900;
+            WorkspaceGlobalNavigation.IsVisible = false;
             GlobalReviewButton.IsVisible = true;
             GlobalSettingsButton.IsVisible = true;
 
@@ -460,7 +578,7 @@ namespace Unlimotion.Views
             };
             var wideRequired = fixedControls.Where(static control => control.IsVisible).Sum(GetMeasuredWidth)
                 + 240
-                + ShellAppBarGrid.ColumnSpacing * fixedControls.Count(static control => control.IsVisible);
+                + ShellAppBarGrid.ColumnSpacing * (ShellAppBarGrid.ColumnDefinitions.Count - 1);
             var compact = wideRequired > availableWidth;
             Grid.SetRow(GlobalSearchHost, compact ? 1 : 0);
             Grid.SetColumn(GlobalSearchHost, compact ? 0 : 4);
@@ -475,14 +593,26 @@ namespace Unlimotion.Views
             var spaceInOverflow = !TaskSpaceSelector.IsVisible;
             var modeInOverflow = Bounds.Width < 900 && !ShellModeSelector.IsVisible;
             GlobalTaskSpaceMenuItem.IsVisible = spaceInOverflow;
-            GlobalFeedModeMenuItem.IsVisible = modeInOverflow
+            GlobalFeedModeMenuItem.IsVisible = Bounds.Width < 900
                 && DataContext is MainWindowViewModel { Settings.IsFeedEnabled: true };
-            GlobalTasksModeMenuItem.IsVisible = modeInOverflow;
+            GlobalTasksModeMenuItem.IsVisible = true;
             GlobalReviewMenuItem.IsVisible = !GlobalReviewButton.IsVisible;
             GlobalSettingsMenuItem.IsVisible = !GlobalSettingsButton.IsVisible;
             GlobalOverflowContextSeparator.IsVisible = (spaceInOverflow || modeInOverflow)
                 && (GlobalReviewMenuItem.IsVisible || GlobalSettingsMenuItem.IsVisible);
             PopulateTaskSpaceOverflow();
+        }
+
+        private void PopulateWorkspaceOpeningMenus()
+        {
+            if (DataContext is not MainWindowViewModel owner) return;
+            // Capture current singleton/opening choices when the menu opens. Replacing
+            // these controls during shell layout interrupts an in-flight submenu gesture.
+            GlobalFeedModeMenuItem.Items.Clear();
+            foreach (var item in WorkspaceOpenMenu.TakeItems(WorkspaceOpenMenu.Create(owner, WorkspaceLocation.FeedRoot)))
+                GlobalFeedModeMenuItem.Items.Add(item);
+            GlobalTasksModeMenuItem.Items.Clear();
+            foreach (var item in WorkspaceOpenMenu.TakeItems(CreateTaskViewsMenu(owner))) GlobalTasksModeMenuItem.Items.Add(item);
         }
 
         private void HideLastActionWhileOverflowing(Control control, double availableWidth)
@@ -509,7 +639,9 @@ namespace Unlimotion.Views
             };
             var visible = controls.Where(static control => control.IsVisible).ToArray();
             return visible.Sum(GetMeasuredWidth)
-                + Math.Max(0, visible.Length - 1) * ShellAppBarGrid.ColumnSpacing;
+                // Grid retains gaps around empty/hidden columns. Counting only
+                // visible buttons underestimates the row and clips the overflow menu.
+                + Math.Max(0, ShellAppBarGrid.ColumnDefinitions.Count - 1) * ShellAppBarGrid.ColumnSpacing;
         }
 
         private static double GetMeasuredWidth(Control control)
@@ -557,6 +689,7 @@ namespace Unlimotion.Views
 
         private void OnFeedModeMenuItemClick(object? sender, RoutedEventArgs e)
         {
+            if (!ReferenceEquals(e.Source, sender)) return;
             if (DataContext is MainWindowViewModel { Settings.IsFeedEnabled: true } viewModel)
             {
                 _ = viewModel.OpenWorkspaceRootAsync(WorkspaceMode.Feed);
@@ -565,6 +698,7 @@ namespace Unlimotion.Views
 
         private void OnTasksModeMenuItemClick(object? sender, RoutedEventArgs e)
         {
+            if (!ReferenceEquals(e.Source, sender)) return;
             if (DataContext is MainWindowViewModel viewModel)
             {
                 _ = viewModel.OpenWorkspaceRootAsync(WorkspaceMode.Tasks);
@@ -574,13 +708,13 @@ namespace Unlimotion.Views
         private void OnFeedRootClick(object? sender, RoutedEventArgs e)
         {
             if (DataContext is MainWindowViewModel { Settings.IsFeedEnabled: true } viewModel)
-                _ = viewModel.OpenWorkspaceRootAsync(WorkspaceMode.Feed);
+                _ = viewModel.OpenWorkspaceLocationAsync(WorkspaceLocation.FeedRoot, TakeRailDisposition());
         }
 
         private void OnTasksRootClick(object? sender, RoutedEventArgs e)
         {
             if (DataContext is MainWindowViewModel viewModel)
-                _ = viewModel.OpenWorkspaceRootAsync(WorkspaceMode.Tasks);
+                _ = viewModel.OpenWorkspaceLocationAsync(WorkspaceLocation.TasksRoot, TakeRailDisposition());
         }
 
         private async void OnWorkspaceTaskCategoryClick(object? sender, RoutedEventArgs e)
@@ -588,14 +722,34 @@ namespace Unlimotion.Views
             if (sender is Button { Tag: string index }
                 && DataContext is MainWindowViewModel viewModel)
                 await viewModel.OpenWorkspaceLocationAsync(
-                    WorkspaceLocation.TasksRoot with { StateKey = $"tasktab:{index}" });
+                    WorkspaceLocation.ForTaskList((TaskListKind)int.Parse(index)), TakeRailDisposition());
         }
 
         private void OnDetachedFromVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
         {
+            _keyboardHost?.RemoveHandler(InputElement.KeyDownEvent, OnShellKeyDown);
+            _keyboardHost = null;
             _isAttached = false;
             if (DataContext is MainWindowViewModel owner) owner.IsWorkspaceShellAttached = false;
             DetachShellLayoutSources();
+            if (_workspaceOwner is not null)
+            {
+                foreach (var pane in _workspaceOwner.WorkspaceNavigation.Panes)
+                    if (pane.ActiveTab is { CurrentEntry: { } entry } tab)
+                        entry.ViewState = _workspaceOwner.CaptureWorkspaceTabState?.Invoke(tab) ?? entry.ViewState;
+                _workspaceOwner.CaptureActiveFeedLocation = null;
+                _workspaceOwner.CaptureWorkspaceTabState = null;
+                _workspaceOwner.RestoreWorkspaceTabState = null;
+            }
+            _primaryPaneView?.Dispose();
+            _secondaryPaneView?.Dispose();
+            WorkspacePanesHost.Children.Clear();
+            _primaryPaneView = null;
+            _secondaryPaneView = null;
+            _primaryPaneModel = null;
+            _secondaryPaneModel = null;
+            _layoutPrimaryPane = null;
+            _layoutSecondaryPane = null;
         }
 
         private void OnGlobalSearchResultPointerPressed(object? sender, PointerPressedEventArgs e)
@@ -609,21 +763,25 @@ namespace Unlimotion.Views
         {
             if (sender is not DropDownButton actions || actions.Flyout is not null) return;
             var menu = new MenuFlyout();
-            Add("WorkspaceOpenInNewTab", WorkspaceOpenDisposition.NewTab);
-            Add("WorkspaceOpenBeside", WorkspaceOpenDisposition.AdjacentPane);
             actions.Flyout = menu;
-
-            void Add(string labelKey, WorkspaceOpenDisposition disposition)
+            menu.Opening += (_, _) =>
             {
-                var item = new MenuItem { Header = L10n.Get(labelKey), MinHeight = 44 };
-                item.Click += async (_, _) =>
+                menu.Items.Clear();
+                if (actions.DataContext is not FeedSearchResultViewModel result
+                    || DataContext is not MainWindowViewModel viewModel) return;
+                var anchor = result.Entry.BlockIndex.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                var location = result.Type switch
                 {
-                    if (actions.DataContext is FeedSearchResultViewModel result
-                        && DataContext is MainWindowViewModel viewModel)
-                        await viewModel.Feed.OpenSearchResultAsync(result, disposition);
+                    FeedSearchDocumentType.Task => WorkspaceLocation.ForTask(result.TaskId, result.Text),
+                    FeedSearchDocumentType.Daily => WorkspaceLocation.ForFeedDay(result.RelativePath, result.DisplaySource, anchor),
+                    _ => WorkspaceLocation.ForNote(result.RelativePath, result.DisplaySource, anchor)
                 };
-                menu.Items.Add(item);
-            }
+                // Resolve the current search anchor when the command executes, not
+                // from this display snapshot. Rebuild reuse labels on every open.
+                var commands = WorkspaceOpenMenu.Create(viewModel, location,
+                    disposition => viewModel.Feed.OpenSearchResultAsync(result, disposition));
+                foreach (var command in WorkspaceOpenMenu.TakeItems(commands)) menu.Items.Add(command);
+            };
         }
 
         private async void OnGlobalSearchResultClick(object? sender, RoutedEventArgs e)
@@ -645,8 +803,29 @@ namespace Unlimotion.Views
 
         internal bool TryHandleHotkeyHelpKey(KeyEventArgs e)
         {
-            return DataContext is MainWindowViewModel { IsTasksMode: true }
-                && GetActiveMainControl()?.TryHandleHotkeyHelpKey(e) == true;
+            if (e.Handled || e.KeyModifiers != KeyModifiers.None) return false;
+            if (e.Key == Key.F1 && DataContext is MainWindowViewModel { IsTasksMode: true })
+            {
+                SetHotkeyHelpVisibility(!IsHotkeyHelpVisible);
+                e.Handled = true;
+                return true;
+            }
+            if (e.Key == Key.Escape && IsHotkeyHelpVisible)
+            {
+                SetHotkeyHelpVisibility(false);
+                e.Handled = true;
+                return true;
+            }
+            return false;
+        }
+
+        internal bool IsHotkeyHelpVisible => ShellHotkeyHelpOverlayHost.IsVisible;
+
+        private void SetHotkeyHelpVisibility(bool visible)
+        {
+            ShellHotkeyHelpOverlayHost.IsVisible = visible;
+            if (visible) ShellHotkeyHelpOverlayHost.Focus();
+            else GetActiveMainControl()?.Focus();
         }
 
         internal void ShowHotkeyHelp()
@@ -658,14 +837,14 @@ namespace Unlimotion.Views
                 return;
             }
 
-            GetActiveMainControl()?.ShowHotkeyHelp();
+            SetHotkeyHelpVisibility(true);
         }
 
         private async System.Threading.Tasks.Task ShowHotkeyHelpAsync(MainWindowViewModel viewModel)
         {
             if (!viewModel.IsTasksMode)
                 await viewModel.OpenWorkspaceRootAsync(WorkspaceMode.Tasks);
-            GetActiveMainControl()?.ShowHotkeyHelp();
+            SetHotkeyHelpVisibility(true);
         }
 
         internal bool TryHandleShellHotkey(KeyEventArgs e)
@@ -675,6 +854,11 @@ namespace Unlimotion.Views
                 return false;
             }
 
+            if (e.Key == Key.Escape && IsHotkeyHelpVisible)
+            {
+                SetHotkeyHelpVisibility(false);
+                return true;
+            }
             if (e.Key == Key.Escape && viewModel.CloseTopmostOverlay())
             {
                 return true;
@@ -687,16 +871,15 @@ namespace Unlimotion.Views
                 _ = activeFeed.ReturnToCurrentDayAsync();
                 return true;
             }
-            if (modifiers == KeyModifiers.Control && !IsTextEditorFocused())
+            if (modifiers == KeyModifiers.Control)
             {
-                var key = e.Key.ToString();
-                if (key is "OemOpenBrackets" or "LeftBracket")
+                if (e.Key == Key.OemOpenBrackets)
                 {
                     _ = viewModel.NavigateWorkspaceBackAsync();
                     e.Handled = true;
                     return true;
                 }
-                if (key is "OemCloseBrackets" or "RightBracket")
+                if (e.Key == Key.OemCloseBrackets)
                 {
                     _ = viewModel.NavigateWorkspaceForwardAsync();
                     e.Handled = true;
@@ -741,7 +924,7 @@ namespace Unlimotion.Views
             return false;
         }
 
-        private MainControl? GetActiveMainControl() => DataContext is MainWindowViewModel viewModel
+        private TaskPresentationControl? GetActiveMainControl() => DataContext is MainWindowViewModel viewModel
             ? _primaryPaneView is not null && viewModel.WorkspaceNavigation.ActivePane == viewModel.WorkspaceNavigation.PrimaryPane
                 ? _primaryPaneView.TasksView
                 : _secondaryPaneView?.TasksView

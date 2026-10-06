@@ -418,6 +418,7 @@
                             BorderBrush="{DynamicResource ThemeBorderLowBrush}"
                             BorderThickness="0,0,1,0"
                             AutomationProperties.AutomationId="WorkspaceNavigationRail">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                         <StackPanel Margin="0,8" Spacing="2">
                             <Button x:Name="WorkspaceRailFeedButton" Classes="WorkspaceRailButton"
                                     Click="OnFeedRootClick"
@@ -453,7 +454,26 @@
                                 <Button Classes="WorkspaceRailButton" Tag="5" Click="OnWorkspaceTaskCategoryClick"
                                         Content="{DynamicResource Completed}"
                                         AutomationProperties.AutomationId="WorkspaceRailCompletedButton" />
+                                <Button Classes="WorkspaceRailButton" Tag="1" Click="OnWorkspaceTaskCategoryClick"
+                                        Content="{DynamicResource LastCreated}"
+                                        AutomationProperties.AutomationId="WorkspaceRailLastCreatedButton" />
+                                <Button Classes="WorkspaceRailButton" Tag="2" Click="OnWorkspaceTaskCategoryClick"
+                                        Content="{DynamicResource LastUpdated}"
+                                        AutomationProperties.AutomationId="WorkspaceRailLastUpdatedButton" />
+                                <Button Classes="WorkspaceRailButton" Tag="6" Click="OnWorkspaceTaskCategoryClick"
+                                        Content="{DynamicResource Archived}"
+                                        AutomationProperties.AutomationId="WorkspaceRailArchivedButton" />
+                                <Button Classes="WorkspaceRailButton" Tag="7" Click="OnWorkspaceTaskCategoryClick"
+                                        Content="{DynamicResource LastOpened}"
+                                        AutomationProperties.AutomationId="WorkspaceRailLastOpenedButton" />
+                                <Button Classes="WorkspaceRailButton" Tag="8" Click="OnWorkspaceTaskCategoryClick"
+                                        Content="{DynamicResource Roadmap}"
+                                        AutomationProperties.AutomationId="WorkspaceRailRoadmapButton" />
                             </StackPanel>
+                            <Button Classes="WorkspaceRailButton" Content="⋯" Click="OnWorkspaceRailActionsClick"
+                                    ToolTip.Tip="{DynamicResource WorkspaceOpenActions}"
+                                    AutomationProperties.Name="{DynamicResource WorkspaceOpenActions}"
+                                    AutomationProperties.AutomationId="WorkspaceRailTasksActionsButton" />
                             <Button x:Name="WorkspaceRailNotesButton" Classes="WorkspaceRailButton"
                                     Command="{Binding OpenNotesCommand}" ToolTip.Tip="{DynamicResource WorkspaceNotes}"
                                     AutomationProperties.Name="{DynamicResource WorkspaceNotes}"
@@ -475,6 +495,7 @@
                             </Button>
                             <StackPanel x:Name="WorkspacePinnedNotesPanel" Spacing="4" />
                         </StackPanel>
+                        </ScrollViewer>
                     </Border>
                     <Grid Grid.Column="1"
                           x:Name="WorkspacePanesHost"
@@ -482,6 +503,53 @@
                           AutomationProperties.ControlTypeOverride="Group"
                           AutomationProperties.IsControlElementOverride="True"
                           AutomationProperties.AutomationId="WorkspacePanesHost" />
+                </Grid>
+
+                <Grid Grid.Row="1" Panel.ZIndex="89"
+                      IsVisible="{Binding IsTasksLoading}"
+                      Background="#66000000"
+                      AutomationProperties.AutomationId="TasksLoadingOverlay">
+                    <Border MaxWidth="260" Padding="20" CornerRadius="14"
+                            Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
+                            HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <StackPanel Spacing="12">
+                            <unlimotion:SeamlessLoadingIndicator Width="160" Height="72"
+                                IsVisible="{Binding IsTasksLoading}"
+                                HorizontalAlignment="Center"
+                                AutomationProperties.AutomationId="TasksLoadingSpinner" />
+                            <TextBlock Text="{DynamicResource LoadingTasks}" FontWeight="SemiBold"
+                                       HorizontalAlignment="Center" TextAlignment="Center" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+
+                <Grid Grid.Row="1" Panel.ZIndex="90"
+                      IsVisible="{Binding Settings.IsTaskSpaceSwitching}"
+                      Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
+                      AutomationProperties.AutomationId="TaskSpaceSwitchOverlay">
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
+                        <unlimotion:SeamlessLoadingIndicator Width="180" Height="80"
+                            IsVisible="{Binding Settings.IsTaskSpaceSwitching}"
+                            AutomationProperties.AutomationId="TaskSpaceSwitchProgress" />
+                        <TextBlock Text="{DynamicResource TaskSpaceSwitching}" HorizontalAlignment="Center" />
+                    </StackPanel>
+                </Grid>
+
+                <Grid Grid.Row="1" Panel.ZIndex="91"
+                      IsVisible="{Binding Settings.IsTaskSpaceRecoveryRequired}"
+                      Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
+                      AutomationProperties.AutomationId="TaskSpaceRecoveryOverlay">
+                    <Border MaxWidth="620" Margin="24" Padding="20" CornerRadius="6"
+                            HorizontalAlignment="Center" VerticalAlignment="Center"
+                            BorderThickness="1" BorderBrush="{DynamicResource ThemeControlMidBrush}">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="{DynamicResource TaskSpaceRecoveryTitle}" FontWeight="Bold"
+                                       HorizontalAlignment="Center" />
+                            <TextBlock Text="{Binding Settings.TaskSpaceRecoveryMessage}"
+                                       TextWrapping="Wrap" TextAlignment="Center"
+                                       AutomationProperties.AutomationId="TaskSpaceRecoveryMessageText" />
+                        </StackPanel>
+                    </Border>
                 </Grid>
 
                 <ItemsControl Grid.Row="1"
@@ -714,6 +782,17 @@
                                             HorizontalAlignment="Center"
                                             VerticalAlignment="Center"
                                             DataContext="{Binding Feed}" />
+                </Grid>
+                <Grid x:Name="ShellHotkeyHelpOverlayHost" Grid.RowSpan="2" Panel.ZIndex="110"
+                      IsVisible="False" Focusable="True" Background="#66000000"
+                      AutomationProperties.AutomationId="HotkeyHelpOverlayHost">
+                    <Border HorizontalAlignment="Right" VerticalAlignment="Top" Margin="8"
+                            MaxWidth="560"
+                            MaxHeight="{Binding $parent[Grid].Bounds.Height}"
+                            CornerRadius="6" Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
+                            AutomationProperties.AutomationId="HotkeyHelpOverlayPanelFrame">
+                        <views:HotkeyHelpPanel x:Name="ShellHotkeyHelpPanel" />
+                    </Border>
                 </Grid>
             </Grid>
         </dialogHostAvalonia:DialogHost>

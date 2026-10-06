@@ -1,0 +1,592 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:viewModel="clr-namespace:Unlimotion.ViewModel;assembly=Unlimotion.ViewModel"
+             xmlns:unlimotion="clr-namespace:Unlimotion"
+             xmlns:views="clr-namespace:Unlimotion.Views"
+             xmlns:converters="clr-namespace:Unlimotion.Converters"
+             xmlns:behavior="clr-namespace:Unlimotion.Behavior"
+             xmlns:domain="clr-namespace:Unlimotion.Domain;assembly=Unlimotion.Domain"
+             xmlns:searchControl="clr-namespace:Unlimotion.Views.SearchControl"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+             x:DataType="viewModel:MainWindowViewModel"
+             Name="mainControl"
+             x:Class="Unlimotion.Views.TaskCardView" AutomationProperties.AutomationId="TaskCardDocument">
+    <UserControl.KeyBindings>
+        <KeyBinding Gesture="Shift+Delete" Command="{Binding DeleteSelectedTreeItemsCommand}"/>
+        <KeyBinding Gesture="Ctrl+Enter" Command="{Binding CreateSibling}"/>
+        <KeyBinding Gesture="Shift+Enter" Command="{Binding CreateBlockedSibling}"/>
+        <KeyBinding Gesture="Ctrl+Tab" Command="{Binding CreateInner}"/>
+        <KeyBinding Gesture="Ctrl+Shift+Right" Command="{Binding ExpandCurrentNestedCommand}"/>
+        <KeyBinding Gesture="Ctrl+Shift+Left" Command="{Binding CollapseCurrentNestedCommand}"/>
+        <KeyBinding Gesture="Ctrl+Alt+Right" Command="{Binding ExpandAllTreeNodesCommand}"/>
+        <KeyBinding Gesture="Ctrl+Alt+Left" Command="{Binding CollapseAllTreeNodesCommand}"/>
+        <KeyBinding Gesture="Ctrl+Shift+C" Command="{Binding CopyTaskOutlineTreeCommand}"/>
+        <KeyBinding Gesture="Ctrl+Shift+V" Command="{Binding PasteTaskOutlineTreeCommand}"/>
+        <KeyBinding Gesture="Ctrl+D" Command="{Binding CompleteCurrentTaskCommand}"/>
+    </UserControl.KeyBindings>
+                    <Border x:Name="CurrentTaskDetailsPanelFrame"
+                            Classes="CurrentTaskDetailsPanelFrame"
+                            Classes.WorkspaceTaskRoute="{Binding #mainControl.RouteTaskItem, Converter={x:Static ObjectConverters.IsNotNull}}"
+                            AutomationProperties.ControlTypeOverride="Group"
+                            AutomationProperties.IsControlElementOverride="True"
+                            AutomationProperties.AutomationId="CurrentTaskDetailsPanelFrame"
+                            IsVisible="{Binding #mainControl.IsRouteDetailsOpen}">
+                        <ScrollViewer x:Name="CurrentTaskDetailsScrollViewer"
+                                      AutomationProperties.AutomationId="CurrentTaskDetailsScrollViewer"
+                                      HorizontalScrollBarVisibility="Disabled"
+                                      VerticalScrollBarVisibility="Auto"
+                                      VerticalContentAlignment="Top"
+                                      behavior:KeyboardAwareScrollViewer.IsEnabled="True">
+                            <StackPanel x:Name="TaskDetailsPanelRoot" Classes="TaskDetailsPanel"
+                                        Classes.WorkspaceTaskRoute="{Binding #mainControl.RouteTaskItem, Converter={x:Static ObjectConverters.IsNotNull}}">
+                            <Border Classes="CurrentTaskCard"
+                                    Classes.WorkspaceTaskRoute="{Binding #mainControl.RouteTaskItem, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                    AutomationProperties.ControlTypeOverride="Group"
+                                    AutomationProperties.IsControlElementOverride="True"
+                                    AutomationProperties.AutomationId="CurrentTaskCard"
+                                    IsVisible="{Binding #mainControl.CardTaskItem, Converter={x:Static ObjectConverters.IsNotNull}}">
+                                <StackPanel Classes="CurrentTaskCardContent"
+                                            DataContext="{Binding #mainControl.CardTaskItem}">
+                                    <Grid Classes="TaskCardHeader"
+                                          ColumnDefinitions="Auto,Auto,*"
+                                          RowDefinitions="Auto,Auto"
+                                          AutomationProperties.ControlTypeOverride="Group"
+                                          AutomationProperties.IsControlElementOverride="True"
+                                          AutomationProperties.AutomationId="CurrentTaskHeader">
+                                        <unlimotion:TaskStatusPicker Task="{Binding}"
+                                                  Margin="0,0,8,0"
+                                                  VerticalAlignment="Center"
+                                                  ToolTip.Tip="{Binding StatusToolTip}"
+                                                  AutomationProperties.AutomationId="CurrentTaskStatusButton"/>
+                                        <TextBlock Grid.Column="1"
+                                                   Classes="TaskGoalIndicator"
+                                                   Text="★"
+                                                   IsVisible="{Binding IsGoal}"
+                                                   ToolTip.Tip="{DynamicResource TaskIsGoal}"
+                                                   AutomationProperties.Name="{DynamicResource TaskIsGoal}"
+                                                   AutomationProperties.AutomationId="CurrentTaskGoalIndicator"/>
+                                        <TextBox Grid.Column="2"
+                                                 x:Name="CurrentTaskTitleTextBox"
+                                                 AutomationProperties.AutomationId="CurrentTaskTitleTextBox"
+                                                 Classes="CurrentTaskTitleEditor BorderlessTextBoxChrome"
+                                                 ToolTip.Tip="{Binding Id}"
+                                                 TextWrapping="Wrap"
+                                                 Text="{Binding Title}"
+                                                 PlaceholderText="{DynamicResource TitleWatermark}"
+                                                 VerticalAlignment="Center"
+                                                 VerticalContentAlignment="Center"/>
+
+                                        <WrapPanel Grid.Row="1"
+                                                   Grid.ColumnSpan="3"
+                                                   Classes="TaskHeaderStateRow">
+                                            <CheckBox IsChecked="{Binding WantedFromUi}"
+                                                      Classes="TaskHeaderStateCheckBox"
+                                                      VerticalAlignment="Center"
+                                                      Content="{DynamicResource Wanted}"
+                                                      AutomationProperties.AutomationId="CurrentTaskWantedCheckBox" />
+                                            <NumericUpDown Value="{Binding Importance}"
+                                                           Classes="TaskHeaderImportanceInput"
+                                                           Minimum="0"
+                                                           Maximum="100"
+                                                           ToolTip.Tip="{DynamicResource Importance}"
+                                                           PlaceholderText="{DynamicResource Importance}"
+                                                           AutomationProperties.AutomationId="CurrentTaskImportanceInput"/>
+                                            <unlimotion:EmojiTextBlock Classes="TaskHeaderParentEmojiTrail"
+                                                                        EmojiText="{Binding ParentEmojiTrail, Mode=OneWay}"
+                                                                        IsVisible="{Binding HasParentEmojiTrail}"
+                                                                        ToolTip.Tip="{DynamicResource ParentsTasks}"
+                                                                        AutomationProperties.Name="{DynamicResource ParentsTasks}"
+                                                                        AutomationProperties.AutomationId="CurrentTaskParentEmojiTrail"/>
+                                            <TextBlock Classes="TaskHeaderIdMeta"
+                                                       Text="{Binding Id, Mode=OneWay}"
+                                                       ToolTip.Tip="{Binding Id}"
+                                                       AutomationProperties.AutomationId="CurrentTaskIdTextBlock"/>
+                                            <WrapPanel Classes="TaskCommandBar"
+                                                       IsVisible="{Binding ., Converter={x:Static ObjectConverters.IsNotNull}}"
+                                                       AutomationProperties.ControlTypeOverride="Group"
+                                                       AutomationProperties.IsControlElementOverride="True"
+                                                       AutomationProperties.AutomationId="CurrentTaskCommandBar">
+                                                <Button x:Name="CurrentTaskSourceButton" IsVisible="False"
+                                                        Content="{DynamicResource WorkspaceGoToSource}" Click="OnTaskSourceClick"
+                                                        AutomationProperties.AutomationId="CurrentTaskSourceButton" />
+                                                <Button Content="{DynamicResource WorkspaceAddNextStep}" Click="OnAddNextStepClick"
+                                                        AutomationProperties.AutomationId="CurrentTaskNextStepButton" />
+                                                <DropDownButton Classes="TaskActionsMenuButton TaskAccentOutlineButton TaskIconOnlyDropDownButton"
+                                                                Content="⚙"
+                                                                ToolTip.Tip="{DynamicResource TaskActionsMenuTip}"
+                                                                AutomationProperties.Name="{DynamicResource TaskActionsMenuTip}"
+                                                                AutomationProperties.AutomationId="CurrentTaskActionsMenuButton">
+                                                    <DropDownButton.Flyout>
+                                                        <MenuFlyout>
+                                                            <MenuItem Header="{DynamicResource MoveToPath}"
+                                                                      Command="{Binding #mainControl.CardContext.MoveToPath}"
+                                                                      AutomationProperties.AutomationId="CurrentTaskMoveToPathMenuItem">
+                                                                <MenuItem.Icon>
+                                                                    <TextBlock Text="📁"/>
+                                                                </MenuItem.Icon>
+                                                            </MenuItem>
+                                                            <MenuItem Header="{Binding ArchiveCommandTitle}"
+                                                                      Command="{Binding ArchiveCommand}"
+                                                                      AutomationProperties.AutomationId="CurrentTaskArchiveMenuItem">
+                                                                <MenuItem.Icon>
+                                                                    <TextBlock Text="📦"/>
+                                                                </MenuItem.Icon>
+                                                            </MenuItem>
+                                                            <MenuItem Header="{DynamicResource Remove}"
+                                                                      Command="{Binding #mainControl.CardContext.Remove}"
+                                                                      AutomationProperties.AutomationId="CurrentTaskRemoveMenuItem">
+                                                                <MenuItem.Icon>
+                                                                    <TextBlock Text="🗑️"/>
+                                                                </MenuItem.Icon>
+                                                            </MenuItem>
+                                                        </MenuFlyout>
+                                                    </DropDownButton.Flyout>
+                                                </DropDownButton>
+                                            </WrapPanel>
+                                            <WrapPanel Classes="TaskHeaderDateMeta TaskHeaderMetaRow" IsVisible="{Binding CreatedDateTime, Converter={x:Static ObjectConverters.IsNotNull}}">
+                                                <Label Content="{DynamicResource CreatedPrefix}" Margin="0,0,2,0"/>
+                                                <Label Content="{Binding CreatedDateTime, StringFormat={}{0:yyyy.MM.dd HH:mm}}"/>
+                                            </WrapPanel>
+                                            <WrapPanel Classes="TaskHeaderDateMeta TaskHeaderMetaRow" IsVisible="{Binding UpdatedDateTime, Converter={x:Static ObjectConverters.IsNotNull}}">
+                                                <Label Content="{DynamicResource UpdatedPrefix}" Margin="0,0,2,0"/>
+                                                <Label Content="{Binding UpdatedDateTime, StringFormat={}{0:yyyy.MM.dd HH:mm}}"/>
+                                            </WrapPanel>
+                                            <WrapPanel Classes="TaskHeaderDateMeta TaskHeaderMetaRow" IsVisible="{Binding UnlockedDateTime, Converter={x:Static ObjectConverters.IsNotNull}}">
+                                                <Label Content="{DynamicResource UnlockedPrefix}" Margin="0,0,2,0"/>
+                                                <Label Content="{Binding UnlockedDateTime, StringFormat={}{0:yyyy.MM.dd HH:mm}}"/>
+                                            </WrapPanel>
+                                            <WrapPanel Classes="TaskHeaderDateMeta TaskHeaderMetaRow" IsVisible="{Binding CompletedDateTime, Converter={x:Static ObjectConverters.IsNotNull}}">
+                                                <Label Content="{DynamicResource CompletedPrefix}" Margin="0,0,2,0"/>
+                                                <Label Content="{Binding CompletedDateTime, StringFormat={}{0:yyyy.MM.dd HH:mm}}"/>
+                                            </WrapPanel>
+                                            <WrapPanel Classes="TaskHeaderDateMeta TaskHeaderMetaRow" IsVisible="{Binding ArchiveDateTime, Converter={x:Static ObjectConverters.IsNotNull}}">
+                                                <Label Content="{DynamicResource ArchivedPrefix}" Margin="0,0,2,0"/>
+                                                <Label Content="{Binding ArchiveDateTime, StringFormat={}{0:yyyy.MM.dd HH:mm}}"/>
+                                            </WrapPanel>
+                                        </WrapPanel>
+                                    </Grid>
+
+                                    <Border Classes="TaskCardSection"
+                                            AutomationProperties.ControlTypeOverride="Group"
+                                            AutomationProperties.IsControlElementOverride="True"
+                                            AutomationProperties.AutomationId="CurrentTaskDescriptionSection">
+                                        <StackPanel Classes="TaskCardSectionContent">
+                                            <TextBox Text="{Binding Description}"
+                                                     AutomationProperties.AutomationId="CurrentTaskDescriptionTextBox"
+                                                     Classes="TaskDescriptionEditor"
+                                                     TextWrapping="Wrap"
+                                                     AcceptsReturn="True"
+                                                     AcceptsTab="True"
+                                                     HorizontalAlignment="Stretch"/>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <Border Classes="TaskCardSection"
+                                            AutomationProperties.ControlTypeOverride="Group"
+                                            AutomationProperties.IsControlElementOverride="True"
+                                            AutomationProperties.AutomationId="CurrentTaskClassificationSection">
+                                        <StackPanel Classes="TaskCardSectionContent">
+                                            <TextBlock Classes="TaskCardSectionTitle"
+                                                       Text="{DynamicResource TaskClassificationTitle}" />
+                                            <views:TaskClassificationControl Task="{Binding}"
+                                                                             Owner="{Binding MainWindow}"
+                                                                             AreaOptions="{Binding MainWindow.Feed.Areas}"
+                                                                             AreaDefinitions="{Binding MainWindow.Feed.AreaManagement.ClassificationAreas}"
+                                                                             AutomationIdPrefix="CurrentTaskClassification" />
+                                        </StackPanel>
+                                    </Border>
+
+                                    <Border Classes="TaskCardSection"
+                                            AutomationProperties.ControlTypeOverride="Group"
+                                            AutomationProperties.IsControlElementOverride="True"
+                                            AutomationProperties.AutomationId="CurrentTaskCompletionCriteriaSection">
+                                        <StackPanel Classes="TaskCardSectionContent">
+                                            <Grid ColumnDefinitions="*,Auto">
+                                                <TextBlock Classes="TaskCardSectionTitle"
+                                                           Text="{DynamicResource CompletionCriteria}"
+                                                           VerticalAlignment="Center"/>
+                                                <Button Grid.Column="1"
+                                                        Content="{DynamicResource Add}"
+                                                        Command="{Binding AddCompletionCriterionCommand}"
+                                                        IsEnabled="{Binding CanEditCompletionCriteria}"
+                                                        AutomationProperties.AutomationId="AddCompletionCriterionButton"/>
+                                            </Grid>
+                                            <ItemsControl ItemsSource="{Binding CompletionCriteria}"
+                                                          IsEnabled="{Binding CanEditCompletionCriteria}"
+                                                          AutomationProperties.AutomationId="CompletionCriteriaItems"/>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <Border Classes="TaskCardSection"
+                                            AutomationProperties.ControlTypeOverride="Group"
+                                            AutomationProperties.IsControlElementOverride="True"
+                                            AutomationProperties.AutomationId="CurrentTaskPlanningSection">
+                                        <StackPanel Classes="TaskCardSectionContent">
+                                            <WrapPanel Classes="TaskPlanningGroups">
+                                                <StackPanel Classes="TaskPlanningGroup">
+                                                    <Grid Classes="TaskPlanningFieldRow" ColumnDefinitions="*,Auto">
+                                                        <CalendarDatePicker SelectedDate="{Binding PlannedBeginDateTime}"
+                                                                            Classes="TaskPlanningValueControl"
+                                                                            AutomationProperties.AutomationId="CurrentTaskPlannedBeginPicker"
+                                                                            IsTodayHighlighted="True"
+                                                                            PlaceholderText="{DynamicResource PlannedBegin}"
+                                                                            UseFloatingPlaceholder="True"
+                                                                            HorizontalAlignment="Stretch"
+                                                                            DisplayDate="{Binding PlannedBeginDateTime, Mode=OneWay, Converter={converters:DayOrTodayValueConverter}}"/>
+                                                        <DropDownButton Grid.Column="1"
+                                                                        Content="📅"
+                                                                        ToolTip.Tip="{DynamicResource SetBegin}"
+                                                                        AutomationProperties.Name="{DynamicResource SetBegin}"
+                                                                        Classes="TaskPlanningQuickAction TaskAccentOutlineButton TaskIconOnlyDropDownButton"
+                                                                        AutomationProperties.AutomationId="CurrentTaskSetBeginButton">
+                                                            <DropDownButton.Flyout>
+                                                                <MenuFlyout>
+                                                                    <MenuItem Header="{DynamicResource Today}" Command="{Binding Commands.SetBeginToday}"/>
+                                                                    <MenuItem Header="{DynamicResource Tomorrow}" Command="{Binding Commands.SetBeginTomorrow}"/>
+                                                                    <MenuItem Header="{DynamicResource NextMonday}" Command="{Binding Commands.SetBeginNextMonday}"/>
+                                                                    <MenuItem Header="{DynamicResource FirstDayNextMonth}" Command="{Binding Commands.SetBegin1DayNextMonth}"/>
+                                                                    <MenuItem Header="{DynamicResource None}" Command="{Binding Commands.SetBeginNone}"/>
+                                                                </MenuFlyout>
+                                                            </DropDownButton.Flyout>
+                                                        </DropDownButton>
+                                                    </Grid>
+                                                </StackPanel>
+
+                                                <StackPanel Classes="TaskPlanningGroup">
+                                                    <Grid Classes="TaskPlanningFieldRow" ColumnDefinitions="*,Auto">
+                                                        <TextBox ToolTip.Tip="{DynamicResource DurationExample}"
+                                                                 Classes="TaskPlanningValueControl"
+                                                                 AutomationProperties.AutomationId="CurrentTaskPlannedDurationTextBox"
+                                                                 HorizontalAlignment="Stretch"
+                                                                 behavior:LostFocusUpdateBindingBehavior.Text="{Binding PlannedDuration, Converter={StaticResource TimeSpanStringConverter}}"
+                                                                 PlaceholderText="{DynamicResource PlannedDuration}"
+                                                                 UseFloatingPlaceholder="True"/>
+                                                        <DropDownButton Grid.Column="1"
+                                                                        Content="⏱"
+                                                                        ToolTip.Tip="{DynamicResource SetDuration}"
+                                                                        AutomationProperties.Name="{DynamicResource SetDuration}"
+                                                                        Classes="TaskPlanningQuickAction TaskAccentOutlineButton TaskIconOnlyDropDownButton"
+                                                                        AutomationProperties.AutomationId="CurrentTaskSetDurationButton">
+                                                            <DropDownButton.Flyout>
+                                                                <MenuFlyout>
+                                                                    <MenuItem Header="{DynamicResource OneMinute}" Command="{Binding SetDurationCommands.OneMinCommand}" />
+                                                                    <MenuItem Header="{DynamicResource FiveMinutes}" Command="{Binding SetDurationCommands.FiveMinutesCommand}" />
+                                                                    <MenuItem Header="{DynamicResource TenMinutes}" Command="{Binding SetDurationCommands.TenMinutesCommand}" />
+                                                                    <MenuItem Header="{DynamicResource TwentyMinutes}" Command="{Binding SetDurationCommands.TwentyMinutesCommand}" />
+                                                                    <MenuItem Header="{DynamicResource FortyMinutes}" Command="{Binding SetDurationCommands.FortyMinutesCommand}" />
+                                                                    <MenuItem Header="{DynamicResource OneHour}" Command="{Binding SetDurationCommands.OneHourCommand}" />
+                                                                    <MenuItem Header="{DynamicResource TwoHours}" Command="{Binding SetDurationCommands.TwoHoursCommand}" />
+                                                                    <MenuItem Header="{DynamicResource FourHours}" Command="{Binding SetDurationCommands.FourHoursCommand}" />
+                                                                    <MenuItem Header="{DynamicResource OneDay}" Command="{Binding SetDurationCommands.OneDayCommand}" />
+                                                                    <MenuItem Header="{DynamicResource TwoDays}" Command="{Binding SetDurationCommands.TwoDaysCommand}" />
+                                                                    <MenuItem Header="{DynamicResource FourDays}" Command="{Binding SetDurationCommands.FourDaysCommand}" />
+                                                                    <MenuItem Header="{DynamicResource EightDays}" Command="{Binding SetDurationCommands.EightDaysCommand}" />
+                                                                    <MenuItem Header="{DynamicResource None}" Command="{Binding SetDurationCommands.NoneCommand}" />
+                                                                </MenuFlyout>
+                                                            </DropDownButton.Flyout>
+                                                        </DropDownButton>
+                                                    </Grid>
+                                                </StackPanel>
+
+                                                <StackPanel Classes="TaskPlanningGroup">
+                                                    <Grid Classes="TaskPlanningFieldRow" ColumnDefinitions="*,Auto">
+                                                        <CalendarDatePicker SelectedDate="{Binding PlannedEndDateTime}"
+                                                                            Classes="TaskPlanningValueControl"
+                                                                            AutomationProperties.AutomationId="CurrentTaskPlannedEndPicker"
+                                                                            IsTodayHighlighted="True"
+                                                                            PlaceholderText="{DynamicResource PlannedEnd}"
+                                                                            UseFloatingPlaceholder="True"
+                                                                            HorizontalAlignment="Stretch"
+                                                                            DisplayDate="{Binding PlannedEndDateTime, Mode=OneWay, Converter={converters:DayOrTodayValueConverter}}"/>
+                                                        <DropDownButton Grid.Column="1"
+                                                                        Content="🏁"
+                                                                        ToolTip.Tip="{DynamicResource SetEnd}"
+                                                                        AutomationProperties.Name="{DynamicResource SetEnd}"
+                                                                        Classes="TaskPlanningQuickAction TaskAccentOutlineButton TaskIconOnlyDropDownButton"
+                                                                        AutomationProperties.AutomationId="CurrentTaskSetEndButton">
+                                                            <DropDownButton.Flyout>
+                                                                <MenuFlyout>
+                                                                    <MenuItem Header="{DynamicResource Today}" Command="{Binding Commands.SetEndToday}"/>
+                                                                    <MenuItem Header="{DynamicResource Tomorrow}" Command="{Binding Commands.SetEndTomorrow}"/>
+                                                                    <MenuItem Header="{DynamicResource NextFriday}" Command="{Binding Commands.SetEndNextFriday}"/>
+                                                                    <MenuItem Header="{DynamicResource OneDay}" Command="{Binding Commands.SetEnd1Days}"/>
+                                                                    <MenuItem Header="{DynamicResource FiveDays}" Command="{Binding Commands.SetEnd5Days}"/>
+                                                                    <MenuItem Header="{DynamicResource SevenDays}" Command="{Binding Commands.SetEnd7Days}"/>
+                                                                    <MenuItem Header="{DynamicResource TenDays}" Command="{Binding Commands.SetEnd10Days}"/>
+                                                                    <MenuItem Header="{DynamicResource OneMonth}" Command="{Binding Commands.SetEnd1Month}"/>
+                                                                    <MenuItem Header="{DynamicResource None}" Command="{Binding Commands.SetEndNone}"/>
+                                                                </MenuFlyout>
+                                                            </DropDownButton.Flyout>
+                                                        </DropDownButton>
+                                                    </Grid>
+                                                </StackPanel>
+                                            </WrapPanel>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <Border Classes="TaskCardSection"
+                                            AutomationProperties.ControlTypeOverride="Group"
+                                            AutomationProperties.IsControlElementOverride="True"
+                                            AutomationProperties.AutomationId="CurrentTaskRepeaterSection"
+                                            IsVisible="{Binding PlannedBeginDateTime, Converter={x:Static ObjectConverters.IsNotNull}}">
+                                        <StackPanel Classes="TaskCardSectionContent">
+                                            <Grid Classes="RepeaterControls RepeaterPatternControls"
+                                                  ColumnDefinitions="*,*,Auto,*"
+                                                  RowDefinitions="Auto,Auto">
+                                                <ComboBox Grid.Column="0"
+                                                          Classes="RepeaterSelector"
+                                                          ItemsSource="{Binding Repeaters}"
+                                                          SelectedItem="{Binding SelectedRepeaterTemplate}"
+                                                          PlaceholderText="{DynamicResource RepeaterTemplates}"
+                                                          AutomationProperties.AutomationId="CurrentTaskRepeaterSelector">
+                                                    <ComboBox.ItemTemplate>
+                                                        <DataTemplate DataType="viewModel:RepeaterPatternViewModel">
+                                                            <Label Content="{Binding Title}"/>
+                                                        </DataTemplate>
+                                                    </ComboBox.ItemTemplate>
+                                                </ComboBox>
+                                                <ComboBox Grid.Column="1"
+                                                          Classes="RepeaterPatternTypeSelector"
+                                                          ItemsSource="{Binding Repeater.RepeaterTypes}"
+                                                          SelectedItem="{Binding Repeater.SelectedRepeaterType}"
+                                                          IsVisible="{Binding IsHaveRepeater}"
+                                                          AutomationProperties.AutomationId="CurrentTaskRepeaterPatternTypeSelector"/>
+                                                <NumericUpDown Grid.Column="2"
+                                                               Classes="RepeaterPeriodInput"
+                                                               Value="{Binding Repeater.Period}"
+                                                               IsVisible="{Binding IsHaveRepeater}"
+                                                               PlaceholderText="{DynamicResource Period}"
+                                                               ToolTip.Tip="{DynamicResource Period}"
+                                                               AutomationProperties.AutomationId="CurrentTaskRepeaterPeriodInput"/>
+                                                <CheckBox Grid.Column="3"
+                                                          Classes="RepeaterAfterCompleteCheckBox"
+                                                          IsChecked="{Binding Repeater.AfterComplete}"
+                                                          IsVisible="{Binding IsHaveRepeater}"
+                                                          Content="{DynamicResource AfterComplete}"
+                                                          AutomationProperties.AutomationId="CurrentTaskRepeaterAfterCompleteCheckBox"/>
+                                                <WrapPanel Grid.Row="1"
+                                                           Grid.Column="1"
+                                                           Grid.ColumnSpan="3"
+                                                           Classes="WeekdayToggles"
+                                                           IsVisible="{Binding Repeater.Type, Converter={StaticResource EqualConverter}, ConverterParameter={x:Static domain:RepeaterType.Weekly}, FallbackValue={x:Static domain:RepeaterType.None}, TargetNullValue={x:Static domain:RepeaterType.None}}">
+                                                    <ToggleButton Classes="WeekdayToggle" IsChecked="{Binding Repeater.Monday}" Content="{DynamicResource MondayShort}" ToolTip.Tip="{DynamicResource Monday}" />
+                                                    <ToggleButton Classes="WeekdayToggle" IsChecked="{Binding Repeater.Tuesday}" Content="{DynamicResource TuesdayShort}" ToolTip.Tip="{DynamicResource Tuesday}" />
+                                                    <ToggleButton Classes="WeekdayToggle" IsChecked="{Binding Repeater.Wednesday}" Content="{DynamicResource WednesdayShort}" ToolTip.Tip="{DynamicResource Wednesday}"/>
+                                                    <ToggleButton Classes="WeekdayToggle" IsChecked="{Binding Repeater.Thursday}" Content="{DynamicResource ThursdayShort}" ToolTip.Tip="{DynamicResource Thursday}" />
+                                                    <ToggleButton Classes="WeekdayToggle" IsChecked="{Binding Repeater.Friday}" Content="{DynamicResource FridayShort}" ToolTip.Tip="{DynamicResource Friday}" />
+                                                    <ToggleButton Classes="WeekdayToggle" IsChecked="{Binding Repeater.Saturday}" Content="{DynamicResource SaturdayShort}" ToolTip.Tip="{DynamicResource Saturday}" />
+                                                    <ToggleButton Classes="WeekdayToggle" IsChecked="{Binding Repeater.Sunday}" Content="{DynamicResource SundayShort}" ToolTip.Tip="{DynamicResource Sunday}" />
+                                                </WrapPanel>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <Border Classes="TaskCardSection"
+                                            AutomationProperties.ControlTypeOverride="Group"
+                                            AutomationProperties.IsControlElementOverride="True"
+                                            AutomationProperties.AutomationId="CurrentTaskRelationsSection">
+                                        <StackPanel Classes="TaskCardSectionContent">
+                                    <views:TaskRelationsControl Owner="{Binding MainWindow}"
+                                                                TargetTask="{Binding}"
+                                                                Editor="{Binding #mainControl.CardContext.RelationEditor}"
+                                                                OpenParentTaskOnDoubleTap="True"/>
+
+                                    <Grid Classes="RelationSectionHeader" ColumnDefinitions="*,Auto">
+                                        <Label Content="{DynamicResource BlockingTasks}"/>
+                                        <Button Grid.Column="1"
+                                                Classes="RelationAddButton TaskAccentOutlineButton"
+                                                Content="＋"
+                                                ToolTip.Tip="{DynamicResource AddBlockingRelation}"
+                                                AutomationProperties.Name="{DynamicResource AddBlockingRelation}"
+                                                Click="RelationAddButton_OnClick"
+                                                Tag="Blocking"
+                                                AutomationProperties.AutomationId="CurrentTaskBlockingRelationAddButton"/>
+                                    </Grid>
+                                    <Border Classes="RelationEditorCard"
+                                            DataContext="{Binding #mainControl.CardContext.RelationEditor}"
+                                            IsVisible="{Binding IsOpenForBlocking}">
+                                        <StackPanel Classes="RelationPickerRow">
+                                            <TextBlock Text="{Binding Header}" FontWeight="Bold"/>
+                                            <TextBox Classes="RelationEditorSearch"
+                                                     Text="{Binding Query, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                     PlaceholderText="{Binding Watermark}"
+                                                     KeyDown="RelationEditorControl_OnKeyDown"
+                                                     AutomationProperties.AutomationId="CurrentTaskBlockingRelationAddInput"/>
+                                            <ListBox Classes="RelationEditorSuggestions"
+                                                     ItemsSource="{Binding Suggestions}"
+                                                     SelectedItem="{Binding SelectedCandidate, Mode=TwoWay}"
+                                                     DoubleTapped="RelationEditorSuggestions_OnDoubleTapped"
+                                                     KeyDown="RelationEditorControl_OnKeyDown"
+                                                     AutomationProperties.AutomationId="CurrentTaskBlockingRelationSuggestions"/>
+                                            <TextBlock Text="{Binding EmptyStateText}"
+                                                       IsVisible="{Binding !HasSuggestions}"
+                                                       Opacity="0.7"
+                                                       TextWrapping="Wrap"/>
+                                            <Grid ColumnDefinitions="Auto,Auto" ColumnSpacing="8" HorizontalAlignment="Right">
+                                                <Button Content="{DynamicResource Cancel}"
+                                                        Command="{Binding CancelCommand}"
+                                                        AutomationProperties.AutomationId="CurrentTaskBlockingRelationAddCancelButton"/>
+                                                <Button Grid.Column="1"
+                                                        Content="{DynamicResource Add}"
+                                                        Command="{Binding ConfirmCommand}"
+                                                        AutomationProperties.AutomationId="CurrentTaskBlockingRelationAddConfirmButton"/>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
+                                    <TreeView DataContext="{Binding #mainControl.CardContext}"
+                                              x:DataType="viewModel:TaskCardDocumentViewModel"
+                                              ItemsSource="{Binding CurrentItemBlockedBy.SubTasks}"
+                                              SelectionMode="Multiple"
+                                              Classes="TaskTree RelationTaskTree"
+                                              ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                              PointerPressed="TaskTree_OnPointerPressed"
+                                              AutomationProperties.AutomationId="CurrentItemBlockedByTree"
+                                              x:Name="CurrentItemBlockedByTree">
+                                        <TreeView.ItemTemplate>
+                                            <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
+                                                <ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed" PointerMoved="InputElement_OnPointerMoved" PointerReleased="InputElement_OnPointerReleased" DoubleTapped="Task_OnDoubleTapped"/>
+                                            </TreeDataTemplate>
+                                        </TreeView.ItemTemplate>
+                                    </TreeView>
+
+                                    <Grid Classes="RelationSectionHeader" ColumnDefinitions="*,Auto">
+                                        <Label Content="{DynamicResource ContainingTasks}"/>
+                                        <Button Grid.Column="1"
+                                                Classes="RelationAddButton TaskAccentOutlineButton"
+                                                Content="＋"
+                                                ToolTip.Tip="{DynamicResource AddContainingRelation}"
+                                                AutomationProperties.Name="{DynamicResource AddContainingRelation}"
+                                                Click="RelationAddButton_OnClick"
+                                                Tag="Containing"
+                                                AutomationProperties.AutomationId="CurrentTaskContainingRelationAddButton"/>
+                                    </Grid>
+                                    <Border Classes="RelationEditorCard"
+                                            DataContext="{Binding #mainControl.CardContext.RelationEditor}"
+                                            IsVisible="{Binding IsOpenForContaining}">
+                                        <StackPanel Classes="RelationPickerRow">
+                                            <TextBlock Text="{Binding Header}" FontWeight="Bold"/>
+                                            <TextBox Classes="RelationEditorSearch"
+                                                     Text="{Binding Query, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                     PlaceholderText="{Binding Watermark}"
+                                                     KeyDown="RelationEditorControl_OnKeyDown"
+                                                     AutomationProperties.AutomationId="CurrentTaskContainingRelationAddInput"/>
+                                            <ListBox Classes="RelationEditorSuggestions"
+                                                     ItemsSource="{Binding Suggestions}"
+                                                     SelectedItem="{Binding SelectedCandidate, Mode=TwoWay}"
+                                                     DoubleTapped="RelationEditorSuggestions_OnDoubleTapped"
+                                                     KeyDown="RelationEditorControl_OnKeyDown"
+                                                     AutomationProperties.AutomationId="CurrentTaskContainingRelationSuggestions"/>
+                                            <TextBlock Text="{Binding EmptyStateText}"
+                                                       IsVisible="{Binding !HasSuggestions}"
+                                                       Opacity="0.7"
+                                                       TextWrapping="Wrap"/>
+                                            <Grid ColumnDefinitions="Auto,Auto" ColumnSpacing="8" HorizontalAlignment="Right">
+                                                <Button Content="{DynamicResource Cancel}"
+                                                        Command="{Binding CancelCommand}"
+                                                        AutomationProperties.AutomationId="CurrentTaskContainingRelationAddCancelButton"/>
+                                                <Button Grid.Column="1"
+                                                        Content="{DynamicResource Add}"
+                                                        Command="{Binding ConfirmCommand}"
+                                                        AutomationProperties.AutomationId="CurrentTaskContainingRelationAddConfirmButton"/>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
+                                    <TreeView DataContext="{Binding #mainControl.CardContext}"
+                                              x:DataType="viewModel:TaskCardDocumentViewModel"
+                                              ItemsSource="{Binding CurrentItemContains.SubTasks}"
+                                              SelectionMode="Multiple"
+                                              Classes="TaskTree RelationTaskTree"
+                                              ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                              PointerPressed="TaskTree_OnPointerPressed"
+                                              AutomationProperties.AutomationId="CurrentItemContainsTree"
+                                              x:Name="CurrentItemContainsTree">
+                                        <TreeView.ItemTemplate>
+                                            <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
+                                                <ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed" PointerMoved="InputElement_OnPointerMoved" PointerReleased="InputElement_OnPointerReleased" DoubleTapped="Task_OnDoubleTapped"/>
+                                            </TreeDataTemplate>
+                                        </TreeView.ItemTemplate>
+                                    </TreeView>
+
+                                    <Grid Classes="RelationSectionHeader" ColumnDefinitions="*,Auto">
+                                        <Label Content="{DynamicResource BlockedTasks}"/>
+                                        <Button Grid.Column="1"
+                                                Classes="RelationAddButton TaskAccentOutlineButton"
+                                                Content="＋"
+                                                ToolTip.Tip="{DynamicResource AddBlockedRelation}"
+                                                AutomationProperties.Name="{DynamicResource AddBlockedRelation}"
+                                                Click="RelationAddButton_OnClick"
+                                                Tag="Blocked"
+                                                AutomationProperties.AutomationId="CurrentTaskBlockedRelationAddButton"/>
+                                    </Grid>
+                                    <Border Classes="RelationEditorCard"
+                                            DataContext="{Binding #mainControl.CardContext.RelationEditor}"
+                                            IsVisible="{Binding IsOpenForBlocked}">
+                                        <StackPanel Classes="RelationPickerRow">
+                                            <TextBlock Text="{Binding Header}" FontWeight="Bold"/>
+                                            <TextBox Classes="RelationEditorSearch"
+                                                     Text="{Binding Query, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                     PlaceholderText="{Binding Watermark}"
+                                                     KeyDown="RelationEditorControl_OnKeyDown"
+                                                     AutomationProperties.AutomationId="CurrentTaskBlockedRelationAddInput"/>
+                                            <ListBox Classes="RelationEditorSuggestions"
+                                                     ItemsSource="{Binding Suggestions}"
+                                                     SelectedItem="{Binding SelectedCandidate, Mode=TwoWay}"
+                                                     DoubleTapped="RelationEditorSuggestions_OnDoubleTapped"
+                                                     KeyDown="RelationEditorControl_OnKeyDown"
+                                                     AutomationProperties.AutomationId="CurrentTaskBlockedRelationSuggestions"/>
+                                            <TextBlock Text="{Binding EmptyStateText}"
+                                                       IsVisible="{Binding !HasSuggestions}"
+                                                       Opacity="0.7"
+                                                       TextWrapping="Wrap"/>
+                                            <Grid ColumnDefinitions="Auto,Auto" ColumnSpacing="8" HorizontalAlignment="Right">
+                                                <Button Content="{DynamicResource Cancel}"
+                                                        Command="{Binding CancelCommand}"
+                                                        AutomationProperties.AutomationId="CurrentTaskBlockedRelationAddCancelButton"/>
+                                                <Button Grid.Column="1"
+                                                        Content="{DynamicResource Add}"
+                                                        Command="{Binding ConfirmCommand}"
+                                                        AutomationProperties.AutomationId="CurrentTaskBlockedRelationAddConfirmButton"/>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
+                                    <TreeView DataContext="{Binding #mainControl.CardContext}"
+                                              x:DataType="viewModel:TaskCardDocumentViewModel"
+                                              ItemsSource="{Binding CurrentItemBlocks.SubTasks}"
+                                              SelectionMode="Multiple"
+                                              Classes="TaskTree RelationTaskTree"
+                                              ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                              PointerPressed="TaskTree_OnPointerPressed"
+                                              AutomationProperties.AutomationId="CurrentItemBlocksTree"
+                                              x:Name="CurrentItemBlocksTree">
+                                        <TreeView.ItemTemplate>
+                                            <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
+                                                <ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed" PointerMoved="InputElement_OnPointerMoved" PointerReleased="InputElement_OnPointerReleased" DoubleTapped="Task_OnDoubleTapped"/>
+                                            </TreeDataTemplate>
+                                        </TreeView.ItemTemplate>
+                                    </TreeView>
+
+                                        </StackPanel>
+                                    </Border>
+
+                                    <Border Classes="TaskCardSection"
+                                            AutomationProperties.ControlTypeOverride="Group"
+                                            AutomationProperties.IsControlElementOverride="True"
+                                            AutomationProperties.AutomationId="CurrentTaskStatusHistorySection">
+                                        <Expander Header="{DynamicResource StatusHistory}"
+                                                  Classes="TaskStatusHistoryExpander"
+                                                  ExpandDirection="Down"
+                                                  AutomationProperties.AutomationId="StatusHistoryExpander">
+                                            <ItemsControl ItemsSource="{Binding StatusHistory}"
+                                                          AutomationProperties.AutomationId="StatusHistoryItems"/>
+                                        </Expander>
+                                    </Border>
+
+                                </StackPanel>
+                            </Border>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
+
+</UserControl>

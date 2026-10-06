@@ -48,18 +48,7 @@ public sealed class FeedReadingPolishFlaUiTests
             session.MainWindow.Patterns.Window.Pattern.SetWindowVisualState(WindowVisualState.Normal);
             Resize(session.MainWindow, width, 850);
             session.MainWindow.Focus();
-            WaitUntil(() => Visible(session, "FeedModeButton") || Visible(session, "GlobalOverflowMenuButton"),
-                "Shell mode navigation did not become ready.");
-            if (Visible(session, "FeedModeButton"))
-            {
-                Find(session, "FeedModeButton")!.AsRadioButton().IsChecked = true;
-            }
-            else
-            {
-                Activate(Find(session, "GlobalOverflowMenuButton")!);
-                WaitUntil(() => Visible(session, "GlobalFeedModeMenuItem"), "Feed mode is absent from shell overflow.");
-                Find(session, "GlobalFeedModeMenuItem")!.AsMenuItem().Click();
-            }
+            OpenFeed(session);
 
             var metadataId = $"FeedDay-{today:yyyyMMdd}-ServiceDataToggle";
             var headingId = $"FeedDay-{today:yyyyMMdd}-DateText";
@@ -107,6 +96,79 @@ public sealed class FeedReadingPolishFlaUiTests
             catch (Exception ex) { Console.Error.WriteLine($"Screenshot unavailable: {ex.Message}"); }
             throw;
         }
+    }
+
+    internal static void OpenFeed(DesktopAppSession session)
+    {
+        // Wide shells expose the document rail; narrow shells expose its entries in overflow.
+        // FeedModeButton belongs to the hidden compatibility mode selector, not current navigation.
+        WaitUntil(() => Visible(session, "WorkspaceRailFeedButton") || Visible(session, "GlobalOverflowMenuButton"),
+            "Shell document navigation did not become ready.");
+        if (Visible(session, "WorkspaceRailFeedButton"))
+        {
+            Activate(Find(session, "WorkspaceRailFeedButton")!);
+        }
+        else
+        {
+            Activate(Find(session, "GlobalOverflowMenuButton")!);
+            WaitUntil(() => Visible(session, "GlobalFeedModeMenuItem"), "Feed document is absent from shell overflow.");
+            Find(session, "GlobalFeedModeMenuItem")!.AsMenuItem().Click();
+            // The Feed entry now contains the common document-opening submenu. Clicking its
+            // parent only expands it; select the actual current-tab/reuse command as a user would.
+            try
+            {
+                WaitUntil(() => FindVisibleFeedOpeningCommand(session) is not null,
+                    "Feed opening command is absent from its submenu.");
+            }
+            catch (TimeoutException)
+            {
+                DumpFeedOpeningMenu(session);
+                try { Capture(session, "native-feed-opening-failure.png"); }
+                catch (Exception exception) { Console.Error.WriteLine($"Menu screenshot unavailable: {exception.Message}"); }
+                throw;
+            }
+            FindVisibleFeedOpeningCommand(session)!.AsMenuItem().Click();
+        }
+        WaitUntil(() => Visible(session, "FeedChronologyList"), "Feed chronology did not open after navigation.");
+    }
+
+    private static AutomationElement? FindVisibleFeedOpeningCommand(DesktopAppSession session)
+    {
+        var condition = session.ConditionFactory.ByProcessId(session.MainWindow.Properties.ProcessId.ValueOrDefault)
+            .And(session.ConditionFactory.ByControlType(ControlType.MenuItem))
+            .And(session.ConditionFactory.ByName("Открыть в текущей вкладке")
+                .Or(session.ConditionFactory.ByName("Показать открытую вкладку")));
+        return session.MainWindow.Automation.GetDesktop().FindAllDescendants(condition)
+            .FirstOrDefault(element => !element.Properties.IsOffscreen.ValueOrDefault
+                && element.BoundingRectangle.Width > 0 && element.BoundingRectangle.Height > 0);
+    }
+
+    private static void DumpFeedOpeningMenu(DesktopAppSession session)
+    {
+        try
+        {
+            var process = session.ConditionFactory.ByProcessId(session.MainWindow.Properties.ProcessId.ValueOrDefault);
+            var windows = session.MainWindow.Automation.GetDesktop().FindAllChildren(process);
+            foreach (var window in windows.Take(12))
+            {
+                WriteElement("Owned window", window);
+                foreach (var element in window.FindAllDescendants(
+                             session.ConditionFactory.ByControlType(ControlType.MenuItem)).Take(80))
+                    WriteElement("Menu item", element);
+            }
+            Console.Error.WriteLine($"Feed chronology visible={Visible(session, "FeedChronologyList")}; " +
+                $"Feed root visible={Visible(session, "FeedRoot")}; processWindows={windows.Length}.");
+        }
+        catch (Exception exception)
+        {
+            Console.Error.WriteLine($"Feed menu diagnostics unavailable: {exception.Message}");
+        }
+
+        static void WriteElement(string kind, AutomationElement element) => Console.Error.WriteLine(
+            $"{kind}: Name='{element.Properties.Name.ValueOrDefault}'; " +
+            $"type={element.Properties.ControlType.ValueOrDefault}; " +
+            $"id='{element.Properties.AutomationId.ValueOrDefault}'; " +
+            $"offscreen={element.Properties.IsOffscreen.ValueOrDefault}; bounds={element.BoundingRectangle}.");
     }
 
     private static void ScrollInsideLongDay(DesktopAppSession session, string headingId)

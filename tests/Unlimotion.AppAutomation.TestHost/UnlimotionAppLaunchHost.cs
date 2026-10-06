@@ -401,6 +401,7 @@ public static class UnlimotionAppLaunchHost
             runtime.TaskContext.MainWindow = vm;
             await Dispatcher.UIThread.InvokeAsync(async () =>
             {
+                if (vm.IsInitialized && ReferenceEquals(vm.taskRepository, runtime.Storage)) return;
                 await vm.CommitWorkspaceEditorsAsync();
                 await vm.BindInitializedStorage(runtime.Storage);
             });
@@ -433,7 +434,7 @@ public static class UnlimotionAppLaunchHost
             await RunOnUiThread(() => settings.IsTaskSpaceSwitching = true);
             try
             {
-                await vm.Feed.CommitActiveEditorsAsync();
+                await vm.CommitWorkspaceEditorsAsync();
                 await coordinator.SwitchAsync(target.SourceId);
                 taskSourceSwitched = true;
                 await RunOnUiThread(() =>

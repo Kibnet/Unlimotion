@@ -141,38 +141,18 @@ public sealed class TaskLoadingPerformanceFlaUiTests
         var readyMs = watch.Elapsed.TotalMilliseconds;
 
         // A successful task-card action distinguishes readiness from a hidden overlay on failure.
-        var details = Find(session, "DetailsPaneToggleButton")!.AsToggleButton();
         if (Find(session, "CurrentTaskTitleTextBox")?.AsTextBox().Text != title)
         {
-            // Close a previously selected card before clicking the new row. Closing after the click
-            // races with the same toggle that the row click opens and made the benchmark flaky.
-            // The button binds to !DetailsAreOpen: checked means the pane is closed.
-            if (details.IsToggled != true)
-            {
-                details.Toggle();
-                Wait(() => details.IsToggled == true, "The previous task card did not close.", TimeSpan.FromSeconds(15));
-            }
             var lastClick = Stopwatch.StartNew();
             var clicked = false;
-            var toggledAfterClick = false;
             Wait(() =>
             {
                 if (Find(session, "CurrentTaskTitleTextBox")?.AsTextBox().Text == title) return true;
-                if (clicked && lastClick.Elapsed >= TimeSpan.FromSeconds(1) &&
-                    details.IsToggled == true && !toggledAfterClick)
-                {
-                    // Some UIA providers select the row without opening the pane. Toggle once,
-                    // but never close a pane that the row click has already opened.
-                    details.Toggle();
-                    toggledAfterClick = true;
-                    return false;
-                }
-
                 if (clicked && lastClick.Elapsed < TimeSpan.FromSeconds(3)) return false;
-
                 var task = session.MainWindow
-                    .FindAllDescendants(session.ConditionFactory.ByAutomationId("InlineTaskTitleTextBlock"))
-                    .FirstOrDefault(e => e.Name == title && Visible(e));
+                    .FindAllDescendants()
+                    .FirstOrDefault(e => e.Properties.AutomationId.ValueOrDefault?.StartsWith("TaskTitle_", StringComparison.Ordinal) == true
+                        && e.Name == title && Visible(e));
                 if (task is null) return false;
                 var row = task.Parent;
                 while (row is not null && row.ControlType != ControlType.TreeItem)
@@ -195,11 +175,13 @@ public sealed class TaskLoadingPerformanceFlaUiTests
                         ?? throw new InvalidOperationException($"Task '{title}' disappeared before selection."))
                         .GetAwaiter().GetResult();
                 clicked = true;
-                toggledAfterClick = false;
                 lastClick.Restart();
                 return false;
             }, "The selected task card did not open.", TimeSpan.FromSeconds(15));
         }
+        if (!Visible(Find(session, "TaskCardDocument")) || Visible(Find(session, "MainTabs")) ||
+            Visible(Find(session, "TaskListDocument")))
+            throw new InvalidOperationException("The loading flow did not open a standalone task card.");
         var cardOpenedMs = watch.Elapsed.TotalMilliseconds;
         Find(session, "CurrentTaskParentsRelationAddButton")!.AsButton().Invoke();
         Wait(() => Visible(Find(session, "CurrentTaskParentsRelationAddInput")),

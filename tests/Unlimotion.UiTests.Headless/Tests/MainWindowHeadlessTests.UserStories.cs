@@ -6,6 +6,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
+using Avalonia.Headless;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -121,16 +122,15 @@ public sealed partial class MainWindowHeadlessTests
         var taskLink = WaitForHeadlessControl(
             () => Page.FeedSeededTaskTitleButton,
             "The daily entry did not display its linked task.");
-        HeadlessRuntime.Dispatch(() =>
-        {
-            var button = GetNativeControl<Button>(taskLink);
-            var openBeside = button.ContextMenu?.Items.OfType<MenuItem>().ElementAtOrDefault(1)
-                ?? throw new InvalidOperationException("The linked task has no Open beside command.");
-            openBeside.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent, openBeside));
-            Dispatcher.UIThread.RunJobs();
-        });
+        OpenStoryLinkBesidePhysically(HeadlessRuntime.Dispatch(() => GetNativeControl<Button>(taskLink)));
         WaitUntil(
-            () => HeadlessRuntime.Dispatch(() => GetHeadlessMainWindowViewModel().WorkspaceNavigation.HasSecondaryPane),
+            () => HeadlessRuntime.Dispatch(() =>
+            {
+                var navigation = GetHeadlessMainWindowViewModel().WorkspaceNavigation;
+                return navigation.PrimaryPane.ActiveTab?.CurrentLocation?.Kind == Unlimotion.ViewModel.Workspace.WorkspaceLocationKind.Feed &&
+                    navigation.SecondaryPane?.ActiveTab?.CurrentLocation is
+                        { Kind: Unlimotion.ViewModel.Workspace.WorkspaceLocationKind.Task } task && task.Id == UnlimotionAutomationScenarioData.FeedCurrentTaskId;
+            }),
             timeout: TimeSpan.FromSeconds(10),
             timeoutMessage: "The task did not open next to its source note.");
         WaitUntil(
@@ -253,28 +253,15 @@ public sealed partial class MainWindowHeadlessTests
             value => value.Contains("- [ ] " + marker, StringComparison.Ordinal),
             timeout: TimeSpan.FromSeconds(10),
             timeoutMessage: "The checklist item was not persisted to the daily Markdown file.");
-        var checkbox = WaitUntil(
-            () => HeadlessRuntime.Dispatch(() => TryFindNativeControlByAutomationId<CheckBox>(block.TaskCheckboxAutomationId)),
-            value => value is not null,
-            timeout: TimeSpan.FromSeconds(10),
-            timeoutMessage: "The new checklist item has no visible checkbox.")!;
-        HeadlessRuntime.Dispatch(() =>
-        {
-            checkbox.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, checkbox));
-            Dispatcher.UIThread.RunJobs();
-        });
+        var pendingChecklistText = ReadFeedVaultText(todayPath);
+        ClickCurrentLocalCheckbox();
         WaitUntil(
             () => ReadFeedVaultText(todayPath),
             value => value.Contains("- [x] " + marker, StringComparison.Ordinal),
             timeout: TimeSpan.FromSeconds(10),
             timeoutMessage: "Checking the local item was not saved.");
         await CaptureStoryScreenshotAsync("ux02-local-checkbox.png");
-        HeadlessRuntime.Dispatch(() =>
-        {
-            var current = FindNativeControlByAutomationId<CheckBox>(block.TaskCheckboxAutomationId);
-            current.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, current));
-            Dispatcher.UIThread.RunJobs();
-        });
+        ClickCurrentLocalCheckbox();
         WaitUntil(
             () => ReadFeedVaultText(todayPath),
             value => value.Contains("- [ ] " + marker, StringComparison.Ordinal),
@@ -282,6 +269,35 @@ public sealed partial class MainWindowHeadlessTests
             timeoutMessage: "Returning the local item to pending was not saved.");
         await Assert.That(HeadlessRuntime.Dispatch(() => GetHeadlessMainWindowViewModel().taskRepository!.Tasks.Items.Count()))
             .IsEqualTo(originalTaskCount);
+        await Assert.That(ReadFeedVaultText(todayPath)).IsEqualTo(pendingChecklistText);
+
+        void ClickCurrentLocalCheckbox()
+        {
+            WaitUntil(() => HeadlessRuntime.Dispatch(() =>
+            {
+                Dispatcher.UIThread.RunJobs();
+                Session.Inner.MainWindow.UpdateLayout();
+                var currentBlock = GetHeadlessMainWindowViewModel().Feed.Days
+                    .First(day => day.Date == DateOnly.FromDateTime(DateTime.Now)).MarkdownEditor.Blocks
+                    .Single(item => item.Block.Raw.Contains(marker, StringComparison.Ordinal));
+                var checkbox = TryFindNativeControlByAutomationId<CheckBox>(currentBlock.TaskCheckboxAutomationId);
+                return checkbox is { IsEffectivelyVisible: true, IsEffectivelyEnabled: true }
+                    && checkbox.Bounds.Width > 0 && checkbox.Bounds.Height > 0
+                    && ReferenceEquals(TopLevel.GetTopLevel(checkbox), Session.Inner.MainWindow);
+            }), timeout: TimeSpan.FromSeconds(10), timeoutMessage: "The current local checklist checkbox did not attach.");
+            HeadlessRuntime.Dispatch(() =>
+            {
+                var currentBlock = GetHeadlessMainWindowViewModel().Feed.Days
+                    .First(day => day.Date == DateOnly.FromDateTime(DateTime.Now)).MarkdownEditor.Blocks
+                    .Single(item => item.Block.Raw.Contains(marker, StringComparison.Ordinal));
+                var checkbox = FindNativeControlByAutomationId<CheckBox>(currentBlock.TaskCheckboxAutomationId);
+                var point = checkbox.TranslatePoint(new Point(checkbox.Bounds.Width / 2, checkbox.Bounds.Height / 2),
+                    Session.Inner.MainWindow) ?? throw new InvalidOperationException("The local checkbox has no pointer position.");
+                Session.Inner.MainWindow.MouseDown(point, MouseButton.Left);
+                Session.Inner.MainWindow.MouseUp(point, MouseButton.Left);
+                Dispatcher.UIThread.RunJobs();
+            });
+        }
     }
 
     [Test]
@@ -354,6 +370,8 @@ public sealed partial class MainWindowHeadlessTests
                 && GetHeadlessMainWindowViewModel().Feed.CanConfirmReviewDecision
                 && moveConfirmButton.IsEffectivelyEnabled),
             timeout: TimeSpan.FromSeconds(10), timeoutMessage: "Move to today was not ready for confirmation.");
+        Console.WriteLine($"UX03 before confirmation: thread={Environment.CurrentManagedThreadId}; " +
+            $"ui={Dispatcher.UIThread.CheckAccess()}; context={SynchronizationContext.Current?.GetType().FullName ?? "<null>"}");
         Page.FeedReviewConfirmButton.Invoke();
         try
         {
@@ -421,6 +439,8 @@ public sealed partial class MainWindowHeadlessTests
         Page.FeedReviewNoteFolderBox.Enter("Projects");
         await Assert.That(Directory.GetFiles(feedVaultPath, noteTitle + ".md", SearchOption.AllDirectories)).IsEmpty();
         await CaptureStoryScreenshotAsync("ux04-extraction-preview.png");
+        Console.WriteLine($"UX04 before confirmation: thread={Environment.CurrentManagedThreadId}; " +
+            $"ui={Dispatcher.UIThread.CheckAccess()}; context={SynchronizationContext.Current?.GetType().FullName ?? "<null>"}");
         Page.FeedReviewConfirmButton.Invoke();
         var createdFile = WaitUntil(
             () => Directory.GetFiles(feedVaultPath, noteTitle + ".md", SearchOption.AllDirectories).SingleOrDefault(),
@@ -449,37 +469,137 @@ public sealed partial class MainWindowHeadlessTests
         await Assert.That(dayText).DoesNotContain(opening);
         await Assert.That(dayText).DoesNotContain(decision);
         await Assert.That(dayText).DoesNotContain(reason);
+        WaitUntil(() => HeadlessRuntime.Dispatch(() => !GetHeadlessMainWindowViewModel().Feed.IsBusy),
+            timeout: TimeSpan.FromSeconds(10), timeoutMessage: "Extraction was still busy before finishing review.");
+        Page.FeedFinishReviewButton.Invoke();
+        WaitUntil(() => HeadlessRuntime.Dispatch(() => !GetHeadlessMainWindowViewModel().Feed.IsReviewActive),
+            timeout: TimeSpan.FromSeconds(10), timeoutMessage: "Review did not close before opening the extracted note.");
+        var relativeNotePath = Path.GetRelativePath(feedVaultPath, createdFile).Replace(Path.DirectorySeparatorChar, '/');
         var sourceLink = WaitUntil(
             () => HeadlessRuntime.Dispatch(() => Session.Inner.MainWindow.GetVisualDescendants()
-                .OfType<Button>().FirstOrDefault(control => control.IsVisible &&
+                .OfType<Button>().FirstOrDefault(control => control.IsEffectivelyVisible &&
                     (AutomationProperties.GetHelpText(control) ?? string.Empty).EndsWith(
                         noteTitle, StringComparison.OrdinalIgnoreCase))),
             value => value is not null,
             timeout: TimeSpan.FromSeconds(10),
             timeoutMessage: "The source day did not show a clickable link to the extracted note.")!;
+        string ObserveExtractionRoutes() => HeadlessRuntime.Dispatch(() =>
+        {
+            var owner = GetHeadlessMainWindowViewModel();
+            return $"expected={relativeNotePath}; activePane={owner.WorkspaceNavigation.ActivePane.Id}; " +
+                string.Join("; ", owner.WorkspaceNavigation.Panes.Select(pane =>
+                    $"pane={pane.Id},active={pane.ActiveTab?.CurrentLocation?.Kind}:{pane.ActiveTab?.CurrentLocation?.Id}," +
+                    $"tabs=[{string.Join(",", pane.Tabs.Select(tab => $"{tab.CurrentLocation?.Kind}:{tab.CurrentLocation?.Id}"))}]")) +
+                $"; feedError={owner.Feed.ErrorMessage}; selectedDocument={owner.Feed.DocumentWorkspace.ActiveDocument?.RelativePath}; " +
+                $"link={AutomationProperties.GetHelpText(sourceLink)}; source={dayText}";
+        });
+        Console.WriteLine("UX04 before physical context action: " + ObserveExtractionRoutes());
         HeadlessRuntime.Dispatch(() =>
         {
-            var openBeside = sourceLink.ContextMenu?.Items.OfType<MenuItem>().ElementAtOrDefault(1)
-                ?? throw new InvalidOperationException("The note link has no Open beside command.");
-            openBeside.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent, openBeside));
+            sourceLink.BringIntoView();
+            Session.Inner.MainWindow.UpdateLayout();
+            var point = sourceLink.TranslatePoint(new Point(sourceLink.Bounds.Width / 2, sourceLink.Bounds.Height / 2),
+                Session.Inner.MainWindow) ?? throw new InvalidOperationException("The source note link has no physical position.");
+            Session.Inner.MainWindow.MouseDown(point, MouseButton.Right);
+            Session.Inner.MainWindow.MouseUp(point, MouseButton.Right);
             Dispatcher.UIThread.RunJobs();
         });
-        WaitUntil(
-            () => HeadlessRuntime.Dispatch(() => GetHeadlessMainWindowViewModel().WorkspaceNavigation.HasSecondaryPane),
+        var adjacentCommand = WaitUntil(() => HeadlessRuntime.Dispatch(() =>
+        {
+            Dispatcher.UIThread.RunJobs();
+            if (sourceLink.ContextMenu is not { IsOpen: true } menu) return null;
+            var command = menu.Items.OfType<MenuItem>().SingleOrDefault(item => Equals(item.Header,
+                Unlimotion.ViewModel.Localization.Localization.Get("WorkspaceOpenBeside")));
+            if (command is null) return null;
+            TopLevel.GetTopLevel(command)?.UpdateLayout();
+            return command is { IsEffectivelyVisible: true, IsEffectivelyEnabled: true } && command.Bounds.Width > 0
+                ? command : null;
+        }), command => command is not null, timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "Physical right-click did not show the note link Open beside command.")!;
+        HeadlessRuntime.Dispatch(() =>
+        {
+            var popup = TopLevel.GetTopLevel(adjacentCommand)
+                ?? throw new InvalidOperationException("The note opening menu has no rendered TopLevel.");
+            var point = adjacentCommand.TranslatePoint(new Point(adjacentCommand.Bounds.Width / 2, adjacentCommand.Bounds.Height / 2), popup)
+                ?? throw new InvalidOperationException("The Open beside menu item has no physical position.");
+            popup.MouseDown(point, MouseButton.Left);
+            popup.MouseUp(point, MouseButton.Left);
+            Dispatcher.UIThread.RunJobs();
+        });
+        Console.WriteLine("UX04 after physical context action: " + ObserveExtractionRoutes());
+        try
+        {
+            WaitUntil(
+            () => HeadlessRuntime.Dispatch(() => GetHeadlessMainWindowViewModel().WorkspaceNavigation.SecondaryPane?
+                .ActiveTab?.CurrentLocation is { Kind: Unlimotion.ViewModel.Workspace.WorkspaceLocationKind.Note } location &&
+                location.Id.Replace('\\', '/') == relativeNotePath),
             timeout: TimeSpan.FromSeconds(10),
-            timeoutMessage: "The extracted note did not open beside the source day.");
-        Page.FeedFinishReviewButton.Invoke();
-        WaitUntil(
-            () => HeadlessRuntime.Dispatch(() => !GetHeadlessMainWindowViewModel().Feed.IsReviewActive),
-            timeout: TimeSpan.FromSeconds(10),
-            timeoutMessage: "Review did not close before reading the extracted note.");
+            timeoutMessage: "The adjacent pane did not select the exact extracted note document.");
+        }
+        catch (TimeoutException error)
+        {
+            var diagnostics = ObserveExtractionRoutes();
+            Console.WriteLine("UX04 exact adjacent failure: " + diagnostics);
+            await CaptureStoryScreenshotAsync("ux04-exact-adjacent-failure.png");
+            throw new InvalidOperationException(error.Message + " " + diagnostics, error);
+        }
+        WaitUntil(() => HeadlessRuntime.Dispatch(() =>
+        {
+            Dispatcher.UIThread.RunJobs();
+            Session.Inner.MainWindow.UpdateLayout();
+            var pane = FindNativeControlByAutomationId<Control>("WorkspaceSecondaryPane");
+            var body = pane.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault(control =>
+                control.IsEffectivelyVisible && AutomationProperties.GetAutomationId(control) == "FeedDocumentScrollViewer");
+            var text = body is null ? string.Empty : string.Join("\n", body.GetVisualDescendants().OfType<TextBlock>()
+                .Where(control => control.IsEffectivelyVisible).Select(control => control.Text));
+            return text.Contains(opening, StringComparison.Ordinal) && text.Contains(decision, StringComparison.Ordinal) &&
+                   text.Contains(reason, StringComparison.Ordinal);
+        }), timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "The extracted note body was not rendered in the adjacent document pane.");
+        await Assert.That(HeadlessRuntime.Dispatch(() => GetHeadlessMainWindowViewModel().WorkspaceNavigation.PrimaryPane
+            .ActiveTab?.CurrentLocation?.Kind)).IsEqualTo(Unlimotion.ViewModel.Workspace.WorkspaceLocationKind.Feed);
+        await Assert.That(HeadlessRuntime.Dispatch(() => sourceLink.IsEffectivelyVisible && sourceLink.GetVisualAncestors()
+            .OfType<Control>().Any(control => AutomationProperties.GetAutomationId(control) == "WorkspacePrimaryPane"))).IsTrue();
         await CaptureStoryScreenshotAsync("ux04-extracted-note-beside-source.png");
-        WaitUntil(
-            () => HeadlessRuntime.Dispatch(() => Session.Inner.MainWindow.GetVisualDescendants()
-                .OfType<TextBlock>().Any(control => control.IsVisible &&
-                    control.Text == noteTitle)),
-            timeout: TimeSpan.FromSeconds(10),
-            timeoutMessage: "The extracted note heading was not visible in the adjacent pane.");
+    }
+
+    private void OpenStoryLinkBesidePhysically(Button sourceLink)
+    {
+        HeadlessRuntime.Dispatch(() =>
+        {
+            sourceLink.BringIntoView();
+            Dispatcher.UIThread.RunJobs();
+            Session.Inner.MainWindow.UpdateLayout();
+            if (!sourceLink.IsEffectivelyVisible || sourceLink.Bounds.Width <= 0 || sourceLink.Bounds.Height <= 0)
+                throw new InvalidOperationException("The source link is not pointer-visible for Open beside.");
+            var point = sourceLink.TranslatePoint(new Point(sourceLink.Bounds.Width / 2, sourceLink.Bounds.Height / 2),
+                Session.Inner.MainWindow) ?? throw new InvalidOperationException("The source link has no physical position.");
+            Session.Inner.MainWindow.MouseDown(point, MouseButton.Right);
+            Session.Inner.MainWindow.MouseUp(point, MouseButton.Right);
+            Dispatcher.UIThread.RunJobs();
+        });
+        var adjacent = WaitUntil(() => HeadlessRuntime.Dispatch(() =>
+        {
+            Dispatcher.UIThread.RunJobs();
+            if (sourceLink.ContextMenu is not { IsOpen: true } menu) return null;
+            var item = menu.Items.OfType<MenuItem>().SingleOrDefault(command => Equals(command.Header,
+                Unlimotion.ViewModel.Localization.Localization.Get("WorkspaceOpenBeside")));
+            if (item is null) return null;
+            TopLevel.GetTopLevel(item)?.UpdateLayout();
+            return item.IsEffectivelyVisible && item.IsEffectivelyEnabled && item.Bounds.Width > 0 && item.Bounds.Height > 0
+                ? item : null;
+        }), item => item is not null, timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "Physical right-click did not render the named Open beside command.")!;
+        HeadlessRuntime.Dispatch(() =>
+        {
+            var popup = TopLevel.GetTopLevel(adjacent)
+                ?? throw new InvalidOperationException("The link opening menu has no rendered TopLevel.");
+            var point = adjacent.TranslatePoint(new Point(adjacent.Bounds.Width / 2, adjacent.Bounds.Height / 2), popup)
+                ?? throw new InvalidOperationException("The Open beside command has no physical position.");
+            popup.MouseDown(point, MouseButton.Left);
+            popup.MouseUp(point, MouseButton.Left);
+            Dispatcher.UIThread.RunJobs();
+        });
     }
 
     private void CaptureViaHotkey(string text)
@@ -658,7 +778,7 @@ public sealed partial class MainWindowHeadlessTests
             kind => kind == Unlimotion.ViewModel.Workspace.WorkspaceLocationKind.Note,
             timeout: TimeSpan.FromSeconds(10),
             timeoutMessage: "The supporting document did not open in the current tab.");
-        Page.WorkspaceGlobalBackButton.Invoke();
+        InvokeWorkspaceBack();
         WaitUntil(
             () => HeadlessRuntime.Dispatch(() => GetHeadlessMainWindowViewModel()
                 .WorkspaceNavigation.ActivePane.ActiveTab?.CurrentLocation?.Id),
@@ -677,6 +797,13 @@ public sealed partial class MainWindowHeadlessTests
             value => value is not null,
             timeout: TimeSpan.FromSeconds(10),
             timeoutMessage: "Search did not find the supporting thematic note.")!;
+        var initialActions = ReadSearchOpeningActions(noteResult.ActionsAutomationId, noteResult.AutomationId);
+        await Assert.That(initialActions).IsEquivalentTo(new[]
+        {
+            Unlimotion.ViewModel.Localization.Localization.Get("WorkspaceOpenHere"),
+            Unlimotion.ViewModel.Localization.Localization.Get("WorkspaceOpenInNewTab"),
+            Unlimotion.ViewModel.Localization.Localization.Get("WorkspaceOpenBeside")
+        });
         InvokeNativeButton(HeadlessRuntime.Dispatch(() => FindNativeControlByAutomationId<Button>(noteResult.AutomationId)));
         WaitUntil(
             () => HeadlessRuntime.Dispatch(() => GetHeadlessMainWindowViewModel()
@@ -687,6 +814,49 @@ public sealed partial class MainWindowHeadlessTests
         await Assert.That(HeadlessRuntime.Dispatch(() => Session.Inner.MainWindow.GetVisualDescendants()
             .OfType<TextBlock>().Any(control => control.IsEffectivelyVisible
                 && control.Text?.Contains(noteFact, StringComparison.OrdinalIgnoreCase) == true))).IsTrue();
+        Page.FeedSearchBox.Enter(noteFact);
+        WaitUntil(() => HeadlessRuntime.Dispatch(() => GetHeadlessMainWindowViewModel().Feed.SearchResults.Any(
+                item => item.AutomationId == noteResult.AutomationId)),
+            timeout: TimeSpan.FromSeconds(10), timeoutMessage: "The open note did not return as a search result.");
+        await Assert.That(ReadSearchOpeningActions(noteResult.ActionsAutomationId, noteResult.AutomationId)).IsEquivalentTo(new[]
+        {
+            Unlimotion.ViewModel.Localization.Localization.Get("WorkspaceShowIndicatedPlace")
+        });
+    }
+
+    private string[] ReadSearchOpeningActions(string automationId, string resultAutomationId)
+    {
+        var actions = HeadlessRuntime.Dispatch(() =>
+        {
+            var window = Session.Inner.MainWindow;
+            Dispatcher.UIThread.RunJobs();
+            window.UpdateLayout();
+            var popup = window.GetVisualDescendants().OfType<Popup>().SingleOrDefault(control =>
+                control.IsOpen && AutomationProperties.GetAutomationId(control) == "GlobalSearchFlyout");
+            Control surface;
+            if (popup?.Child is { } globalSearch) surface = globalSearch;
+            else
+            {
+                var owner = GetHeadlessMainWindowViewModel();
+                var activePaneId = ReferenceEquals(owner.WorkspaceNavigation.ActivePane, owner.WorkspaceNavigation.PrimaryPane)
+                    ? "WorkspacePrimaryPane" : "WorkspaceSecondaryPane";
+                surface = window.GetVisualDescendants().OfType<Unlimotion.Views.WorkspacePaneView>()
+                    .Single(control => control.IsEffectivelyVisible && AutomationProperties.GetAutomationId(control) == activePaneId);
+            }
+            return surface.GetVisualDescendants().OfType<DropDownButton>().Single(control =>
+                control.IsEffectivelyVisible && control.IsAttachedToVisualTree()
+                && AutomationProperties.GetAutomationId(control) == automationId
+                && control.DataContext is Unlimotion.ViewModel.Feed.FeedSearchResultViewModel result
+                && result.AutomationId == resultAutomationId);
+        });
+        InvokeNativeButton(actions);
+        return HeadlessRuntime.Dispatch(() =>
+        {
+            var flyout = (MenuFlyout)actions.Flyout!;
+            if (!flyout.IsOpen) throw new InvalidOperationException("The visible search result's opening menu did not open.");
+            try { return flyout.Items.OfType<MenuItem>().Select(item => item.Header!.ToString()!).ToArray(); }
+            finally { flyout.Hide(); }
+        });
     }
 
     [Test]
@@ -769,7 +939,7 @@ public sealed partial class MainWindowHeadlessTests
         await Assert.That(HeadlessRuntime.Dispatch(() => GetHeadlessMainWindowViewModel()
             .WorkspaceNavigation.PrimaryPane.Tabs.Count)).IsEqualTo(1);
         await CaptureStoryScreenshotAsync("ux09-existing-task-link.png");
-        Page.WorkspaceGlobalBackButton.Invoke();
+        InvokeWorkspaceBack();
         WaitUntil(
             () => HeadlessRuntime.Dispatch(() => GetHeadlessMainWindowViewModel()
                 .WorkspaceNavigation.ActivePane.ActiveTab?.CurrentLocation?.Kind),
@@ -799,19 +969,16 @@ public sealed partial class MainWindowHeadlessTests
             timeout: TimeSpan.FromSeconds(10),
             timeoutMessage: "The first document did not replace the Feed in the current tab.");
         var secondLink = FindStoryLink("UX12 Second note");
-        HeadlessRuntime.Dispatch(() =>
-        {
-            var openBeside = secondLink.ContextMenu?.Items.OfType<MenuItem>().ElementAtOrDefault(1)
-                ?? throw new InvalidOperationException("The second note link has no Open beside command.");
-            openBeside.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent, openBeside));
-            Dispatcher.UIThread.RunJobs();
-        });
+        OpenStoryLinkBesidePhysically(secondLink);
         WaitUntil(
             () => HeadlessRuntime.Dispatch(() => GetHeadlessMainWindowViewModel()
                 .WorkspaceNavigation.SecondaryPane?.ActiveTab?.CurrentLocation?.Id),
             path => path == "Проекты/UX12 Second note.md",
             timeout: TimeSpan.FromSeconds(10),
             timeoutMessage: "The second document did not open beside the first.");
+        await Assert.That(HeadlessRuntime.Dispatch(() => GetHeadlessMainWindowViewModel().WorkspaceNavigation.PrimaryPane
+            .ActiveTab?.CurrentLocation is { Kind: Unlimotion.ViewModel.Workspace.WorkspaceLocationKind.Note } note &&
+            note.Id == "Проекты/UX12 First note.md")).IsTrue();
         var firstNote = HeadlessRuntime.Dispatch(() => GetHeadlessMainWindowViewModel().Feed.DocumentWorkspace
             .Find("Проекты/UX12 First note.md"))
             ?? throw new InvalidOperationException("The first note was not loaded into the document workspace.");
@@ -866,7 +1033,7 @@ public sealed partial class MainWindowHeadlessTests
             path => path == "Проекты/UX12 Third note.md",
             timeout: TimeSpan.FromSeconds(10),
             timeoutMessage: "Following the second document's link did not open the third document.");
-        Page.WorkspaceGlobalBackButton.Invoke();
+        InvokeWorkspaceBack();
         WaitUntil(
             () => HeadlessRuntime.Dispatch(() => GetHeadlessMainWindowViewModel()
                 .WorkspaceNavigation.ActivePane.ActiveTab?.CurrentLocation?.Id),
@@ -913,7 +1080,7 @@ public sealed partial class MainWindowHeadlessTests
         RequireRenderedStoryMode();
         Page.ClickButton(static page => page.WorkspaceRailTasksButton);
         PrepareFeedTaskReferenceSurface();
-        Page.SelectTabItem(static page => page.InProgressTabItem, timeoutMs: 10_000);
+        OpenStoryTaskView("WorkspaceRailInProgressButton");
         WaitUntil(
             () => HeadlessRuntime.Dispatch(() => GetHeadlessMainWindowViewModel().InProgressItems
                 .SelectMany(item => FlattenStoryTask(item)).Select(item => item.Id).ToArray()),
@@ -931,7 +1098,7 @@ public sealed partial class MainWindowHeadlessTests
         WaitForTaskStatus("ux08-finished", Unlimotion.Domain.TaskStatus.Completed);
 
         Page.ClickButton(static page => page.WorkspaceRailTasksButton);
-        Page.SelectTabItem(static page => page.UnlockedTabItem, timeoutMs: 10_000);
+        OpenStoryTaskView("WorkspaceRailUnlockedButton");
         var initialUnlocked = HeadlessRuntime.Dispatch(() => GetHeadlessMainWindowViewModel().UnlockedItems
             .SelectMany(item => FlattenStoryTask(item)).Select(item => item.Id).ToArray());
         await CaptureStoryScreenshotAsync("ux08-unlocked-before-filter.png");
@@ -981,12 +1148,13 @@ public sealed partial class MainWindowHeadlessTests
             timeout: TimeSpan.FromSeconds(10),
             timeoutMessage: "Today plus short-duration filters did not narrow the unlocked list.");
         await CaptureStoryScreenshotAsync("ux08-today-short-work.png");
+        HeadlessRuntime.Dispatch(() => filterButton.Flyout!.Hide());
         SelectStoryTaskFromTree("UnlockedTree", "ux08-short");
         WaitForVisibleTaskCard("UX08 Five-minute action");
         SelectVisibleTaskStatus(Unlimotion.Domain.TaskStatus.Completed);
         WaitForTaskStatus("ux08-short", Unlimotion.Domain.TaskStatus.Completed);
         Page.ClickButton(static page => page.WorkspaceRailTasksButton);
-        Page.SelectTabItem(static page => page.UnlockedTabItem, timeoutMs: 10_000);
+        OpenStoryTaskView("WorkspaceRailUnlockedButton");
         var filteredFlyout = HeadlessRuntime.Dispatch(() => FindNativeControlByAutomationId<DropDownButton>(
             "UnlockedFiltersButton"));
         InvokeNativeButton(filteredFlyout);
@@ -1015,6 +1183,7 @@ public sealed partial class MainWindowHeadlessTests
                 .SelectMany(item => FlattenStoryTask(item)).Select(task => task.Id).ToArray()),
             ids => ids.Contains("ux08-urgent") && !ids.Contains("ux08-overdue") && !ids.Contains("ux08-long"),
             timeout: TimeSpan.FromSeconds(10), timeoutMessage: "Urgent 5–30 minute work was not isolated.");
+        HeadlessRuntime.Dispatch(() => filteredFlyout.Flyout!.Hide());
         SelectStoryTaskFromTree("UnlockedTree", "ux08-urgent");
         WaitForVisibleTaskCard("UX08 Due today");
         SelectVisibleTaskStatus(Unlimotion.Domain.TaskStatus.InProgress);
@@ -1022,7 +1191,8 @@ public sealed partial class MainWindowHeadlessTests
         SelectVisibleTaskStatus(Unlimotion.Domain.TaskStatus.Completed);
         WaitForTaskStatus("ux08-urgent", Unlimotion.Domain.TaskStatus.Completed);
         await CaptureStoryScreenshotAsync("ux08-urgent-completed.png");
-
+        OpenStoryTaskView("WorkspaceRailUnlockedButton");
+        filteredFlyout = HeadlessRuntime.Dispatch(() => FindNativeControlByAutomationId<DropDownButton>("UnlockedFiltersButton"));
         HeadlessRuntime.Dispatch(() =>
         {
             var flyout = filteredFlyout.Flyout as Flyout
@@ -1064,11 +1234,12 @@ public sealed partial class MainWindowHeadlessTests
                 .SelectMany(item => FlattenStoryTask(item)).Select(task => task.Id).ToArray()),
             ids => ids.Contains("ux08-long") && !ids.Contains("ux08-overdue"),
             timeout: TimeSpan.FromSeconds(10), timeoutMessage: "The longer-work filter did not expose the 55-minute task.");
+        HeadlessRuntime.Dispatch(() => filteredFlyout.Flyout!.Hide());
         SelectStoryTaskFromTree("UnlockedTree", "ux08-long");
         WaitForVisibleTaskCard("UX08 Long available task");
         await CaptureStoryScreenshotAsync("ux08-longer-work.png");
 
-        Page.SelectTabItem(static page => page.CompletedTabItem, timeoutMs: 10_000);
+        OpenStoryTaskView("WorkspaceRailCompletedButton");
         await Assert.That(HeadlessRuntime.Dispatch(() => GetHeadlessMainWindowViewModel().taskRepository!.Tasks.Items
             .Single(task => task.Id == "ux08-short").Status)).IsEqualTo(Unlimotion.Domain.TaskStatus.Completed);
         await Assert.That(HeadlessRuntime.Dispatch(() => GetHeadlessMainWindowViewModel().taskRepository!.Tasks.Items
@@ -1081,7 +1252,7 @@ public sealed partial class MainWindowHeadlessTests
     {
         RequireRenderedStoryMode();
         Page.ClickButton(static page => page.WorkspaceRailTasksButton);
-        Page.SelectTabItem(static page => page.AllTasksTabItem, timeoutMs: 10_000);
+        OpenStoryTaskView("WorkspaceRailAllTasksButton");
         PrepareFeedTaskReferenceSurface();
         WaitUntil(() => Page.AllTasksTree.Items.Count, count => count > 0,
             timeout: TimeSpan.FromSeconds(10), timeoutMessage: "The project plan did not render.");
@@ -1129,7 +1300,7 @@ public sealed partial class MainWindowHeadlessTests
             Dispatcher.UIThread.RunJobs();
         });
         var candidate = WaitUntil(() => HeadlessRuntime.Dispatch(() =>
-                GetHeadlessMainWindowViewModel().CurrentRelationEditor.Suggestions
+                input.GetVisualAncestors().OfType<Unlimotion.Views.TaskCardView>().Single().CardContext!.RelationEditor.Suggestions
                     .FirstOrDefault(item => item.Task.Id == expectedTaskId)),
             value => value is not null, timeout: TimeSpan.FromSeconds(10),
             timeoutMessage: $"The {prefix} relation search did not find {expectedTaskId}.")!;
@@ -1151,7 +1322,7 @@ public sealed partial class MainWindowHeadlessTests
     {
         RequireRenderedStoryMode();
         Page.ClickButton(static page => page.WorkspaceRailTasksButton);
-        Page.SelectTabItem(static page => page.AllTasksTabItem, timeoutMs: 10_000);
+        OpenStoryTaskView("WorkspaceRailAllTasksButton");
         PrepareFeedTaskReferenceSurface();
         WaitUntil(() => Page.AllTasksTree.Items.Count, count => count > 0,
             timeout: TimeSpan.FromSeconds(10), timeoutMessage: "The planning tasks did not load.");
@@ -1227,7 +1398,7 @@ public sealed partial class MainWindowHeadlessTests
         await Assert.That(HeadlessRuntime.Dispatch(() => nextStep.IsCanBeCompleted)).IsTrue()
             .Because("A new child without blockers must be available after preparation.");
         Page.ClickButton(static page => page.WorkspaceRailTasksButton);
-        Page.SelectTabItem(static page => page.UnlockedTabItem, timeoutMs: 10_000);
+        OpenStoryTaskView("WorkspaceRailUnlockedButton");
         WaitUntil(() => HeadlessRuntime.Dispatch(() => GetHeadlessMainWindowViewModel().UnlockedItems
                 .SelectMany(item => FlattenStoryTask(item)).Any(item => item.Id == nextStep.Id)),
             timeout: TimeSpan.FromSeconds(10),
@@ -1252,16 +1423,14 @@ public sealed partial class MainWindowHeadlessTests
             id => id == relativeNote, timeout: TimeSpan.FromSeconds(10),
             timeoutMessage: "The meeting note did not open for planning.");
         var taskLink = FindStoryLink("ux07-shared");
-        HeadlessRuntime.Dispatch(() =>
-        {
-            var openBeside = taskLink.ContextMenu?.Items.OfType<MenuItem>().ElementAtOrDefault(1)
-                ?? throw new InvalidOperationException("The existing task link has no Open beside command.");
-            openBeside.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent, openBeside));
-            Dispatcher.UIThread.RunJobs();
-        });
+        OpenStoryLinkBesidePhysically(taskLink);
         WaitUntil(() => HeadlessRuntime.Dispatch(() => GetHeadlessMainWindowViewModel()
-                .WorkspaceNavigation.HasSecondaryPane), timeout: TimeSpan.FromSeconds(10),
+                .WorkspaceNavigation.SecondaryPane?.ActiveTab?.CurrentLocation is
+                    { Kind: Unlimotion.ViewModel.Workspace.WorkspaceLocationKind.Task } task && task.Id == "ux07-shared"), timeout: TimeSpan.FromSeconds(10),
             timeoutMessage: "The existing plan task did not open beside the meeting note.");
+        await Assert.That(HeadlessRuntime.Dispatch(() => GetHeadlessMainWindowViewModel().WorkspaceNavigation.PrimaryPane
+            .ActiveTab?.CurrentLocation is { Kind: Unlimotion.ViewModel.Workspace.WorkspaceLocationKind.Note } note &&
+            note.Id == relativeNote)).IsTrue();
         WaitForVisibleTaskCard("UX07 Product description");
         var originalCount = HeadlessRuntime.Dispatch(() => GetHeadlessMainWindowViewModel().taskRepository!.Tasks.Items.Count());
         HeadlessRuntime.Dispatch(() =>
@@ -1301,15 +1470,21 @@ public sealed partial class MainWindowHeadlessTests
             state => state.SelectedMarkdown?.Contains("UX11 Check the first screen", StringComparison.Ordinal) == true,
             timeout: TimeSpan.FromSeconds(10),
             timeoutMessage: "Creating a task from the meeting note did not enter review for the selected step.");
-        HeadlessRuntime.Dispatch(() =>
+        var reviewArea = WaitUntil(() => HeadlessRuntime.Dispatch(() =>
         {
-            var area = Session.Inner.MainWindow.GetVisualDescendants().OfType<CheckBox>().FirstOrDefault(control =>
-                control.IsVisible && control.DataContext is Unlimotion.ViewModel.Feed.FeedTaskAreaOptionViewModel option
-                    && option.Area.StableAreaId == "area-unlimotion")
-                ?? throw new InvalidOperationException("The review task editor did not offer the Unlimotion area.");
-            area.IsChecked = true;
             Dispatcher.UIThread.RunJobs();
-        });
+            Session.Inner.MainWindow.UpdateLayout();
+            if (!GetHeadlessMainWindowViewModel().Feed.IsReviewTaskStage) return null;
+            return Session.Inner.MainWindow.GetVisualDescendants().OfType<CheckBox>().FirstOrDefault(control =>
+                control.IsEffectivelyVisible && control.Bounds.Width > 0 && control.Bounds.Height > 0 &&
+                control.DataContext is Unlimotion.ViewModel.Feed.FeedTaskAreaOptionViewModel option &&
+                option.Area.StableAreaId == "area-unlimotion");
+        }), control => control is not null, timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "The review task editor did not render the Unlimotion area checkbox.")!;
+        if (HeadlessRuntime.Dispatch(() => reviewArea.IsChecked != true)) InvokeNativeButton(reviewArea);
+        await Assert.That(HeadlessRuntime.Dispatch(() => reviewArea.IsChecked == true &&
+            reviewArea.DataContext is Unlimotion.ViewModel.Feed.FeedTaskAreaOptionViewModel option &&
+            option.Area.StableAreaId == "area-unlimotion" && option.IsSelected)).IsTrue();
         AddStoryReviewDraftParent("UX07 Launch site", "ux07-goal");
         Page.FeedReviewConfirmButton.Invoke();
         var created = WaitUntil(() => HeadlessRuntime.Dispatch(() => GetHeadlessMainWindowViewModel().taskRepository!.Tasks.Items
@@ -1346,13 +1521,36 @@ public sealed partial class MainWindowHeadlessTests
     {
         var button = HeadlessRuntime.Dispatch(() => FindNativeControlByAutomationId<DropDownButton>(buttonId));
         InvokeNativeButton(button);
-        HeadlessRuntime.Dispatch(() =>
+        ClickRenderedStoryMenuItem(() => (button.Flyout as MenuFlyout)?.Items.OfType<MenuItem>().ElementAtOrDefault(optionIndex),
+            $"Planning option {buttonId}/{optionIndex}");
+        WaitUntil(() => HeadlessRuntime.Dispatch(() => !button.Flyout!.IsOpen), timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: $"Planning menu {buttonId} did not close after choosing an option.");
+    }
+
+    private void ClickRenderedStoryMenuItem(Func<MenuItem?> resolve, string description)
+    {
+        WaitUntil(() => HeadlessRuntime.Dispatch(() =>
         {
             Dispatcher.UIThread.RunJobs();
-            var item = (button.Flyout as MenuFlyout)?.Items.OfType<MenuItem>().ElementAtOrDefault(optionIndex)
-                ?? throw new InvalidOperationException($"Planning menu {buttonId} has no option {optionIndex}.");
-            if (!item.IsEnabled) throw new InvalidOperationException($"Planning option {buttonId}/{optionIndex} is disabled.");
-            item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent, item));
+            var current = resolve();
+            var popup = TopLevel.GetTopLevel(current);
+            popup?.UpdateLayout();
+            return current is { IsEffectivelyVisible: true, IsEffectivelyEnabled: true }
+                && popup is not null && current.Bounds.Width > 0 && current.Bounds.Height > 0
+                && current.TranslatePoint(new Point(current.Bounds.Width / 2, current.Bounds.Height / 2), popup) is not null;
+        }), timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: $"{description} did not attach as an enabled menu item to a rendered popup.");
+        HeadlessRuntime.Dispatch(() =>
+        {
+            // A live status refresh can rebuild MenuFlyout.Items between readiness and input.
+            // Never keep a detached menu item from the previous dispatcher turn.
+            var item = resolve() ?? throw new InvalidOperationException($"{description} is no longer available.");
+            var popup = TopLevel.GetTopLevel(item)
+                ?? throw new InvalidOperationException($"{description} has no rendered popup.");
+            var point = item.TranslatePoint(new Point(item.Bounds.Width / 2, item.Bounds.Height / 2), popup)
+                ?? throw new InvalidOperationException($"{description} has no pointer position.");
+            popup.MouseDown(point, MouseButton.Left);
+            popup.MouseUp(point, MouseButton.Left);
             Dispatcher.UIThread.RunJobs();
         });
     }
@@ -1406,14 +1604,64 @@ public sealed partial class MainWindowHeadlessTests
 
     private void SelectStoryTaskFromTree(string automationId, string taskId)
     {
+        var railId = automationId switch
+        {
+            "AllTasksTree" => "WorkspaceRailAllTasksButton",
+            "UnlockedTree" => "WorkspaceRailUnlockedButton",
+            "InProgressTree" => "WorkspaceRailInProgressButton",
+            "CompletedTree" => "WorkspaceRailCompletedButton",
+            "ArchivedTree" => "WorkspaceRailArchivedButton",
+            _ => throw new InvalidOperationException($"No task-view rail entry for {automationId}.")
+        };
+        OpenStoryTaskView(railId);
+        WaitUntil(() => HeadlessRuntime.Dispatch(() => Session.Inner.MainWindow.GetVisualDescendants()
+                .OfType<TreeView>().Any(tree => tree.IsEffectivelyVisible &&
+                    AutomationProperties.GetAutomationId(tree) == automationId)),
+            timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: $"The {automationId} document did not become visible.");
+        var title = WaitUntil(() => HeadlessRuntime.Dispatch(() =>
+            {
+                Dispatcher.UIThread.RunJobs();
+                Session.Inner.MainWindow.UpdateLayout();
+                var tree = Session.Inner.MainWindow.GetVisualDescendants().OfType<TreeView>().Single(control =>
+                    control.IsEffectivelyVisible && AutomationProperties.GetAutomationId(control) == automationId);
+                // Expand the model path even when an ancestor's container is not
+                // realized yet. Do not select or open another row to materialize it.
+                foreach (var wrapper in tree.Items.OfType<Unlimotion.ViewModel.TaskWrapperViewModel>()
+                             .SelectMany(FlattenStoryWrapper))
+                    if (wrapper.TaskItem.Id != taskId && FlattenStoryWrapper(wrapper).Any(item => item.TaskItem.Id == taskId))
+                        wrapper.IsExpanded = true;
+                Session.Inner.MainWindow.UpdateLayout();
+                var row = tree.GetVisualDescendants().OfType<TreeViewItem>().FirstOrDefault(control =>
+                    control.DataContext is Unlimotion.ViewModel.TaskWrapperViewModel wrapper && wrapper.TaskItem.Id == taskId);
+                row?.BringIntoView();
+                Dispatcher.UIThread.RunJobs();
+                Session.Inner.MainWindow.UpdateLayout();
+                var candidate = tree.GetVisualDescendants().OfType<Control>().FirstOrDefault(control =>
+                    control.IsEffectivelyVisible && control.Bounds.Width > 0 && control.Bounds.Height > 0 &&
+                    (AutomationProperties.GetAutomationId(control) == $"TaskTitle_{taskId}" ||
+                     AutomationProperties.GetAutomationId(control) == "InlineTaskTitleTextBlock") &&
+                    (control.DataContext is Unlimotion.ViewModel.TaskWrapperViewModel wrapper && wrapper.TaskItem.Id == taskId ||
+                     control.DataContext is Unlimotion.ViewModel.TaskItemViewModel task && task.Id == taskId));
+                candidate?.BringIntoView();
+                Dispatcher.UIThread.RunJobs();
+                Session.Inner.MainWindow.UpdateLayout();
+                var center = candidate?.TranslatePoint(new Point(candidate.Bounds.Width / 2, candidate.Bounds.Height / 2),
+                    Session.Inner.MainWindow);
+                return center is { } point && point.X >= 0 && point.Y >= 0 &&
+                    point.X < Session.Inner.MainWindow.Bounds.Width && point.Y < Session.Inner.MainWindow.Bounds.Height
+                    ? candidate : null;
+            }),
+            control => control is not null, timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: $"The visible {automationId} row did not expose the task title {taskId}.")!;
         HeadlessRuntime.Dispatch(() =>
         {
-            var tree = FindNativeControlByAutomationId<TreeView>(automationId);
-            var item = tree.ItemsSource?.OfType<Unlimotion.ViewModel.TaskWrapperViewModel>()
-                .SelectMany(FlattenStoryWrapper)
-                .FirstOrDefault(wrapper => wrapper.Id == taskId)
-                ?? throw new InvalidOperationException($"Task {taskId} was not exposed by tree {automationId}.");
-            tree.SelectedItem = item;
+            title.BringIntoView();
+            Session.Inner.MainWindow.UpdateLayout();
+            var position = title.TranslatePoint(new Avalonia.Point(title.Bounds.Width / 2, title.Bounds.Height / 2),
+                Session.Inner.MainWindow) ?? throw new InvalidOperationException("Task title has no window position.");
+            Session.Inner.MainWindow.MouseDown(position, MouseButton.Left);
+            Session.Inner.MainWindow.MouseUp(position, MouseButton.Left);
             Dispatcher.UIThread.RunJobs();
         });
     }
@@ -1427,6 +1675,21 @@ public sealed partial class MainWindowHeadlessTests
             yield return descendant;
     }
 
+    private void OpenStoryTaskView(string railId)
+    {
+        RunParityUiAsync(async () =>
+        {
+            Session.Inner.MainWindow.Width = 1600;
+            await Task.Yield();
+            Dispatcher.UIThread.RunJobs();
+            Session.Inner.MainWindow.UpdateLayout();
+        }).GetAwaiter().GetResult();
+        var rail = WaitUntil(() => HeadlessRuntime.Dispatch(() => TryFindNativeControlByAutomationId<Button>(railId)),
+            button => button is { IsEffectivelyVisible: true }, timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: $"Expanded navigation did not expose {railId}.")!;
+        InvokeNativeButton(rail);
+    }
+
     private void WaitForVisibleTaskCard(string title) => WaitUntil(
         () => HeadlessRuntime.Dispatch(() => Session.Inner.MainWindow.GetVisualDescendants().OfType<TextBox>()
             .FirstOrDefault(control => control.IsVisible &&
@@ -1437,20 +1700,32 @@ public sealed partial class MainWindowHeadlessTests
 
     private void SelectVisibleTaskStatus(Unlimotion.Domain.TaskStatus status)
     {
-        var picker = HeadlessRuntime.Dispatch(() => Session.Inner.MainWindow.GetVisualDescendants()
-            .OfType<TaskStatusPicker>().First(control => control.IsVisible &&
-                AutomationProperties.GetAutomationId(control) == "CurrentTaskStatusButton"));
-        InvokeNativeButton(picker);
-        HeadlessRuntime.Dispatch(() =>
+        var picker = WaitUntil(() => HeadlessRuntime.Dispatch(() =>
         {
             Dispatcher.UIThread.RunJobs();
-            var option = (picker.Flyout as MenuFlyout)?.Items.OfType<MenuItem>().SingleOrDefault(item =>
-                AutomationProperties.GetAutomationId(item) == $"TaskStatusOption{status}")
-                ?? throw new InvalidOperationException($"The task card has no {status} status choice.");
-            if (!option.IsEnabled) throw new InvalidOperationException($"The {status} status choice is disabled.");
-            option.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent, option));
+            Session.Inner.MainWindow.UpdateLayout();
+            var activeTaskId = GetHeadlessMainWindowViewModel().WorkspaceNavigation.ActivePane.ActiveTab?.CurrentLocation?.Id;
+            return Session.Inner.MainWindow.GetVisualDescendants().OfType<TaskStatusPicker>().SingleOrDefault(control =>
+                control.IsEffectivelyVisible && control.IsEffectivelyEnabled
+                && control.Bounds.Width > 0 && control.Bounds.Height > 0
+                && ReferenceEquals(TopLevel.GetTopLevel(control), Session.Inner.MainWindow)
+                && control.GetVisualAncestors().OfType<Unlimotion.Views.TaskCardView>().Any(card => card.IsEffectivelyVisible)
+                && (control.Task ?? control.DataContext as Unlimotion.ViewModel.TaskItemViewModel)?.Id == activeTaskId
+                && AutomationProperties.GetAutomationId(control) == "CurrentTaskStatusButton");
+        }), control => control is not null, timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "The active standalone card's status picker did not become ready.")!;
+        HeadlessRuntime.Dispatch(() =>
+        {
+            var point = picker.TranslatePoint(new Point(picker.Bounds.Width / 2, picker.Bounds.Height / 2),
+                Session.Inner.MainWindow) ?? throw new InvalidOperationException("The active status picker has no pointer position.");
+            Session.Inner.MainWindow.MouseDown(point, MouseButton.Left);
+            Session.Inner.MainWindow.MouseUp(point, MouseButton.Left);
             Dispatcher.UIThread.RunJobs();
         });
+        ClickRenderedStoryMenuItem(() => (picker.Flyout as MenuFlyout)?.Items.OfType<MenuItem>().SingleOrDefault(item =>
+            AutomationProperties.GetAutomationId(item) == $"TaskStatusOption{status}"), $"Task status {status}");
+        WaitUntil(() => HeadlessRuntime.Dispatch(() => !picker.Flyout!.IsOpen), timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "The task status menu did not close after choosing a status.");
     }
 
     private void WaitForTaskStatus(string id, Unlimotion.Domain.TaskStatus status) => WaitUntil(
@@ -1470,13 +1745,13 @@ public sealed partial class MainWindowHeadlessTests
         }
     }
 
-    private async Task CaptureStoryScreenshotAsync(string fileName)
+    private async Task CaptureStoryScreenshotAsync(string fileName, double width = 1280, double height = 800)
     {
         await HeadlessRuntime.Session.Dispatch<bool>(async () =>
         {
             var window = Session.Inner.MainWindow;
-            window.Width = 1280;
-            window.Height = 800;
+            window.Width = width;
+            window.Height = height;
             window.Show();
             await Task.Yield();
             Dispatcher.UIThread.RunJobs();
@@ -1489,5 +1764,7 @@ public sealed partial class MainWindowHeadlessTests
             "workspace-user-stories", Guid.NewGuid().ToString("N"), fileName);
         var path = await Task.Run(() => Session.Inner.CaptureScreenshot(output)).ConfigureAwait(false);
         Console.WriteLine($"Headless screenshot: {path}");
+        Console.WriteLine($"Screenshot continuation: thread={Environment.CurrentManagedThreadId}; " +
+            $"ui={Dispatcher.UIThread.CheckAccess()}; context={SynchronizationContext.Current?.GetType().FullName ?? "<null>"}");
     }
 }

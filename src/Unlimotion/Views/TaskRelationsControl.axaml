@@ -4,6 +4,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:unlimotion="clr-namespace:Unlimotion"
              xmlns:viewModel="clr-namespace:Unlimotion.ViewModel;assembly=Unlimotion.ViewModel"
+             xmlns:views="clr-namespace:Unlimotion.Views"
              x:Class="Unlimotion.Views.TaskRelationsControl"
              x:Name="Root"
              x:CompileBindings="False"
@@ -102,7 +103,7 @@
 
     <UserControl.DataTemplates>
         <DataTemplate DataType="viewModel:TaskItemViewModel">
-            <Grid ColumnDefinitions="Auto,*" Background="Transparent">
+            <Grid ColumnDefinitions="Auto,*,Auto" Background="Transparent">
                 <unlimotion:TaskStatusPicker Task="{Binding}"
                                              VerticalAlignment="Center"
                                              AutomationProperties.AutomationId="TaskStatusButton"/>
@@ -113,8 +114,17 @@
                                            TextWrapping="NoWrap"
                                            TextTrimming="CharacterEllipsis"
                                            AutomationProperties.AutomationId="InlineTaskTitleTextBlock"
+                                           PointerPressed="ParentTaskTitle_OnPointerPressed"
+                                           ContextRequested="ParentTaskTitle_OnContextRequested"
                                            Classes.IsWanted="{Binding Wanted}"
                                            Classes.IsCanBeCompleted="{Binding !IsCanBeCompleted}"/>
+                <Button Grid.Column="2" Content="⋯" MinWidth="32" MinHeight="32" Padding="0"
+                        Margin="4,0,0,0" Background="Transparent" BorderBrush="Transparent"
+                        IsVisible="{Binding $parent[views:TaskRelationsControl].OpenParentTaskOnDoubleTap}"
+                        ToolTip.Tip="{DynamicResource WorkspaceOpenActions}"
+                        AutomationProperties.Name="{DynamicResource WorkspaceOpenActions}"
+                        AutomationProperties.AutomationId="{Binding Id, StringFormat='ParentTaskOpenActions_{0}'}"
+                        Click="ParentTaskOpenActions_OnClick"/>
             </Grid>
         </DataTemplate>
         <DataTemplate DataType="viewModel:TaskWrapperViewModel">
@@ -154,7 +164,6 @@
         </Grid>
 
         <Border x:Name="ParentEditorCard" Classes="RelationEditorCard"
-                DataContext="{Binding Owner.CurrentRelationEditor, ElementName=Root}"
                 IsVisible="{Binding IsEditorOpen, ElementName=Root}">
             <StackPanel Classes="RelationPickerRow">
                 <TextBlock Text="{Binding Header}" FontWeight="Bold"/>

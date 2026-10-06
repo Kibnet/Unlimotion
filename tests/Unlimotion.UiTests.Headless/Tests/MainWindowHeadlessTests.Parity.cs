@@ -93,13 +93,17 @@ public sealed partial class MainWindowHeadlessTests
         WaitUntil(() => HeadlessRuntime.Dispatch(() => owner.WorkspaceNavigation.HasSecondaryPane),
             timeout: TimeSpan.FromSeconds(10), timeoutMessage: "Move did not create an adjacent pane.");
         var allIds = HeadlessRuntime.Dispatch(() => owner.WorkspaceNavigation.Panes.SelectMany(p => p.Tabs).Select(t => t.Id).ToArray());
+        var movedHistory = HeadlessRuntime.Dispatch(() => owner.WorkspaceNavigation.ActiveTab.History.Select(entry => entry.Location.HistoryKey).ToArray());
+        var movedHistoryIndex = HeadlessRuntime.Dispatch(() => owner.WorkspaceNavigation.ActiveTab.CurrentIndex);
         await CaptureStoryScreenshotAsync("parity-before-merge.png");
         InvokeActiveTabMenu("WorkspaceMergePanes");
         WaitUntil(() => HeadlessRuntime.Dispatch(() => !owner.WorkspaceNavigation.HasSecondaryPane),
             timeout: TimeSpan.FromSeconds(10), timeoutMessage: "Merge did not close the empty pane.");
         await Assert.That(HeadlessRuntime.Dispatch(() => allIds.All(id => owner.WorkspaceNavigation.PrimaryPane.Tabs.Any(t => t.Id == id)))).IsTrue();
         await Assert.That(HeadlessRuntime.Dispatch(() => owner.WorkspaceNavigation.ActiveTab.Id)).IsEqualTo(movedId);
-        Page.WorkspaceGlobalBackButton.Invoke();
+        await Assert.That(HeadlessRuntime.Dispatch(() => owner.WorkspaceNavigation.ActiveTab.History
+            .Select(entry => entry.Location.HistoryKey).SequenceEqual(movedHistory))).IsTrue();
+        await Assert.That(HeadlessRuntime.Dispatch(() => owner.WorkspaceNavigation.ActiveTab.CurrentIndex)).IsEqualTo(movedHistoryIndex);
         await CaptureStoryScreenshotAsync("parity-merged-tabs.png");
         await Assert.That(HeadlessRuntime.Dispatch(() => owner.WorkspaceNavigation.Panes.SelectMany(p => p.Tabs).Select(t => t.CurrentLocation!.ObjectKey).Distinct().Count()))
             .IsEqualTo(HeadlessRuntime.Dispatch(() => owner.WorkspaceNavigation.Panes.Sum(p => p.Tabs.Count)));
@@ -229,7 +233,8 @@ public sealed partial class MainWindowHeadlessTests
         const string marker = "Parity backlink source";
         CaptureViaHotkey(marker);
         Page.GlobalReviewButton.Invoke();
-        await CaptureStoryScreenshotAsync("parity-backlink-review.png");
+        await CaptureStoryScreenshotAsync("parity-backlink-review.png")
+            .ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
         WaitUntil(() => HeadlessRuntime.Dispatch(() => owner.Feed.CurrentReview?.SelectedMarkdown == marker && !owner.Feed.IsBusy),
             timeout: TimeSpan.FromSeconds(15), timeoutMessage: "Captured source did not enter review.");
         InvokeNativeButton(GetNativeControl<RadioButton>(Page.FeedReviewTaskActionButton));
@@ -239,10 +244,35 @@ public sealed partial class MainWindowHeadlessTests
         WaitUntil(() => HeadlessRuntime.Dispatch(() => !owner.Feed.IsBusy), timeout: TimeSpan.FromSeconds(15), timeoutMessage: "Conversion not complete.");
         Page.FeedFinishReviewButton.Invoke();
         await RunParityUiAsync(() => owner.TryOpenTaskByIdAsync(created.Id));
-        await CaptureStoryScreenshotAsync("parity-source-task.png");
+        await CaptureStoryScreenshotAsync("parity-source-task.png")
+            .ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
         var locations = await RunParityUiAsync(() => owner.Feed.FindTaskSourceLocationsAsync(created.Id));
         await Assert.That(locations.Count).IsEqualTo(1);
         await Assert.That(locations[0].Anchor).IsNotNull();
+        // Review already placed the Feed on this exact source block. Choose a
+        // different real day, not a null anchor that viewport capture can refine.
+        var priorDay = HeadlessRuntime.Dispatch(() => owner.Feed.Days.First(day => day.RelativePath != locations[0].Id));
+        await CaptureStoryScreenshotAsync("parity-before-prior-day.png", 1280, 420)
+            .ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
+        await Assert.That(await RunParityUiAsync(() => owner.OpenWorkspaceLocationAsync(
+            WorkspaceLocation.ForFeedDay(priorDay.RelativePath, priorDay.DisplayDate, "0")))).IsTrue();
+        await CaptureStoryScreenshotAsync("parity-prior-reading-place.png", 1280, 420)
+            .ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
+        WaitUntil(() => HeadlessRuntime.Dispatch(() => Session.Inner.MainWindow.GetVisualDescendants()
+                .OfType<FeedControl>().Single(control => control.IsEffectivelyVisible)
+                .CaptureWorkspaceLocation()?.Id == priorDay.RelativePath),
+            timeout: TimeSpan.FromSeconds(10), timeoutMessage: "The distinct prior day was not physically visible at the viewport anchor.");
+        await Assert.That(await RunParityUiAsync(() => owner.TryOpenTaskByIdAsync(created.Id))).IsTrue();
+        var taskTab = HeadlessRuntime.Dispatch(() => owner.WorkspaceNavigation.ActiveTab);
+        var taskHistoryCount = HeadlessRuntime.Dispatch(() => taskTab.History.Count);
+        var owningFeedTab = HeadlessRuntime.Dispatch(() => owner.WorkspaceNavigation.Panes.SelectMany(pane => pane.Tabs)
+            .Single(tab => tab.CurrentLocation?.Kind == WorkspaceLocationKind.Feed));
+        var previousFeedLocation = HeadlessRuntime.Dispatch(() => owningFeedTab.CurrentLocation!);
+        var previousFeedIndex = HeadlessRuntime.Dispatch(() => owningFeedTab.CurrentIndex);
+        var previousFeedHistoryCount = HeadlessRuntime.Dispatch(() => owningFeedTab.History.Count);
+        await Assert.That(previousFeedLocation.Id).IsEqualTo(priorDay.RelativePath);
+        await Assert.That(previousFeedLocation.Id).IsNotEqualTo(locations[0].Id);
+        await Assert.That(previousFeedLocation.Anchor).IsNotNull();
         var sourceButton = WaitUntil(() => HeadlessRuntime.Dispatch(() => Session.Inner.MainWindow.GetVisualDescendants().OfType<Button>()
                 .FirstOrDefault(b => b.IsEffectivelyVisible && AutomationProperties.GetAutomationId(b) == "CurrentTaskSourceButton")),
             button => button is not null, timeout: TimeSpan.FromSeconds(15), timeoutMessage: "Verified backlink was not visible.")!;
@@ -250,10 +280,37 @@ public sealed partial class MainWindowHeadlessTests
         WaitUntil(() => HeadlessRuntime.Dispatch(() => owner.WorkspaceNavigation.ActiveTab.CurrentLocation?.Kind == WorkspaceLocationKind.Feed),
             timeout: TimeSpan.FromSeconds(15), timeoutMessage: "Backlink did not open source Feed.");
         await Assert.That(HeadlessRuntime.Dispatch(() => owner.WorkspaceNavigation.ActiveTab.CurrentLocation!.Anchor)).IsEqualTo(locations[0].Anchor);
-        await CaptureStoryScreenshotAsync("parity-returned-source.png");
-        Page.WorkspaceGlobalBackButton.Invoke();
+        await Assert.That(HeadlessRuntime.Dispatch(() => owner.WorkspaceNavigation.ActiveTab.Id)).IsEqualTo(owningFeedTab.Id);
+        await Assert.That(HeadlessRuntime.Dispatch(() => taskTab.History.Count)).IsEqualTo(taskHistoryCount);
+        await Assert.That(HeadlessRuntime.Dispatch(() => owningFeedTab.CurrentIndex)).IsEqualTo(previousFeedIndex + 1);
+        await Assert.That(HeadlessRuntime.Dispatch(() => owningFeedTab.History.Count)).IsEqualTo(previousFeedHistoryCount + 1);
+        await CaptureStoryScreenshotAsync("parity-source-before-repeat.png", 1280, 420)
+            .ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
+        Console.WriteLine(await RunParityUiAsync(async () =>
+        {
+            await Task.Yield();
+            var feedView = Session.Inner.MainWindow.GetVisualDescendants().OfType<FeedControl>()
+                .Single(control => control.IsEffectivelyVisible);
+            return $"Repeat source: requested={locations[0].HistoryKey}; stored={owningFeedTab.CurrentLocation?.HistoryKey}; " +
+                $"physical={feedView.CaptureWorkspaceLocation()?.HistoryKey}; history=" +
+                string.Join(" | ", owningFeedTab.History.Select(entry => entry.Location.HistoryKey));
+        }));
+        await RunParityUiAsync(() => owner.Feed.OpenTaskSourceAsync(created.Id, locations[0]));
+        await Assert.That(HeadlessRuntime.Dispatch(() => owner.WorkspaceNavigation.ActiveTab.Id)).IsEqualTo(owningFeedTab.Id);
+        await Assert.That(HeadlessRuntime.Dispatch(() => owningFeedTab.CurrentIndex)).IsEqualTo(previousFeedIndex + 1);
+        await Assert.That(HeadlessRuntime.Dispatch(() => owningFeedTab.History.Count)).IsEqualTo(previousFeedHistoryCount + 1);
+        await Assert.That(HeadlessRuntime.Dispatch(() => taskTab.History.Count)).IsEqualTo(taskHistoryCount);
+        await CaptureStoryScreenshotAsync("parity-returned-source.png", 1280, 420)
+            .ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
+        InvokeWorkspaceBack();
+        WaitUntil(() => HeadlessRuntime.Dispatch(() => owner.WorkspaceNavigation.ActiveTab.CurrentLocation?.HistoryKey == previousFeedLocation.HistoryKey),
+            timeout: TimeSpan.FromSeconds(10), timeoutMessage: "Back did not restore the owning Feed's prior location.");
+        await Assert.That(HeadlessRuntime.Dispatch(() => taskTab.History.Count)).IsEqualTo(taskHistoryCount);
+        await Assert.That(HeadlessRuntime.Dispatch(() => owningFeedTab.CurrentIndex)).IsEqualTo(previousFeedIndex);
+        InvokeNativeButton(HeadlessRuntime.Dispatch(() => FindNativeControlByAutomationId<Button>(
+            "WorkspaceTab-" + taskTab.Id.ToString("N"))));
         WaitUntil(() => HeadlessRuntime.Dispatch(() => owner.WorkspaceNavigation.ActiveTab.CurrentLocation?.Id == created.Id),
-            timeout: TimeSpan.FromSeconds(10), timeoutMessage: "Back did not return to task.");
+            timeout: TimeSpan.FromSeconds(10), timeoutMessage: "The existing task tab did not become active.");
         File.Delete(Path.Combine(feedVaultPath!, locations[0].Id));
         await RunParityUiAsync(() => owner.Feed.OpenTaskSourceAsync(created.Id, locations[0]));
         await Assert.That(HeadlessRuntime.Dispatch(() => owner.Feed.ErrorMessage)).IsEqualTo(L10n.Get("WorkspaceNoteUnavailable"));

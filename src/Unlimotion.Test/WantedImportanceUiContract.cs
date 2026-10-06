@@ -11,6 +11,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Unlimotion.ViewModel;
+using Unlimotion.ViewModel.Workspace;
 using Unlimotion.Views;
 
 namespace Unlimotion.Test;
@@ -50,10 +51,11 @@ internal static class WantedImportanceUiContract
                     vm.CurrentTaskItem = currentTask;
                     vm.SelectCurrentTask();
 
-                    var view = new MainControl { DataContext = vm };
+                    var view = new MainScreen { DataContext = vm };
                     window = CreateWindow(view);
                     window.Show();
                     window.Activate();
+                    await Assert.That(await vm.OpenWorkspaceTaskAsync(currentTask)).IsTrue();
                     RunLayoutJobs();
                     result.MainControlOpened = true;
 
@@ -79,6 +81,8 @@ internal static class WantedImportanceUiContract
                     result.ImportanceInputUpdatesTask = await WaitUntilAsync(() =>
                         currentTask.Importance == 42);
 
+                    await Assert.That(await vm.OpenWorkspaceLocationAsync(WorkspaceLocation.TasksRoot)).IsTrue();
+                    RunLayoutJobs();
                     var titleTextBlock = WaitForTaskTitleTextBlock(
                         view,
                         currentTask.Id,
@@ -87,18 +91,18 @@ internal static class WantedImportanceUiContract
                     result.WantedTitleUsesBoldPresentation =
                         titleTextBlock.FontWeight == FontWeight.Bold;
 
-                    vm.AllTasksMode = false;
-                    vm.GraphMode = true;
                     vm.Graph.OnlyUnlocked = true;
-                    var graphControl = OpenRoadmapTabAndWaitForGraphControl(view);
+                    await Assert.That(await vm.OpenWorkspaceLocationAsync(
+                        WorkspaceLocation.ForTaskList(TaskListKind.Roadmap))).IsTrue();
+                    var graphControl = WaitForGraphControl(view);
 
-                    vm.ShowWanted = true;
+                    vm.Graph.ShowWanted = true;
                     RunLayoutJobs();
                     result.WantedFilterIncludesOnlyWantedTasks = await WaitUntilAsync(() =>
                         graphControl.RoadmapNodes.Any(node => node.Id == currentTask.Id) &&
                         graphControl.RoadmapNodes.All(node => node.TaskItem.Wanted));
 
-                    vm.ShowWanted = false;
+                    vm.Graph.ShowWanted = false;
                     RunLayoutJobs();
                     result.NotWantedFilterExcludesWantedTask = await WaitUntilAsync(() =>
                         graphControl.RoadmapNodes.Any() &&
@@ -230,15 +234,10 @@ internal static class WantedImportanceUiContract
         return false;
     }
 
-    private static GraphControl OpenRoadmapTabAndWaitForGraphControl(
-        MainControl root,
+    private static GraphControl WaitForGraphControl(
+        MainScreen root,
         int timeoutMilliseconds = 3000)
     {
-        var roadmapTab = FindControlByAutomationId<TabItem>(
-            root,
-            "RoadmapTabItem");
-
-        roadmapTab.IsSelected = true;
         GraphControl? graphControl = null;
         var ready = SpinWait.SpinUntil(() =>
         {

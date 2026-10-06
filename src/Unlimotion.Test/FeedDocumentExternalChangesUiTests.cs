@@ -34,20 +34,34 @@ public sealed class FeedDocumentExternalChangesUiTests
             var newPath = daily ? "Ежедневные/2026-09-09.md" : "New.md";
             await File.WriteAllTextAsync(Path.Combine(directory.Path, oldPath), "Исходный текст\n");
             using var feed = new FeedViewModel(() => new DateOnly(2026, 9, 9));
-            await feed.InitializeVaultAsync(directory.Path);
-            await feed.OpenVaultLinkAsync(oldPath, null);
-            var tab = feed.OpenedThematicFile!;
-            tab.ScrollOffset = 25;
-            File.Move(Path.Combine(directory.Path, oldPath), Path.Combine(directory.Path, newPath));
-            var disk = await new FileNoteVault(directory.Path).ReadAsync(newPath);
-            await Reload(feed, new(new(VaultWatchScope.Markdown, VaultWatchChangeKind.Renamed, newPath, oldPath, disk!.Revision), disk));
-            await feed.OpenVaultLinkAsync(newPath, null);
-            await Assert.That(feed.OpenedThematicFile).IsSameReferenceAs(tab);
-            await Assert.That(feed.DocumentWorkspace.Documents.Count).IsEqualTo(1);
-            await Assert.That(tab.RelativePath).IsEqualTo(newPath);
-            await Assert.That(tab.MarkdownEditor.Snapshot!.RelativePath).IsEqualTo(newPath);
-            if (daily)
-                await Assert.That(tab.MarkdownEditor).IsSameReferenceAs(feed.Days.Single(day => day.RelativePath == newPath).MarkdownEditor);
+            try
+            {
+                await feed.InitializeVaultAsync(directory.Path);
+                await feed.OpenVaultLinkAsync(oldPath, null);
+                var tab = feed.OpenedThematicFile!;
+                tab.ScrollOffset = 25;
+                File.Move(Path.Combine(directory.Path, oldPath), Path.Combine(directory.Path, newPath));
+                var disk = await new FileNoteVault(directory.Path).ReadAsync(newPath);
+                await Reload(feed, new(new(VaultWatchScope.Markdown, VaultWatchChangeKind.Renamed, newPath, oldPath, disk!.Revision), disk));
+                await feed.OpenVaultLinkAsync(newPath, null);
+                await Assert.That(feed.OpenedThematicFile).IsSameReferenceAs(tab);
+                await Assert.That(feed.DocumentWorkspace.Documents.Count).IsEqualTo(1);
+                await Assert.That(tab.RelativePath).IsEqualTo(newPath);
+                await Assert.That(tab.MarkdownEditor.Snapshot!.RelativePath).IsEqualTo(newPath);
+                if (daily)
+                    await Assert.That(tab.MarkdownEditor).IsSameReferenceAs(feed.Days.Single(day => day.RelativePath == newPath).MarkdownEditor);
+            }
+            finally
+            {
+                feed.Dispose();
+                // Canceled asynchronous file readers can finish closing their handles
+                // after Feed disposal. Retry only this isolated fixture's cleanup.
+                for (var attempt = 0; ; attempt++)
+                {
+                    try { directory.Dispose(); break; }
+                    catch (IOException) when (attempt < 10) { await Task.Delay(20); }
+                }
+            }
         }, CancellationToken.None);
     }
 

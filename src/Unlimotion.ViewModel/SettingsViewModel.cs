@@ -1651,6 +1651,8 @@ public class SettingsViewModel
         }
 
         ReloadGitMetadata();
+        // Publish the new choice before selecting it: a two-way ComboBox can
+        // otherwise reject a remote absent from its previous ItemsSource.
         GitRemoteName = result.RemoteName;
         GitRemoteUrl = result.RemoteUrl;
     }

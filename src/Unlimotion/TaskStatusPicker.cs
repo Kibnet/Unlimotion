@@ -92,7 +92,13 @@ public class TaskStatusPicker : Button
     {
         if (!IsStatusFlyoutOpen())
         {
-            OpenStatusFlyout();
+            // Button.OnClick opens its flyout itself. Showing it first makes the
+            // base handler immediately close it (notably for keyboard/Invoke).
+            var task = GetEffectiveTask();
+            if (task != null)
+            {
+                Flyout = BuildStatusFlyout(task);
+            }
         }
 
         base.OnClick();

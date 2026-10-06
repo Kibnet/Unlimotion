@@ -61,6 +61,8 @@ namespace Unlimotion.ViewModel
         private bool _isLastOpenedTabInitialized;
         private bool _isSynchronizingStatusFilters;
         private bool _isApplyingWorkspaceLocation;
+        private long _workspaceScopeRevision;
+        private int _workspaceActivationCount;
         public bool IsWorkspaceShellAttached { get; set; }
         public bool IsLegacyReviewOverlayVisible { get; private set; }
         private readonly bool _defaultShowCompleted;
@@ -105,10 +107,39 @@ namespace Unlimotion.ViewModel
             Settings = settings ?? new SettingsViewModel(_configuration);
             Feed = new FeedViewModel();
             WorkspaceNavigation = new WorkspaceNavigationViewModel(WorkspaceLocation.TasksRoot, CommitWorkspaceTabAsync);
+            WorkspaceNavigation.HasPendingEditorChanges = HasPendingWorkspaceTabChanges;
+            WorkspaceNavigation.CaptureViewState = tab =>
+            {
+                var state = CaptureWorkspaceTabState?.Invoke(tab);
+                var displayed = state is FeedWorkspaceViewState feedState ? feedState.Location : state as WorkspaceLocation;
+                if (displayed is not null && tab.CurrentLocation?.ObjectKey == displayed.ObjectKey)
+                    WorkspaceNavigation.UpdateLocation(tab, displayed);
+                return state;
+            };
+            WorkspaceNavigation.RestoreViewState = (tab, entry) => RestoreWorkspaceTabState?.Invoke(tab, entry.ViewState);
+            WorkspaceNavigation.WhenAnyValue(navigation => navigation.LastNavigationNotice)
+                .Where(notice => notice == WorkspaceNavigationNotice.ExistingHistoryDocumentFocused)
+                .Subscribe(_ => ManagerWrapper?.SuccessToast(L10n.Get("WorkspaceExistingHistoryDocumentFocused")))
+                .AddToDispose(this);
             Feed.NavigationLocationOpened = RecordFeedNavigation;
             Feed.NavigateToTaskWithDispositionRequested = NavigateFeedTask;
             Feed.NavigateToWorkspaceLocationRequested = NavigateFeedWorkspaceLocationAsync;
             Feed.WorkspaceScopeChanged = ResetWorkspaceForCurrentScope;
+            Feed.WorkspaceScopeChanging = async () =>
+            {
+                try
+                {
+                    if (!await CommitAllWorkspaceDraftsAsync().ConfigureAwait(true)) return false;
+                }
+                catch (Exception exception)
+                {
+                    ManagerWrapper?.ErrorToast(exception.Message);
+                    return false;
+                }
+                WorkspaceNavigation.InvalidatePendingNavigation();
+                _workspaceScopeRevision++;
+                return true;
+            };
             Feed.PresentReviewSourceRequested = PresentReviewSourceAsync;
             InitializeWorkspaceExtras();
             Feed.WhenAnyValue(feed => feed.IsReviewActive).Subscribe(active =>
@@ -491,6 +522,7 @@ namespace Unlimotion.ViewModel
                 SelectCurrentTask();
                 if (newTask != null)
                 {
+                    if (IsWorkspaceShellAttached) await OpenWorkspaceTaskAsync(newTask);
                     RequestTitleFocusForCurrentTask();
                 }
 
@@ -535,6 +567,7 @@ namespace Unlimotion.ViewModel
 
                 if (newTask != null)
                 {
+                    if (IsWorkspaceShellAttached) await OpenWorkspaceTaskAsync(newTask);
                     RequestTitleFocusForCurrentTask();
                 }
             }).AddToDisposeAndReturn(connectionDisposableList);
@@ -725,6 +758,7 @@ namespace Unlimotion.ViewModel
             SelectCurrentTask();
             if (newTask != null)
             {
+                if (IsWorkspaceShellAttached) await OpenWorkspaceTaskAsync(newTask);
                 RequestTitleFocusForCurrentTask();
             }
 
@@ -770,6 +804,7 @@ namespace Unlimotion.ViewModel
         public Task BindInitializedStorage(ITaskStorage storage)
         {
             ArgumentNullException.ThrowIfNull(storage);
+            _workspaceScopeRevision++;
             storage.BindToCurrentSynchronizationContext();
             WorkspaceNavigation.Reset(WorkspaceLocation.TasksRoot);
             ResetTaskSpaceSelection();
@@ -782,6 +817,7 @@ namespace Unlimotion.ViewModel
 
         public void ClearTaskSpaceSurface()
         {
+            _workspaceScopeRevision++;
             WorkspaceNavigation.Reset(WorkspaceLocation.TasksRoot);
             ResetTaskSpaceSelection();
             DetailsAreOpen = false;
@@ -1147,7 +1183,7 @@ namespace Unlimotion.ViewModel
                         if (filter.Item1 == null || filter.Item2 == null)
                             return true;
 
-                        var dateTime = task.ArchiveDateTime?.Add(DateTimeOffset.Now.Offset).Date;
+                        var dateTime = task.ArchiveDateTime?.LocalDateTime.Date;
                         return filter.Item1 <= dateTime && dateTime <= filter.Item2;
                     }
 
@@ -1445,7 +1481,7 @@ namespace Unlimotion.ViewModel
                         if (filter.Item1 == null || filter.Item2 == null)
                             return true;
 
-                        var dateTime = task.CompletedDateTime?.Add(DateTimeOffset.Now.Offset).Date;
+                        var dateTime = task.CompletedDateTime?.LocalDateTime.Date;
                         return filter.Item1 <= dateTime && dateTime <= filter.Item2;
                     }
 
@@ -1516,7 +1552,7 @@ namespace Unlimotion.ViewModel
                         if (filter.Item1 == null || filter.Item2 == null)
                             return true;
 
-                        var dateTime = task.CreatedDateTime.Add(DateTimeOffset.Now.Offset).Date;
+                        var dateTime = task.CreatedDateTime.LocalDateTime.Date;
                         return filter.Item1 <= dateTime && dateTime <= filter.Item2;
                     }
 
@@ -2060,6 +2096,9 @@ namespace Unlimotion.ViewModel
 
         public void SelectCurrentTask()
         {
+            // Workspace documents own their tree selection. The shell's last task is
+            // compatibility state, not an instruction to select it in every list.
+            if (IsWorkspaceShellAttached) return;
             if (AllTasksMode ^ UnlockedMode ^ InProgressMode ^ CompletedMode ^ ArchivedMode ^ GraphMode ^ LastCreatedMode ^ LastUpdatedMode ^ LastOpenedMode)
             {
                 if (AllTasksMode)
@@ -2143,10 +2182,14 @@ namespace Unlimotion.ViewModel
             if (location.Kind == WorkspaceLocationKind.Task && FindTaskById(location.Id) is null)
                 return false;
 
-            CaptureFeedWorkspaceLocation();
+            var scopeRevision = _workspaceScopeRevision;
+            var existing = WorkspaceNavigation.GetOpenObject(location);
+            // An explicit link must reveal its target even when its stored locator
+            // already matches: the user may have manually scrolled away since then.
+            var restoreLocator = existing is null || location.HasExplicitLocator;
             if (!await WorkspaceNavigation.OpenAsync(location, disposition).ConfigureAwait(true)) return false;
-            await ActivateWorkspaceLocationAsync(WorkspaceNavigation.ActiveTab.CurrentLocation).ConfigureAwait(true);
-            return true;
+            if (scopeRevision != _workspaceScopeRevision) return false;
+            return await ActivateWorkspaceLocationAsync(WorkspaceNavigation.ActiveTab.CurrentLocation, restoreLocator).ConfigureAwait(true);
         }
 
         public Task<bool> OpenWorkspaceRootAsync(WorkspaceMode mode) =>
@@ -2155,39 +2198,33 @@ namespace Unlimotion.ViewModel
 
         public async Task<bool> NavigateWorkspaceBackAsync(WorkspacePaneViewModel? pane = null)
         {
-            CaptureFeedWorkspaceLocation();
-            if (!await WorkspaceNavigation.GoBackAsync().ConfigureAwait(true)) return false;
-            await ActivateWorkspaceLocationAsync(WorkspaceNavigation.ActiveTab.CurrentLocation).ConfigureAwait(true);
-            return true;
+            if (!await WorkspaceNavigation.GoBackAsync(pane ?? WorkspaceNavigation.ActivePane).ConfigureAwait(true)) return false;
+            return await ActivateWorkspaceLocationAsync(WorkspaceNavigation.ActiveTab.CurrentLocation,
+                WorkspaceNavigation.LastNavigationNotice != WorkspaceNavigationNotice.ExistingHistoryDocumentFocused).ConfigureAwait(true);
         }
 
         public async Task<bool> NavigateWorkspaceForwardAsync(WorkspacePaneViewModel? pane = null)
         {
-            CaptureFeedWorkspaceLocation();
-            if (!await WorkspaceNavigation.GoForwardAsync().ConfigureAwait(true)) return false;
-            await ActivateWorkspaceLocationAsync(WorkspaceNavigation.ActiveTab.CurrentLocation).ConfigureAwait(true);
-            return true;
+            if (!await WorkspaceNavigation.GoForwardAsync(pane ?? WorkspaceNavigation.ActivePane).ConfigureAwait(true)) return false;
+            return await ActivateWorkspaceLocationAsync(WorkspaceNavigation.ActiveTab.CurrentLocation,
+                WorkspaceNavigation.LastNavigationNotice != WorkspaceNavigationNotice.ExistingHistoryDocumentFocused).ConfigureAwait(true);
         }
 
         public async Task<bool> SelectWorkspaceTabAsync(WorkspacePaneViewModel pane, WorkspaceNavigationTabViewModel tab)
         {
-            CaptureFeedWorkspaceLocation();
             if (!await WorkspaceNavigation.SelectTabAsync(pane, tab).ConfigureAwait(true)) return false;
-            await ActivateWorkspaceLocationAsync(tab.CurrentLocation).ConfigureAwait(true);
-            return true;
+            return await ActivateWorkspaceLocationAsync(tab.CurrentLocation, restoreLocator: false).ConfigureAwait(true);
         }
 
         public async Task<bool> NavigateWorkspaceHistoryAsync(WorkspacePaneViewModel pane, int historyIndex)
         {
-            CaptureFeedWorkspaceLocation();
-            if (!await WorkspaceNavigation.GoToHistoryEntryAsync(historyIndex).ConfigureAwait(true)) return false;
-            await ActivateWorkspaceLocationAsync(WorkspaceNavigation.ActiveTab.CurrentLocation).ConfigureAwait(true);
-            return true;
+            if (!await WorkspaceNavigation.GoToHistoryEntryAsync(pane, historyIndex).ConfigureAwait(true)) return false;
+            return await ActivateWorkspaceLocationAsync(WorkspaceNavigation.ActiveTab.CurrentLocation,
+                WorkspaceNavigation.LastNavigationNotice != WorkspaceNavigationNotice.ExistingHistoryDocumentFocused).ConfigureAwait(true);
         }
 
         public void ActivateWorkspacePane(WorkspacePaneViewModel pane)
         {
-            CaptureFeedWorkspaceLocation();
             WorkspaceNavigation.ActivatePane(pane);
             if (pane.ActiveTab?.CurrentLocation is not { } location) return;
             SelectedWorkspaceMode = location.Mode;
@@ -2206,46 +2243,45 @@ namespace Unlimotion.ViewModel
         public TaskItemViewModel? ResolveTaskById(string taskId) => FindTaskById(taskId);
 
         public Func<WorkspaceLocation?>? CaptureActiveFeedLocation { get; set; }
+        public Func<WorkspaceNavigationTabViewModel, object?>? CaptureWorkspaceTabState { get; set; }
+        public Action<WorkspaceNavigationTabViewModel, object?>? RestoreWorkspaceTabState { get; set; }
 
         public async Task<bool> CloseWorkspaceTabAsync(
             WorkspacePaneViewModel pane,
             WorkspaceNavigationTabViewModel tab)
         {
-            CaptureFeedWorkspaceLocation();
             var fallback = pane == WorkspaceNavigation.PrimaryPane
                 ? WorkspaceLocation.TasksRoot
                 : WorkspaceLocation.FeedRoot;
             var isReview = tab.CurrentLocation?.Kind == WorkspaceLocationKind.Review;
+            var previousActiveTab = WorkspaceNavigation.ActiveTab;
             if (!await WorkspaceNavigation.CloseTabAsync(pane, tab, fallback).ConfigureAwait(true)) return false;
             if (isReview && Feed.IsReviewActive) Feed.FinishReviewCommand.Execute(null);
-            if (pane == WorkspaceNavigation.ActivePane)
-                await ActivateWorkspaceLocationAsync(pane.ActiveTab?.CurrentLocation).ConfigureAwait(true);
+            if (!ReferenceEquals(previousActiveTab, WorkspaceNavigation.ActiveTab))
+                await ActivateWorkspaceLocationAsync(WorkspaceNavigation.ActiveTab.CurrentLocation, restoreLocator: false).ConfigureAwait(true);
             return true;
         }
 
         public async Task<bool> CloseWorkspaceSecondaryPaneAsync()
         {
-            CaptureFeedWorkspaceLocation();
             var hasReview = WorkspaceNavigation.SecondaryPane?.Tabs.Any(tab => tab.CurrentLocation?.Kind == WorkspaceLocationKind.Review) == true;
             if (!await WorkspaceNavigation.CloseSecondaryPaneAsync(WorkspaceLocation.TasksRoot).ConfigureAwait(true)) return false;
             if (hasReview && Feed.IsReviewActive) Feed.FinishReviewCommand.Execute(null);
-            await ActivateWorkspaceLocationAsync(WorkspaceNavigation.ActiveTab.CurrentLocation).ConfigureAwait(true);
+            await ActivateWorkspaceLocationAsync(WorkspaceNavigation.ActiveTab.CurrentLocation, restoreLocator: false).ConfigureAwait(true);
             return true;
         }
 
         public async Task<bool> MoveWorkspaceTabAsync(WorkspacePaneViewModel pane, WorkspaceNavigationTabViewModel tab)
         {
-            CaptureFeedWorkspaceLocation();
             if (!await WorkspaceNavigation.MoveTabAsync(pane, tab)) return false;
-            await ActivateWorkspaceLocationAsync(WorkspaceNavigation.ActiveTab.CurrentLocation);
+            await ActivateWorkspaceLocationAsync(WorkspaceNavigation.ActiveTab.CurrentLocation, restoreLocator: false);
             return true;
         }
 
         public async Task<bool> MergeWorkspacePanesAsync()
         {
-            CaptureFeedWorkspaceLocation();
             if (!await WorkspaceNavigation.MergePanesAsync()) return false;
-            await ActivateWorkspaceLocationAsync(WorkspaceNavigation.ActiveTab.CurrentLocation);
+            await ActivateWorkspaceLocationAsync(WorkspaceNavigation.ActiveTab.CurrentLocation, restoreLocator: false);
             return true;
         }
 
@@ -2254,12 +2290,7 @@ namespace Unlimotion.ViewModel
         public async Task ShowReviewSourceAsync()
         {
             if (reviewSourceLocation is not { } source) return;
-            var pane = WorkspaceNavigation.Panes.FirstOrDefault(p => p.Tabs.Any(t => t.CurrentLocation?.ObjectKey == source.ObjectKey));
-            var tab = pane?.Tabs.FirstOrDefault(t => t.CurrentLocation?.ObjectKey == source.ObjectKey);
-            if (pane is not null && tab is not null && await SelectWorkspaceTabAsync(pane, tab))
-                await OpenWorkspaceLocationAsync(source);
-            else if (pane is null)
-                await OpenWorkspaceLocationAsync(source, WorkspaceOpenDisposition.AdjacentPane);
+            await OpenWorkspaceLocationAsync(source, WorkspaceOpenDisposition.AdjacentPane);
         }
 
         private async Task PresentReviewSourceAsync(FeedSearchNavigationRequestedEventArgs navigation)
@@ -2275,10 +2306,15 @@ namespace Unlimotion.ViewModel
 
         private async Task<bool> CommitWorkspaceTabAsync(WorkspaceNavigationTabViewModel tab)
         {
-            if (tab.CurrentLocation?.Mode != WorkspaceMode.Feed) return true;
             try
             {
-                await CommitWorkspaceEditorsAsync().ConfigureAwait(true);
+                if (tab.CurrentLocation?.Mode == WorkspaceMode.Feed)
+                    await Feed.CommitActiveEditorsAsync().ConfigureAwait(true);
+                else if (tab.CurrentLocation is { Kind: WorkspaceLocationKind.Task } location
+                    && FindTaskById(location.Id) is { } task)
+                    await task.FlushPendingEditorChangesAsync().ConfigureAwait(true);
+                else if (tab.CurrentLocation?.Kind == WorkspaceLocationKind.Tasks)
+                    await FlushPendingTaskEditorsAsync().ConfigureAwait(true);
                 return true;
             }
             catch (Exception exception)
@@ -2288,8 +2324,53 @@ namespace Unlimotion.ViewModel
             }
         }
 
-        /// <summary>Commits Feed editors before a workspace scope is replaced.</summary>
-        public Task CommitWorkspaceEditorsAsync() => Feed.CommitActiveEditorsAsync();
+        private bool HasPendingWorkspaceTabChanges(WorkspaceNavigationTabViewModel tab)
+        {
+            if (tab.CurrentLocation?.Mode == WorkspaceMode.Feed)
+                return Feed.HasPendingEditorChanges;
+            if (tab.CurrentLocation is { Kind: WorkspaceLocationKind.Task } location)
+                return FindTaskById(location.Id)?.HasPendingEditorPersistence == true;
+            return tab.CurrentLocation?.Kind == WorkspaceLocationKind.Tasks
+                && (taskRepository?.Tasks.Items.Any(task => task.HasPendingEditorPersistence) ?? false);
+        }
+
+        /// <summary>Commits document and inline task drafts before replacing their storage scope.</summary>
+        public async Task CommitWorkspaceEditorsAsync()
+        {
+            if (!await CommitAllWorkspaceDraftsAsync().ConfigureAwait(true))
+                throw new InvalidOperationException(L10n.Get("WorkspaceDraftSaveFailed"));
+            WorkspaceNavigation.InvalidatePendingNavigation();
+            _workspaceScopeRevision++;
+        }
+
+        private async Task<bool> CommitAllWorkspaceDraftsAsync()
+        {
+            while (true)
+            {
+                if (!await WorkspaceNavigation.CommitAllEditorsAsync().ConfigureAwait(true)) return false;
+                await Feed.CommitActiveEditorsAsync().ConfigureAwait(true);
+                // Includes inline task editors with no open card; no storage scan.
+                await FlushPendingTaskEditorsAsync().ConfigureAwait(true);
+                // Any surface can be edited while another awaits storage. Check
+                // all surfaces in the same UI turn before invalidating the scope.
+                if (!Feed.HasPendingEditorChanges
+                    && !(taskRepository?.Tasks.Items.Any(task => task.HasPendingEditorPersistence) ?? false))
+                    return true;
+            }
+        }
+
+        private async Task FlushPendingTaskEditorsAsync()
+        {
+            while (true)
+            {
+                foreach (var task in taskRepository?.Tasks.Items.ToArray() ?? [])
+                    await task.FlushPendingEditorChangesAsync().ConfigureAwait(true);
+                // Another visible editor can change while a different task awaits
+                // storage. Recheck the entire cache before leaving this UI turn.
+                if (!(taskRepository?.Tasks.Items.Any(task => task.HasPendingEditorPersistence) ?? false))
+                    return;
+            }
+        }
 
         private void RecordFeedNavigation(WorkspaceLocation location)
         {
@@ -2305,9 +2386,7 @@ namespace Unlimotion.ViewModel
             if (location.Kind == WorkspaceLocationKind.Feed
                 && CaptureActiveFeedLocation?.Invoke() is { Kind: WorkspaceLocationKind.Feed } current)
                 location = location with { StateKey = current.StateKey };
-            return _isApplyingWorkspaceLocation
-                ? Task.FromResult(true)
-                : OpenWorkspaceLocationAsync(location, disposition);
+            return OpenWorkspaceLocationAsync(location, disposition);
         }
 
         private void NavigateFeedTask(TaskItemViewModel task, WorkspaceOpenDisposition disposition)
@@ -2317,6 +2396,7 @@ namespace Unlimotion.ViewModel
 
         private void ResetWorkspaceForCurrentScope()
         {
+            _workspaceScopeRevision++;
             reviewSourceLocation = null;
             ReloadPinnedNotes();
             IsNextStepOpen = false;
@@ -2329,27 +2409,12 @@ namespace Unlimotion.ViewModel
             DetailsAreOpen = false;
         }
 
-        private void CaptureFeedWorkspaceLocation()
+        private async Task<bool> ActivateWorkspaceLocationAsync(WorkspaceLocation? location, bool restoreLocator = true)
         {
-            if (WorkspaceNavigation.ActiveTab.CurrentLocation is not { Mode: WorkspaceMode.Feed } current)
-                return;
-            var displayed = CaptureActiveFeedLocation?.Invoke();
-            var offset = displayed?.ScrollOffset ?? current.ScrollOffset ?? Feed.ChronologyScrollOffset;
-            if (current.Kind == WorkspaceLocationKind.Note)
-            {
-                WorkspaceNavigation.UpdateActiveLocation(current with { ScrollOffset = offset });
-                return;
-            }
-
-            WorkspaceNavigation.UpdateActiveLocation(
-                displayed is { Kind: WorkspaceLocationKind.Feed }
-                    ? displayed
-                    : current with { ScrollOffset = offset });
-        }
-
-        private async Task ActivateWorkspaceLocationAsync(WorkspaceLocation? location)
-        {
-            if (location is null) return;
+            if (location is null) return false;
+            var scopeRevision = _workspaceScopeRevision;
+            var tab = WorkspaceNavigation.ActiveTab;
+            _workspaceActivationCount++;
             _isApplyingWorkspaceLocation = true;
             try
             {
@@ -2362,31 +2427,41 @@ namespace Unlimotion.ViewModel
                     case WorkspaceLocationKind.Task:
                         if (FindTaskById(location.Id) is not { } task)
                         {
-                            WorkspaceNavigation.ActiveTab.ReplaceCurrentLocation(WorkspaceLocation.TasksRoot);
-                            ManagerWrapper?.ErrorToast(L10n.Get("TaskDeepLinkTaskNotFound"));
+                            ManagerWrapper?.ErrorToast(L10n.Format("TaskDeepLinkTaskNotFound", location.Id));
                             DetailsAreOpen = false;
                             SelectedWorkspaceMode = WorkspaceMode.Tasks;
-                            break;
+                            return false;
                         }
                         CurrentTaskItem = task;
                         DetailsAreOpen = true;
-                        SelectCurrentTask();
+                        // A document card must not change selection/scroll in another list pane.
+                        if (!IsWorkspaceShellAttached) SelectCurrentTask();
                         break;
                     case WorkspaceLocationKind.Feed:
                         await Feed.ActivateDocumentAsync(null).ConfigureAwait(true);
-                        if (location.Id != "feed")
+                        if (!IsCurrentActivation()) return false;
+                        if (restoreLocator && location.Id != "feed")
                             await Feed.RestoreWorkspaceLocationAsync(location).ConfigureAwait(true);
                         break;
                     case WorkspaceLocationKind.Note:
-                        await Feed.OpenVaultLinkAsync(location.Id, null, wikiLink: true).ConfigureAwait(true);
-                        await Feed.RestoreWorkspaceLocationAsync(location).ConfigureAwait(true);
+                        if (Feed.DocumentWorkspace.Find(location.Id) is { } document)
+                            await Feed.ActivateDocumentAsync(document).ConfigureAwait(true);
+                        else
+                            await Feed.OpenVaultLinkAsync(location.Id, null, wikiLink: true, materializeOnly: true).ConfigureAwait(true);
+                        if (!IsCurrentActivation()) return false;
+                        if (restoreLocator) await Feed.RestoreWorkspaceLocationAsync(location).ConfigureAwait(true);
                         break;
                 }
+                return IsCurrentActivation();
             }
             finally
             {
-                _isApplyingWorkspaceLocation = false;
+                _workspaceActivationCount--;
+                _isApplyingWorkspaceLocation = _workspaceActivationCount > 0;
             }
+            bool IsCurrentActivation() => scopeRevision == _workspaceScopeRevision
+                && ReferenceEquals(tab, WorkspaceNavigation.ActivePane.ActiveTab)
+                && tab.CurrentLocation?.LocatorKey == location.LocatorKey;
         }
 
         public void ConfirmResetTaskFilters(string? category)

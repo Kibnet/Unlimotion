@@ -99,16 +99,14 @@ public class MainControlNewTaskDeadlineUiTests
                 TestHelpers.SetCurrentTask(vm, taskWithDeadline!.Id);
                 vm.SelectCurrentTask();
 
-                var view = new MainControl { DataContext = vm };
+                var view = new MainScreen { DataContext = vm };
                 window = CreateWindow(view);
                 window.Show();
                 window.Activate();
+                await Assert.That(await vm.OpenWorkspaceTaskAsync(taskWithDeadline)).IsTrue();
                 Dispatcher.UIThread.RunJobs();
 
-                var deadlinePickers = view.GetVisualDescendants()
-                    .OfType<CalendarDatePicker>()
-                    .Where(picker => ReferenceEquals(picker.DataContext, taskWithDeadline))
-                    .ToArray();
+                var deadlinePickers = await WaitForTaskCardDatePickersAsync(window, view, taskWithDeadline);
                 await Assert.That(deadlinePickers.Length).IsEqualTo(2);
 
                 var focused = deadlinePickers[0].Focus();
@@ -129,10 +127,7 @@ public class MainControlNewTaskDeadlineUiTests
                 await Assert.That(newTask.PlannedBeginDateTime).IsNull();
                 await Assert.That(newTask.PlannedEndDateTime).IsNull();
 
-                var newTaskPickers = view.GetVisualDescendants()
-                    .OfType<CalendarDatePicker>()
-                    .Where(picker => ReferenceEquals(picker.DataContext, newTask))
-                    .ToArray();
+                var newTaskPickers = await WaitForTaskCardDatePickersAsync(window, view, newTask);
                 await Assert.That(newTaskPickers.Length).IsEqualTo(2);
                 foreach (var picker in newTaskPickers)
                 {
@@ -172,9 +167,10 @@ public class MainControlNewTaskDeadlineUiTests
                 window = CreateWindow(view);
                 window.Show();
                 window.Activate();
+                await Assert.That(await vm.OpenWorkspaceTaskAsync(currentTask)).IsTrue();
                 Dispatcher.UIThread.RunJobs();
 
-                var durationTextBox = FindPlannedDurationTextBox(view, currentTask);
+                var durationTextBox = await WaitForTaskCardPlannedDurationTextBoxAsync(window, view, currentTask);
                 durationTextBox.Focus();
                 await Assert.That(durationTextBox.IsFocused).IsTrue();
                 durationTextBox.Text = "5h";
@@ -193,7 +189,7 @@ public class MainControlNewTaskDeadlineUiTests
                 var newTask = vm.CurrentTaskItem!;
                 await Assert.That(newTask.PlannedDuration).IsNull();
 
-                var newTaskDurationTextBox = FindPlannedDurationTextBox(view, newTask);
+                var newTaskDurationTextBox = await WaitForTaskCardPlannedDurationTextBoxAsync(window, view, newTask);
                 await Assert.That(string.IsNullOrEmpty(newTaskDurationTextBox.Text)).IsTrue();
             }
             finally
@@ -284,12 +280,10 @@ public class MainControlNewTaskDeadlineUiTests
                 window = CreateWindow(view);
                 window.Show();
                 window.Activate();
+                await Assert.That(await vm.OpenWorkspaceTaskAsync(taskWithDeadline)).IsTrue();
                 Dispatcher.UIThread.RunJobs();
 
-                var deadlinePickers = view.GetVisualDescendants()
-                    .OfType<CalendarDatePicker>()
-                    .Where(picker => ReferenceEquals(picker.DataContext, taskWithDeadline))
-                    .ToArray();
+                var deadlinePickers = await WaitForTaskCardDatePickersAsync(window, view, taskWithDeadline);
                 await Assert.That(deadlinePickers.Length).IsEqualTo(2);
 
                 if (setDatesThroughPicker)
@@ -325,10 +319,7 @@ public class MainControlNewTaskDeadlineUiTests
                 await Assert.That(newTask.PlannedBeginDateTime).IsNull();
                 await Assert.That(newTask.PlannedEndDateTime).IsNull();
 
-                var newTaskPickers = view.GetVisualDescendants()
-                    .OfType<CalendarDatePicker>()
-                    .Where(picker => ReferenceEquals(picker.DataContext, newTask))
-                    .ToArray();
+                var newTaskPickers = await WaitForTaskCardDatePickersAsync(window, view, newTask);
                 await Assert.That(newTaskPickers.Length).IsEqualTo(2);
                 foreach (var picker in newTaskPickers)
                 {
@@ -341,6 +332,27 @@ public class MainControlNewTaskDeadlineUiTests
                 await fixture.CleanTasksAsync();
             }
         }, CancellationToken.None);
+    }
+
+    private static async Task<CalendarDatePicker[]> WaitForTaskCardDatePickersAsync(
+        Window window, MainScreen shell, TaskItemViewModel task)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (DateTime.UtcNow < deadline)
+        {
+            Dispatcher.UIThread.RunJobs();
+            window.UpdateLayout();
+            var card = shell.GetVisualDescendants().OfType<TaskCardView>()
+                .SingleOrDefault(candidate => candidate.IsEffectivelyVisible &&
+                    ReferenceEquals(candidate.RouteTaskItem, task));
+            var pickers = card?.GetVisualDescendants().OfType<CalendarDatePicker>()
+                .Where(picker => ReferenceEquals(picker.DataContext, task)).ToArray() ?? [];
+            if (pickers.Length == 2) return pickers;
+            // CurrentTaskItem is set before asynchronous route activation finishes.
+            // Await the actual matching card, not the previous card's DataContext.
+            await Task.Delay(20);
+        }
+        throw new TimeoutException($"The actual task card for '{task.Id}' did not mount its two deadline pickers.");
     }
 
     private static Window CreateWindow(Control content)
@@ -405,13 +417,24 @@ public class MainControlNewTaskDeadlineUiTests
         }
     }
 
-    private static TextBox FindPlannedDurationTextBox(Control root, TaskItemViewModel task)
+    private static async Task<TextBox> WaitForTaskCardPlannedDurationTextBoxAsync(
+        Window window, MainScreen shell, TaskItemViewModel task)
     {
-        return root.GetVisualDescendants()
-            .OfType<TextBox>()
-            .First(textBox =>
-                ReferenceEquals(textBox.DataContext, task) &&
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (DateTime.UtcNow < deadline)
+        {
+            Dispatcher.UIThread.RunJobs();
+            window.UpdateLayout();
+            var card = shell.GetVisualDescendants().OfType<TaskCardView>().SingleOrDefault(candidate =>
+                candidate.IsEffectivelyVisible && ReferenceEquals(candidate.RouteTaskItem, task));
+            var input = card?.GetVisualDescendants().OfType<TextBox>().FirstOrDefault(textBox =>
+                textBox.IsEffectivelyVisible && ReferenceEquals(textBox.DataContext, task) &&
                 ToolTip.GetTip(textBox)?.ToString()?.Contains("1d, 5h, 20m", StringComparison.Ordinal) == true);
+            if (input is not null) return input;
+            // Task creation publishes its model before the asynchronous route mounts its card.
+            await Task.Delay(20);
+        }
+        throw new TimeoutException($"The actual task card for '{task.Id}' did not mount its planned duration editor.");
     }
 
     private static async Task ClickControlAsync(Window window, Control control)

@@ -115,17 +115,39 @@ public partial class FeedControl : UserControl
 
         var offset = ChronologyScroller.Offset.Y;
         var viewportHeight = ChronologyScroller.Viewport.Height;
-        var visibleDay = ChronologyList.GetRealizedContainers()
+        var visibleDays = ChronologyList.GetRealizedContainers()
             .Select(control => (Control: control, Day: control.DataContext as FeedDayViewModel,
                 Y: control.TranslatePoint(default, ChronologyScroller)?.Y))
             .Where(item => item.Day is not null && item.Y is { } y
                 && y < viewportHeight && y + item.Control.Bounds.Height > 0)
             .OrderBy(item => item.Y)
-            .FirstOrDefault();
+            .ToArray();
+        // BringIntoView cannot place a short/end-of-document target at the top.
+        // Keep an explicit locator while its block is still visible: otherwise
+        // capturing the first visible heading creates a duplicate history step
+        // every time the same source link is opened. Scrolling away from the
+        // target still records the actual reading position below.
+        if (int.TryParse(workspaceLocation.Anchor, NumberStyles.Integer, CultureInfo.InvariantCulture, out var anchor))
+        {
+            var targetDay = visibleDays.FirstOrDefault(item => string.Equals(item.Day!.RelativePath,
+                workspaceLocation.Id, StringComparison.OrdinalIgnoreCase));
+            if (targetDay.Control is not null && VisibleWorkspaceBlocks(targetDay.Control, viewportHeight)
+                    .Any(block => block.Index == anchor))
+                return workspaceLocation with { ScrollOffset = offset, StateKey = workspaceFilterKey };
+        }
+        var visibleDay = visibleDays.FirstOrDefault();
         if (visibleDay.Day is null)
             return workspaceLocation with { ScrollOffset = offset, StateKey = workspaceFilterKey };
 
-        var visibleBlock = visibleDay.Control.GetVisualDescendants().OfType<Control>()
+        var visibleBlock = VisibleWorkspaceBlocks(visibleDay.Control, viewportHeight).FirstOrDefault();
+        return WorkspaceLocation.ForFeedDay(visibleDay.Day.RelativePath,
+            visibleDay.Day.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            visibleBlock?.Index.ToString(CultureInfo.InvariantCulture),
+            workspaceFilterKey, offset);
+    }
+
+    private IEnumerable<MarkdownLiveBlockViewModel> VisibleWorkspaceBlocks(Control dayControl, double viewportHeight) =>
+        dayControl.GetVisualDescendants().OfType<Control>()
             .Where(control => control.DataContext is MarkdownLiveBlockViewModel
                 && control.IsEffectivelyVisible
                 && string.Equals(AutomationProperties.GetAutomationId(control),
@@ -136,12 +158,7 @@ public partial class FeedControl : UserControl
                 Height: control.Bounds.Height))
             .Where(item => item.Y is { } y && y < viewportHeight && y + item.Height > 0)
             .OrderBy(item => item.Y)
-            .FirstOrDefault();
-        return WorkspaceLocation.ForFeedDay(visibleDay.Day.RelativePath,
-            visibleDay.Day.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-            visibleBlock.Block?.Index.ToString(CultureInfo.InvariantCulture),
-            workspaceFilterKey, offset);
-    }
+            .Select(item => item.Block);
 
     private FeedViewModel? observedViewModel;
     private INotifyPropertyChanged? observedPropertyChanges;
@@ -152,6 +169,7 @@ public partial class FeedControl : UserControl
     private bool loadOlderDaysWhenIdle;
     private bool userReachedChronologyEnd;
     private bool isRestoringChronologyAnchor;
+    private long feedBlockNavigationVersion;
     private FeedThematicDocumentViewModel? displayedDocument;
     private WorkspaceOpenDisposition pendingSearchResultDisposition = WorkspaceOpenDisposition.CurrentTab;
 
@@ -325,9 +343,32 @@ public partial class FeedControl : UserControl
     {
         if (sender is not DropDownButton actions || actions.Flyout is not null) return;
         var menu = new MenuFlyout();
-        Add("WorkspaceOpenInNewTab", WorkspaceOpenDisposition.NewTab);
-        Add("WorkspaceOpenBeside", WorkspaceOpenDisposition.AdjacentPane);
         actions.Flyout = menu;
+        menu.Opening += (_, _) =>
+        {
+            menu.Items.Clear();
+            if (actions.DataContext is not FeedSearchResultViewModel result
+                || DataContext is not FeedViewModel viewModel) return;
+            if (GetWorkspaceOwner() is { } owner)
+            {
+                var anchor = result.Entry.BlockIndex.ToString(CultureInfo.InvariantCulture);
+                var location = result.Type switch
+                {
+                    Unlimotion.Notes.Search.FeedSearchDocumentType.Task => WorkspaceLocation.ForTask(result.TaskId, result.Text),
+                    Unlimotion.Notes.Search.FeedSearchDocumentType.Daily => WorkspaceLocation.ForFeedDay(result.RelativePath, result.DisplaySource, anchor),
+                    _ => WorkspaceLocation.ForNote(result.RelativePath, result.DisplaySource, anchor)
+                };
+                var commands = WorkspaceOpenMenu.Create(owner, location,
+                    disposition => viewModel.OpenSearchResultAsync(result, disposition));
+                foreach (var command in WorkspaceOpenMenu.TakeItems(commands)) menu.Items.Add(command);
+            }
+            else
+            {
+                // Standalone legacy feed hosts do not own workspace documents.
+                Add("WorkspaceOpenInNewTab", WorkspaceOpenDisposition.NewTab);
+                Add("WorkspaceOpenBeside", WorkspaceOpenDisposition.AdjacentPane);
+            }
+        };
 
         void Add(string labelKey, WorkspaceOpenDisposition disposition)
         {
@@ -586,12 +627,36 @@ public partial class FeedControl : UserControl
 
     private void NavigateToFeedBlock(FeedSearchNavigationRequestedEventArgs e)
     {
+        if (!IsCurrentFeedNavigationPayload(e)) return;
         if (UseWorkspaceTabs && ((!isWorkspacePaneActive && !(DataContext is FeedViewModel { IsReviewActive: true }))
             || !string.Equals(workspaceLocation?.Id, e.RelativePath, StringComparison.OrdinalIgnoreCase)))
             return;
+        var navigationVersion = ++feedBlockNavigationVersion;
+        var scopeRevision = GetWorkspaceOwner()?.WorkspaceNavigation.ScopeRevision;
+        if (UseWorkspaceTabs && e.Day is not null)
+        {
+            e.Day.IsCollapsed = false;
+            var target = e.Editor.Blocks.FirstOrDefault(block => block.Index == e.BlockIndex);
+            if (target is not null && !WorkspaceFilterAll
+                && !WorkspaceSelectedAreas.Any(area => FeedAreaPresentationFilter.MatchesArea(target.Block, area)))
+            {
+                RestoreWorkspaceAreaFilter(null);
+                if (GetWorkspaceOwner() is { } owner)
+                {
+                    if (workspaceLocation is { } current)
+                    {
+                        workspaceLocation = current with { StateKey = null };
+                        if (owner.WorkspaceNavigation.GetOpenObject(current) is { } opened)
+                            owner.WorkspaceNavigation.UpdateLocation(opened.Tab, workspaceLocation);
+                    }
+                    owner.ManagerWrapper?.SuccessToast(L10n.Get("WorkspaceLocatorFilterRelaxed"));
+                }
+            }
+        }
         Dispatcher.UIThread.Post(
             () =>
             {
+                if (!IsCurrentFeedNavigation(e, navigationVersion, scopeRevision)) return;
                 if (e.Day is not null)
                 {
                     if (DataContext is FeedViewModel viewModel)
@@ -610,14 +675,34 @@ public partial class FeedControl : UserControl
                 }
 
                 Dispatcher.UIThread.Post(
-                    () => FocusNavigatedBlock(e, remainingAttempts: 8),
+                    () => FocusNavigatedBlock(e, remainingAttempts: 8, navigationVersion, scopeRevision),
                     DispatcherPriority.Loaded);
             },
             DispatcherPriority.Loaded);
     }
 
-    private void FocusNavigatedBlock(FeedSearchNavigationRequestedEventArgs e, int remainingAttempts)
+    private MainWindowViewModel? GetWorkspaceOwner() => this.GetVisualAncestors().OfType<Control>()
+        .Select(control => control.DataContext).OfType<MainWindowViewModel>().FirstOrDefault();
+
+    private bool IsCurrentFeedNavigationPayload(FeedSearchNavigationRequestedEventArgs e)
     {
+        if (!this.IsAttachedToVisualTree() || observedViewModel is not { } viewModel
+            || !ReferenceEquals(DataContext, viewModel)) return false;
+        return e.Day is { } day
+            ? viewModel.Days.Any(current => ReferenceEquals(current, day))
+                && ReferenceEquals(day.MarkdownEditor, e.Editor)
+            : ReferenceEquals(viewModel.DocumentWorkspace.Find(e.RelativePath)?.MarkdownEditor, e.Editor);
+    }
+
+    private bool IsCurrentFeedNavigation(FeedSearchNavigationRequestedEventArgs e,
+        long navigationVersion, long? scopeRevision) => navigationVersion == feedBlockNavigationVersion
+        && scopeRevision == GetWorkspaceOwner()?.WorkspaceNavigation.ScopeRevision
+        && IsCurrentFeedNavigationPayload(e);
+
+    private void FocusNavigatedBlock(FeedSearchNavigationRequestedEventArgs e, int remainingAttempts,
+        long navigationVersion, long? scopeRevision)
+    {
+        if (!IsCurrentFeedNavigation(e, navigationVersion, scopeRevision)) return;
         if (UseWorkspaceTabs && ((!isWorkspacePaneActive && !(DataContext is FeedViewModel { IsReviewActive: true }))
             || !string.Equals(workspaceLocation?.Id, e.RelativePath, StringComparison.OrdinalIgnoreCase)))
             return;
@@ -673,7 +758,7 @@ public partial class FeedControl : UserControl
         }
 
         Dispatcher.UIThread.Post(
-            () => FocusNavigatedBlock(e, remainingAttempts - 1),
+            () => FocusNavigatedBlock(e, remainingAttempts - 1, navigationVersion, scopeRevision),
             DispatcherPriority.Loaded);
     }
 

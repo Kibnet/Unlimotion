@@ -65,6 +65,14 @@ One application instance can keep several named task spaces. Use the selector in
 
 Only one space is active at a time. Its task source and complete Git synchronization profile are isolated from every other space; tasks from multiple spaces are never shown together and cross-space task relations are rejected. To configure storage or Git for another space, switch to it first. Removing a space removes only its configuration and stored credentials from this application—it does not delete or move the task files or remote repository.
 
+### Workspace documents (development snapshot)
+
+Each task view is an independent document: All Tasks, Last Created, Last Updated, Unlocked, In Progress, Completed, Archived, Last Opened, and Roadmap. Task cards, the Feed, and individual notes also open independently, without a task list nested inside a card.
+
+Normal opening replaces the selected tab's document. Use `Ctrl` when opening, the context menu, or the touch-accessible actions button to open a new tab or an adjacent pane. An already open object is focused instead of duplicated.
+
+Each tab keeps its own history and document state, including search, filters, selection, and reading position. Use Back/Forward buttons or `Ctrl+[` / `Ctrl+]`, or select an entry from history. An exact source link reveals its day or block in the existing Feed or note tab. A failed save prevents leaving the editor and preserves the draft.
+
 ### Daily Feed (development snapshot)
 
 The current source tree includes a desktop-first `Feed` mode for working directly with an existing Obsidian-compatible Markdown vault. It is not a claim about an already published release.
@@ -72,7 +80,7 @@ The current source tree includes a desktop-first `Feed` mode for working directl
 - Choose the vault root in Settings. Notes stay in that folder; Unlimotion does not import them into task storage.
 - The daily-note folder and filename format are configurable, defaulting to `Ежедневные/YYYY-MM-DD.md`. The Feed's display date has a separate format setting and does not rename files; hovering a date shows the full path.
 - Quick capture appends to today's file, while block Live Preview keeps Markdown editable. Right-click, `Shift+F10`, or the menu key opens block actions. Clicking an already selected handle without modifiers clears selection across the Feed.
-- Note links open in scrollable document tabs alongside the pinned Feed. `Ctrl+Tab` switches tabs and `Ctrl+W` closes a document; a failed save keeps the document open.
+- Notes are scrollable workspace documents using the same opening rules. Choose Open Beside to read a source next to a task; a failed save keeps the document open.
 - The Feed shows daily entries newest first, supports text search and a review flow, and can turn a selected fragment into a task, goal, or permanent thematic note.
 - A task or goal can belong to several hierarchical areas. Task references keep the status control to the left of the title and open the existing task card.
 - An area's settings can specify a root task as the suggested parent for new tasks. Parents remain editable before creation; defaults are isolated by task space and note vault.
@@ -173,9 +181,9 @@ The next occurrence receives **its own subtree**: new tasks, criteria and intern
 
 ## Interface description
 
-The header contains the task space selector and the path to the selected task. Tabs on the left provide different task views and Settings; the card on the right contains the description, criteria, planning fields, relations and status history.
+The shared header contains the space selector, search and Settings. Left navigation opens independent documents: task views, Feed and Roadmap. A task card contains the description, criteria, planning fields, relations and status history and can open in the current tab or beside another document.
 
-The images below use a synthetic demo dataset.
+The images below use a synthetic demo dataset and show the previous layout; the new layout rules are described in the Workspace documents section above.
 
 ### All Tasks
 
@@ -227,7 +235,7 @@ Red arrows - the ratio of the blocking task to the blocked one
 
 ### Settings
 
-The Settings tab includes:
+The shared application settings include:
 
 - Task spaces: create, switch, rename and remove a space from the app.
 - The shortcut reference, language, theme, text size, smart search and remembering expanded nodes.

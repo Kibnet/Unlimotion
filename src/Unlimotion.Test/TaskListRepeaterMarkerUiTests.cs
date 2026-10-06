@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
@@ -84,17 +85,51 @@ public class TaskListRepeaterMarkerUiTests
     }
 
     [Test]
-    public async Task TaskListRepeaterMarker_XamlTemplates_AddMarkerBeforeEveryInlineTitle()
+    [Arguments("MainControl.axaml")]
+    [Arguments("TaskListDocumentView.axaml")]
+    public async Task TaskListRepeaterMarker_XamlTemplates_AddMarkerBeforeEveryInlineTitle(string fileName)
     {
-        var xaml = File.ReadAllText(FindViewXamlPath("MainControl.axaml"));
+        var xaml = File.ReadAllText(FindViewXamlPath(fileName));
 
         var inlineTitleCount = CountOccurrences(xaml, "EmojiText=\"{Binding TaskItem.Title}\"");
         var inlineMarkerCount = CountOccurrences(xaml, "Text=\"{Binding TaskItem.RepeaterListMarker}\"");
 
-        await Assert.That(xaml).Contains("Text=\"{Binding RepeaterListMarker}\"");
-        await Assert.That(xaml).Contains("ToolTip.Tip=\"{Binding RepeaterListMarkerToolTip}\"");
         await Assert.That(inlineTitleCount).IsGreaterThan(0);
         await Assert.That(inlineMarkerCount).IsEqualTo(inlineTitleCount);
+        await AssertMarkersBeforeTitlesAsync(xaml, "TaskItem.");
+    }
+
+    [Test]
+    public async Task TaskListRepeaterMarker_SharedTaskTemplate_AddsMarkerBeforeEmojiTitle()
+    {
+        var xaml = File.ReadAllText(FindViewXamlPath("TaskPresentationResources.axaml"));
+        await Assert.That(xaml).Contains("Text=\"{Binding RepeaterListMarker}\"");
+        await Assert.That(xaml).Contains("ToolTip.Tip=\"{Binding RepeaterListMarkerToolTip}\"");
+        await AssertMarkersBeforeTitlesAsync(xaml, string.Empty);
+    }
+
+    private static async Task AssertMarkersBeforeTitlesAsync(string xaml, string taskPrefix)
+    {
+        var titleBinding = $"{{Binding {taskPrefix}Title}}";
+        var markerBinding = $"{{Binding {taskPrefix}RepeaterListMarker}}";
+        var titles = XDocument.Parse(xaml).Descendants()
+            .Where(element => element.Name.LocalName == "EmojiTextBlock"
+                && (string?)element.Attribute("EmojiText") == titleBinding).ToArray();
+        await Assert.That(titles.Length).IsGreaterThan(0);
+        foreach (var title in titles)
+        {
+            var row = title.Ancestors().First(element => element.Name.LocalName == "Grid"
+                && element.Descendants().Any(child => (string?)child.Attribute("Text") == markerBinding));
+            // Every title must have its own marker, not merely find another row's marker.
+            await Assert.That(row.Descendants().Count(element =>
+                (string?)element.Attribute("EmojiText") == titleBinding)).IsEqualTo(1);
+            var marker = row.Descendants().Single(element => (string?)element.Attribute("Text") == markerBinding);
+            await Assert.That((string?)marker.Attribute("IsVisible")).IsEqualTo($"{{Binding {taskPrefix}IsHaveRepeater}}");
+            await Assert.That((string?)marker.Attribute("ToolTip.Tip")).IsEqualTo($"{{Binding {taskPrefix}RepeaterListMarkerToolTip}}");
+            await Assert.That((string?)marker.Attribute("AutomationProperties.AutomationId")).IsEqualTo("TaskRepeaterListMarker");
+            var visualOrder = row.Descendants().ToList();
+            await Assert.That(visualOrder.IndexOf(marker)).IsLessThan(visualOrder.IndexOf(title));
+        }
     }
 
     [Test]

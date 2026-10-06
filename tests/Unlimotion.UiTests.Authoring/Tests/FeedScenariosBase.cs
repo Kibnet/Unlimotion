@@ -56,6 +56,10 @@ public abstract class FeedScenariosBase<TSession> : StatusContractScenariosBase<
 
     protected abstract FeedNarrowLayoutSnapshot GetFeedNarrowLayoutSnapshot();
 
+    protected virtual bool IsFeedWorkspaceSelected => Page.FeedModeButton.IsChecked == true;
+
+    protected virtual bool IsTasksWorkspaceSelected => Page.TasksModeButton.IsChecked == true;
+
     protected virtual void PrepareFeedTaskReferenceSurface()
     {
     }
@@ -223,21 +227,20 @@ public abstract class FeedScenariosBase<TSession> : StatusContractScenariosBase<
     public async Task Feed_shell_switch_preserves_task_context()
     {
         PrepareMainTabSelection("LastCreatedTabItem");
-        Page.SelectTabItem(static page => page.LastCreatedTabItem, timeoutMs: 10_000);
-        await Assert.That(Page.LastCreatedTabItem.IsSelected).IsTrue();
+        Page.WorkspaceRailLastCreatedButton.Invoke();
+        await Assert.That(Page.LastCreatedTree.AutomationId).IsEqualTo("LastCreatedTree");
 
         OpenFeed();
         using (Assert.Multiple())
         {
-            await Assert.That(Page.FeedModeButton.IsChecked).IsTrue();
+            await Assert.That(IsFeedWorkspaceSelected).IsTrue();
             await Assert.That(Page.FeedRoot.AutomationId).IsEqualTo("FeedRoot");
         }
 
-        OpenTasks();
+        InvokeWorkspaceBack();
         using (Assert.Multiple())
         {
-            await Assert.That(Page.TasksModeButton.IsChecked).IsTrue();
-            await Assert.That(Page.LastCreatedTabItem.IsSelected).IsTrue();
+            await Assert.That(IsTasksWorkspaceSelected).IsTrue();
             await Assert.That(Page.LastCreatedTree.AutomationId).IsEqualTo("LastCreatedTree");
         }
 
@@ -481,11 +484,21 @@ public abstract class FeedScenariosBase<TSession> : StatusContractScenariosBase<
         WaitForControl(() => Page.ConfirmNoteDailyFileNameFormatButton,
             "Returning to hyphenated names must warn about the existing dotted daily file.").Invoke();
         FlushDailyNoteFilenameFormatUi();
-        WaitUntil(
-            () => ReadFeedVaultText(DailyNoteSettingsRelativePath),
-            text => text.Contains("\"dailyFileNameFormat\": \"yyyy-MM-dd\"", StringComparison.Ordinal),
-            timeout: TimeSpan.FromSeconds(20),
-            timeoutMessage: "The repeated Apply did not persist the hyphenated format.");
+        try
+        {
+            WaitUntil(
+                () => ReadFeedVaultText(DailyNoteSettingsRelativePath),
+                text => text.Contains("\"dailyFileNameFormat\": \"yyyy-MM-dd\"", StringComparison.Ordinal),
+                timeout: TimeSpan.FromSeconds(20),
+                timeoutMessage: "The repeated Apply did not persist the hyphenated format.");
+        }
+        catch (TimeoutException exception)
+        {
+            throw new TimeoutException(
+                exception.Message + " Current UI state: " +
+                DescribeDailyNoteFilenameFormatApplyAvailability() +
+                "; persisted=" + ReadFeedVaultText(DailyNoteSettingsRelativePath), exception);
+        }
         WaitForDailyNoteFilenameFormatOperationCompletion("yyyy-MM-dd");
 
         EnterDailyNoteFilenameFormat(formatInput, "yyyy.MM.dd");
@@ -657,7 +670,7 @@ public abstract class FeedScenariosBase<TSession> : StatusContractScenariosBase<
 
         title.Invoke();
         WaitUntil(
-            () => Page.TasksModeButton.IsChecked == true,
+            () => IsTasksWorkspaceSelected,
             timeout: TimeSpan.FromSeconds(10),
             timeoutMessage: "Task title navigation did not switch from Feed to Tasks.");
         await UiAssert.TextEqualsAsync(
@@ -691,7 +704,7 @@ public abstract class FeedScenariosBase<TSession> : StatusContractScenariosBase<
     {
         Page.ClickButton(static page => page.WorkspaceRailFeedButton);
         WaitUntil(
-            () => Page.FeedModeButton.IsChecked == true,
+            () => IsFeedWorkspaceSelected,
             timeout: TimeSpan.FromSeconds(10),
             timeoutMessage: "Feed workspace mode did not become selected.");
         _ = WaitForControl(() => Page.FeedRoot, "Feed root did not become available.");
@@ -701,7 +714,7 @@ public abstract class FeedScenariosBase<TSession> : StatusContractScenariosBase<
     {
         Page.ClickButton(static page => page.WorkspaceRailTasksButton);
         WaitUntil(
-            () => Page.TasksModeButton.IsChecked == true,
+            () => IsTasksWorkspaceSelected,
             timeout: TimeSpan.FromSeconds(10),
             timeoutMessage: "Tasks workspace mode did not become selected.");
     }
@@ -728,7 +741,7 @@ public abstract class FeedScenariosBase<TSession> : StatusContractScenariosBase<
             .FirstOrDefault(count => count > 0);
     }
 
-    private static TControl WaitForControl<TControl>(Func<TControl> resolve, string timeoutMessage)
+    private TControl WaitForControl<TControl>(Func<TControl> resolve, string timeoutMessage)
         where TControl : class
     {
         return WaitUntil(

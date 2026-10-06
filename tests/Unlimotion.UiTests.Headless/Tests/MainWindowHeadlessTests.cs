@@ -36,6 +36,18 @@ public sealed partial class MainWindowHeadlessTests
     : FeedScenariosBase<MainWindowHeadlessTests.HeadlessRuntimeSession>
 {
     private const string TaskDeepLinkScenarioTestName = nameof(Task_deep_link_opens_existing_task_card);
+    protected override void InvokeWorkspaceBack()
+    {
+        var back = HeadlessRuntime.Dispatch(() =>
+        {
+            var owner = GetHeadlessMainWindowViewModel();
+            var paneId = ReferenceEquals(owner.WorkspaceNavigation.ActivePane, owner.WorkspaceNavigation.PrimaryPane)
+                ? "WorkspacePrimaryPane" : "WorkspaceSecondaryPane";
+            return FindNativeControlByAutomationId<Control>(paneId).GetVisualDescendants().OfType<Button>()
+                .Single(button => button.IsEffectivelyVisible && AutomationProperties.GetAutomationId(button) == "WorkspacePaneBackButton");
+        });
+        InvokeNativeButton(back);
+    }
     private const string WorkspaceScreenshotsTestName = nameof(Capture_workspace_feed_and_task_screenshots);
     private const string WorkspaceScreenshotDirectoryVariable = "UNLIMOTION_WORKSPACE_SCREENSHOT_DIR";
     private const string UnifiedEditorUseEditorMarker = "Unified editor version chosen by UseEditor";
@@ -80,10 +92,17 @@ public sealed partial class MainWindowHeadlessTests
                         if (TestContext.Current?.Metadata.TestName is "UX07_LinkedPlan"
                             or "UX08_ChooseWork"
                             or "UX11_UpdatePlanFromNotes"
-                            or "UX13_MetaWork")
+                            or "UX13_MetaWork"
+                            or "UX20_TwoTaskViewsHaveIndependentSearchAndHistory"
+                            or "UX21_ListTaskBackIsCardOnlyAndRestoresList"
+                            or "UX22_TaskMenuNewTabAdjacentAndReuseKeepTargets"
+                            or "UX25_StandaloneDocumentsRemainReadableAcrossThemesAndWidths"
+                            or "UX27_AdjacentCardDoesNotChangeListSelectionOrScroll")
                         {
                             UnlimotionAutomationScenarioData.SeedWorkspaceStoryTasks(
                                 Path.Combine(Path.GetDirectoryName(path)!, "Tasks"));
+                            if (TestContext.Current?.Metadata.TestName == "UX27_AdjacentCardDoesNotChangeListSelectionOrScroll")
+                                SeedScrollableInProgressTasks(Path.Combine(Path.GetDirectoryName(path)!, "Tasks"));
                         }
                         if (string.Equals(TestContext.Current?.Metadata.TestName,
                                 nameof(UX05_FindHistoricalFact), StringComparison.Ordinal))
@@ -165,12 +184,46 @@ public sealed partial class MainWindowHeadlessTests
                     viewModelFactoryDispatcher: factory => HeadlessRuntime.Dispatch(factory),
                     prepareViewModelDispatcher: HeadlessSessionHooks.PrepareAsync,
                     headlessWindowCleanup: HeadlessSessionHooks.CloseWindow));
+        HeadlessRuntime.Dispatch(() =>
+        {
+            inner.MainWindow.Width = 1600;
+            inner.MainWindow.Height = 800;
+            inner.MainWindow.Show();
+            inner.MainWindow.UpdateLayout();
+            Dispatcher.UIThread.RunJobs();
+        });
+        if (!isFeed)
+        {
+            HeadlessRuntime.Session.Dispatch<bool>(async () =>
+            {
+                var owner = inner.MainWindow.DataContext as MainWindowViewModel
+                    ?? throw new InvalidOperationException("Fixture window has no task owner.");
+                var taskId = isStatusContract ? StatusContractCurrentTaskId : UnlimotionAutomationScenarioData.SmokeCurrentTaskId;
+                await owner.TryOpenTaskByIdAsync(taskId);
+                Dispatcher.UIThread.RunJobs();
+                return true;
+            }, CancellationToken.None).GetAwaiter().GetResult();
+        }
         return new HeadlessRuntimeSession(inner);
     }
 
     protected override MainWindowPage CreatePage(HeadlessRuntimeSession session)
     {
         return new MainWindowPage(new HeadlessControlResolver(session.Inner.MainWindow));
+    }
+
+    protected override void ReopenFixtureTaskCard() => SelectStoryTaskFromTree("AllTasksTree",
+        IsStatusContractScenarioTest ? StatusContractCurrentTaskId : UnlimotionAutomationScenarioData.SmokeCurrentTaskId);
+
+    protected override void PrepareMainTabSelection(string automationId)
+    {
+        HeadlessRuntime.Dispatch(() =>
+        {
+            Session.Inner.MainWindow.Width = 1600;
+            Session.Inner.MainWindow.Show();
+            Dispatcher.UIThread.RunJobs();
+            Session.Inner.MainWindow.UpdateLayout();
+        });
     }
 
     [Test]
@@ -1023,7 +1076,7 @@ public sealed partial class MainWindowHeadlessTests
             var state = HeadlessRuntime.Dispatch(() =>
             {
                 var owner = GetHeadlessMainWindowViewModel();
-                var editor = owner.CurrentRelationEditor;
+                var editor = relationControl.ActiveEditor!;
                 var allControls = TopLevel.GetTopLevel(nativeAddButton)?
                     .GetVisualDescendants()
                     .OfType<Unlimotion.Views.TaskRelationsControl>()
@@ -1075,7 +1128,7 @@ public sealed partial class MainWindowHeadlessTests
         {
             candidate = WaitUntil(
                 () => HeadlessRuntime.Dispatch(() =>
-                    GetHeadlessMainWindowViewModel().CurrentRelationEditor.Suggestions
+                    relationControl.ActiveEditor!.Suggestions
                         .FirstOrDefault(suggestion => string.Equals(
                             suggestion.Task.Id,
                             UnlimotionAutomationScenarioData.FeedCurrentTaskId,
@@ -1089,7 +1142,7 @@ public sealed partial class MainWindowHeadlessTests
             var state = HeadlessRuntime.Dispatch(() =>
             {
                 var owner = GetHeadlessMainWindowViewModel();
-                var editor = owner.CurrentRelationEditor;
+                var editor = relationControl.ActiveEditor!;
                 var createdReference = owner.Feed.CreatedTaskReference;
                 var suggestionsState = string.Join(
                     ", ",
@@ -1498,7 +1551,7 @@ public sealed partial class MainWindowHeadlessTests
                 StringComparison.Ordinal));
     }
 
-    private static TControl WaitForHeadlessControl<TControl>(
+    private TControl WaitForHeadlessControl<TControl>(
         Func<TControl> resolve,
         string timeoutMessage)
         where TControl : class =>
@@ -1608,18 +1661,7 @@ public sealed partial class MainWindowHeadlessTests
 
     protected override void SelectArchivedContractTask()
     {
-        var tree = GetNativeControl<TreeView>(Page.ArchivedTree);
-        HeadlessRuntime.Dispatch(() =>
-        {
-            var viewModel = Session.Inner.MainWindow.DataContext as Unlimotion.ViewModel.MainWindowViewModel
-                ?? throw new InvalidOperationException("Headless status-contract window did not expose MainWindowViewModel.");
-            var item = viewModel.ArchivedItems.Single(wrapper => string.Equals(
-                wrapper.Id,
-                UnlimotionAutomationScenarioData.StatusContractArchivedTaskId,
-                StringComparison.Ordinal));
-            tree.SelectedItem = item;
-            Dispatcher.UIThread.RunJobs();
-        });
+        SelectStoryTaskFromTree("ArchivedTree", UnlimotionAutomationScenarioData.StatusContractArchivedTaskId);
     }
 
     protected override void OpenStatusPicker()
@@ -1779,19 +1821,8 @@ public sealed partial class MainWindowHeadlessTests
 
     protected override void SelectStatusContractTask(string taskId, string title)
     {
-        HeadlessRuntime.Dispatch(() =>
-        {
-            var viewModel = Session.Inner.MainWindow.DataContext as Unlimotion.ViewModel.MainWindowViewModel
-                ?? throw new InvalidOperationException("Headless status-contract window did not expose MainWindowViewModel.");
-            var task = viewModel.taskRepository?.Tasks.Items.Single(item => string.Equals(
-                item.Id,
-                taskId,
-                StringComparison.Ordinal))
-                ?? throw new InvalidOperationException($"Status-contract task '{taskId}' was not loaded.");
-            viewModel.CurrentTaskItem = task;
-            viewModel.SelectCurrentTask();
-            Dispatcher.UIThread.RunJobs();
-        });
+        SelectStoryTaskFromTree("AllTasksTree", taskId);
+        WaitForVisibleTaskCard(title);
     }
 
     [Test]
@@ -1991,7 +2022,7 @@ public sealed partial class MainWindowHeadlessTests
         return null;
     }
 
-    public sealed class HeadlessRuntimeSession : IUiTestSession
+    public sealed class HeadlessRuntimeSession : IUiTestSession, IUiTestWaitPump
     {
         public HeadlessRuntimeSession(DesktopAppSession inner)
         {
@@ -1999,6 +2030,14 @@ public sealed partial class MainWindowHeadlessTests
         }
 
         public DesktopAppSession Inner { get; }
+
+        public void PumpUiWaitObservation()
+        {
+            if (Dispatcher.UIThread.CheckAccess())
+                Dispatcher.UIThread.RunJobs();
+            else
+                HeadlessRuntime.Dispatch(() => Dispatcher.UIThread.RunJobs());
+        }
 
         public void Dispose()
         {

@@ -218,7 +218,11 @@
   <data name="WorkspaceClosePane" xml:space="preserve"><value>Закрыть панель</value></data>
   <data name="WorkspaceOpenInNewTab" xml:space="preserve"><value>Открыть в новой вкладке</value></data>
   <data name="WorkspaceOpenActions" xml:space="preserve"><value>Действия с результатом</value></data>
-  <data name="WorkspaceOpenBeside" xml:space="preserve"><value>Открыть рядом</value></data>
+  <data name="WorkspaceOpenBeside" xml:space="preserve"><value>Открыть в соседней панели</value></data>
+  <data name="WorkspaceShowExisting" xml:space="preserve"><value>Показать открытую вкладку</value></data>
+  <data name="WorkspaceShowIndicatedPlace" xml:space="preserve"><value>Показать указанное место</value></data>
+  <data name="WorkspaceLocatorFilterRelaxed" xml:space="preserve"><value>Фильтр областей временно снят, чтобы показать найденный блок. Назад восстановит фильтр.</value></data>
+  <data name="WorkspaceExistingHistoryDocumentFocused" xml:space="preserve"><value>Документ уже открыт — показана его вкладка</value></data>
   <data name="WorkspaceCloseTab" xml:space="preserve"><value>Закрыть вкладку</value></data>
   <data name="WorkspacePrimaryPane" xml:space="preserve"><value>Основная панель</value></data>
   <data name="WorkspaceSecondaryPane" xml:space="preserve"><value>Соседняя панель</value></data>
@@ -959,4 +963,5 @@ ID: {1}</value></data>
   <data name="WorkspaceReviewComplete" xml:space="preserve"><value>Разбор завершён. Все записи разобраны.</value></data>
   <data name="WorkspaceFinishReview" xml:space="preserve"><value>Завершить разбор</value></data>
   <data name="WorkspaceOpenHere" xml:space="preserve"><value>Открыть в текущей вкладке</value></data>
+  <data name="WorkspaceDraftSaveFailed" xml:space="preserve"><value>Не удалось сохранить изменения. Черновик сохранён в редакторе; устраните ошибку перед переключением пространства.</value></data>
 </root>

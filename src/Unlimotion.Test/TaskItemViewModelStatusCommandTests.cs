@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Reactive;
 using System.Reactive.Threading.Tasks;
@@ -302,6 +303,253 @@ public sealed class TaskItemViewModelStatusCommandTests
         await Assert.That(vm.TaskOperationError).IsEqualTo(L10n.Get(key));
         await Assert.That(vm.TaskOperationDetails).IsEqualTo(kind.ToString());
         await Assert.That(vm.Status).IsEqualTo(DomainTaskStatus.Prepared);
+    }
+
+    [Test]
+    public async Task RawStorageHydration_PreservesNewerPendingFieldAndAppliesAuthoritativeState()
+    {
+        using var storage = new ScriptedTaskStorage();
+        var task = CreateTask("raw-hydration-late-editor", DomainTaskStatus.Prepared);
+        storage.Seed(task);
+        using var viewModel = new TaskItemViewModel(task, storage, () => true)
+        {
+            PropertyChangedThrottleTimeSpanDefault = TimeSpan.FromDays(1)
+        };
+        viewModel.Title = "first persisted title";
+        await viewModel.FlushPendingEditorChangesAsync();
+        var olderSnapshot = storage.Snapshot(task.Id) with
+        {
+            Description = "authoritative description",
+            Status = DomainTaskStatus.Completed,
+            Importance = 8,
+            ContainsTasks = ["authoritative-child"],
+            ParentTasks = ["authoritative-parent"]
+        };
+        viewModel.Title = "newer pending title";
+        await Assert.That(viewModel.HasPendingEditableChanges).IsTrue();
+
+        // Ordinary storage acknowledgements use the raw overload, not a graph revision.
+        viewModel.Update(olderSnapshot);
+
+        await Assert.That(viewModel.Title).IsEqualTo("newer pending title");
+        await Assert.That(viewModel.Description).IsEqualTo("authoritative description");
+        await Assert.That(viewModel.Status).IsEqualTo(DomainTaskStatus.Completed);
+        await Assert.That(viewModel.Importance).IsEqualTo(8);
+        await Assert.That(viewModel.Contains.SequenceEqual(["authoritative-child"])).IsTrue();
+        await Assert.That(viewModel.Parents.SequenceEqual(["authoritative-parent"])).IsTrue();
+        await Assert.That(viewModel.HasPendingEditableChanges).IsTrue();
+        await Assert.That(storage.Snapshot(task.Id).Title).IsEqualTo("first persisted title");
+
+        await viewModel.FlushPendingEditorChangesAsync();
+        await Assert.That(storage.Snapshot(task.Id).Title).IsEqualTo("newer pending title");
+        await Assert.That(storage.Snapshot(task.Id).Status).IsEqualTo(DomainTaskStatus.Completed);
+        await Assert.That(viewModel.HasPendingEditableChanges).IsFalse();
+    }
+
+    [Test]
+    public async Task EditorPersistenceReadiness_DetectsLateEditAfterAnotherTaskWaitsForStorage()
+    {
+        using var storage = new ScriptedTaskStorage();
+        var firstTask = CreateTask("scope-first", DomainTaskStatus.Prepared);
+        var secondTask = CreateTask("scope-second", DomainTaskStatus.Prepared);
+        storage.Seed(firstTask, secondTask);
+        var secondStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseSecond = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var writes = 0;
+        storage.UpdateHandler = async snapshot =>
+        {
+            writes++;
+            if (snapshot.Id == secondTask.Id)
+            {
+                secondStarted.TrySetResult();
+                await releaseSecond.Task;
+            }
+        };
+        using var first = new TaskItemViewModel(firstTask, storage, () => true);
+        using var second = new TaskItemViewModel(secondTask, storage, () => true);
+        await Assert.That(first.HasPendingEditorPersistence).IsFalse();
+        first.Description = "initial first draft";
+        second.Description = "second draft";
+        await first.FlushPendingEditorChangesAsync();
+        await Assert.That(first.HasPendingEditorPersistence).IsFalse();
+        var secondFlush = second.FlushPendingEditorChangesAsync();
+        await secondStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await Assert.That(second.HasPendingEditorPersistence).IsTrue();
+        first.Description = "late edit while second waits";
+        releaseSecond.TrySetResult();
+        await secondFlush.WaitAsync(TimeSpan.FromSeconds(5));
+        var writesBeforeRead = writes;
+        await Assert.That(first.HasPendingEditorPersistence).IsTrue();
+        await Assert.That(second.HasPendingEditorPersistence).IsFalse();
+        await Assert.That(writes).IsEqualTo(writesBeforeRead);
+        await first.FlushPendingEditorChangesAsync().WaitAsync(TimeSpan.FromSeconds(5));
+        await Assert.That(first.HasPendingEditorPersistence).IsFalse();
+        await Assert.That(storage.Snapshot(firstTask.Id).Description).IsEqualTo("late edit while second waits");
+    }
+
+    [Test]
+    public async Task EditorFlush_PersistsFastThrottledDraftAndRemainsReversible()
+    {
+        using var storage = new ScriptedTaskStorage();
+        var task = CreateTask("fast-flush", DomainTaskStatus.Prepared);
+        storage.Seed(task);
+        var writes = 0;
+        storage.UpdateHandler = _ => { writes++; return Task.CompletedTask; };
+        using var viewModel = new TaskItemViewModel(task, storage, () => true);
+        viewModel.Description = "draft before throttle";
+        await Assert.That(viewModel.HasPendingEditableChanges).IsTrue();
+        await viewModel.WaitForPendingSavesAsync();
+        await Assert.That(writes).IsEqualTo(0);
+        await viewModel.FlushPendingEditorChangesAsync().WaitAsync(TimeSpan.FromSeconds(5));
+        await Assert.That(storage.Snapshot(task.Id).Description).IsEqualTo("draft before throttle");
+        await Assert.That(viewModel.HasPendingEditableChanges).IsFalse();
+        viewModel.Description = "later draft";
+        await viewModel.FlushPendingEditorChangesAsync().WaitAsync(TimeSpan.FromSeconds(5));
+        await Assert.That(storage.Snapshot(task.Id).Description).IsEqualTo("later draft");
+        await Assert.That(writes).IsEqualTo(2);
+        await viewModel.FlushPendingEditorChangesAsync();
+        await Assert.That(writes).IsEqualTo(2);
+    }
+
+    [Test]
+    public async Task EditorFlush_CoalescesCallersAndSerializesConcurrentAutosaveAndStatus()
+    {
+        using var storage = new ScriptedTaskStorage();
+        var task = CreateTask("concurrent-flush", DomainTaskStatus.Prepared);
+        storage.Seed(task);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var writes = 0;
+        var activeWrites = 0;
+        var maximumWrites = 0;
+        storage.UpdateHandler = async _ =>
+        {
+            var active = Interlocked.Increment(ref activeWrites);
+            maximumWrites = Math.Max(maximumWrites, active);
+            try
+            {
+                if (Interlocked.Increment(ref writes) == 1)
+                {
+                    started.TrySetResult();
+                    await release.Task;
+                }
+            }
+            finally { Interlocked.Decrement(ref activeWrites); }
+        };
+        using var viewModel = new TaskItemViewModel(task, storage, () => true);
+        viewModel.Description = "initial draft";
+        var first = viewModel.FlushPendingEditorChangesAsync();
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var second = viewModel.FlushPendingEditorChangesAsync();
+        await Assert.That(second).IsSameReferenceAs(first);
+        viewModel.AreaIds.Add("area-during-flush"); // Starts the tracked immediate autosave.
+        var transition = viewModel.TryTransitionToStatusAsync(DomainTaskStatus.InProgress, "tester");
+        viewModel.Description = "latest draft during flush";
+        await Assert.That(first.IsCompleted).IsFalse();
+        release.TrySetResult();
+        await first.WaitAsync(TimeSpan.FromSeconds(5));
+        await Assert.That((await transition.WaitAsync(TimeSpan.FromSeconds(5))).Success).IsTrue();
+        await Assert.That(maximumWrites).IsEqualTo(1);
+        await Assert.That(storage.Snapshot(task.Id).Description).IsEqualTo("latest draft during flush");
+        await Assert.That(storage.Snapshot(task.Id).AreaIds).Contains("area-during-flush");
+        await Assert.That(storage.Snapshot(task.Id).Status).IsEqualTo(DomainTaskStatus.InProgress);
+        await Assert.That(viewModel.HasPendingEditableChanges).IsFalse();
+    }
+
+    [Test]
+    public async Task EditorFlush_FailurePreservesDraftAndNextAttemptCanRetry()
+    {
+        using var storage = new ScriptedTaskStorage();
+        var task = CreateTask("retry-flush", DomainTaskStatus.Prepared);
+        storage.Seed(task);
+        storage.UpdateHandler = _ => throw new IOException("controlled editor flush failure");
+        using var viewModel = new TaskItemViewModel(task, storage, () => true);
+        viewModel.Description = "retained failed draft";
+        await Assert.That(async () => await viewModel.FlushPendingEditorChangesAsync())
+            .Throws<IOException>();
+        await Assert.That(viewModel.Description).IsEqualTo("retained failed draft");
+        await Assert.That(viewModel.HasPendingEditableChanges).IsTrue();
+        storage.UpdateHandler = _ => Task.CompletedTask;
+        await viewModel.FlushPendingEditorChangesAsync().WaitAsync(TimeSpan.FromSeconds(5));
+        await Assert.That(storage.Snapshot(task.Id).Description).IsEqualTo("retained failed draft");
+        await Assert.That(viewModel.HasPendingEditableChanges).IsFalse();
+    }
+
+    [Test]
+    public async Task EditorFlush_WaitsForExistingStatusProducerWithoutEditableDraft()
+    {
+        using var storage = new ScriptedTaskStorage();
+        var task = CreateTask("status-flush", DomainTaskStatus.Prepared);
+        storage.Seed(task);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        storage.StatusHandler = async (id, status, author) =>
+        {
+            started.TrySetResult();
+            await release.Task;
+            return storage.CreateSuccess(id, status, author);
+        };
+        using var viewModel = new TaskItemViewModel(task, storage, () => true);
+        var transition = viewModel.TryTransitionToStatusAsync(DomainTaskStatus.InProgress, "tester");
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await Assert.That(viewModel.HasPendingEditableChanges).IsFalse();
+        var flush = viewModel.FlushPendingEditorChangesAsync();
+        await Assert.That(flush.IsCompleted).IsFalse();
+        await Assert.That(viewModel.HasPendingEditorPersistence).IsTrue();
+        release.TrySetResult();
+        await flush.WaitAsync(TimeSpan.FromSeconds(5));
+        await Assert.That((await transition).Success).IsTrue();
+        await Assert.That(viewModel.Status).IsEqualTo(DomainTaskStatus.InProgress);
+        await Assert.That(viewModel.HasPendingEditorPersistence).IsFalse();
+    }
+
+    [Test]
+    public async Task EditorFlush_ReportsPendingProducerFailureButDoesNotPoisonRetry()
+    {
+        using var storage = new ScriptedTaskStorage();
+        var task = CreateTask("producer-retry-flush", DomainTaskStatus.Prepared);
+        storage.Seed(task);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        storage.UpdateHandler = async _ =>
+        {
+            started.TrySetResult();
+            await release.Task;
+            throw new IOException("controlled pending producer failure");
+        };
+        using var viewModel = new TaskItemViewModel(task, storage, () => true);
+        viewModel.Description = "dirty producer draft";
+        var transition = viewModel.TryTransitionToStatusAsync(DomainTaskStatus.InProgress, "tester");
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var flush = viewModel.FlushPendingEditorChangesAsync();
+        release.TrySetResult();
+        await Assert.That(async () => await flush.WaitAsync(TimeSpan.FromSeconds(5))).Throws<IOException>();
+        await Assert.That((await transition).Success).IsFalse();
+        await Assert.That(viewModel.HasPendingEditableChanges).IsTrue();
+        storage.UpdateHandler = _ => Task.CompletedTask;
+        await viewModel.FlushPendingEditorChangesAsync().WaitAsync(TimeSpan.FromSeconds(5));
+        await Assert.That(storage.Snapshot(task.Id).Description).IsEqualTo("dirty producer draft");
+        await Assert.That(viewModel.HasPendingEditableChanges).IsFalse();
+    }
+
+    [Test]
+    public async Task EditorFlush_IsIncludedInLifecycleSealWithoutCircularWait()
+    {
+        using var storage = new ScriptedTaskStorage();
+        var task = CreateTask("seal-flush", DomainTaskStatus.Prepared);
+        storage.Seed(task);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        storage.UpdateHandler = async _ => { started.TrySetResult(); await release.Task; };
+        using var viewModel = new TaskItemViewModel(task, storage, () => true);
+        viewModel.Description = "final draft";
+        var flush = viewModel.FlushPendingEditorChangesAsync();
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var seal = viewModel.SealPendingSaves();
+        await Assert.That(seal.IsCompleted).IsFalse();
+        release.TrySetResult();
+        await Task.WhenAll(flush, seal).WaitAsync(TimeSpan.FromSeconds(5));
+        await Assert.That(storage.Snapshot(task.Id).Description).IsEqualTo("final draft");
     }
 
     [Test]

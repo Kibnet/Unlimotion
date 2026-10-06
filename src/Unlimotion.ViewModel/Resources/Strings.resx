@@ -218,7 +218,11 @@
   <data name="WorkspaceClosePane" xml:space="preserve"><value>Close pane</value></data>
   <data name="WorkspaceOpenInNewTab" xml:space="preserve"><value>Open in new tab</value></data>
   <data name="WorkspaceOpenActions" xml:space="preserve"><value>Open actions</value></data>
-  <data name="WorkspaceOpenBeside" xml:space="preserve"><value>Open beside</value></data>
+  <data name="WorkspaceOpenBeside" xml:space="preserve"><value>Open in adjacent pane</value></data>
+  <data name="WorkspaceShowExisting" xml:space="preserve"><value>Show existing tab</value></data>
+  <data name="WorkspaceShowIndicatedPlace" xml:space="preserve"><value>Show indicated location</value></data>
+  <data name="WorkspaceLocatorFilterRelaxed" xml:space="preserve"><value>Area filtering was temporarily cleared to reveal the target. Back restores the filter.</value></data>
+  <data name="WorkspaceExistingHistoryDocumentFocused" xml:space="preserve"><value>Document is already open — its tab was focused</value></data>
   <data name="WorkspaceCloseTab" xml:space="preserve"><value>Close tab</value></data>
   <data name="WorkspacePrimaryPane" xml:space="preserve"><value>Primary pane</value></data>
   <data name="WorkspaceSecondaryPane" xml:space="preserve"><value>Adjacent pane</value></data>
@@ -959,4 +963,5 @@ ID: {1}</value></data>
   <data name="WorkspaceReviewComplete" xml:space="preserve"><value>Review complete. All entries have been processed.</value></data>
   <data name="WorkspaceFinishReview" xml:space="preserve"><value>Finish review</value></data>
   <data name="WorkspaceOpenHere" xml:space="preserve"><value>Open in current tab</value></data>
+  <data name="WorkspaceDraftSaveFailed" xml:space="preserve"><value>Changes could not be saved. Your draft is retained; resolve the error before switching workspaces.</value></data>
 </root>

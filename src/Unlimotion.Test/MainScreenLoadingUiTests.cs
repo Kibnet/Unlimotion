@@ -54,6 +54,7 @@ public class MainScreenLoadingUiTests
             var window = CreateWindow(view);
             window.Show();
             Dispatcher.UIThread.RunJobs();
+            await AssertStandaloneShellAsync(view);
             var settingsButton = FindControlByAutomationId<Button>(view, "GlobalSettingsButton");
             settingsButton.Command!.Execute(settingsButton.CommandParameter);
             Dispatcher.UIThread.RunJobs();
@@ -121,6 +122,7 @@ public class MainScreenLoadingUiTests
                 window = CreateWindow(view);
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
+                await AssertStandaloneShellAsync(view);
 
                 var overlay = FindControlByAutomationId<Grid>(view, "TasksLoadingOverlay");
                 var spinner = FindControlByAutomationId<SeamlessLoadingIndicator>(
@@ -131,8 +133,10 @@ public class MainScreenLoadingUiTests
                 await Assert.That(spinner.GetType().Name).IsEqualTo("SeamlessLoadingIndicator");
 
                 SetTasksLoading(vm, true);
-                var becameVisible = WaitFor(() => overlay.IsVisible && spinner.IsVisible);
+                var becameVisible = WaitFor(() => overlay.IsEffectivelyVisible && spinner.IsEffectivelyVisible);
                 await Assert.That(becameVisible).IsTrue();
+                await Assert.That(overlay.Bounds.Width).IsGreaterThan(0d);
+                await Assert.That(overlay.Bounds.Height).IsGreaterThan(0d);
 
                 SetTasksLoading(vm, false);
                 var becameHidden = WaitFor(() => !overlay.IsVisible);
@@ -164,6 +168,7 @@ public class MainScreenLoadingUiTests
                 window = CreateWindow(view);
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
+                await AssertStandaloneShellAsync(view);
 
                 var overlay = FindControlByAutomationId<Grid>(view, "TasksLoadingOverlay");
                 var spinner = FindControlByAutomationId<SeamlessLoadingIndicator>(
@@ -172,8 +177,8 @@ public class MainScreenLoadingUiTests
                 var connectTask = vm.Connect();
 
                 var loadStarted = WaitFor(
-                    () => overlay.IsVisible &&
-                          spinner.IsVisible &&
+                    () => overlay.IsEffectivelyVisible &&
+                          spinner.IsEffectivelyVisible &&
                           !connectTask.IsCompleted,
                     timeoutMilliseconds: 2000);
                 await Assert.That(loadStarted).IsTrue();
@@ -200,6 +205,47 @@ public class MainScreenLoadingUiTests
                 window?.Close();
             }
         }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task MainScreen_TaskSpaceRecoveryRemainsVisibleWithoutLegacyTaskControl()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            using var context = TestMainWindowContext.Create(TimeSpan.Zero);
+            var vm = context.MainWindowViewModel;
+            var view = new MainScreen { DataContext = vm };
+            var window = CreateWindow(view);
+            try
+            {
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+                await AssertStandaloneShellAsync(view);
+                var overlay = FindControlByAutomationId<Grid>(view, "TaskSpaceRecoveryOverlay");
+                var message = FindControlByAutomationId<TextBlock>(view, "TaskSpaceRecoveryMessageText");
+                await Assert.That(overlay.IsVisible).IsFalse();
+                vm.Settings.TaskSpaceRecoveryMessage = "Recovery requires reconnecting the task space";
+                vm.Settings.IsTaskSpaceRecoveryRequired = true;
+                await Assert.That(WaitFor(() => overlay.IsEffectivelyVisible
+                    && message.Text == vm.Settings.TaskSpaceRecoveryMessage)).IsTrue();
+                await Assert.That(overlay.Bounds.Width).IsGreaterThan(0d);
+                await Assert.That(overlay.Bounds.Height).IsGreaterThan(0d);
+                vm.Settings.IsTaskSpaceRecoveryRequired = false;
+                await Assert.That(WaitFor(() => !overlay.IsVisible)).IsTrue();
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    private static async Task AssertStandaloneShellAsync(MainScreen view)
+    {
+        await Assert.That(view.GetVisualDescendants().OfType<MainControl>().Any()).IsFalse();
+        await Assert.That(FindControlByAutomationId<Grid>(view, "WorkspacePanesHost").IsEffectivelyVisible).IsTrue();
+        await Assert.That(FindControlByAutomationId<Border>(view, "ShellAppBar").IsEffectivelyVisible).IsTrue();
     }
 
     private static Window CreateWindow(Control content)

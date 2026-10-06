@@ -53,8 +53,7 @@ public sealed class FeedEditorPerformanceFlaUiTests
         session.MainWindow.Patterns.Window.Pattern.SetWindowVisualState(WindowVisualState.Normal);
         FeedReadingPolishFlaUiTests.Resize(session.MainWindow, 1200, 800);
         session.MainWindow.Focus();
-        var feedMode = WaitForElement(session, "FeedModeButton");
-        feedMode.AsRadioButton().IsChecked = true;
+        FeedReadingPolishFlaUiTests.OpenFeed(session);
         var prefix = $"FeedDay-{today:yyyyMMdd}-Markdown";
         // Native UIA exposes the rendered TextBlock, not the surrounding ContentControl preview.
         // The fixture is one 200-line paragraph, so its editor has the stable block index zero.

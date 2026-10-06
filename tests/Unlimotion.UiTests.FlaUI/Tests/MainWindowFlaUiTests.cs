@@ -85,19 +85,54 @@ public sealed class MainWindowFlaUiTests
         {
             var readiness = Retry.WhileNull(
                 () => session.MainWindow.FindFirstDescendant(
-                    session.ConditionFactory.ByAutomationId("CurrentTaskTitleTextBox")),
+                    session.ConditionFactory.ByAutomationId("WorkspaceRailFeedButton")) is { IsOffscreen: false } rail ? rail : null,
                 timeout: TimeSpan.FromSeconds(30),
                 interval: TimeSpan.FromMilliseconds(200),
                 throwOnTimeout: false);
             if (!readiness.Success)
             {
                 session.Dispose();
-                throw new TimeoutException(
-                    "The main task card did not become ready within 30 seconds.");
+                throw new TimeoutException("The Feed navigation rail did not become ready within 30 seconds.");
             }
+            ClickLaunchElement(readiness.Result!);
+            var feedReady = Retry.WhileNull(() => session.MainWindow.FindFirstDescendant(
+                    session.ConditionFactory.ByAutomationId("FeedRoot")) is { IsOffscreen: false } feed ? feed : null,
+                timeout: TimeSpan.FromSeconds(30), interval: TimeSpan.FromMilliseconds(200), throwOnTimeout: false);
+            if (!feedReady.Success) { session.Dispose(); throw new TimeoutException("The standalone Feed document did not become ready within 30 seconds."); }
+        }
+        else
+        {
+            var initialTask = Retry.WhileNull(() =>
+            {
+                var card = session.MainWindow.FindFirstDescendant(session.ConditionFactory.ByAutomationId("CurrentTaskTitleTextBox"));
+                if (card is { IsOffscreen: false }) return card;
+                var title = session.MainWindow.FindFirstDescendant(session.ConditionFactory.ByAutomationId(
+                    "TaskTitle_" + UnlimotionAutomationScenarioData.SmokeCurrentTaskId));
+                return title is { IsOffscreen: false } ? title : null;
+            },
+                timeout: TimeSpan.FromSeconds(30), interval: TimeSpan.FromMilliseconds(200), throwOnTimeout: false);
+            if (!initialTask.Success) { session.Dispose(); throw new TimeoutException("Neither the smoke task card nor its list title became ready within 30 seconds."); }
+            if (initialTask.Result!.Properties.AutomationId.ValueOrDefault != "CurrentTaskTitleTextBox")
+                ClickLaunchElement(initialTask.Result);
+            var cardReady = Retry.WhileNull(() => session.MainWindow.FindFirstDescendant(
+                    session.ConditionFactory.ByAutomationId("CurrentTaskTitleTextBox")) is { IsOffscreen: false } card ? card : null,
+                timeout: TimeSpan.FromSeconds(30), interval: TimeSpan.FromMilliseconds(200), throwOnTimeout: false);
+            if (!cardReady.Success) { session.Dispose(); throw new TimeoutException("The standalone task card did not become ready after opening within 30 seconds."); }
         }
 
         return new FlaUiRuntimeSession(session);
+    }
+
+    protected override bool IsFeedWorkspaceSelected => FindVisibleProcessElement("FeedRoot") is not null;
+
+    protected override bool IsTasksWorkspaceSelected => FindVisibleProcessElement("TaskListDocument") is not null ||
+        FindVisibleProcessElement("TaskCardDocument") is not null;
+
+    private static void ClickLaunchElement(AutomationElement element)
+    {
+        var cursor = Mouse.Position;
+        try { element.Click(); }
+        finally { Mouse.MoveTo(cursor); }
     }
 
     protected override string ReadFeedVaultText(string relativePath)
@@ -317,6 +352,31 @@ public sealed class MainWindowFlaUiTests
             timeout: TimeSpan.FromSeconds(10),
             timeoutMessage: "Feed window did not reach its narrow contract width.")
             ?? throw new InvalidOperationException("Feed window bounds were unavailable after narrow resize.");
+        var feedMode = WaitUntil(() => FindVisibleProcessElement("FeedModeButton") ??
+                FindVisibleProcessElement("WorkspaceRailFeedButton") ?? FindVisibleProcessElement("GlobalOverflowMenuButton"), element => element is not null,
+            timeout: TimeSpan.FromSeconds(10), timeoutMessage: "The visible Feed navigation affordance did not settle after resize.")!;
+        var tasksMode = WaitUntil(() => FindVisibleProcessElement("TasksModeButton") ??
+                FindVisibleProcessElement("WorkspaceRailTasksButton") ?? FindVisibleProcessElement("GlobalOverflowMenuButton"), element => element is not null,
+            timeout: TimeSpan.FromSeconds(10), timeoutMessage: "The visible Tasks navigation affordance did not settle after resize.")!;
+        if (feedMode.Properties.AutomationId.ValueOrDefault == "GlobalOverflowMenuButton" ||
+            tasksMode.Properties.AutomationId.ValueOrDefault == "GlobalOverflowMenuButton")
+        {
+            var cursor = Mouse.Position;
+            try
+            {
+                var bounds = RequireProcessElement("GlobalOverflowMenuButton").Properties.BoundingRectangle.ValueOrDefault;
+                Mouse.Click(new System.Drawing.Point((int)(bounds.Left + bounds.Width / 2), (int)(bounds.Top + bounds.Height / 2)));
+                WaitUntil(() => FindVisibleProcessElement("GlobalFeedModeMenuItem") is not null &&
+                    FindVisibleProcessElement("GlobalTasksModeMenuItem") is not null,
+                    timeout: TimeSpan.FromSeconds(10), timeoutMessage: "Overflow did not expose both workspace navigation commands.");
+            }
+            finally
+            {
+                Keyboard.Press(VirtualKeyShort.ESCAPE);
+                Keyboard.Release(VirtualKeyShort.ESCAPE);
+                Mouse.MoveTo(cursor);
+            }
+        }
         var viewport = new FeedElementBounds(resized.Left, resized.Top, resized.Width, resized.Height);
         var feedRoot = FindProcessElement("FeedRoot")
             ?? throw new InvalidOperationException("Feed root was absent after narrow resize.");
@@ -328,8 +388,8 @@ public sealed class MainWindowFlaUiTests
 
         return new FeedNarrowLayoutSnapshot(
             viewport,
-            ToFeedBounds(RequireProcessElement("FeedModeButton")),
-            ToFeedBounds(RequireProcessElement("TasksModeButton")),
+            ToFeedBounds(feedMode),
+            ToFeedBounds(tasksMode),
             ToFeedBounds(RequireProcessElement("GlobalCreateMenuButton")),
             ToFeedBounds(RequireProcessElement("FeedStartReviewButton")),
             ToFeedBounds(RequireProcessElement("FeedAreaFilterButton")),
@@ -349,7 +409,7 @@ public sealed class MainWindowFlaUiTests
     public async Task Feed_editor_pointer_drag_reorders_blocks(int selectedCount)
     {
         const string dragSectionMarker = "Pointer drag section";
-        Page.FeedModeButton.IsChecked = true;
+        Page.ClickButton(static page => page.WorkspaceRailFeedButton);
         _ = WaitUntil(
             () => FindProcessElement("FeedRoot"),
             static element => element is not null,
@@ -487,6 +547,13 @@ public sealed class MainWindowFlaUiTests
     private AutomationElement RequireProcessElement(string automationId) =>
         FindProcessElement(automationId)
         ?? throw new InvalidOperationException($"Feed UI Automation element '{automationId}' was absent.");
+
+    private AutomationElement? FindVisibleProcessElement(string automationId)
+    {
+        var element = FindProcessElement(automationId);
+        return element is not null && !element.Properties.IsOffscreen.ValueOrDefault &&
+            element.Properties.BoundingRectangle.ValueOrDefault is { Width: > 0, Height: > 0 } ? element : null;
+    }
 
     private static FeedElementBounds ToFeedBounds(AutomationElement element)
     {
@@ -950,52 +1017,24 @@ public sealed class MainWindowFlaUiTests
 
     protected override void PrepareMainTabSelection(string automationId)
     {
-        var directTab = Session.Inner.MainWindow.FindFirstDescendant(
-            Session.Inner.ConditionFactory.ByAutomationId(automationId));
-        if (directTab is not null && !directTab.Properties.IsOffscreen.ValueOrDefault) return;
+        Session.Inner.MainWindow.Patterns.Window.Pattern.SetWindowVisualState(WindowVisualState.Normal);
+        FeedReadingPolishFlaUiTests.Resize(Session.Inner.MainWindow, 1600, 900);
+        var railId = "WorkspaceRail" + automationId.Replace("TabItem", "Button", StringComparison.Ordinal);
+        WaitUntil(() => Session.Inner.MainWindow.FindFirstDescendant(Session.Inner.ConditionFactory.ByAutomationId(railId)),
+            element => element is not null && !element.Properties.IsOffscreen.ValueOrDefault,
+            timeout: TimeSpan.FromSeconds(10), timeoutMessage: $"Expanded navigation did not expose {railId}.");
+    }
 
-        InvokeMainWindowButton("MainTabsOverflowButton");
-        var overflowItem = WaitUntil(
-            () => FindProcessElement("MainTabsOverflow" + automationId),
-            static element => element is not null && !element.Properties.IsOffscreen.ValueOrDefault,
-            timeout: TimeSpan.FromSeconds(10),
-            timeoutMessage: $"Main-tabs overflow did not expose {automationId}.")!;
-        overflowItem.Click();
-        WaitUntil(
-            () => Session.Inner.MainWindow.FindFirstDescendant(
-                Session.Inner.ConditionFactory.ByAutomationId(automationId)),
-            static element => element is not null && !element.Properties.IsOffscreen.ValueOrDefault,
-            timeout: TimeSpan.FromSeconds(10),
-            timeoutMessage: $"Selected tab {automationId} did not become available.");
+    protected override void InvokeWorkspaceBack()
+    {
+        Session.Inner.MainWindow.Focus();
+        Keyboard.TypeSimultaneously([VirtualKeyShort.CONTROL, VirtualKeyShort.OEM_4]);
     }
 
     protected override void OpenArchivedTab()
     {
-        var directTab = Session.Inner.MainWindow.FindFirstDescendant(
-            Session.Inner.ConditionFactory.ByAutomationId("ArchivedTabItem"));
-        if (directTab is not null)
-        {
-            directTab.AsTabItem().Select();
-        }
-        else
-        {
-            InvokeMainWindowButton("MainTabsOverflowButton");
-            var overflowItem = WaitUntil(
-                () => FindProcessElement("MainTabsOverflowArchivedTabItem"),
-                static element => element is not null,
-                timeout: TimeSpan.FromSeconds(10),
-                timeoutMessage: "Main-tabs overflow did not expose Archived.")!;
-            var invoke = overflowItem.Patterns.Invoke.PatternOrDefault;
-            if (invoke is not null)
-            {
-                invoke.Invoke();
-            }
-            else
-            {
-                DesktopPointer.Click(overflowItem);
-            }
-        }
-
+        PrepareMainTabSelection("ArchivedTabItem");
+        InvokeMainWindowButton("WorkspaceRailArchivedButton");
         SelectArchivedAllTimeDateFilter();
     }
 
@@ -1073,13 +1112,6 @@ public sealed class MainWindowFlaUiTests
         var task = FindTreeItemAncestor(titleElement, treeAutomationId)
             ?? throw new InvalidOperationException(
                 $"Title '{title}' was not contained by a TreeItem.");
-        var selectionPattern = task.Patterns.SelectionItem.PatternOrDefault;
-        if (selectionPattern is not null)
-        {
-            selectionPattern.Select();
-            return;
-        }
-
         task.Patterns.ScrollItem.PatternOrDefault?.ScrollIntoView();
         _ = WaitUntil(
             () => FindTaskTitleElement(treeAutomationId, title),
@@ -1098,6 +1130,12 @@ public sealed class MainWindowFlaUiTests
         DesktopPointer.ClickAsync(() => FindTaskTitleElement(treeAutomationId, title)
             ?? throw new InvalidOperationException($"Tree title '{title}' disappeared before selection."))
             .GetAwaiter().GetResult();
+    }
+
+    protected override void ReopenFixtureTaskCard()
+    {
+        Page.WorkspaceRailAllTasksButton.Invoke();
+        SelectTaskTreeItem("AllTasksTree", ExpectedCurrentTaskTitle);
     }
 
     private AutomationElement? FindProcessElement(string automationId)
@@ -1162,9 +1200,7 @@ public sealed class MainWindowFlaUiTests
     {
         var tree = Session.Inner.MainWindow.FindFirstDescendant(
             Session.Inner.ConditionFactory.ByAutomationId(treeAutomationId));
-        var titleCondition = Session.Inner.ConditionFactory
-            .ByAutomationId("InlineTaskTitleTextBlock")
-            .And(Session.Inner.ConditionFactory.ByName(title));
+        var titleCondition = Session.Inner.ConditionFactory.ByName(title);
         return tree?.FindFirstDescendant(titleCondition);
     }
 

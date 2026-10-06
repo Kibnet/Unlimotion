@@ -40,7 +40,7 @@ public sealed partial class FeedViewModel
         {
             if (session.IsCancellationRequested) return;
             // Resolve and read through the normal link pipeline, including shared daily editors.
-            await OpenVaultLinkAsync(document.Path, null, wikiLink: true);
+            await OpenVaultLinkAsync(document.Path, null, wikiLink: true, materializeOnly: true);
             if (session.IsCancellationRequested) return;
             if (DocumentWorkspace.Find(document.Path) is { } restored)
             {
@@ -114,9 +114,29 @@ public sealed partial class FeedViewModel
     {
         if (location.Kind == WorkspaceLocationKind.Note)
         {
-            if (DocumentWorkspace.Find(location.Id) is { } document && int.TryParse(location.Anchor, out var index))
-                SearchNavigationRequested?.Invoke(this,
-                    new FeedSearchNavigationRequestedEventArgs(location.Id, document.MarkdownEditor, index, null));
+            if (DocumentWorkspace.Find(location.Id) is not { } document)
+            {
+                ErrorMessage = L10n.Get("WorkspaceNoteUnavailable");
+                return;
+            }
+            if (location.Anchor is null) return;
+            var editor = document.MarkdownEditor;
+            int index;
+            if (!int.TryParse(location.Anchor, out index))
+            {
+                var anchor = Uri.UnescapeDataString(location.Anchor);
+                var target = editor.Blocks.FirstOrDefault(block => anchor.StartsWith('^')
+                    ? block.Block.Raw.Trim() == anchor
+                    : block.Kind == Unlimotion.Notes.Markdown.MarkdownBlockKind.Heading && block.PreviewText.Trim() == anchor);
+                if (target is null) { ErrorMessage = L10n.Get("FeedNoteLinkUnavailable"); return; }
+                index = anchor.StartsWith('^')
+                    ? editor.Blocks.LastOrDefault(block => block.Index < target.Index && block.Block.IsContent)?.Index ?? target.Index
+                    : target.Index;
+            }
+            if (!editor.Blocks.Any(block => block.Index == index))
+            { ErrorMessage = L10n.Get("FeedNoteLinkUnavailable"); return; }
+            SearchNavigationRequested?.Invoke(this,
+                new FeedSearchNavigationRequestedEventArgs(location.Id, editor, index, null));
             return;
         }
         if (location.Kind != WorkspaceLocationKind.Feed || location.Id == "feed") return;
@@ -127,7 +147,7 @@ public sealed partial class FeedViewModel
             await LoadThroughSearchDayAsync(location.Id, GetSessionToken()).ConfigureAwait(true);
             day = FindDay(location.Id);
         }
-        if (day is null) return;
+        if (day is null) { ErrorMessage = L10n.Get("WorkspaceNoteUnavailable"); return; }
 
         SelectedDay = day;
         if (!useWorkspaceAreaPresentation && location.StateKey is not null)
@@ -151,6 +171,8 @@ public sealed partial class FeedViewModel
         if (int.TryParse(location.Anchor, System.Globalization.NumberStyles.Integer,
                 System.Globalization.CultureInfo.InvariantCulture, out var blockIndex))
         {
+            if (!day.MarkdownEditor.Blocks.Any(block => block.Index == blockIndex))
+            { ErrorMessage = L10n.Get("FeedNoteLinkUnavailable"); return; }
             SearchNavigationStarting?.Invoke(this, EventArgs.Empty);
             SearchNavigationRequested?.Invoke(this, new FeedSearchNavigationRequestedEventArgs(
                 location.Id, day.MarkdownEditor, blockIndex, day));

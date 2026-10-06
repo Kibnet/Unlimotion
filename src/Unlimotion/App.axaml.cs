@@ -205,6 +205,11 @@ public class App : Application
                     await RunOnUiThreadAsync(
                         async () =>
                         {
+                            // A rejected candidate bind may leave the previous runtime
+                            // attached. Restoring that same runtime must not retry a
+                            // failed draft save or reset its workspace surface.
+                            if (_mainWindowViewModel.IsInitialized &&
+                                ReferenceEquals(_mainWindowViewModel.taskRepository, runtime.Storage)) return;
                             await _mainWindowViewModel.CommitWorkspaceEditorsAsync();
                             await _mainWindowViewModel.BindInitializedStorage(runtime.Storage);
                         });
@@ -1287,7 +1292,7 @@ public class App : Application
 
             if (_mainWindowViewModel is not null)
             {
-                await _mainWindowViewModel.Feed.CommitActiveEditorsAsync().ConfigureAwait(true);
+                await _mainWindowViewModel.CommitWorkspaceEditorsAsync().ConfigureAwait(true);
             }
 
             var descriptor = manager.ConfiguredSources.FirstOrDefault(source =>
@@ -1982,7 +1987,7 @@ public class App : Application
                 await vm.Connect();
             }
 
-            ApplyAutomationStartupState(vm);
+            await ApplyAutomationStartupStateAsync(vm);
             if (vm.Settings.IsConflictResolutionMode)
             {
                 EnterConflictResolutionMode(vm.Settings);
@@ -2041,7 +2046,7 @@ public class App : Application
         _mainWindowViewModel = null;
     }
 
-    private static void ApplyAutomationStartupState(MainWindowViewModel vm)
+    private static async Task ApplyAutomationStartupStateAsync(MainWindowViewModel vm)
     {
         ApplyAutomationWindowTitle(vm);
 
@@ -2063,12 +2068,22 @@ public class App : Application
             }
 
             ApplyAutomationTreeExpansion(vm);
+            await OpenAutomationTaskDocumentAsync(vm, shouldOpenDetails);
             return;
         }
 
         var taskId = Environment.GetEnvironmentVariable(AutomationCurrentTaskIdEnvironmentVariable);
         SelectAutomationTask(vm, taskId);
         ApplyAutomationTreeExpansion(vm);
+        await OpenAutomationTaskDocumentAsync(vm, shouldOpenDetails);
+    }
+
+    private static Task OpenAutomationTaskDocumentAsync(MainWindowViewModel vm, bool openDetails)
+    {
+        var id = Environment.GetEnvironmentVariable(AutomationCurrentTaskIdEnvironmentVariable);
+        return openDetails && !string.IsNullOrWhiteSpace(id)
+            ? vm.TryOpenTaskByIdAsync(id)
+            : Task.CompletedTask;
     }
 
     private static void ApplyAutomationTaskWrapperDefaults()

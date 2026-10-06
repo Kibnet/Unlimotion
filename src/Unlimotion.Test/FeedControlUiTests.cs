@@ -162,7 +162,10 @@ public class FeedControlUiTests
                 var button = view.GetVisualDescendants().OfType<Button>().First(control =>
                     AutomationProperties.GetAutomationId(control)?.StartsWith("FeedDay-20260904-Markdown-Link-", StringComparison.Ordinal) == true);
                 button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, button));
-                await Assert.That(await WaitForAsync(() => movedDaily ? navigation is not null : feed.OpenedThematicFile is not null)).IsTrue();
+                var opened = await WaitForAsync(() => movedDaily ? navigation is not null : feed.OpenedThematicFile is not null);
+                if (!opened)
+                    Console.WriteLine($"Note link state: movedDaily={movedDaily}; busy={feed.IsBusy}; error={feed.ErrorMessage}; opened={feed.OpenedThematicFile?.RelativePath}; navigation={navigation?.RelativePath}");
+                await Assert.That(opened).IsTrue();
                 await Assert.That(feed.HasError).IsFalse();
                 if (movedDaily)
                 {
@@ -482,11 +485,12 @@ public class FeedControlUiTests
                 var point = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), window)!.Value;
                 window.MouseDown(point, MouseButton.Left);
                 window.MouseUp(point, MouseButton.Left);
-                await Assert.That(WaitFor(() =>
+                await Assert.That(await WaitForAsync(() =>
                 {
                     try { return File.ReadAllText(directory.GetDailyPath(today)) == raw; }
                     catch (IOException) { return false; } // The atomic writer can briefly own the file during Undo.
                 })).IsTrue();
+                await Assert.That(await File.ReadAllTextAsync(directory.GetDailyPath(today))).IsEqualTo(raw);
                 await feed.RefreshAsync();
                 await Assert.That(feed.VisibleDays.Count).IsEqualTo(1);
                 await Assert.That(feed.HasMoveUndoNotice).IsFalse();
@@ -759,6 +763,7 @@ public class FeedControlUiTests
 
             viewModel.ReviewNoteTitle = "Неизвестная классификация";
             viewModel.ReviewNoteFolder = "Темы";
+            await Assert.That(await WaitForAsync(() => !viewModel.IsBusy)).IsTrue();
             viewModel.CreateNoteCommand.Execute(null);
             var notePath = System.IO.Path.Combine(directory.Path, "Темы", "Неизвестная классификация.md");
             await Assert.That(await WaitForAsync(() => File.Exists(notePath) && !viewModel.IsBusy)).IsTrue();
@@ -1996,13 +2001,13 @@ public class FeedControlUiTests
                     await Assert.That(viewModel.CurrentReview.SelectedMarkdown).Contains("Сегодня сверху");
                 }
 
-                ConfirmLeaveDecision(dialog);
+                await ConfirmLeaveDecisionWhenReadyAsync(dialog);
                 await Assert.That(WaitFor(() =>
                     !viewModel.IsBusy
                     && viewModel.CurrentReview?.SelectedMarkdown.Contains("Сегодня ниже", StringComparison.Ordinal) == true)).IsTrue();
                 await Assert.That(viewModel.CurrentReview!.Date).IsEqualTo(today);
 
-                ConfirmLeaveDecision(dialog);
+                await ConfirmLeaveDecisionWhenReadyAsync(dialog);
                 await Assert.That(WaitFor(() =>
                     !viewModel.IsBusy
                     && viewModel.CurrentReview?.SelectedMarkdown.Contains("Вчера сверху", StringComparison.Ordinal) == true)).IsTrue();
@@ -2266,6 +2271,17 @@ public class FeedControlUiTests
     {
         InvokeButton(FindControlByAutomationId<Button>(dialog, "FeedReviewLeaveButton"));
         InvokeButton(FindControlByAutomationId<Button>(dialog, "FeedReviewConfirmButton"));
+    }
+
+    private static async Task ConfirmLeaveDecisionWhenReadyAsync(FeedReviewDialog dialog)
+    {
+        InvokeButton(FindControlByAutomationId<Button>(dialog, "FeedReviewLeaveButton"));
+        var confirm = FindControlByAutomationId<Button>(dialog, "FeedReviewConfirmButton");
+        // IsBusy is cleared before ReactiveCommand publishes its completion.
+        // Yield the UI thread and wait for the next real click to be executable.
+        await Assert.That(await WaitForAsync(() => confirm.IsEnabled
+            && confirm.Command?.CanExecute(confirm.CommandParameter) == true)).IsTrue();
+        InvokeButton(confirm);
     }
 
     private static async Task<MenuFlyout> OpenStatusFlyoutAsync(global::Unlimotion.TaskStatusPicker statusPicker)

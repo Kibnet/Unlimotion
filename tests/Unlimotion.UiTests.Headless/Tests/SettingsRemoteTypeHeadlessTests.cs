@@ -163,7 +163,7 @@ public sealed class SettingsRemoteTypeHeadlessTests
         _vm.Settings.GitRemoteUrl = string.Empty;
         await Assert.That(_vm.Settings.RefreshGitMetadataCommand?.CanExecute(null)).IsTrue();
 
-        _vm.Settings.RefreshGitMetadataCommand!.Execute(null);
+        Page.ClickButton(static page => page.RefreshGitMetadataButton);
 
         var selectedRemote = WaitUntil(
             () => new RemoteMetadataWaitState(_vm?.Settings.GitRemoteName, _vm?.Settings.GitRemoteUrl),

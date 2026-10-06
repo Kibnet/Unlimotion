@@ -433,6 +433,7 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
     public Func<WorkspaceLocation, WorkspaceOpenDisposition, Task<bool>>? NavigateToWorkspaceLocationRequested { get; set; }
 
     public Action? WorkspaceScopeChanged { get; set; }
+    public Func<Task<bool>>? WorkspaceScopeChanging { get; set; }
 
     public double ChronologyScrollOffset { get; set; }
 
@@ -1043,6 +1044,7 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
 
     public async Task InitializeVaultAsync(string? rootPath)
     {
+        if (WorkspaceScopeChanging is not null && !await WorkspaceScopeChanging().ConfigureAwait(true)) return;
         var previousRoot = vault?.RootPath;
         var previousVaultId = vaultId;
         try { await CommitActiveEditorsAsync(GetSessionToken()); }
@@ -1695,6 +1697,9 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
         ThrowIfDisposed();
         return CaptureTaskCoreAsync();
     }
+
+    public bool HasPendingEditorChanges => Days.Any(day => day.MarkdownEditor?.ActiveBlock?.IsDirty == true)
+        || DocumentWorkspace.Documents.Any(document => document.MarkdownEditor?.ActiveBlock?.IsDirty == true);
 
     public async Task CommitActiveEditorsAsync(CancellationToken cancellationToken = default)
     {
@@ -4943,7 +4948,7 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
     }
 
     public async Task OpenVaultLinkAsync(string target, string? sourcePath, bool wikiLink = true,
-        WorkspaceOpenDisposition disposition = WorkspaceOpenDisposition.CurrentTab)
+        WorkspaceOpenDisposition disposition = WorkspaceOpenDisposition.CurrentTab, bool materializeOnly = false)
     {
         var navigation = ++noteNavigationGeneration;
         var sourceVault = vault;
@@ -4974,6 +4979,23 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
             token.ThrowIfCancellationRequested();
             if (!ReferenceEquals(sourceVault, vault) || navigation != noteNavigationGeneration) return;
             if (document is null) throw new FileNotFoundException();
+            // Resolve a link without changing the displayed document first. The workspace
+            // commits both editors before it selects a pane or materializes the target.
+            if (!materializeOnly && NavigateToWorkspaceLocationRequested is { } openWorkspace)
+            {
+                if (parts.Length == 2)
+                {
+                    var anchor = Uri.UnescapeDataString(parts[1]);
+                    var blocks = (markdownParser ?? new MarkdownDocumentParser()).Parse(document.Text).Blocks;
+                    if (!blocks.Any(block => anchor.StartsWith('^')
+                            ? block.Raw.Trim() == anchor
+                            : block.Kind == MarkdownBlockKind.Heading && block.Raw.Trim().TrimStart('#').Trim() == anchor))
+                        throw new FileNotFoundException();
+                }
+                await openWorkspace(WorkspaceLocation.ForNote(path, Path.GetFileNameWithoutExtension(path),
+                    parts.Length == 2 ? parts[1] : null), disposition).ConfigureAwait(true);
+                return;
+            }
             if (dailyNoteNaming.TryParseRelativePath(path, out _))
             {
                 await LoadThroughSearchDayAsync(path, token);
@@ -4996,9 +5018,9 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
                 path,
                 Path.GetFileNameWithoutExtension(path),
                 parts.Length == 2 ? parts[1] : null);
-            if (NavigateToWorkspaceLocationRequested is { } navigate)
+            if (!materializeOnly && NavigateToWorkspaceLocationRequested is { } navigate)
                 await navigate(location, disposition).ConfigureAwait(true);
-            else
+            else if (!materializeOnly)
                 NavigationLocationOpened?.Invoke(location);
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { }
@@ -5796,16 +5818,17 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
                     return;
                 }
 
-                SearchNavigationStarting?.Invoke(this, EventArgs.Empty);
-                SearchQuery = string.Empty;
-                SelectedDay = day;
                 var location = WorkspaceLocation.ForFeedDay(
                     current.RelativePath,
                     day.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
                     current.BlockIndex.ToString(CultureInfo.InvariantCulture),
                     CaptureFeedAreaFilterKey(),
                     ChronologyScrollOffset);
-                await NavigateSearchLocationAsync(location, disposition).ConfigureAwait(true);
+                if (!await NavigateSearchLocationAsync(location, disposition).ConfigureAwait(true)) return;
+                if (cancellationToken.IsCancellationRequested || !ReferenceEquals(sourceVault, vault)) return;
+                SearchNavigationStarting?.Invoke(this, EventArgs.Empty);
+                SearchQuery = string.Empty;
+                SelectedDay = day;
                 SearchNavigationRequested?.Invoke(
                     this,
                     new FeedSearchNavigationRequestedEventArgs(
@@ -5817,9 +5840,19 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
                 return;
             }
 
-            await OpenThematicFileAsync(current.RelativePath, navigation).ConfigureAwait(true);
-            if (!IsCurrent()) return;
-            var thematic = OpenedThematicFile;
+            var noteLocation = WorkspaceLocation.ForNote(current.RelativePath,
+                Path.GetFileNameWithoutExtension(current.RelativePath), current.BlockIndex.ToString(CultureInfo.InvariantCulture));
+            if (NavigateToWorkspaceLocationRequested is not null)
+            {
+                if (!await NavigateSearchLocationAsync(noteLocation, disposition).ConfigureAwait(true)) return;
+                if (cancellationToken.IsCancellationRequested || !ReferenceEquals(sourceVault, vault)) return;
+            }
+            else
+            {
+                await OpenThematicFileAsync(current.RelativePath, navigation).ConfigureAwait(true);
+                if (!IsCurrent()) return;
+            }
+            var thematic = DocumentWorkspace.Find(current.RelativePath);
             if (thematic is null
                 || !TryResolveSearchBlock(thematic.MarkdownEditor, current, out _))
             {
@@ -5830,11 +5863,8 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
 
             SearchNavigationStarting?.Invoke(this, EventArgs.Empty);
             SearchQuery = string.Empty;
-            var noteLocation = WorkspaceLocation.ForNote(
-                current.RelativePath,
-                Path.GetFileNameWithoutExtension(current.RelativePath),
-                current.BlockIndex.ToString(CultureInfo.InvariantCulture));
-            await NavigateSearchLocationAsync(noteLocation, disposition).ConfigureAwait(true);
+            if (NavigateToWorkspaceLocationRequested is null)
+                await NavigateSearchLocationAsync(noteLocation, disposition).ConfigureAwait(true);
             SearchNavigationRequested?.Invoke(
                 this,
                 new FeedSearchNavigationRequestedEventArgs(
@@ -5853,14 +5883,15 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
         }
     }
 
-    private async Task NavigateSearchLocationAsync(
+    private async Task<bool> NavigateSearchLocationAsync(
         WorkspaceLocation location,
         WorkspaceOpenDisposition disposition)
     {
         if (NavigateToWorkspaceLocationRequested is { } navigate)
-            await navigate(location, disposition).ConfigureAwait(true);
+            return await navigate(location, disposition).ConfigureAwait(true);
         else
             NavigationLocationOpened?.Invoke(location);
+        return true;
     }
 
     public string CaptureFeedAreaFilterKey() => JsonSerializer.Serialize(FeedAreaFilterOptions

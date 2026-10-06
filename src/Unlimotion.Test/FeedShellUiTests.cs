@@ -251,6 +251,95 @@ public class FeedShellUiTests
     }
 
     [Test]
+    [Arguments(390)]
+    [Arguments(360)]
+    public async Task Shell_PhoneWidthsKeepEveryVisibleAppBarControlInsideWindow(int width)
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            var fixture = new MainWindowViewModelFixture();
+            Window? window = null;
+            try
+            {
+                var owner = fixture.MainWindowViewModelTest;
+                owner.Settings.TaskSpaces.Add(new TaskSpaceOptionViewModel
+                {
+                    SourceId = "phone-layout-space", DisplayName = "Phone layout space", IsActive = true
+                });
+                owner.Settings.IsFeedEnabled = true;
+                var view = new MainScreen { DataContext = owner };
+                window = new Window { Width = width, Height = 800, Content = view };
+                window.Show();
+                // Allow responsive reflow and its deferred second layout to settle.
+                for (var frame = 0; frame < 4; frame++)
+                {
+                    await Task.Delay(20);
+                    RunLayoutJobs();
+                    window.UpdateLayout();
+                }
+
+                var appBar = FindControlByAutomationId<Border>(view, "ShellAppBar");
+                var appBarGrid = (Grid)appBar.Child!;
+                foreach (var control in appBarGrid.Children.Where(control => control.IsEffectivelyVisible))
+                    await AssertInsideAppBarAsync(control);
+                var search = FindControlByAutomationId<TextBox>(view, "GlobalSearchBox");
+                await Assert.That(search.IsEffectivelyVisible).IsTrue();
+                await AssertInsideAppBarAsync(search);
+                var overflow = FindControlByAutomationId<DropDownButton>(view, "GlobalOverflowMenuButton");
+                await Assert.That(overflow.IsEffectivelyVisible).IsTrue();
+                await AssertInsideAppBarAsync(overflow);
+                await Assert.That(view.GetVisualDescendants().OfType<MainControl>().Any()).IsFalse();
+
+                var flyout = (MenuFlyout)overflow.Flyout!;
+                flyout.ShowAt(overflow);
+                RunLayoutJobs();
+                var feedMenu = FindMenuFlyoutItem(overflow, "GlobalFeedModeMenuItem");
+                var tasksMenu = FindMenuFlyoutItem(overflow, "GlobalTasksModeMenuItem");
+                var spaceMenu = FindMenuFlyoutItem(overflow, "GlobalTaskSpaceMenuItem");
+                var settingsMenu = FindMenuFlyoutItem(overflow, "GlobalSettingsMenuItem");
+                await Assert.That(feedMenu.IsEffectivelyVisible && feedMenu.IsEnabled).IsTrue();
+                await Assert.That(feedMenu.Items.OfType<MenuItem>().Count()).IsEqualTo(3);
+                await Assert.That(tasksMenu.IsEffectivelyVisible && tasksMenu.IsEnabled).IsTrue();
+                foreach (var kind in Enum.GetValues<TaskListKind>())
+                    await Assert.That(tasksMenu.Items.OfType<MenuItem>().Any(item =>
+                        item.Header?.ToString() == WorkspaceLocation.ForTaskList(kind).Title)).IsTrue();
+                var space = FindControlByAutomationId<ComboBox>(view, "TaskSpaceSelector");
+                if (!space.IsEffectivelyVisible)
+                {
+                    await Assert.That(spaceMenu.IsEffectivelyVisible && spaceMenu.IsEnabled).IsTrue();
+                    await Assert.That(spaceMenu.ItemsSource!.Cast<object>().Any()).IsTrue();
+                }
+                await Assert.That(settingsMenu.IsEffectivelyVisible && settingsMenu.IsEnabled).IsTrue();
+                settingsMenu.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent, settingsMenu));
+                flyout.Hide();
+                RunLayoutJobs();
+                await Assert.That(FindControlByAutomationId<Grid>(view, "GlobalSettingsOverlay").IsEffectivelyVisible).IsTrue();
+
+                async Task AssertInsideAppBarAsync(Control control)
+                {
+                    var inBar = control.TranslatePoint(default, appBar)
+                        ?? throw new InvalidOperationException("App-bar control cannot be translated to its parent.");
+                    var inWindow = control.TranslatePoint(default, window)
+                        ?? throw new InvalidOperationException("App-bar control cannot be translated to the window.");
+                    await Assert.That(control.Bounds.Width).IsGreaterThan(0d);
+                    await Assert.That(inBar.X).IsGreaterThanOrEqualTo(-0.5d);
+                    await Assert.That(inBar.X + control.Bounds.Width).IsLessThanOrEqualTo(appBar.Bounds.Width + 0.5d);
+                    await Assert.That(inWindow.X).IsGreaterThanOrEqualTo(-0.5d);
+                    await Assert.That(inWindow.X + control.Bounds.Width).IsLessThanOrEqualTo(window.Bounds.Width + 0.5d);
+                    await Assert.That(inWindow.Y).IsGreaterThanOrEqualTo(-0.5d);
+                    await Assert.That(inWindow.Y + control.Bounds.Height).IsLessThanOrEqualTo(window.Bounds.Height + 0.5d);
+                }
+            }
+            finally
+            {
+                window?.Close();
+                await fixture.CleanTasksAsync();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
     public async Task Shell_RecalculatesOverflowWhenReviewCounterGrowsWithoutWindowResize()
     {
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
@@ -363,16 +452,16 @@ public class FeedShellUiTests
 
                 var feedButton = FindControlByAutomationId<Button>(view, "WorkspaceRailFeedButton");
                 var tasksButton = FindControlByAutomationId<Button>(view, "WorkspaceRailTasksButton");
-                var mainTabs = FindControlByAutomationId<TabControl>(view, "MainTabs");
 
                 await Assert.That(viewModel.SelectedWorkspaceMode).IsEqualTo(WorkspaceMode.Tasks);
                 await Assert.That(viewModel.WorkspaceNavigation.ActiveTab.CurrentLocation?.Kind)
                     .IsEqualTo(WorkspaceLocationKind.Tasks);
 
-                mainTabs.SelectedIndex = 2;
+                await Assert.That(await viewModel.OpenWorkspaceLocationAsync(
+                    WorkspaceLocation.ForTaskList(TaskListKind.LastUpdated))).IsTrue();
                 RunLayoutJobs();
-                await Assert.That(WaitFor(() => viewModel.WorkspaceNavigation.ActiveTab.CurrentLocation?.StateKey
-                    == "tasktab:2")).IsTrue();
+                await Assert.That(viewModel.WorkspaceNavigation.ActiveTab.CurrentLocation?.TaskListKind)
+                    .IsEqualTo(TaskListKind.LastUpdated);
                 feedButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
                 var feedOpened = WaitFor(() =>
@@ -383,16 +472,21 @@ public class FeedShellUiTests
                 await Assert.That(view.GetVisualDescendants().OfType<FeedControl>()
                     .Any(control => control.IsEffectivelyVisible)).IsTrue();
 
-                var globalBack = FindControlByAutomationId<Button>(view, "WorkspaceGlobalBackButton");
-                await Assert.That(globalBack.IsEnabled).IsTrue();
-                globalBack.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                var localBack = FindControlByAutomationId<Button>(view, "WorkspacePaneBackButton");
+                await Assert.That(localBack.IsEffectivelyVisible).IsTrue();
+                await Assert.That(localBack.IsEnabled).IsTrue();
+                localBack.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 var tasksRestored = WaitFor(() =>
                     viewModel.IsTasksMode
                     && viewModel.WorkspaceNavigation.ActiveTab.CurrentLocation?.Kind == WorkspaceLocationKind.Tasks);
 
                 await Assert.That(tasksRestored).IsTrue();
-                await Assert.That(mainTabs.SelectedIndex).IsEqualTo(2);
-                await Assert.That(mainTabs.DataContext).IsSameReferenceAs(viewModel);
+                await Assert.That(viewModel.WorkspaceNavigation.ActiveTab.CurrentLocation?.TaskListKind)
+                    .IsEqualTo(TaskListKind.LastUpdated);
+                await Assert.That(view.GetVisualDescendants().OfType<TaskListDocumentView>()
+                    .Any(control => control.IsEffectivelyVisible)).IsTrue();
+                await Assert.That(view.GetVisualDescendants().OfType<Control>()
+                    .Any(control => control.IsEffectivelyVisible && AutomationProperties.GetAutomationId(control) == "MainTabs")).IsFalse();
 
                 tasksButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 await Assert.That(viewModel.WorkspaceNavigation.ActiveTab.CurrentLocation?.Kind)
@@ -404,11 +498,10 @@ public class FeedShellUiTests
                     "WorkspaceRailUnlockedButton");
                 await Assert.That(unlockedShortcut.IsEffectivelyVisible).IsTrue();
                 unlockedShortcut.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                await Assert.That(WaitFor(() => mainTabs.SelectedIndex == 3
-                    && viewModel.WorkspaceNavigation.ActiveTab.CurrentLocation?.StateKey == "tasktab:3"))
+                await Assert.That(WaitFor(() => viewModel.WorkspaceNavigation.ActiveTab.CurrentLocation?.TaskListKind == TaskListKind.Unlocked))
                     .IsTrue();
                 await Assert.That(await viewModel.NavigateWorkspaceBackAsync()).IsTrue();
-                await Assert.That(mainTabs.SelectedIndex).IsEqualTo(0);
+                await Assert.That(viewModel.WorkspaceNavigation.ActiveTab.CurrentLocation?.TaskListKind).IsEqualTo(TaskListKind.AllTasks);
             }
             finally
             {
@@ -523,10 +616,10 @@ public class FeedShellUiTests
                     .Single(pane => AutomationProperties.GetAutomationId(pane) == "WorkspaceSecondaryPane");
                 await Assert.That(primary.TasksView.RouteTaskItem).IsSameReferenceAs(firstTask);
                 await Assert.That(secondary.TasksView.RouteTaskItem).IsSameReferenceAs(secondTask);
-                await Assert.That(FindControlByAutomationId<Control>(primary.TasksView,
-                    "BreadcrumbsTextBlock").IsEffectivelyVisible).IsFalse();
-                await Assert.That(FindControlByAutomationId<ToggleButton>(primary.TasksView,
-                    "DetailsPaneToggleButton").IsEffectivelyVisible).IsFalse();
+                await Assert.That(primary.TasksView is TaskCardView).IsTrue();
+                await Assert.That(primary.GetVisualDescendants().OfType<Control>().Any(control =>
+                    control.IsEffectivelyVisible && AutomationProperties.GetAutomationId(control) is
+                        "MainTabs" or "TaskListDocument" or "BreadcrumbsTextBlock" or "DetailsPaneToggleButton")).IsFalse();
                 var routeFrame = FindControlByAutomationId<Border>(primary.TasksView,
                     "CurrentTaskDetailsPanelFrame");
                 await Assert.That(routeFrame.Classes.Contains("WorkspaceTaskRoute")).IsTrue();
@@ -577,33 +670,35 @@ public class FeedShellUiTests
                 RunLayoutJobs();
 
                 await Assert.That(await owner.OpenWorkspaceLocationAsync(
-                    WorkspaceLocation.TasksRoot with { StateKey = "tasktab:4" },
+                    WorkspaceLocation.ForTaskList(TaskListKind.InProgress),
                     WorkspaceOpenDisposition.AdjacentPane)).IsTrue();
                 RunLayoutJobs();
                 var primary = view.GetVisualDescendants().OfType<WorkspacePaneView>()
                     .Single(pane => AutomationProperties.GetAutomationId(pane) == "WorkspacePrimaryPane");
                 var secondary = view.GetVisualDescendants().OfType<WorkspacePaneView>()
                     .Single(pane => AutomationProperties.GetAutomationId(pane) == "WorkspaceSecondaryPane");
-                var primaryTabs = FindControlByAutomationId<TabControl>(primary.TasksView, "MainTabs");
-                var secondaryTabs = FindControlByAutomationId<TabControl>(secondary.TasksView, "MainTabs");
                 RunLayoutJobs();
-                await Assert.That(secondaryTabs.SelectedIndex).IsEqualTo(4);
+                await Assert.That(secondary.TasksView is TaskListDocumentView).IsTrue();
+                await Assert.That(primary.TasksView is TaskListDocumentView).IsTrue();
+                await Assert.That(FindControlByAutomationId<TreeView>(secondary.TasksView!, "InProgressTree").IsEffectivelyVisible).IsTrue();
+                await Assert.That(FindControlByAutomationId<TreeView>(primary.TasksView!, "AllTasksTree").IsEffectivelyVisible).IsTrue();
+                await Assert.That(view.GetVisualDescendants().OfType<Control>().Any(control =>
+                    control.IsEffectivelyVisible && AutomationProperties.GetAutomationId(control) is "MainTabs" or "TaskCardDocument")).IsFalse();
                 await Assert.That(owner.InProgressMode).IsTrue();
-                await Assert.That(primaryTabs.SelectedIndex).IsEqualTo(0);
 
                 owner.ActivateWorkspacePane(owner.WorkspaceNavigation.PrimaryPane);
                 RunLayoutJobs();
                 await Assert.That(owner.AllTasksMode).IsTrue();
                 await Assert.That(owner.InProgressMode).IsFalse();
-                await Assert.That(secondaryTabs.SelectedIndex).IsEqualTo(4);
+                await Assert.That(owner.WorkspaceNavigation.SecondaryPane!.CurrentLocation?.TaskListKind).IsEqualTo(TaskListKind.InProgress);
 
                 owner.ActivateWorkspacePane(owner.WorkspaceNavigation.SecondaryPane!);
                 await Assert.That(await owner.OpenWorkspaceRootAsync(WorkspaceMode.Feed)).IsTrue();
                 await Assert.That(await owner.NavigateWorkspaceBackAsync()).IsTrue();
                 RunLayoutJobs();
-                await Assert.That(secondaryTabs.SelectedIndex).IsEqualTo(4);
+                await Assert.That(FindControlByAutomationId<TreeView>(secondary.TasksView!, "InProgressTree").IsEffectivelyVisible).IsTrue();
                 await Assert.That(owner.InProgressMode).IsTrue();
-                await Assert.That(primaryTabs.SelectedIndex).IsEqualTo(0);
+                await Assert.That(owner.WorkspaceNavigation.PrimaryPane.CurrentLocation?.TaskListKind).IsEqualTo(TaskListKind.AllTasks);
             }
             finally
             {
@@ -635,8 +730,8 @@ public class FeedShellUiTests
                 RunLayoutJobs();
                 var primary = view.GetVisualDescendants().OfType<WorkspacePaneView>()
                     .Single(pane => AutomationProperties.GetAutomationId(pane) == "WorkspacePrimaryPane");
-                var title = primary.TasksView.GetVisualDescendants().OfType<Control>()
-                    .First(control => AutomationProperties.GetAutomationId(control) == "InlineTaskTitleTextBlock"
+                var title = primary.TasksView!.GetVisualDescendants().OfType<Control>()
+                    .First(control => AutomationProperties.GetAutomationId(control) == "TaskTitle_" + task.Id
                         && (control.DataContext is TaskItemViewModel item && item.Id == task.Id
                             || control.DataContext is TaskWrapperViewModel wrapper
                             && wrapper.TaskItem.Id == task.Id));
@@ -702,11 +797,23 @@ public class FeedShellUiTests
                 await Assert.That(primary.FeedView.DisplayedDocument?.RelativePath).IsEqualTo("First.md");
                 await Assert.That(secondary.FeedView.DisplayedDocument?.RelativePath).IsEqualTo("Second.md");
 
+                var remainingPane = owner.WorkspaceNavigation.SecondaryPane!;
+                var remainingTab = remainingPane.ActiveTab!;
+                var remainingHistory = remainingTab.History.Select(entry => entry.Location.HistoryKey).ToArray();
                 FindControlByAutomationId<Button>(primary.FeedView, "FeedThematicFileCloseButton")
                     .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                await Assert.That(WaitFor(() => owner.WorkspaceNavigation.PrimaryPane.ActiveTab?
-                    .CurrentLocation?.Kind == WorkspaceLocationKind.Tasks)).IsTrue();
-                await Assert.That(secondary.FeedView.DisplayedDocument?.RelativePath).IsEqualTo("Second.md");
+                await Assert.That(WaitFor(() => ReferenceEquals(owner.WorkspaceNavigation.PrimaryPane, remainingPane)
+                    && !owner.WorkspaceNavigation.HasSecondaryPane)).IsTrue();
+                await Assert.That(owner.WorkspaceNavigation.PrimaryPane.ActiveTab).IsSameReferenceAs(remainingTab);
+                await Assert.That(remainingTab.History.Select(entry => entry.Location.HistoryKey).SequenceEqual(remainingHistory)).IsTrue();
+                await Assert.That(owner.WorkspaceNavigation.Panes.SelectMany(pane => pane.Tabs).Count()).IsEqualTo(1);
+                await Assert.That(remainingTab.CurrentLocation?.Id).IsEqualTo("Second.md");
+                await Assert.That(owner.WorkspaceNavigation.Panes.SelectMany(pane => pane.Tabs)
+                    .Any(tab => tab.CurrentLocation?.Id == "First.md" || tab.CurrentLocation?.Kind == WorkspaceLocationKind.Tasks)).IsFalse();
+                var promotedView = view.GetVisualDescendants().OfType<WorkspacePaneView>()
+                    .Single(pane => AutomationProperties.GetAutomationId(pane) == "WorkspacePrimaryPane");
+                await Assert.That(promotedView.FeedView.IsEffectivelyVisible).IsTrue();
+                await Assert.That(promotedView.FeedView.DisplayedDocument?.RelativePath).IsEqualTo("Second.md");
             }
             finally
             {
@@ -807,19 +914,21 @@ public class FeedShellUiTests
                 var loadedBeforeAppend = owner.Feed.Days.Count;
                 await Assert.That(owner.Feed.HasMoreDays).IsTrue();
                 await owner.Feed.LoadOlderDaysAsync();
-                RunLayoutJobs();
+                await Assert.That(await TestHelpers.WaitUntilAsync(() =>
+                {
+                    RunLayoutJobs();
+                    return owner.Feed.Days.Count > loadedBeforeAppend;
+                }, TimeSpan.FromSeconds(5))).IsTrue();
                 await Assert.That(owner.Feed.Days.Count).IsGreaterThan(loadedBeforeAppend);
                 await Assert.That(Math.Abs(primaryScroll.Offset.Y - offsetBeforeAppend)).IsLessThan(0.5);
 
-                var targetPath = $"Ежедневные/{latest:yyyy-MM-dd}.md";
-                var target = WorkspaceLocation.ForFeedDay(targetPath, latest.ToString("yyyy-MM-dd"), "0");
-                await Assert.That(await owner.OpenWorkspaceLocationAsync(target,
-                    WorkspaceOpenDisposition.AdjacentPane)).IsFalse();
+                var savedOffset = primaryScroll.Offset.Y;
+                await Assert.That(await owner.OpenWorkspaceLocationAsync(WorkspaceLocation.FeedRoot,
+                    WorkspaceOpenDisposition.AdjacentPane)).IsTrue();
                 RunLayoutJobs();
                 await Assert.That(owner.WorkspaceNavigation.HasSecondaryPane).IsFalse();
                 await Assert.That(owner.WorkspaceNavigation.PrimaryPane.ActiveTab?.CurrentLocation?.Id)
                     .IsNotEqualTo("feed");
-                var savedOffset = primaryScroll.Offset.Y;
                 await Assert.That(savedOffset).IsGreaterThan(0);
                 await Assert.That(primaryScroll.Offset.Y).IsEqualTo(savedOffset);
 
@@ -841,7 +950,7 @@ public class FeedShellUiTests
     }
 
     [Test]
-    public async Task WorkspaceShell_AlreadyOpenRootFocusesExistingPane_AndGlobalBackReturnsToSource()
+    public async Task WorkspaceShell_AlreadyOpenRootFocusesExistingPane_WithoutChangingEitherHistory()
     {
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
@@ -866,11 +975,13 @@ public class FeedShellUiTests
                     .IsSameReferenceAs(owner.WorkspaceNavigation.PrimaryPane);
                 await Assert.That(owner.WorkspaceNavigation.PrimaryPane.Tabs.Count).IsEqualTo(1);
                 await Assert.That(owner.WorkspaceNavigation.SecondaryPane!.Tabs.Count).IsEqualTo(1);
-                var back = FindControlByAutomationId<Button>(view, "WorkspaceGlobalBackButton");
-                await Assert.That(back.IsEnabled).IsTrue();
-                back.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                await Assert.That(WaitFor(() => ReferenceEquals(owner.WorkspaceNavigation.ActiveTab, feedTab)))
-                    .IsTrue();
+                var primary = view.GetVisualDescendants().OfType<WorkspacePaneView>()
+                    .Single(pane => AutomationProperties.GetAutomationId(pane) == "WorkspacePrimaryPane");
+                var back = FindControlByAutomationId<Button>(primary, "WorkspacePaneBackButton");
+                await Assert.That(back.IsEnabled).IsFalse();
+                await Assert.That(owner.WorkspaceNavigation.PrimaryPane.ActiveTab!.History.Count).IsEqualTo(1);
+                await Assert.That(feedTab.History.Count).IsEqualTo(1);
+                await Assert.That(feedTab.CurrentLocation?.Kind).IsEqualTo(WorkspaceLocationKind.Feed);
             }
             finally
             {
@@ -896,7 +1007,7 @@ public class FeedShellUiTests
                 window = new Window { Width = 1200, Height = 700, Content = view };
                 window.Show();
                 await Assert.That(await owner.OpenWorkspaceLocationAsync(
-                    WorkspaceLocation.TasksRoot with { StateKey = "tasktab:3" },
+                    WorkspaceLocation.ForTaskList(TaskListKind.Unlocked),
                     WorkspaceOpenDisposition.AdjacentPane)).IsTrue();
                 RunLayoutJobs();
 
@@ -933,7 +1044,7 @@ public class FeedShellUiTests
 
                 owner.ActivateWorkspacePane(owner.WorkspaceNavigation.PrimaryPane);
                 await Assert.That(await owner.OpenWorkspaceLocationAsync(
-                    WorkspaceLocation.TasksRoot with { StateKey = "tasktab:1" },
+                    WorkspaceLocation.ForTaskList(TaskListKind.LastCreated),
                     WorkspaceOpenDisposition.AdjacentPane)).IsTrue();
                 RunLayoutJobs();
                 var lastCreatedFilters = FindControlByAutomationId<DropDownButton>(secondary.TasksView,
@@ -1081,14 +1192,20 @@ public class FeedShellUiTests
                 var actions = FindControlByAutomationId<DropDownButton>((Control)popup.Child!, result.ActionsAutomationId);
                 await Assert.That(actions.Flyout is MenuFlyout).IsTrue();
                 var menu = (MenuFlyout)actions.Flyout!;
+                menu.ShowAt(actions);
+                RunLayoutJobs();
                 await Assert.That(menu.Items.OfType<MenuItem>().Select(item => item.Header).ToArray())
                     .IsEquivalentTo(new[]
                     {
+                        Unlimotion.ViewModel.Localization.Localization.Get("WorkspaceOpenHere"),
                         Unlimotion.ViewModel.Localization.Localization.Get("WorkspaceOpenInNewTab"),
                         Unlimotion.ViewModel.Localization.Localization.Get("WorkspaceOpenBeside")
                     });
 
-                menu.Items.OfType<MenuItem>().First().RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+                menu.Items.OfType<MenuItem>().Single(item => item.Header?.ToString()
+                    == Unlimotion.ViewModel.Localization.Localization.Get("WorkspaceOpenInNewTab"))
+                    .RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+                menu.Hide();
                 await Assert.That(WaitFor(() => owner.WorkspaceNavigation.ActiveTab.CurrentLocation?.Kind
                     == WorkspaceLocationKind.Task
                     && owner.WorkspaceNavigation.ActiveTab.CurrentLocation.Id == target.Id)).IsTrue();

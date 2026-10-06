@@ -2911,6 +2911,32 @@ public class MainControlTaskCardLayoutUiTests
 
     }
 
+    private static void AssertTaskActionsMenuSitsAfterIdBelowTitle(Control root)
+    {
+        var title = FindControlByAutomationId<Control>(root, "CurrentTaskTitleTextBox");
+        var idText = FindControlByAutomationId<Control>(root, "CurrentTaskIdTextBlock");
+        var actionsMenuButton = FindControlByAutomationId<Control>(root, "CurrentTaskActionsMenuButton");
+
+        var titleBottom = GetBottomEdge(root, title);
+        var idRight = GetRightEdge(root, idText);
+        var actionsTop = GetTopEdge(root, actionsMenuButton);
+        var actionsLeft = GetLeftEdge(root, actionsMenuButton);
+
+        if (actionsTop < titleBottom - 1)
+        {
+            throw new InvalidOperationException(
+                $"Task actions menu should sit below the title row: " +
+                $"titleBottom={titleBottom:F1}; actionsTop={actionsTop:F1}.");
+        }
+
+        if (actionsLeft <= idRight)
+        {
+            throw new InvalidOperationException(
+                $"Task actions menu should sit to the right of the task identifier: " +
+                $"idRight={idRight:F1}; actionsLeft={actionsLeft:F1}.");
+        }
+    }
+
     private static void AssertStatusHistoryLivesAtTaskCardBottomAndExpandsDown(Control root)
     {
         var statusHistorySection = FindControlByAutomationId<Control>(root, "CurrentTaskStatusHistorySection");
