@@ -1,7 +1,7 @@
 # Доставка emoji-проекции на UI-потоке без повторного входа
 
 ## 0. Метаданные
-- Текущая фаза: EXEC, 06.10.2026; пользователь подтвердил именно эту SPEC фразой «Спеку подтверждаю». Outcome один, риск medium: общий reactive pipeline, межпоточная доставка и синхронная initial projection. Использована компактная expanded форма центрального `templates/specs/_template.md`; short eligibility не выполнена из-за существенной межкомпонентной неопределённости producer. Предшествующие SPEC-only записи ниже — история подготовки.
+- Текущая фаза: EXEC, реализация и обязательные локальные gates завершены 06.10.2026; пользователь подтвердил именно эту SPEC фразой «Спеку подтверждаю». Итоговые evidence и review — §22. Outcome один, риск medium: общий reactive pipeline, межпоточная доставка и синхронная initial projection. Использована компактная expanded форма центрального `templates/specs/_template.md`; short eligibility не выполнена из-за существенной межкомпонентной неопределённости producer. Предшествующие SPEC-only записи ниже — история подготовки.
 - Профили: `dotnet-desktop-client`, `ui-automation-testing`; context `testing-dotnet`. Behavior baseline каталога GPT-6 Astra, поверхность Codex desktop; model eval не применим к .NET/Avalonia изменению.
 - Один предполагаемый владелец EXEC — этот emoji-чат после отдельного approval. Автор CLI scheduler не меняет; других writers в перечисленных файлах быть не должно.
 - Проверенный локальный main: `68197565816295c7c766877c39cc40a72b3aeeb4`. Read-only GitHub preflight: PR317 MERGED, remote main `dce4e1961b3f29e33a2e439730cd09cac885a872`. Checkout/fetch/rebase на SPEC не выполнялись; EXEC начинается с проверки актуального main и изолированной рабочей ветки.
@@ -213,4 +213,50 @@ Selection characterization первой версии на `26e42327` ошибо�
 
 Минимальная коррекция внутри root completion: restore после clear не считается окончательным, пока при выключенных emoji-фильтрах выбран parented task из direct root search projection. Pending restore сохраняется до следующего root batch, где выбирается новый nested wrapper. Произвольные delays и existing TreeSearch assertions не изменены, storage/children pipeline не правились. `search-two-stage-green/run.log`: управляемый case и неизменённый исходный UI test 2/2, 0 skipped, exit0. Затем усилены setup/phase selection assertions; final targeted/full должны пройти уже последнюю версию.
 
-`oracle-selection` кадры оказались black после смешанного App/Skia запуска и не входят в visual acceptance. Финальные paired frames выполняются отдельным fresh process только для Skia Title/AllToggle, с source identity manifest. Полные gates и final expanded review пока pending.
+`oracle-selection` кадры оказались black после смешанного App/Skia запуска и не входят в visual acceptance. Финальные paired frames выполнены отдельным fresh process только для Skia Title/AllToggle, с source identity manifest. Pending на этом промежуточном checkpoint закрыт финальными gates ниже.
+
+## 22. Финальная локальная валидация и post-EXEC review
+
+Единственный final product/test candidate: **`208531a241bae89074247eaff4c296b9f4d0827d`**, ветка `fix/emoji-ui-affinity`, baseline main `dce4e1961b3f29e33a2e439730cd09cac885a872`. Во время последних запусков исходники и Git HEAD не менялись, working tree был clean. Последующее обновление только этой SPEC — audit документации; code/test blobs остаются теми же. Manifest `artifacts/emoji-ui-affinity/verified-gates.json` повторно сверяет все три SHA256 с candidate; все matches=true. SDK10.0.401, Main: Avalonia12.0.3 / DynamicData9.4.31 / Rx6.1.0 / TUnit1.44 / MTP2.2.2; package/build files не менялись.
+
+| Проверка на final candidate | Итог | Evidence относительно корня worktree |
+| --- | --- | --- |
+| Targeted root delivery / lifecycle / AllToggle / 🧙‍♂️→🪼 / selection | 24/24, failed0/skipped0, exit0 | `artifacts/emoji-ui-affinity/candidate-targeted-corrected/run.log`, source manifest |
+| Fresh Skia-only Title/AllToggle | 6/6, failed0/skipped0, exit0; 31 actual PNG | `artifacts/emoji-ui-affinity/candidate-visual/run.log`, `result.json` с frame SHA256 |
+| Fresh unfiltered Main | **1363/1363, failed0/skipped0, exit0**; 46m42.957s | `artifacts/emoji-ui-affinity/candidate-full-main/run.log`, `report.html`, `verified-summary.json` |
+| Fresh unfiltered Headless | **55/55, failed0/skipped0, exit0**; 3m38.723s | `artifacts/emoji-ui-affinity/candidate-full-headless/run.log`, `report.html`, `verified-summary.json` |
+| Standard Desktop build | Build succeeded, warnings0/errors0, exit0 | `artifacts/emoji-ui-affinity/candidate-desktop-build/run.log`, `result.json` |
+
+Main log SHA256 `DA24EDA8B725417A2D1739BDEE17E6A3F55F2E074800728224A58AE2C57E9546`; Headless log SHA256 `AB44A0792488588F9D30472A40976D1EAD79B713E701F44F2BCE3BA1CEDD700D`. Counts взяты из финальных TUnit summaries, не из промежуточного счётчика строк. Точная команда unfiltered соответствует §11, без tree filter. `candidate-targeted` перед corrected запуском дал 0 tests/exit8 из-за неподдержанного combined class/method filter; не входит в PASS. Full Main включает существующий benchmark 3000 tasks/600 reads; его время не используется как performance claim этого изменения.
+
+Visual acceptance: root просмотрел реальные paired AllToggle True before/after, False after, Wizard False before/selected, child before и grandchild after. Reviewer фактически просмотрел все 31 PNG и пересчитал 31/31 hash, mismatches0. 🧰 Beta сохраняется в обоих AllToggle случаях; retired ❌ исчезает; flags/selected All/popup согласованы с actual assertions. Include popup перекрывает короткое дерево, поэтому белая область под ним не доказывает пустой результат: exact6IDs и actual realized containers проверены кодом. Переходы 🧙‍♂️→🪼→phoenix→empty→🧙‍♂️ в include/exclude согласованы с карточкой и деревом; trails ребёнка/внука обновляются, второй родитель 🛠 сохранён. Исторические black/Beta-loss frames не используются для acceptance. Video fallback: Avalonia.Headless без native HWND; вместо записи применены actual input/control checks, paired rendered PNG и trace по заранее утверждённому §6.2. Native/FlaUI, CI и установленная версия этим evidence не подтверждаются.
+
+### Expanded passes и root fallback
+
+Scope/Evidence pass: прочитаны approved SPEC, полный diff `dce4e196..208531a`, четыре изменённых файла, clean status, команды §11, RED/targeted/final full summaries, source/hash manifests и rendered PNG; central QUEST/review-loop, dotnet-desktop-client, UI-testing и локальный MUST UI tests применены. Parser, storage, CLI, package/build files и другие ветки не изменены; generated artifacts игнорируются Git.
+
+Contract pass: AC1–5 выполнены. Actual scheduler owner и null-context legacy path разделены; initial ready проверен сразу после await Connect. UI-origin completion, mixed FIFO и whole-notify depth≤1 проверены до extra pump. Исходные first-notify Title injection, before-view registration, surviving/retired checks, второй Space и Escape сохранены. Точный пользовательский Unicode/child/grandchild сценарий, save/reload BDD и unchanged TreeSearch restore test проходят последнего source.
+
+Adversarial fallback root: проверены counterexamples worker accepted до UI, nested notification, pending disposal, Schedule rejection, consumer exception и overflow4097. Cancellation slot устанавливается до Schedule; consumer не выполняется под queue lock; очередь bounded4096 и завершается явно при ошибке. Unknown Reset не позволяет перескочить invalid index, every Reset checkpoint/frozen payload и every add/remove/move/replace replay проверяются. Source oracle не допускает ложный PASS при потере Beta; revised selection setup ждёт фактическую search projection, исчерпывает retries до позднего worker и различает old root/new nested identity. Новых actionable findings по этому проходу нет.
+
+| Роль | Result / проверяемое основание |
+| --- | --- |
+| Business analyst / domain workflow | PASS: filter semantics, связи и persisted contracts сохранены; точный исходный emoji flow проходит |
+| UX / designer | PASS: actual popup/input/selection/containers и все31 fresh PNG просмотрены; layout не менялся |
+| Tester / validation | PASS: pinned RED→GREEN, exact source oracle, final24/6/1363/55, no failed/skipped, standard build |
+| Developer / architect | PASS: instance UI owner, FIFO/sync/depth/lifecycle/error contract, bounded memory и cleanup; нет global scheduler refactor |
+| Delivery / operations / security | PASS в локальном scope: isolated managed worktree, exact candidate/hash, generated evidence вне commits; external delivery не входит в approval |
+
+Reviewer выполнял только чтения, но effective sandbox `danger-full-access` writable: техническая read-only изоляция недоступна. Его source/visual review дополнен отдельными root Contract/Adversarial/Role passes выше; это не объявляется технически независимым read-only review. Residual risk: native/install/CI evidence отсутствует и не заявляется; sporadic old container exception не выдаётся за повторно воспроизведённый runtime failure. Concrete legacy offUI и two-stage selection counterexamples воспроизведены отдельно и закрыты.
+
+### Findings / disposition / depth
+
+| Severity / Area | Finding / Required action | Status |
+| --- | --- | --- |
+| BLOCKER / mandatory gates | Незавершённые либо RED full attempts нельзя считать PASS; нужны свежие final Main/Headless/build | CLOSED:1363/55/build на208, exit0, failed/skipped0 |
+| BLOCKER / selection preservation | Old promoted search wrapper считался окончательно восстановленным перед late remove; нужен distinct canonical wrapper | CLOSED: pinned RED0/1, correction, controlled + unchanged existing test GREEN в targeted/full |
+| MEDIUM / data oracle | Surviving-only flags принимали лишнюю потерю группы; нужны actual Title/Emoji/identity и exact keys | CLOSED: controlled no-watcher source, exact7 identities/values, before8/after7 keys, fresh Beta PNG и full AllToggle |
+| MEDIUM / delivery/probe | Owner context, Schedule rejection/cancellation slot, Reset checkpoint/replay gaps | CLOSED: actual-owner/failure/FIFO/replay cases и final full |
+| LOW / negative assertion | Broad catch мог скрыть другую ошибку oracle | CLOSED: ловится только AssertionException |
+
+Depth checklist: boundaries/non-goals, source/evidence identity, sync/FIFO/lifecycle errors, actual user flow, original assertions, visual fidelity, no unrelated diffs, authorization/rollout и обязательные gates проверены. No-findings justification: конкретные ранее найденные контрпримеры закрыты различающими assertions на закреплённом source; fresh full завершились без ошибок/пропусков; code/test hashes после всех gates совпадают. Непроверенный native/install слой не подменяет локальный результат. Final stop decision после адресного runtime re-review: **PASS локального EXEC**; дальнейший PR/merge/install требует отдельного поручения.
