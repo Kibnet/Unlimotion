@@ -218,9 +218,10 @@ public class MainControlFilterToolbarResponsiveUiTests
     [Arguments(true)]
     public async Task Toolbar_EmojiFilters_AllToggle_WithReentrantSourceUpdate_KeepsCollectionConsistent(bool exclude)
     {
-        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(EmojiTitleTestAppBuilder));
         await session.DispatchAsync(async () =>
         {
+            ApplyApplicationFontResources(AppearanceSettings.DefaultFontSize);
             var fixture = new MainWindowViewModelFixture();
             Window? window = null;
             INotifyCollectionChanged? collection = null;
@@ -232,6 +233,7 @@ public class MainControlFilterToolbarResponsiveUiTests
                 var vm = fixture.MainWindowViewModelTest;
                 var probe = new RootNotificationProbe();
                 vm.RootCollectionFactory = () => probe;
+                vm.RootDeliveryTrace = probe.TraceBatch;
                 await vm.Connect();
                 await SealControlledSourceSaves(vm);
                 vm.AllTasksMode = true;
@@ -263,6 +265,7 @@ public class MainControlFilterToolbarResponsiveUiTests
                 list.SelectedItem = all;
                 list.Focus();
                 RunLayoutJobs();
+                RenderEmojiToggleWindow(window, view);
                 SaveEmojiDiagnosticFrame(window, $"{exclude}-before");
                 var filtersAtToggle = (exclude ? vm.EmojiExcludeFilters : vm.EmojiFilters).ToArray();
                 TestExecutionTrace.Write("emoji-state", "before-toggle", "observed", details: new { all.ShowTasks, filters = filtersAtToggle.Select(filter => new { filter.Emoji, filter.ShowTasks }).ToArray() });
@@ -275,11 +278,30 @@ public class MainControlFilterToolbarResponsiveUiTests
                 // The user-visible contract applies to every surviving filter, not the retired object.
                 await Assert.That((exclude ? vm.EmojiExcludeFilters : vm.EmojiFilters).All(filter => filter.ShowTasks)).IsTrue();
                 await Assert.That((exclude ? vm.EmojiExcludeFilters : vm.EmojiFilters).Any(filter => filter.Emoji == "❌")).IsFalse();
+                RenderEmojiToggleWindow(window, view);
                 SaveEmojiDiagnosticFrame(window, $"{exclude}-after");
                 await Assert.That(IsEmojiDropDownOpen(control)).IsTrue();
                 await Assert.That(vm.CurrentAllTasksItems.Select(item => item.TaskItem.Id).Distinct().Count())
                     .IsEqualTo(vm.CurrentAllTasksItems.Count);
                 await Assert.That(ReferenceEquals(list.SelectedItem, all)).IsTrue();
+                var tree = view.FindControl<TreeView>("AllTasksTree")!;
+                await Assert.That(tree.Items.Count).IsEqualTo(vm.CurrentAllTasksItems.Count);
+                TestExecutionTrace.Write("emoji-reference", "after-toggle", "observed", details: new
+                {
+                    exclude,
+                    ids = vm.CurrentAllTasksItems.Select(item => item.TaskItem.Id).ToArray(),
+                    sources = vm.EmojiFilters.Select(filter => new { filter.Emoji, filter.ShowTasks, id = filter.Source?.Id }).ToArray()
+                });
+                if (!exclude)
+                {
+                    await Assert.That(vm.CurrentAllTasksItems.Any(item => item.TaskItem.Id == MainWindowViewModelFixture.RootTask2Id)).IsTrue();
+                    await Assert.That(tree.ContainerFromIndex(0)).IsNotNull();
+                }
+                for (var index = 0; index < vm.CurrentAllTasksItems.Count; ++index)
+                {
+                    if (tree.ContainerFromIndex(index) is TreeViewItem container)
+                        await Assert.That(ReferenceEquals(container.DataContext, vm.CurrentAllTasksItems[index])).IsTrue();
+                }
                 PressKey(window, Key.Space, PhysicalKey.Space);
                 RunLayoutJobs();
                 await Assert.That((exclude ? vm.EmojiExcludeFilters : vm.EmojiFilters).All(filter => !filter.ShowTasks)).IsTrue();
@@ -396,6 +418,21 @@ public class MainControlFilterToolbarResponsiveUiTests
         // emoji grouping and bound UI collections remain live; integration BDD cases
         // continue to exercise the normal persistence lifecycle without this seam.
         await Task.WhenAll(vm.taskRepository!.Tasks.Items.Select(item => item.SealPendingSaves()));
+    }
+
+    private static void RenderEmojiToggleWindow(Window window, MainControl view)
+    {
+        var size = new Size(390, 760);
+        window.Measure(size);
+        window.Arrange(new Rect(size));
+        view.Measure(size);
+        view.Arrange(new Rect(size));
+        for (var index = 0; index < 10; ++index)
+        {
+            Dispatcher.UIThread.RunJobs();
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+        }
+        Dispatcher.UIThread.RunJobs();
     }
 
     private static void SaveEmojiDiagnosticFrame(Window window, string state)

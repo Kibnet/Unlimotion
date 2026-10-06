@@ -39,6 +39,8 @@ namespace Unlimotion.ViewModel
         private DisposableList connectionDisposableList = new DisposableListRealization();
         internal Func<ObservableCollectionExtended<TaskWrapperViewModel>>? RootCollectionFactory { get; set; }
         internal IScheduler? EmojiSearchRefreshScheduler { get; set; }
+        internal IScheduler? RootUiDeliveryScheduler { get; set; }
+        internal Action<string, long>? RootDeliveryTrace { get; set; }
         private bool _isCompletedTabInitialized;
         private bool _isArchivedTabInitialized;
         private bool _isInProgressTabInitialized;
@@ -1196,29 +1198,31 @@ namespace Unlimotion.ViewModel
                 .Sort(sortObservable)
                 .TreatMovesAsRemoveAdd();
 
-            DeliverRootProjection(rootChanges, RxSchedulers.MainThreadScheduler, Environment.CurrentManagedThreadId)
-                // Use the current-thread trampoline so the initial projection remains synchronous,
-                // while a task edit raised from CollectionChanged is queued until the current
-                // notification completes. This prevents nested Avalonia container mutations.
-                .Bind(rootItems, new SortedObservableCollectionAdaptor<TaskWrapperViewModel, string>(1))
-                .Subscribe(_ =>
-                {
-                    var isSearchActive = !string.IsNullOrWhiteSpace(Search.SearchText);
-                    if (!isSearchActive && wasAllTasksSearchActive && AllTasksMode)
+            await BindRootProjectionOnOwner(ownerThreadId =>
+            {
+                (ownerThreadId == null
+                    ? rootChanges.ObserveOn(CurrentThreadScheduler.Instance)
+                    : DeliverRootProjection(rootChanges, RootUiDeliveryScheduler ?? RxSchedulers.MainThreadScheduler, ownerThreadId.Value, RootDeliveryTrace))
+                    .Bind(rootItems, new SortedObservableCollectionAdaptor<TaskWrapperViewModel, string>(1))
+                    .Subscribe(_ =>
                     {
-                        // Clearing a filter can arrive as more than one change set. Keep the
-                        // restore pending until the selected task's replacement wrapper exists.
-                        wasAllTasksSearchActive = !RestoreCurrentAllTasksSelectionAfterSearchClear();
-                    }
-                    else
-                    {
-                        wasAllTasksSearchActive = isSearchActive;
-                    }
-                })
-                .AddToDispose(connectionDisposableList);
+                        var isSearchActive = !string.IsNullOrWhiteSpace(Search.SearchText);
+                        if (!isSearchActive && wasAllTasksSearchActive && AllTasksMode)
+                        {
+                            // Clearing a filter can arrive as more than one change set. Keep the
+                            // restore pending until the selected task's replacement wrapper exists.
+                            wasAllTasksSearchActive = !RestoreCurrentAllTasksSelectionAfterSearchClear();
+                        }
+                        else
+                        {
+                            wasAllTasksSearchActive = isSearchActive;
+                        }
+                    })
+                    .AddToDispose(connectionDisposableList);
 
-            _currentItems = new ReadOnlyObservableCollection<TaskWrapperViewModel>(rootItems);
-            CurrentAllTasksItems = _currentItems;
+                _currentItems = new ReadOnlyObservableCollection<TaskWrapperViewModel>(rootItems);
+                CurrentAllTasksItems = _currentItems;
+            }, SynchronizationContext.Current, RxSchedulers.MainThreadScheduler);
 
             #endregion Roots
 
@@ -2869,8 +2873,142 @@ namespace Unlimotion.ViewModel
         private TaskItemViewModel? _lastSelectedAllTasksItem;
         public ReadOnlyObservableCollection<TaskWrapperViewModel> CurrentAllTasksItems { get; set; }
 
-        internal static IObservable<T> DeliverRootProjection<T>(IObservable<T> source, IScheduler uiScheduler, int uiThreadId) =>
-            source.ObserveOn(CurrentThreadScheduler.Instance);
+        internal const int MaximumPendingRootBatches = 4096;
+        // A context's presence does not identify the UI thread. Capture the owner from
+        // work actually run by the UI scheduler; Connect awaits the completed initial bind.
+        // Context-free model callers retain their synchronous current-thread projection.
+        internal static Task BindRootProjectionOnOwner(Action<int?> bind, SynchronizationContext? context, IScheduler uiScheduler)
+        {
+            if (context == null)
+            {
+                bind(null);
+                return Task.CompletedTask;
+            }
+            return BindOnUiAsync();
+
+            async Task BindOnUiAsync()
+            {
+                var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                using var scheduled = uiScheduler.Schedule(() =>
+                {
+                    try { bind(Environment.CurrentManagedThreadId); completion.SetResult(); }
+                    catch (Exception error) { completion.SetException(error); }
+                });
+                await completion.Task;
+            }
+        }
+
+        internal static IObservable<T> DeliverRootProjection<T>(IObservable<T> source, IScheduler uiScheduler, int uiThreadId, Action<string, long>? trace = null) =>
+            Observable.Create<T>(observer =>
+            {
+                var gate = new object();
+                var pending = new Queue<Action>();
+                var upstream = new SingleAssignmentDisposable();
+                var postedWork = new SerialDisposable();
+                var disposed = false;
+                var draining = false;
+                var posted = false;
+                var batchId = 0L;
+
+                void Dispose()
+                {
+                    lock (gate)
+                    {
+                        disposed = true;
+                        pending.Clear();
+                    }
+                    postedWork.Dispose();
+                    upstream.Dispose();
+                }
+
+                void Drain()
+                {
+                    lock (gate)
+                    {
+                        if (disposed || draining) return;
+                        draining = true;
+                        posted = false;
+                    }
+                    try
+                    {
+                        while (true)
+                        {
+                            Action publish;
+                            lock (gate)
+                            {
+                                if (disposed || pending.Count == 0)
+                                {
+                                    draining = false;
+                                    return;
+                                }
+                                publish = pending.Dequeue();
+                            }
+                            // Do not hold the queue lock through a consumer: a notification can
+                            // cause a nested source edit. Its batch is drained after this one ends.
+                            publish();
+                        }
+                    }
+                    catch
+                    {
+                        Dispose();
+                        throw;
+                    }
+                    finally
+                    {
+                        lock (gate) draining = false;
+                    }
+                }
+
+                void Enqueue(Action publish)
+                {
+                    var owner = Environment.CurrentManagedThreadId == uiThreadId;
+                    SingleAssignmentDisposable? scheduled = null;
+                    var overflow = false;
+                    lock (gate)
+                    {
+                        if (disposed) return;
+                        overflow = pending.Count >= MaximumPendingRootBatches;
+                        if (!overflow)
+                        {
+                            var id = ++batchId;
+                            trace?.Invoke("accepted", id);
+                            pending.Enqueue(() => { trace?.Invoke("published", id); publish(); });
+                        }
+                        if (!overflow && !owner && !draining && !posted)
+                        {
+                            posted = true;
+                            scheduled = new SingleAssignmentDisposable();
+                            // Assign the cancellation slot before posting. A fast dispatcher can
+                            // finish this callback before Schedule returns; its late assignment
+                            // must never cancel a newer worker batch's post.
+                            postedWork.Disposable = scheduled;
+                        }
+                    }
+                    if (overflow)
+                    {
+                        Dispose();
+                        throw new InvalidOperationException("The root UI projection exceeded its pending batch limit.");
+                    }
+                    // Every direct owner update drains earlier accepted worker batches too.
+                    // ObserveOn's acquired loop alone cannot provide this synchronous fast path.
+                    if (owner) Drain();
+                    else if (scheduled != null)
+                    {
+                        try { scheduled.Disposable = uiScheduler.Schedule(Drain); }
+                        catch
+                        {
+                            Dispose();
+                            throw;
+                        }
+                    }
+                }
+
+                upstream.Disposable = source.Subscribe(
+                    value => Enqueue(() => observer.OnNext(value)),
+                    error => Enqueue(() => { try { observer.OnError(error); } finally { Dispose(); } }),
+                    () => Enqueue(() => { try { observer.OnCompleted(); } finally { Dispose(); } }));
+                return Disposable.Create(Dispose);
+            });
 
         private ReadOnlyObservableCollection<TaskWrapperViewModel> _unlockedItems = EmptyTaskWrappers;
         public ReadOnlyObservableCollection<TaskWrapperViewModel> UnlockedItems { get; set; }
