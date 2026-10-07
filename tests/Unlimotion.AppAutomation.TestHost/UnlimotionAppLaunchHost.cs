@@ -97,7 +97,8 @@ public static class UnlimotionAppLaunchHost
         Action<MainWindowViewModel>? afterViewModelPrepared = null,
         string? currentTaskId = null,
         string? theme = null,
-        Action<string>? prepareConfiguration = null)
+        Action<string>? prepareConfiguration = null,
+        INotificationManagerWrapper? notificationManagerOverride = null)
     {
         var launchData = UnlimotionAutomationLaunchData.Create(scenario, language, currentTaskId, theme);
         var previousDefaultIsExpanded = TaskWrapperViewModel.DefaultIsExpanded;
@@ -116,7 +117,7 @@ public static class UnlimotionAppLaunchHost
                         TaskWrapperViewModel.DefaultIsExpanded = true;
                     }
 
-                    vm = CreateHeadlessViewModel(launchData, lifetime);
+                    vm = CreateHeadlessViewModel(launchData, lifetime, notificationManagerOverride);
                     await vm.Connect();
 
                     if (!IsTaskSpaceRecoveryScenario(scenario))
@@ -230,14 +231,15 @@ public static class UnlimotionAppLaunchHost
 
     private static MainWindowViewModel CreateHeadlessViewModel(
         UnlimotionAutomationLaunchData launchData,
-        HeadlessSessionLifetime lifetime)
+        HeadlessSessionLifetime lifetime,
+        INotificationManagerWrapper? notificationManagerOverride = null)
     {
         EnsureReactiveUiInitialized();
 
         var configuration = lifetime.RegisterConfiguration(
             WritableJsonConfigurationFabric.Create(launchData.ConfigPath, reloadOnChange: false));
         var mapper = AppModelMapping.ConfigureMapping();
-        var notificationManager = new AutomationNotificationManager();
+        var notificationManager = notificationManagerOverride ?? new AutomationNotificationManager();
         TaskStorageFactory storageFactory;
         try
         {

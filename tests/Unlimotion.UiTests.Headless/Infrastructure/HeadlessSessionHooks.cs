@@ -18,7 +18,17 @@ public static class HeadlessSessionHooks
     [Before(TestSession)]
     public static void SetupSession()
     {
-        _session = HeadlessSessionFactory.StartNew(UnlimotionAppLaunchHost.AvaloniaAppType);
+        if (Environment.GetEnvironmentVariable("UNLIMOTION_DEEP_LINK_HEADLESS_CHILD") == "1")
+        {
+            // One rendered scenario per fresh process. Do not switch the drawing
+            // backend or session underneath the existing semantic test suite.
+            _recoveryScope = typeof(AvaloniaLocator).GetMethod("EnterScope", BindingFlags.Public | BindingFlags.Static)
+                ?.Invoke(null, null) as IDisposable
+                ?? throw new NotSupportedException("Avalonia locator scope API was not available.");
+            _session = HeadlessSessionFactory.StartNew(typeof(DeepLinkRenderedHeadlessEntryPoint),
+                AvaloniaTestIsolationLevel.PerAssembly);
+        }
+        else _session = HeadlessSessionFactory.StartNew(UnlimotionAppLaunchHost.AvaloniaAppType);
         HeadlessRuntime.SetSession(_session);
     }
 
@@ -78,6 +88,23 @@ public static class HeadlessSessionHooks
                     BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
                     ?? throw new NotSupportedException("Avalonia Headless dispatcher reset API was not available.");
                 reset.Invoke(null, null);
+                Dispatcher.UIThread.VerifyAccess();
+                initialize();
+            }, "Headless");
+        }
+    }
+
+    private sealed class DeepLinkRenderedHeadlessEntryPoint
+    {
+        public static AppBuilder BuildAvaloniaApp()
+        {
+            var builder = AppBuilder.Configure<global::Unlimotion.App>().WithCustomFont()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false });
+            var initialize = builder.WindowingSubsystemInitializer!;
+            return builder.UseWindowingSubsystem(() =>
+            {
+                typeof(Dispatcher).GetMethod("ResetBeforeUnitTests",
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)!.Invoke(null, null);
                 Dispatcher.UIThread.VerifyAccess();
                 initialize();
             }, "Headless");

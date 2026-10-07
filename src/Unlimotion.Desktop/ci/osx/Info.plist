@@ -24,5 +24,14 @@
     <string>NSApplication</string>
     <key>NSHighResolutionCapable</key>
     <true />
+    <key>CFBundleURLTypes</key>
+    <array>
+      <dict>
+        <key>CFBundleURLName</key>
+        <string>Unlimotion Task Links</string>
+        <key>CFBundleURLSchemes</key>
+        <array><string>unlimotion</string></array>
+      </dict>
+    </array>
   </dict>
 </plist>

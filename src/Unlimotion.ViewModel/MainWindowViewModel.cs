@@ -1936,6 +1936,19 @@ namespace Unlimotion.ViewModel
             }
         }
 
+        public bool TryOpenTaskById(string taskId)
+        {
+            var task = FindTaskById(taskId);
+            if (task is null) return false;
+
+            CurrentTaskItem = task;
+            SelectCurrentTask();
+            // A task hidden by the active list filters still has an accessible card.
+            CurrentTaskItem = task;
+            DetailsAreOpen = true;
+            return true;
+        }
+
         public void ConfirmResetTaskFilters()
         {
             ManagerWrapper.Ask(

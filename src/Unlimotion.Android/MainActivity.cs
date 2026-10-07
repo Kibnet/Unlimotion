@@ -37,6 +37,11 @@ namespace Unlimotion.Android;
     WindowSoftInputMode = SoftInput.AdjustResize,
     ConfigurationChanges = ConfigChanges.Orientation | ConfigChanges.ScreenSize | ConfigChanges.UiMode,
     EnableOnBackInvokedCallback = true)]
+[IntentFilter(
+    new[] { Intent.ActionView },
+    Categories = new[] { Intent.CategoryDefault, Intent.CategoryBrowsable },
+    DataScheme = TaskDeepLink.Scheme,
+    DataHost = TaskDeepLink.TaskHost)]
 public class MainActivity : AvaloniaMainActivity
 {
     private const string DefaultConfigName = "Settings.json";

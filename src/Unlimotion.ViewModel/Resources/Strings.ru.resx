@@ -654,4 +654,6 @@ ID: {1}</value></data>
   <data name="TaskHistoryFieldRepeater" xml:space="preserve"><value>Повторение</value></data>
   <data name="TaskHistoryFieldImportance" xml:space="preserve"><value>Важность</value></data>
   <data name="TaskHistoryFieldWanted" xml:space="preserve"><value>Хочу</value></data>  <data name="TaskHistoryMergeFirstParent" xml:space="preserve"><value>Merge-коммит: изменения сопоставлены с первым родителем.</value></data>
+  <data name="TaskDeepLinkTaskNotFound" xml:space="preserve"><value>Задача {0} не найдена в активном пространстве задач.</value></data>
+  <data name="TaskDeepLinkOpenFailed" xml:space="preserve"><value>Не удалось открыть ссылку на задачу: {0}</value></data>
 </root>
