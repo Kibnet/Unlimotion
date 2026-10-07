@@ -8,6 +8,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Unlimotion.Behavior;
@@ -25,7 +26,8 @@ public class MainControlNewTaskDeadlineUiTests
     {
         await RunCreateTaskScenarioAsync(
             selectedTaskId: MainWindowViewModelFixture.RepeateTask9Id,
-            commandSelector: vm => vm.Create);
+            commandSelector: vm => vm.Create,
+            menuItemAutomationId: "GlobalTaskCreateTaskMenuItem");
     }
 
     [Test]
@@ -33,7 +35,8 @@ public class MainControlNewTaskDeadlineUiTests
     {
         await RunCreateTaskScenarioAsync(
             selectedTaskId: MainWindowViewModelFixture.RepeateTask9Id,
-            commandSelector: vm => vm.CreateSibling);
+            commandSelector: vm => vm.CreateSibling,
+            menuItemAutomationId: "GlobalTaskCreateSiblingMenuItem");
     }
 
     [Test]
@@ -42,6 +45,7 @@ public class MainControlNewTaskDeadlineUiTests
         await RunCreateTaskScenarioAsync(
             selectedTaskId: MainWindowViewModelFixture.RepeateTask9Id,
             commandSelector: vm => vm.CreateSibling,
+            menuItemAutomationId: "GlobalTaskCreateSiblingMenuItem",
             selectedTaskCreatedInFuture: true);
     }
 
@@ -50,7 +54,8 @@ public class MainControlNewTaskDeadlineUiTests
     {
         await RunCreateTaskScenarioAsync(
             selectedTaskId: MainWindowViewModelFixture.RepeateTask9Id,
-            commandSelector: vm => vm.CreateInner);
+            commandSelector: vm => vm.CreateInner,
+            menuItemAutomationId: "GlobalTaskCreateInnerMenuItem");
     }
 
     [Test]
@@ -59,6 +64,7 @@ public class MainControlNewTaskDeadlineUiTests
         await RunCreateTaskScenarioAsync(
             selectedTaskId: MainWindowViewModelFixture.RepeateTask9Id,
             commandSelector: vm => vm.CreateInner,
+            menuItemAutomationId: "GlobalTaskCreateInnerMenuItem",
             selectedTaskCreatedInFuture: true);
     }
 
@@ -68,6 +74,7 @@ public class MainControlNewTaskDeadlineUiTests
         await RunCreateTaskScenarioAsync(
             selectedTaskId: MainWindowViewModelFixture.RootTask2Id,
             commandSelector: vm => vm.Create,
+            menuItemAutomationId: "GlobalTaskCreateTaskMenuItem",
             setDatesThroughPicker: true);
     }
 
@@ -92,16 +99,14 @@ public class MainControlNewTaskDeadlineUiTests
                 TestHelpers.SetCurrentTask(vm, taskWithDeadline!.Id);
                 vm.SelectCurrentTask();
 
-                var view = new MainControl { DataContext = vm };
+                var view = new MainScreen { DataContext = vm };
                 window = CreateWindow(view);
                 window.Show();
                 window.Activate();
+                await Assert.That(await vm.OpenWorkspaceTaskAsync(taskWithDeadline)).IsTrue();
                 Dispatcher.UIThread.RunJobs();
 
-                var deadlinePickers = view.GetVisualDescendants()
-                    .OfType<CalendarDatePicker>()
-                    .Where(picker => ReferenceEquals(picker.DataContext, taskWithDeadline))
-                    .ToArray();
+                var deadlinePickers = await WaitForTaskCardDatePickersAsync(window, view, taskWithDeadline);
                 await Assert.That(deadlinePickers.Length).IsEqualTo(2);
 
                 var focused = deadlinePickers[0].Focus();
@@ -122,10 +127,7 @@ public class MainControlNewTaskDeadlineUiTests
                 await Assert.That(newTask.PlannedBeginDateTime).IsNull();
                 await Assert.That(newTask.PlannedEndDateTime).IsNull();
 
-                var newTaskPickers = view.GetVisualDescendants()
-                    .OfType<CalendarDatePicker>()
-                    .Where(picker => ReferenceEquals(picker.DataContext, newTask))
-                    .ToArray();
+                var newTaskPickers = await WaitForTaskCardDatePickersAsync(window, view, newTask);
                 await Assert.That(newTaskPickers.Length).IsEqualTo(2);
                 foreach (var picker in newTaskPickers)
                 {
@@ -161,19 +163,21 @@ public class MainControlNewTaskDeadlineUiTests
                 TestHelpers.SetCurrentTask(vm, currentTask!.Id);
                 vm.SelectCurrentTask();
 
-                var view = new MainControl { DataContext = vm };
+                var view = new MainScreen { DataContext = vm };
                 window = CreateWindow(view);
                 window.Show();
+                window.Activate();
+                await Assert.That(await vm.OpenWorkspaceTaskAsync(currentTask)).IsTrue();
                 Dispatcher.UIThread.RunJobs();
 
-                var durationTextBox = FindPlannedDurationTextBox(view, currentTask);
+                var durationTextBox = await WaitForTaskCardPlannedDurationTextBoxAsync(window, view, currentTask);
                 durationTextBox.Focus();
                 await Assert.That(durationTextBox.IsFocused).IsTrue();
                 durationTextBox.Text = "5h";
                 Dispatcher.UIThread.RunJobs();
 
                 var taskCountBefore = vm.taskRepository!.Tasks.Count;
-                ExecuteCreateCommandThroughMenu(view, vm.Create);
+                ExecuteCreateCommandThroughMenu(view, "GlobalTaskCreateTaskMenuItem");
                 Dispatcher.UIThread.RunJobs();
 
                 var created = WaitFor(() =>
@@ -185,7 +189,7 @@ public class MainControlNewTaskDeadlineUiTests
                 var newTask = vm.CurrentTaskItem!;
                 await Assert.That(newTask.PlannedDuration).IsNull();
 
-                var newTaskDurationTextBox = FindPlannedDurationTextBox(view, newTask);
+                var newTaskDurationTextBox = await WaitForTaskCardPlannedDurationTextBoxAsync(window, view, newTask);
                 await Assert.That(string.IsNullOrEmpty(newTaskDurationTextBox.Text)).IsTrue();
             }
             finally
@@ -245,6 +249,7 @@ public class MainControlNewTaskDeadlineUiTests
     private static async Task RunCreateTaskScenarioAsync(
         string selectedTaskId,
         Func<MainWindowViewModel, System.Windows.Input.ICommand> commandSelector,
+        string menuItemAutomationId,
         bool setDatesThroughPicker = false,
         bool selectedTaskCreatedInFuture = false)
     {
@@ -271,16 +276,14 @@ public class MainControlNewTaskDeadlineUiTests
                 TestHelpers.SetCurrentTask(vm, taskWithDeadline!.Id);
                 vm.SelectCurrentTask();
 
-                var view = new MainControl { DataContext = vm };
+                var view = new MainScreen { DataContext = vm };
                 window = CreateWindow(view);
                 window.Show();
                 window.Activate();
+                await Assert.That(await vm.OpenWorkspaceTaskAsync(taskWithDeadline)).IsTrue();
                 Dispatcher.UIThread.RunJobs();
 
-                var deadlinePickers = view.GetVisualDescendants()
-                    .OfType<CalendarDatePicker>()
-                    .Where(picker => ReferenceEquals(picker.DataContext, taskWithDeadline))
-                    .ToArray();
+                var deadlinePickers = await WaitForTaskCardDatePickersAsync(window, view, taskWithDeadline);
                 await Assert.That(deadlinePickers.Length).IsEqualTo(2);
 
                 if (setDatesThroughPicker)
@@ -301,7 +304,8 @@ public class MainControlNewTaskDeadlineUiTests
 
                 var taskCountBefore = vm.taskRepository!.Tasks.Count;
                 var createCommand = commandSelector(vm);
-                ExecuteCreateCommandThroughMenu(view, createCommand);
+                await Assert.That(createCommand.CanExecute(null)).IsTrue();
+                ExecuteCreateCommandThroughMenu(view, menuItemAutomationId);
                 Dispatcher.UIThread.RunJobs();
 
                 var created = WaitFor(() =>
@@ -315,10 +319,7 @@ public class MainControlNewTaskDeadlineUiTests
                 await Assert.That(newTask.PlannedBeginDateTime).IsNull();
                 await Assert.That(newTask.PlannedEndDateTime).IsNull();
 
-                var newTaskPickers = view.GetVisualDescendants()
-                    .OfType<CalendarDatePicker>()
-                    .Where(picker => ReferenceEquals(picker.DataContext, newTask))
-                    .ToArray();
+                var newTaskPickers = await WaitForTaskCardDatePickersAsync(window, view, newTask);
                 await Assert.That(newTaskPickers.Length).IsEqualTo(2);
                 foreach (var picker in newTaskPickers)
                 {
@@ -333,6 +334,27 @@ public class MainControlNewTaskDeadlineUiTests
         }, CancellationToken.None);
     }
 
+    private static async Task<CalendarDatePicker[]> WaitForTaskCardDatePickersAsync(
+        Window window, MainScreen shell, TaskItemViewModel task)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (DateTime.UtcNow < deadline)
+        {
+            Dispatcher.UIThread.RunJobs();
+            window.UpdateLayout();
+            var card = shell.GetVisualDescendants().OfType<TaskCardView>()
+                .SingleOrDefault(candidate => candidate.IsEffectivelyVisible &&
+                    ReferenceEquals(candidate.RouteTaskItem, task));
+            var pickers = card?.GetVisualDescendants().OfType<CalendarDatePicker>()
+                .Where(picker => ReferenceEquals(picker.DataContext, task)).ToArray() ?? [];
+            if (pickers.Length == 2) return pickers;
+            // CurrentTaskItem is set before asynchronous route activation finishes.
+            // Await the actual matching card, not the previous card's DataContext.
+            await Task.Delay(20);
+        }
+        throw new TimeoutException($"The actual task card for '{task.Id}' did not mount its two deadline pickers.");
+    }
+
     private static Window CreateWindow(Control content)
     {
         return new Window
@@ -345,33 +367,74 @@ public class MainControlNewTaskDeadlineUiTests
 
     private static void ExecuteCreateCommandThroughMenu(
         Control root,
-        System.Windows.Input.ICommand createCommand)
+        string menuItemAutomationId)
     {
         var createMenuButton = root.GetVisualDescendants()
-            .OfType<DropDownButton>()
+            .OfType<Button>()
             .First(button =>
                 string.Equals(
                     AutomationProperties.GetAutomationId(button),
-                    "GlobalTaskCreateMenuButton",
-                    StringComparison.Ordinal) &&
-                button.IsVisible &&
-                button.IsEnabled);
+                    "GlobalCreateMenuButton",
+                    StringComparison.Ordinal));
 
-        if (!createCommand.CanExecute(null))
+        if (!createMenuButton.IsVisible || !createMenuButton.IsEnabled)
         {
-            throw new InvalidOperationException("Expected create command to be executable from the global create menu.");
+            throw new InvalidOperationException(
+                $"Expected global create menu button to be visible and enabled, but " +
+                $"IsVisible={createMenuButton.IsVisible}, IsEnabled={createMenuButton.IsEnabled}.");
         }
 
-        createCommand.Execute(null);
+        if (createMenuButton.Flyout is not MenuFlyout menuFlyout)
+        {
+            throw new InvalidOperationException("Global create button should use a MenuFlyout.");
+        }
+
+        menuFlyout.ShowAt(createMenuButton);
+        Dispatcher.UIThread.RunJobs();
+
+        try
+        {
+            var menuItem = menuFlyout.Items
+                .OfType<MenuItem>()
+                .First(item => string.Equals(
+                    AutomationProperties.GetAutomationId(item),
+                    menuItemAutomationId,
+                    StringComparison.Ordinal));
+
+            if (!menuItem.IsVisible || !menuItem.IsEnabled)
+            {
+                throw new InvalidOperationException(
+                    $"Expected create menu item '{menuItemAutomationId}' to be visible and enabled.");
+            }
+
+            menuItem.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent, menuItem));
+            Dispatcher.UIThread.RunJobs();
+        }
+        finally
+        {
+            menuFlyout.Hide();
+            Dispatcher.UIThread.RunJobs();
+        }
     }
 
-    private static TextBox FindPlannedDurationTextBox(Control root, TaskItemViewModel task)
+    private static async Task<TextBox> WaitForTaskCardPlannedDurationTextBoxAsync(
+        Window window, MainScreen shell, TaskItemViewModel task)
     {
-        return root.GetVisualDescendants()
-            .OfType<TextBox>()
-            .First(textBox =>
-                ReferenceEquals(textBox.DataContext, task) &&
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (DateTime.UtcNow < deadline)
+        {
+            Dispatcher.UIThread.RunJobs();
+            window.UpdateLayout();
+            var card = shell.GetVisualDescendants().OfType<TaskCardView>().SingleOrDefault(candidate =>
+                candidate.IsEffectivelyVisible && ReferenceEquals(candidate.RouteTaskItem, task));
+            var input = card?.GetVisualDescendants().OfType<TextBox>().FirstOrDefault(textBox =>
+                textBox.IsEffectivelyVisible && ReferenceEquals(textBox.DataContext, task) &&
                 ToolTip.GetTip(textBox)?.ToString()?.Contains("1d, 5h, 20m", StringComparison.Ordinal) == true);
+            if (input is not null) return input;
+            // Task creation publishes its model before the asynchronous route mounts its card.
+            await Task.Delay(20);
+        }
+        throw new TimeoutException($"The actual task card for '{task.Id}' did not mount its planned duration editor.");
     }
 
     private static async Task ClickControlAsync(Window window, Control control)

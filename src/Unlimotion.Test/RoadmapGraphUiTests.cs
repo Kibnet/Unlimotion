@@ -21,6 +21,7 @@ using Unlimotion.Domain;
 using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
 using Unlimotion.ViewModel.Localization;
+using Unlimotion.ViewModel.Workspace;
 using Unlimotion.Views;
 using Unlimotion.Views.Graph;
 
@@ -1746,7 +1747,7 @@ public class RoadmapGraphUiTests
     [Test]
     public async Task RoadmapGraph_ModifierDoubleClick_PreservesCurrentTaskSemantics()
     {
-        var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        var session = HeadlessUnitTestSession.StartNew(typeof(SkiaHeadlessAppBuilder));
         try
         {
             await session.DispatchAsync(async () =>
@@ -1918,7 +1919,7 @@ public class RoadmapGraphUiTests
     [Test]
     public async Task RoadmapGraph_RectangleSelection_AppliesModifierSemanticsAndDoesNotChangeCurrentTask()
     {
-        var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        var session = HeadlessUnitTestSession.StartNew(typeof(SkiaHeadlessAppBuilder));
         try
         {
             await session.DispatchAsync(async () =>
@@ -2478,7 +2479,7 @@ public class RoadmapGraphUiTests
     [Test]
     public async Task RoadmapGraph_RightDragOnEmptyCanvas_PansViewportWithSelection()
     {
-        var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        var session = HeadlessUnitTestSession.StartNew(typeof(SkiaHeadlessAppBuilder));
         try
         {
             await session.DispatchAsync(async () =>
@@ -2570,7 +2571,7 @@ public class RoadmapGraphUiTests
         string hotkey,
         string selectedTaskId)
     {
-        var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        var session = HeadlessUnitTestSession.StartNew(typeof(SkiaHeadlessAppBuilder));
         try
         {
             await session.DispatchAsync(async () =>
@@ -2661,12 +2662,20 @@ public class RoadmapGraphUiTests
                 vm.AllTasksMode = false;
                 vm.GraphMode = true;
 
-                var view = new MainControl { DataContext = vm };
-                window = CreateWindow(view);
+                var shell = new MainScreen { DataContext = vm };
+                window = CreateWindow(shell, 1600, 900);
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
 
-                graphControl = OpenRoadmapTabAndWaitForGraphControl(view);
+                await Assert.That(shell.GetVisualDescendants().OfType<MainControl>().Any()).IsFalse();
+                var roadmapButton = WaitForAutomationControl<Button>(shell, "WorkspaceRailRoadmapButton");
+                await ClickControlAsync(window, roadmapButton);
+                await Assert.That(WaitFor(() => vm.WorkspaceNavigation.ActiveTab.CurrentLocation?.TaskListKind
+                    == TaskListKind.Roadmap)).IsTrue();
+                var roadmapTab = vm.WorkspaceNavigation.ActiveTab;
+                var roadmapDocument = shell.GetVisualDescendants().OfType<TaskListDocumentView>()
+                    .Single(document => document.Kind == TaskListKind.Roadmap);
+                graphControl = WaitForGraphControl(roadmapDocument);
                 await Assert.That(graphControl).IsNotNull();
                 var selectedTask = TestHelpers.GetTask(vm, MainWindowViewModelFixture.RootTask2Id);
                 await Assert.That(selectedTask).IsNotNull();
@@ -2676,34 +2685,66 @@ public class RoadmapGraphUiTests
                 await Assert.That(vm.CurrentTaskItem?.Id).IsEqualTo(selectedTask.Id);
 
                 var countBefore = vm.taskRepository!.Tasks.Count;
-                ExecuteCreateCommandThroughMenu(view, "GlobalTaskCreateTaskMenuItem");
-                await Assert.That(WaitFor(() => vm.taskRepository.Tasks.Count == countBefore + 1)).IsTrue();
+                ExecuteCreateCommandThroughMenu(shell, "GlobalTaskCreateTaskMenuItem");
+                await WaitForCreatedCardAsync(countBefore);
                 var rootCreated = vm.CurrentTaskItem;
                 await Assert.That(rootCreated).IsNotNull();
                 await Assert.That(rootCreated!.Parents).IsEmpty();
 
-                await ClickControlAsync(window, selectedNode);
+                await ReturnToRoadmapAndSelectAsync();
                 await Assert.That(vm.CurrentTaskItem?.Id).IsEqualTo(selectedTask.Id);
                 countBefore = vm.taskRepository.Tasks.Count;
-                ExecuteCreateCommandThroughMenu(view, "GlobalTaskCreateSiblingMenuItem");
-                await Assert.That(WaitFor(() => vm.taskRepository.Tasks.Count == countBefore + 1)).IsTrue();
+                ExecuteCreateCommandThroughMenu(shell, "GlobalTaskCreateSiblingMenuItem");
+                await WaitForCreatedCardAsync(countBefore);
+                await Assert.That(vm.CurrentTaskItem!.Parents.Order().SequenceEqual(selectedTask.Parents.Order())).IsTrue();
 
-                await ClickControlAsync(window, selectedNode);
+                await ReturnToRoadmapAndSelectAsync();
                 await Assert.That(vm.CurrentTaskItem?.Id).IsEqualTo(selectedTask.Id);
                 countBefore = vm.taskRepository.Tasks.Count;
-                ExecuteCreateCommandThroughMenu(view, "GlobalTaskCreateBlockedSiblingMenuItem");
-                await Assert.That(WaitFor(() => vm.taskRepository.Tasks.Count == countBefore + 1)).IsTrue();
+                ExecuteCreateCommandThroughMenu(shell, "GlobalTaskCreateBlockedSiblingMenuItem");
+                await WaitForCreatedCardAsync(countBefore);
                 await Assert.That(selectedTask.Blocks).Contains(vm.CurrentTaskItem!.Id);
+                await Assert.That(vm.CurrentTaskItem.BlockedBy).Contains(selectedTask.Id);
 
-                await ClickControlAsync(window, selectedNode);
+                await ReturnToRoadmapAndSelectAsync();
                 await Assert.That(vm.CurrentTaskItem?.Id).IsEqualTo(selectedTask.Id);
                 countBefore = vm.taskRepository.Tasks.Count;
-                ExecuteCreateCommandThroughMenu(view, "GlobalTaskCreateInnerMenuItem");
-                await Assert.That(WaitFor(() => vm.taskRepository.Tasks.Count == countBefore + 1)).IsTrue();
+                ExecuteCreateCommandThroughMenu(shell, "GlobalTaskCreateInnerMenuItem");
+                await WaitForCreatedCardAsync(countBefore);
                 await Assert.That(selectedTask.Contains).Contains(vm.CurrentTaskItem!.Id);
+                await Assert.That(vm.CurrentTaskItem.Parents).Contains(selectedTask.Id);
+
+                await ReturnToRoadmapAndSelectAsync();
 
                 roadmapDeactivated = await DeactivateRoadmapGraphAsync(graphControl);
                 await Assert.That(roadmapDeactivated).IsTrue();
+
+                async Task WaitForCreatedCardAsync(int previousCount)
+                {
+                    await Assert.That(WaitFor(() => vm.taskRepository.Tasks.Count == previousCount + 1
+                        && vm.CurrentTaskItem is { } created && created.Id != selectedTask.Id
+                        && vm.WorkspaceNavigation.ActiveTab.CurrentLocation?.Kind == WorkspaceLocationKind.Task
+                        && vm.WorkspaceNavigation.ActiveTab.CurrentLocation.Id == created.Id)).IsTrue();
+                    await Assert.That(shell.GetVisualDescendants().OfType<TaskCardView>().Any()).IsTrue();
+                    await Assert.That(vm.WorkspaceNavigation.ActiveTab).IsSameReferenceAs(roadmapTab);
+                }
+
+                async Task ReturnToRoadmapAndSelectAsync()
+                {
+                    var back = WaitForAutomationControl<Button>(shell, "WorkspacePaneBackButton");
+                    await Assert.That(back.IsEnabled).IsTrue();
+                    await ClickControlAsync(window, back);
+                    await Assert.That(WaitFor(() => vm.WorkspaceNavigation.ActiveTab.CurrentLocation?.TaskListKind
+                        == TaskListKind.Roadmap)).IsTrue();
+                    await Assert.That(vm.WorkspaceNavigation.ActiveTab).IsSameReferenceAs(roadmapTab);
+                    var restoredDocument = shell.GetVisualDescendants().OfType<TaskListDocumentView>()
+                        .Single(document => document.Kind == TaskListKind.Roadmap);
+                    graphControl = WaitForGraphControl(restoredDocument)
+                        ?? throw new InvalidOperationException("Standalone roadmap did not restore after task creation.");
+                    selectedNode = WaitForTaskNode(graphControl, selectedTask.Id);
+                    await ClickControlAsync(window, selectedNode);
+                    await Assert.That(vm.CurrentTaskItem?.Id).IsEqualTo(selectedTask.Id);
+                }
             }
             finally
             {
@@ -3264,14 +3305,19 @@ public class RoadmapGraphUiTests
     private static void ExecuteCreateCommandThroughMenu(Control root, string menuItemAutomationId)
     {
         var createMenuButton = root.GetVisualDescendants()
-            .OfType<DropDownButton>()
-            .First(button =>
+            .OfType<Button>()
+            .FirstOrDefault(button =>
                 string.Equals(
                     AutomationProperties.GetAutomationId(button),
-                    "GlobalTaskCreateMenuButton",
+                    "GlobalCreateMenuButton",
                     StringComparison.Ordinal) &&
                 button.IsVisible &&
                 button.IsEnabled);
+
+        if (createMenuButton is null)
+        {
+            throw new InvalidOperationException("Visible global create menu button was not found.");
+        }
 
         if (createMenuButton.Flyout is not MenuFlyout menuFlyout)
         {

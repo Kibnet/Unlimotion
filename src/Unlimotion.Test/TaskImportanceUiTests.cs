@@ -179,7 +179,7 @@ public class TaskImportanceUiTests
     [Test]
     public async Task TaskItemTemplate_ShouldUseEmojiTextBlockForTitle()
     {
-        var xaml = File.ReadAllText(FindViewXamlPath("MainControl.axaml"));
+        var xaml = File.ReadAllText(FindViewXamlPath("TaskPresentationResources.axaml"));
         var titleLine = xaml
             .Split(["\r\n", "\n"], StringSplitOptions.None)
             .Single(line => line.Contains("<unlimotion:EmojiTextBlock Grid.Column=\"2\"", StringComparison.Ordinal));

@@ -23,6 +23,7 @@ using Unlimotion.Services;
 using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
 using Unlimotion.ViewModel.Localization;
+using Unlimotion.ViewModel.Workspace;
 using Unlimotion.Views.Graph;
 using SearchBarView = Unlimotion.Views.SearchControl.SearchBar;
 using SearchControlView = Unlimotion.Views.SearchControl.SearchControl;
@@ -32,6 +33,38 @@ namespace Unlimotion.Views
 {
     public partial class MainControl : UserControl
     {
+        public static readonly StyledProperty<TaskItemViewModel?> RouteTaskItemProperty =
+            AvaloniaProperty.Register<MainControl, TaskItemViewModel?>(nameof(RouteTaskItem));
+
+        public static readonly StyledProperty<TaskItemViewModel?> CardTaskItemProperty =
+            AvaloniaProperty.Register<MainControl, TaskItemViewModel?>(nameof(CardTaskItem));
+
+        public static readonly StyledProperty<bool> IsRouteDetailsOpenProperty =
+            AvaloniaProperty.Register<MainControl, bool>(nameof(IsRouteDetailsOpen));
+
+        public TaskItemViewModel? RouteTaskItem
+        {
+            get => GetValue(RouteTaskItemProperty);
+            set
+            {
+                if (ReferenceEquals(RouteTaskItem, value)) return;
+                SetValue(RouteTaskItemProperty, value);
+                SyncRouteDetailsOpen();
+            }
+        }
+
+        public TaskItemViewModel? CardTaskItem
+        {
+            get => GetValue(CardTaskItemProperty);
+            private set => SetValue(CardTaskItemProperty, value);
+        }
+
+        public bool IsRouteDetailsOpen
+        {
+            get => GetValue(IsRouteDetailsOpenProperty);
+            set => SetValue(IsRouteDetailsOpenProperty, value);
+        }
+
         private enum TreeCommandRoute
         {
             Hotkey,
@@ -71,6 +104,7 @@ namespace Unlimotion.Views
         private IDisposable? _taskHistoryWatcherSubscription;
         private TaskHistoryFieldChangeView? _expandedTaskHistoryField;
         private bool _taskHistoryNeedsRefresh;
+        private IDisposable? _detailsOpenSubscription;
         private IDisposable? _relationEditorFocusSubscription;
         private IDisposable? _currentTaskCompletionCriterionSubscription;
         private IDisposable? _completionCriterionFocusSubscription;
@@ -90,6 +124,9 @@ namespace Unlimotion.Views
         private bool _filterToolbarLayoutUpdateQueued;
         private bool _taskDetailsLayoutUpdateQueued;
         private bool _mainTabsOverflowUpdateQueued;
+        private bool _isWorkspaceHosted;
+        private bool _applyingWorkspaceTaskTab;
+        private bool _isActiveWorkspaceTaskPane = true;
         private int _selectionRestoreVersion;
         private ILocalizationService? _mainTabsLocalizationSubscriptionSource;
         private readonly Dictionary<string, double> _mainTabWidthCache = [];
@@ -200,6 +237,7 @@ namespace Unlimotion.Views
 
         private void MainControl_OnAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
         {
+            if (!_isWorkspaceHosted) ApplyActiveTaskCategory(navigate: false);
             AttachHotkeyHelpTopLevelHandler();
             Dispatcher.UIThread.Post(AttachHotkeyHelpTopLevelHandler, DispatcherPriority.Loaded);
             ObserveMainTabsLayout();
@@ -575,7 +613,109 @@ namespace Unlimotion.Views
             {
                 QueueMainTabsOverflowUpdate();
                 QueueFilterToolbarLayoutUpdate();
+                if (!_applyingWorkspaceTaskTab && (_isActiveWorkspaceTaskPane || !_isWorkspaceHosted))
+                    ApplyActiveTaskCategory(navigate: _isWorkspaceHosted);
             }
+        }
+
+        internal void SetWorkspaceTaskRoute(WorkspaceLocation? location, bool isActive)
+        {
+            _isWorkspaceHosted = true;
+            _isActiveWorkspaceTaskPane = isActive && location?.Kind == WorkspaceLocationKind.Tasks;
+            SyncRouteDetailsOpen();
+            if (location?.Kind != WorkspaceLocationKind.Tasks) return;
+
+            var index = ParseWorkspaceTaskCategory(location.StateKey);
+            if (MainTabs.SelectedIndex != index)
+            {
+                _applyingWorkspaceTaskTab = true;
+                try { MainTabs.SelectedIndex = index; }
+                finally { _applyingWorkspaceTaskTab = false; }
+            }
+            if (_isActiveWorkspaceTaskPane) ApplyActiveTaskCategory(navigate: false);
+        }
+
+        private void SyncRouteDetailsOpen()
+        {
+            CardTaskItem = RouteTaskItem
+                ?? (!_isWorkspaceHosted ? (DataContext as MainWindowViewModel)?.CurrentTaskItem : null);
+            IsRouteDetailsOpen = RouteTaskItem is not null
+                || !_isWorkspaceHosted && DataContext is MainWindowViewModel { DetailsAreOpen: true };
+            _ = RefreshTaskSourcesAsync();
+        }
+
+        private System.Collections.Generic.IReadOnlyList<WorkspaceLocation> taskSourceLocations = [];
+        private string? taskSourceLookupKey;
+        private async System.Threading.Tasks.Task RefreshTaskSourcesAsync()
+        {
+            if (CurrentTaskSourceButton is null) return;
+            var task = CardTaskItem;
+            var key = task?.Id + "\n" + (DataContext as MainWindowViewModel)?.Feed.WorkspaceScopeKey;
+            if (key == taskSourceLookupKey) return;
+            taskSourceLookupKey = key;
+            CurrentTaskSourceButton.IsVisible = false;
+            if (task is null || DataContext is not MainWindowViewModel owner) return;
+            var scope = owner.Feed.WorkspaceScopeKey;
+            try
+            {
+                var locations = await owner.Feed.FindTaskSourceLocationsAsync(task.Id);
+                if (!ReferenceEquals(task, CardTaskItem) || scope != owner.Feed.WorkspaceScopeKey) return;
+                taskSourceLocations = locations;
+                CurrentTaskSourceButton.IsVisible = locations.Count > 0;
+            }
+            catch (Exception) { taskSourceLocations = []; }
+        }
+
+        private void OnAddNextStepClick(object? sender, RoutedEventArgs e)
+        {
+            if (CardTaskItem is { } task && DataContext is MainWindowViewModel owner) owner.OpenNextStep(task);
+        }
+
+        private async void OnTaskSourceClick(object? sender, RoutedEventArgs e)
+        {
+            if (DataContext is not MainWindowViewModel owner || CardTaskItem is not { } task) return;
+            if (taskSourceLocations.Count == 1) await owner.Feed.OpenTaskSourceAsync(task.Id, taskSourceLocations[0]);
+            else
+            {
+                var menu = new ContextMenu();
+                foreach (var location in taskSourceLocations)
+                {
+                    var item = new MenuItem { Header = location.Title + " · " + location.Anchor };
+                    item.Click += async (_, _) => await owner.Feed.OpenTaskSourceAsync(task.Id, location);
+                    menu.Items.Add(item);
+                }
+                menu.Open(CurrentTaskSourceButton);
+            }
+        }
+
+        private static int ParseWorkspaceTaskCategory(string? stateKey)
+        {
+            const string prefix = "tasktab:";
+            return stateKey?.StartsWith(prefix, StringComparison.Ordinal) == true
+                   && int.TryParse(stateKey.AsSpan(prefix.Length), out var index)
+                   && index is >= 0 and < 9
+                ? index
+                : 0;
+        }
+
+        private void ApplyActiveTaskCategory(bool navigate = true)
+        {
+            if (DataContext is not MainWindowViewModel owner) return;
+            var index = Math.Max(0, MainTabs.SelectedIndex);
+            owner.AllTasksMode = index == 0;
+            owner.LastCreatedMode = index == 1;
+            owner.LastUpdatedMode = index == 2;
+            owner.UnlockedMode = index == 3;
+            owner.InProgressMode = index == 4;
+            owner.CompletedMode = index == 5;
+            owner.ArchivedMode = index == 6;
+            owner.LastOpenedMode = index == 7;
+            owner.GraphMode = index == 8;
+
+            if (navigate
+                && owner.WorkspaceNavigation.ActiveTab.CurrentLocation is { Kind: WorkspaceLocationKind.Tasks } location
+                && !string.Equals(location.StateKey, $"tasktab:{index}", StringComparison.Ordinal))
+                _ = owner.OpenWorkspaceLocationAsync(location with { StateKey = $"tasktab:{index}" });
         }
 
         private void QueueMainTabsOverflowUpdate()
@@ -1292,6 +1432,8 @@ namespace Unlimotion.Views
         private void MainWindow_DataContextChanged(object? sender, EventArgs e)
         {
             CloseTaskHistoryDetails();
+            _detailsOpenSubscription?.Dispose();
+            _detailsOpenSubscription = null;
             _titleFocusSubscription?.Dispose();
             _titleFocusSubscription = null;
             _relationEditorFocusSubscription?.Dispose();
@@ -1324,6 +1466,8 @@ namespace Unlimotion.Views
 
             if (DataContext is MainWindowViewModel vm)
             {
+                _detailsOpenSubscription = vm.WhenAnyValue(m => m.DetailsAreOpen)
+                    .Subscribe(_ => SyncRouteDetailsOpen());
                 _treeCommandViewModel = vm;
                 vm.ExecuteTreeCommandAction = ExecuteTreeCommand;
                 vm.SetClipboardTextAsync = SetClipboardTextAsync;
@@ -1383,6 +1527,7 @@ namespace Unlimotion.Views
                 _currentTaskCompletionCriterionSubscription = vm.WhenAnyValue(m => m.CurrentTaskItem)
                     .Subscribe(task =>
                     {
+                        SyncRouteDetailsOpen();
                         _completionCriterionFocusSubscription?.Dispose();
                         _completionCriterionFocusSubscription = null;
 
@@ -1421,6 +1566,7 @@ namespace Unlimotion.Views
                     }
                 });
             }
+            SyncRouteDetailsOpen();
         }
 
         private async void TaskHistoryExpander_OnExpanded(object? sender, RoutedEventArgs e)
@@ -2501,7 +2647,6 @@ namespace Unlimotion.Views
         {
             if (e.Handled ||
                 sender is not Control control ||
-                e.KeyModifiers != KeyModifiers.None ||
                 !e.GetCurrentPoint(control).Properties.IsLeftButtonPressed)
             {
                 return;
@@ -2516,6 +2661,25 @@ namespace Unlimotion.Views
             var task = TryGetTaskItem(control.DataContext);
             if (task == null || string.IsNullOrWhiteSpace(task.Id))
             {
+                return;
+            }
+
+            if (e.KeyModifiers == KeyModifiers.Control)
+            {
+                if (DataContext is MainWindowViewModel owner)
+                    _ = owner.OpenWorkspaceTaskAsync(task, WorkspaceOpenDisposition.NewTab);
+                e.Handled = true;
+                return;
+            }
+
+            if (e.KeyModifiers != KeyModifiers.None) return;
+
+            if (_isWorkspaceHosted && DataContext is MainWindowViewModel workspaceOwner)
+            {
+                // A selected task can already be the global CurrentTaskItem (for example
+                // after startup). Opening must not depend on another PropertyChanged event.
+                _ = workspaceOwner.OpenWorkspaceTaskAsync(task);
+                e.Handled = true;
                 return;
             }
 
@@ -2801,13 +2965,32 @@ namespace Unlimotion.Views
 
         private void TaskTreeContextMenuItem_OnClick(object? sender, RoutedEventArgs e)
         {
-            if (sender is not MenuItem menuItem ||
-                !Enum.TryParse<TreeCommandKind>(menuItem.Tag?.ToString(), out var kind))
+            if (sender is not MenuItem menuItem)
             {
                 return;
             }
 
             RestoreContextMenuContextFromPlacementTarget(menuItem);
+            if (menuItem.Tag?.ToString() is "OpenWorkspaceTaskInNewTab" or "OpenWorkspaceTaskBeside")
+            {
+                if (DataContext is MainWindowViewModel owner
+                    && TryGetValidatedContextMenuTree(out var taskTree))
+                {
+                    var task = GetCurrentWrapperForRoute(owner, taskTree, TreeCommandRoute.ContextMenu)?.TaskItem
+                        ?? _contextMenuWrapper?.TaskItem;
+                    if (task is not null)
+                    {
+                        _ = owner.OpenWorkspaceTaskAsync(task,
+                            menuItem.Tag.ToString() == "OpenWorkspaceTaskBeside"
+                                ? WorkspaceOpenDisposition.AdjacentPane
+                                : WorkspaceOpenDisposition.NewTab);
+                    }
+                }
+                ClearContextMenuContext();
+                return;
+            }
+
+            if (!Enum.TryParse<TreeCommandKind>(menuItem.Tag?.ToString(), out var kind)) return;
             ExecuteTreeCommand(kind, TreeCommandRoute.ContextMenu);
         }
         
@@ -2815,6 +2998,12 @@ namespace Unlimotion.Views
         {
             if (DataContext is MainWindowViewModel vm)
             {
+                if (_isWorkspaceHosted)
+                {
+                    if (vm.CurrentTaskItem is { } task)
+                        _ = vm.OpenWorkspaceTaskAsync(task);
+                    return;
+                }
                 vm.DetailsAreOpen = !vm.DetailsAreOpen;
             }
         }

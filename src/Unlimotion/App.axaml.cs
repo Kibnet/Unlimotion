@@ -1,11 +1,14 @@
 //#define LIVE
 
 using System;
+using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reactive;
+using System.Reactive.Disposables;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
@@ -29,6 +32,7 @@ using Unlimotion.Scheduling;
 using Unlimotion.Scheduling.Jobs;
 using Unlimotion.Services;
 using Unlimotion.ViewModel;
+using Unlimotion.ViewModel.Feed;
 using Unlimotion.ViewModel.Localization;
 using Unlimotion.Views;
 using WritableJsonConfiguration;
@@ -62,6 +66,8 @@ public class App : Application
     private static string? _pendingConfigPath;
     private static UnlimotionClientOptions _pendingClientOptions = new();
     private static IApplicationUpdateService? _pendingUpdateService;
+    private static ITaskDeepLinkActivationSource? _pendingTaskDeepLinkActivationSource;
+    private static TaskDeepLink? _pendingStartupTaskDeepLink;
 
     private IConfiguration? _configuration;
     private IMapper? _mapper;
@@ -99,6 +105,10 @@ public class App : Application
     private SettingsFileRecoveryResult? _startupSettingsRecovery;
     private bool _settingsRecoveryWarningShown;
     private Exception? _lastReportedTaskSpaceSettingsPersistenceError;
+    private bool _isTaskSpaceFeedRebindInProgress;
+    private ITaskDeepLinkActivationSource? _taskDeepLinkActivationSource;
+    private AvaloniaTaskDeepLinkActivationSource? _platformTaskDeepLinkActivationSource;
+    private readonly Queue<TaskDeepLink> _pendingTaskDeepLinks = new();
     
     public override void Initialize()
     {
@@ -193,7 +203,16 @@ public class App : Application
                 {
                     runtime.TaskContext.MainWindow = _mainWindowViewModel;
                     await RunOnUiThreadAsync(
-                        () => _mainWindowViewModel.BindInitializedStorage(runtime.Storage));
+                        async () =>
+                        {
+                            // A rejected candidate bind may leave the previous runtime
+                            // attached. Restoring that same runtime must not retry a
+                            // failed draft save or reset its workspace surface.
+                            if (_mainWindowViewModel.IsInitialized &&
+                                ReferenceEquals(_mainWindowViewModel.taskRepository, runtime.Storage)) return;
+                            await _mainWindowViewModel.CommitWorkspaceEditorsAsync();
+                            await _mainWindowViewModel.BindInitializedStorage(runtime.Storage);
+                        });
                 },
                 () => RunOnUiThreadAsync(_mainWindowViewModel.ClearTaskSpaceSurface),
                 PauseTaskSpaceSchedulerAsync,
@@ -204,6 +223,7 @@ public class App : Application
         SetupSettingsCommands(settingsViewModel);
         WireTaskSpaceSettingsPersistenceState(settingsViewModel);
         RefreshTaskSpaces(settingsViewModel);
+        WireNoteVaultFeed(settingsViewModel, _mainWindowViewModel);
         WireSettingsToActiveStorage(settingsViewModel);
         SetupAutomaticUpdateTimer(settingsViewModel);
         WireActiveTaskContext();
@@ -453,6 +473,10 @@ public class App : Application
                 }
 
                 WireSettingsToActiveStorage(settings);
+                if (_mainWindowViewModel?.Feed.IsVaultInitialized == true)
+                {
+                    await _mainWindowViewModel.Feed.RefreshAsync();
+                }
 
                 if (!settings.IsServerMode || settings.StorageConnectionState == SettingsConnectionState.Connecting)
                 {
@@ -631,6 +655,9 @@ public class App : Application
 
             await Task.CompletedTask;
         });
+
+        settings.BrowseNoteVaultRootPathCommand = ReactiveCommand.CreateFromTask(
+            () => BrowseNoteVaultRootPathAsync(settings));
 
         settings.BrowseTaskStoragePathCommand = ReactiveCommand.CreateFromTask(async param =>
         {
@@ -896,6 +923,134 @@ public class App : Application
         settings.ApplyUpdateCommand = ReactiveCommand.CreateFromTask(() => settings.ApplyUpdateAsync());
     }
 
+    private void WireNoteVaultFeed(SettingsViewModel settings, MainWindowViewModel viewModel)
+    {
+        if (!settings.IsFeedEnabled)
+        {
+            viewModel.SelectedWorkspaceMode = WorkspaceMode.Tasks;
+        }
+
+        viewModel.Feed.IsExternalVaultSupported = settings.IsExternalNoteVaultSupported;
+        viewModel.Feed.DayBoundary = settings.NoteDayBoundary;
+        viewModel.Feed.TaskOwner = viewModel;
+        Func<Unlimotion.Notes.Operations.FeedTaskSourceIdentity?> sourceIdentity = () =>
+            FeedTaskSourceIdentityFactory.Capture(_storageFactory?.SourceManager, viewModel.taskRepository);
+        viewModel.Feed.ConfigureTaskSourceParents(sourceIdentity, settings.GetAreaRootTaskId, settings.SetAreaRootTaskIdAsync);
+        viewModel.Feed.TaskCreationTarget = new TaskStorageFeedTaskCreationTarget(() => viewModel.taskRepository, sourceIdentity);
+        viewModel.Feed.TaskResolver = taskId =>
+            viewModel.taskRepository?.Tasks.Items.FirstOrDefault(task =>
+                string.Equals(task.Id, taskId, StringComparison.Ordinal));
+        viewModel.Feed.NavigateToTaskRequested = task => _ = viewModel.OpenWorkspaceTaskAsync(task);
+        viewModel.Feed.NavigateToTaskWithDispositionRequested = (task, disposition) =>
+            _ = viewModel.OpenWorkspaceTaskAsync(task, disposition);
+        viewModel.Feed.ChooseVaultAsync = () => BrowseNoteVaultRootPathAsync(settings);
+        settings.ConfigureNoteDailyFileNameFormatBridge(
+            viewModel.Feed.ValidateDailyNoteFileNameFormat,
+            viewModel.Feed.ApplyDailyNoteFileNameFormatAsync,
+            viewModel.Feed.ReloadDailyNoteFileNameFormatAsync,
+            viewModel.Feed.PreviewDailyNoteFileNameFormatAsync);
+        settings.ConfirmNoteDailyFileNameFormatCommand = ReactiveCommand.CreateFromTask(settings.ConfirmNoteDailyFileNameFormatAsync);
+        settings.CancelNoteDailyFileNameFormatCommand = ReactiveCommand.Create(settings.CancelNoteDailyFileNameFormatPreview);
+        settings.ApplyNoteDailyFileNameFormatCommand = ReactiveCommand.CreateFromTask(
+            settings.ApplyNoteDailyFileNameFormatAsync);
+        settings.ReloadExternalNoteDailyFileNameFormatCommand = ReactiveCommand.CreateFromTask(
+            settings.ReloadExternalNoteDailyFileNameFormatAsync);
+
+        void RefreshDailyNoteFileNameFormatAvailabilityOnUiThread()
+        {
+            settings.SetNoteDailyFileNameFormatFeedAvailability(
+                viewModel.Feed.IsVaultInitialized,
+                viewModel.Feed.IsBusy || viewModel.Feed.IsIdentityFrozen,
+                viewModel.Feed.VaultRootPath);
+        }
+
+        void RefreshDailyNoteFileNameFormatAvailability() =>
+            _ = RunOnUiThreadAsync(RefreshDailyNoteFileNameFormatAvailabilityOnUiThread);
+
+        EventHandler<NoteDailyFileNameFormatState> dailyNoteFileNameFormatChanged = (_, state) =>
+            _ = RunOnUiThreadAsync(() =>
+            {
+                // Feed initialization and watcher work may finish off the UI thread. Read
+                // its settled lifecycle state only after dispatching, then accept the applied
+                // sidecar state in that same UI turn so Settings cannot retain a stale
+                // unavailable snapshot while the Feed surface is already usable.
+                RefreshDailyNoteFileNameFormatAvailabilityOnUiThread();
+                settings.ApplyNoteDailyFileNameFormatState(state);
+            });
+        viewModel.Feed.DailyNoteFileNameFormatChanged += dailyNoteFileNameFormatChanged;
+        Disposable.Create(() =>
+                viewModel.Feed.DailyNoteFileNameFormatChanged -= dailyNoteFileNameFormatChanged)
+            .AddToDispose(viewModel);
+        RefreshDailyNoteFileNameFormatAvailability();
+        PropertyChangedEventHandler feedLifecycleChanged = (_, args) =>
+        {
+            if (args.PropertyName is nameof(FeedViewModel.IsVaultInitialized)
+                or nameof(FeedViewModel.IsBusy)
+                or nameof(FeedViewModel.IsIdentityFrozen)
+                or nameof(FeedViewModel.VaultRootPath))
+            {
+                RefreshDailyNoteFileNameFormatAvailability();
+            }
+        };
+        viewModel.Feed.PropertyChanged += feedLifecycleChanged;
+        Disposable.Create(() => viewModel.Feed.PropertyChanged -= feedLifecycleChanged)
+            .AddToDispose(viewModel);
+        settings
+            .ObservableForProperty(model => model.NoteVaultRootPath, false, true)
+            .Subscribe(change =>
+            {
+                if (!_isTaskSpaceFeedRebindInProgress)
+                {
+                    _ = viewModel.Feed.InitializeVaultAsync(
+                        settings.IsFeedEnabled ? change.Value : null);
+                }
+            })
+            .AddToDispose(viewModel);
+        settings
+            .ObservableForProperty(model => model.NoteDayBoundary, false, true)
+            .Subscribe(change => viewModel.Feed.DayBoundary = change.Value)
+            .AddToDispose(viewModel);
+        settings
+            .ObservableForProperty(model => model.IsFeedEnabled, false, true)
+            .Subscribe(change =>
+            {
+                if (!change.Value)
+                {
+                    _ = viewModel.OpenWorkspaceRootAsync(WorkspaceMode.Tasks);
+                }
+
+                if (!_isTaskSpaceFeedRebindInProgress)
+                {
+                    _ = viewModel.Feed.InitializeVaultAsync(
+                        change.Value ? settings.NoteVaultRootPath : null);
+                }
+            })
+            .AddToDispose(viewModel);
+    }
+
+    private async Task BrowseNoteVaultRootPathAsync(SettingsViewModel settings)
+    {
+        if (_dialogs == null || !settings.IsExternalNoteVaultSupported)
+        {
+            return;
+        }
+
+        try
+        {
+            var path = await _dialogs.ShowOpenFolderDialogAsync(
+                L10n.Get("FolderPickerNoteVaultRoot"),
+                settings.NoteVaultRootPath);
+            if (!string.IsNullOrWhiteSpace(path))
+            {
+                settings.NoteVaultRootPath = path;
+            }
+        }
+        catch (Exception ex)
+        {
+            _notificationManager?.ErrorToast(L10n.Format("NoteVaultFolderPickerFailed", ex.Message));
+        }
+    }
+
     private void EnterConflictResolutionMode(SettingsViewModel settings)
     {
         PauseBackupScheduler(settings);
@@ -1119,13 +1274,25 @@ public class App : Application
             return false;
         }
 
+        var previousSourceId = manager.ActiveSource?.Descriptor.Id
+            ?? throw new InvalidOperationException("There is no active task space to restore.");
+        var previousVaultRoot = settings.IsFeedEnabled && settings.IsExternalNoteVaultSupported
+            ? settings.NoteVaultRootPath
+            : null;
+        var taskSourceSwitched = false;
         settings.IsTaskSpaceSwitching = true;
+        _isTaskSpaceFeedRebindInProgress = true;
         try
         {
             var evidenceDelay = GetAutomationTaskSpaceSwitchDelay();
             if (evidenceDelay > TimeSpan.Zero)
             {
                 await Task.Delay(evidenceDelay).ConfigureAwait(true);
+            }
+
+            if (_mainWindowViewModel is not null)
+            {
+                await _mainWindowViewModel.CommitWorkspaceEditorsAsync().ConfigureAwait(true);
             }
 
             var descriptor = manager.ConfiguredSources.FirstOrDefault(source =>
@@ -1141,10 +1308,10 @@ public class App : Application
             }
 
             await _taskSpaceCoordinator.SwitchAsync(sourceId).ConfigureAwait(true);
+            taskSourceSwitched = true;
             settings.IsTaskSpaceRecoveryRequired = false;
             settings.TaskSpaceRecoveryMessage = string.Empty;
-            settings.ReloadActiveTaskSpaceSettings();
-            WireSettingsToActiveStorage(settings);
+            await RebindFeedToActiveTaskSpaceAsync(settings).ConfigureAwait(true);
             settings.SetStorageConnectionState(SettingsConnectionState.Connected);
             RefreshTaskSpaces(settings);
             return true;
@@ -1163,12 +1330,40 @@ public class App : Application
         }
         catch (Exception ex)
         {
+            if (taskSourceSwitched)
+            {
+                try
+                {
+                    await _taskSpaceCoordinator!.SwitchAsync(previousSourceId).ConfigureAwait(true);
+                    settings.ReloadActiveTaskSpaceSettings();
+                    WireSettingsToActiveStorage(settings);
+                    if (_mainWindowViewModel is not null)
+                    {
+                        await _mainWindowViewModel.Feed.InitializeVaultAsync(previousVaultRoot)
+                            .ConfigureAwait(true);
+                        if (!_mainWindowViewModel.Feed.IsBoundToVaultRoot(previousVaultRoot))
+                        {
+                            throw new InvalidOperationException(
+                                _mainWindowViewModel.Feed.ErrorMessage
+                                ?? L10n.Get("TaskSpaceNoteVaultActivationFailed"));
+                        }
+                    }
+                }
+                catch (Exception rollbackError)
+                {
+                    SetTaskSpaceRecoveryState(settings, new TaskSpaceRecoveryException(ex, rollbackError));
+                    RefreshTaskSpaces(settings);
+                    return false;
+                }
+            }
+
             RefreshTaskSpaces(settings);
             _notificationManager?.ErrorToast(L10n.Format("ConnectStorageFailed", ex.Message, string.Empty));
             return false;
         }
         finally
         {
+            _isTaskSpaceFeedRebindInProgress = false;
             settings.IsTaskSpaceSwitching = false;
         }
     }
@@ -1181,6 +1376,27 @@ public class App : Application
                milliseconds is >= 0 and <= 10_000
             ? TimeSpan.FromMilliseconds(milliseconds)
             : TimeSpan.Zero;
+    }
+
+    private async Task RebindFeedToActiveTaskSpaceAsync(SettingsViewModel settings)
+    {
+        settings.ReloadActiveTaskSpaceSettings();
+        WireSettingsToActiveStorage(settings);
+        if (_mainWindowViewModel is null)
+        {
+            return;
+        }
+
+        var expectedRoot = settings.IsFeedEnabled && settings.IsExternalNoteVaultSupported
+            ? settings.NoteVaultRootPath
+            : null;
+        await _mainWindowViewModel.Feed.InitializeVaultAsync(expectedRoot).ConfigureAwait(true);
+        if (!_mainWindowViewModel.Feed.IsBoundToVaultRoot(expectedRoot))
+        {
+            throw new InvalidOperationException(
+                _mainWindowViewModel.Feed.ErrorMessage
+                ?? L10n.Get("TaskSpaceNoteVaultActivationFailed"));
+        }
     }
 
     private async Task AddTaskSpaceAsync(SettingsViewModel settings)
@@ -1636,6 +1852,22 @@ public class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
+        AttachPlatformTaskDeepLinkActivation();
+
+        if (_pendingTaskDeepLinkActivationSource is not null)
+        {
+            var activationSource = _pendingTaskDeepLinkActivationSource;
+            _pendingTaskDeepLinkActivationSource = null;
+            AttachTaskDeepLinkActivationSource(activationSource);
+        }
+
+        if (_pendingStartupTaskDeepLink is not null)
+        {
+            var startupTaskDeepLink = _pendingStartupTaskDeepLink;
+            _pendingStartupTaskDeepLink = null;
+            QueueOrActivateTaskDeepLink(startupTaskDeepLink);
+        }
+
         if (_startupSettingsRecovery is { Status: SettingsRecoveryStatus.Blocked } blocked &&
             ApplicationLifetime is IClassicDesktopStyleApplicationLifetime recoveryDesktop)
         {
@@ -1724,6 +1956,11 @@ public class App : Application
             _ = InitializeStartupViewModelAsync(vm);
         }
 
+        if (ApplicationLifetime is IControlledApplicationLifetime controlledLifetime)
+        {
+            controlledLifetime.Exit += (_, __) => DisposeMainWindowViewModel();
+        }
+
         base.OnFrameworkInitializationCompleted();
     }
 
@@ -1750,7 +1987,7 @@ public class App : Application
                 await vm.Connect();
             }
 
-            ApplyAutomationStartupState(vm);
+            await ApplyAutomationStartupStateAsync(vm);
             if (vm.Settings.IsConflictResolutionMode)
             {
                 EnterConflictResolutionMode(vm.Settings);
@@ -1761,6 +1998,16 @@ public class App : Application
             vm.Settings.SetStorageConnectionState(SettingsConnectionState.Error);
             var hint = OperatingSystem.IsAndroid() ? L10n.Get("AndroidAllFilesHint") : string.Empty;
             vm.ManagerWrapper?.ErrorToast(L10n.Format("ConnectStorageFailed", ex.Message, hint));
+        }
+
+        await vm.Feed.InitializeVaultAsync(
+            vm.Settings.IsFeedEnabled && vm.Settings.IsExternalNoteVaultSupported
+                ? vm.Settings.NoteVaultRootPath
+                : null);
+
+        if (vm.IsInitialized)
+        {
+            ActivatePendingTaskDeepLinks(vm);
         }
 
         ShowSettingsRecoveryWarning();
@@ -1784,7 +2031,22 @@ public class App : Application
             notification => _toastNotificationManager.Messages.Remove(notification)));
     }
 
-    private static void ApplyAutomationStartupState(MainWindowViewModel vm)
+    private void DisposeMainWindowViewModel()
+    {
+        if (_taskDeepLinkActivationSource is not null)
+        {
+            _taskDeepLinkActivationSource.ActivationRequested -= OnTaskDeepLinkActivationRequested;
+            _taskDeepLinkActivationSource = null;
+        }
+
+        _platformTaskDeepLinkActivationSource?.Dispose();
+        _platformTaskDeepLinkActivationSource = null;
+
+        _mainWindowViewModel?.Dispose();
+        _mainWindowViewModel = null;
+    }
+
+    private static async Task ApplyAutomationStartupStateAsync(MainWindowViewModel vm)
     {
         ApplyAutomationWindowTitle(vm);
 
@@ -1806,12 +2068,22 @@ public class App : Application
             }
 
             ApplyAutomationTreeExpansion(vm);
+            await OpenAutomationTaskDocumentAsync(vm, shouldOpenDetails);
             return;
         }
 
         var taskId = Environment.GetEnvironmentVariable(AutomationCurrentTaskIdEnvironmentVariable);
         SelectAutomationTask(vm, taskId);
         ApplyAutomationTreeExpansion(vm);
+        await OpenAutomationTaskDocumentAsync(vm, shouldOpenDetails);
+    }
+
+    private static Task OpenAutomationTaskDocumentAsync(MainWindowViewModel vm, bool openDetails)
+    {
+        var id = Environment.GetEnvironmentVariable(AutomationCurrentTaskIdEnvironmentVariable);
+        return openDetails && !string.IsNullOrWhiteSpace(id)
+            ? vm.TryOpenTaskByIdAsync(id)
+            : Task.CompletedTask;
     }
 
     private static void ApplyAutomationTaskWrapperDefaults()
@@ -2044,6 +2316,113 @@ public class App : Application
         if (Current is App app)
         {
             app.ConfigureUpdateServiceInstance(updateService);
+        }
+    }
+
+    public static void ConfigureTaskDeepLinkActivation(ITaskDeepLinkActivationSource activationSource)
+    {
+        ArgumentNullException.ThrowIfNull(activationSource);
+        if (Current is App app)
+        {
+            _pendingTaskDeepLinkActivationSource = null;
+            app.AttachTaskDeepLinkActivationSource(activationSource);
+            return;
+        }
+
+        _pendingTaskDeepLinkActivationSource = activationSource;
+    }
+
+    public static void ConfigureStartupTaskDeepLink(TaskDeepLink link)
+    {
+        ArgumentNullException.ThrowIfNull(link);
+        if (Current is App app)
+        {
+            app.QueueOrActivateTaskDeepLink(link);
+            return;
+        }
+
+        _pendingStartupTaskDeepLink = link;
+    }
+
+    private void AttachTaskDeepLinkActivationSource(ITaskDeepLinkActivationSource activationSource)
+    {
+        if (ReferenceEquals(_taskDeepLinkActivationSource, activationSource))
+        {
+            return;
+        }
+
+        if (_taskDeepLinkActivationSource is not null)
+        {
+            _taskDeepLinkActivationSource.ActivationRequested -= OnTaskDeepLinkActivationRequested;
+        }
+
+        _taskDeepLinkActivationSource = activationSource;
+        activationSource.ActivationRequested += OnTaskDeepLinkActivationRequested;
+        foreach (var link in activationSource.DrainPending())
+        {
+            QueueOrActivateTaskDeepLink(link);
+        }
+    }
+
+    private void AttachPlatformTaskDeepLinkActivation()
+    {
+        if (!OperatingSystem.IsMacOS() && !OperatingSystem.IsAndroid())
+        {
+            return;
+        }
+
+        if (this.TryGetFeature<IActivatableLifetime>() is not { } activatableLifetime)
+        {
+            return;
+        }
+
+        _platformTaskDeepLinkActivationSource?.Dispose();
+        _platformTaskDeepLinkActivationSource = new AvaloniaTaskDeepLinkActivationSource(activatableLifetime);
+        AttachTaskDeepLinkActivationSource(_platformTaskDeepLinkActivationSource);
+    }
+
+    private void OnTaskDeepLinkActivationRequested(object? sender, TaskDeepLinkActivationEventArgs args) =>
+        Dispatcher.UIThread.Post(() => QueueOrActivateTaskDeepLink(args.Link));
+
+    private void QueueOrActivateTaskDeepLink(TaskDeepLink link)
+    {
+        if (_mainWindowViewModel is not { IsInitialized: true } viewModel)
+        {
+            _pendingTaskDeepLinks.Enqueue(link);
+            return;
+        }
+
+        ActivateTaskDeepLink(viewModel, link);
+    }
+
+    private void ActivatePendingTaskDeepLinks(MainWindowViewModel viewModel)
+    {
+        while (_pendingTaskDeepLinks.TryDequeue(out var link))
+        {
+            ActivateTaskDeepLink(viewModel, link);
+        }
+    }
+
+    private async void ActivateTaskDeepLink(MainWindowViewModel viewModel, TaskDeepLink link)
+    {
+        if (!await viewModel.TryOpenTaskByIdAsync(link.TaskId))
+        {
+            viewModel.ManagerWrapper?.ErrorToast(L10n.Format("TaskDeepLinkTaskNotFound", link.TaskId));
+        }
+
+        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime { MainWindow: { } window })
+        {
+            if (window.WindowState == WindowState.Minimized)
+            {
+                window.WindowState = WindowState.Normal;
+            }
+
+            if (!window.IsVisible)
+            {
+                window.Show();
+            }
+
+            window.Activate();
         }
     }
 

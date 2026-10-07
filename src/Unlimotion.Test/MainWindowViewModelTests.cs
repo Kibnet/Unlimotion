@@ -79,7 +79,7 @@ namespace Unlimotion.Test
         protected async Task RunWithTreeProjectionAsync(
             Func<MainWindowViewModelFixture, MainWindowViewModel, ITaskStorage, Task> action)
         {
-            var session = HeadlessUnitTestSession.StartNew(typeof(App));
+            var session = HeadlessUnitTestSession.StartNew(typeof(SkiaHeadlessAppBuilder));
             try
             {
                 await session.DispatchAsync(async () =>
@@ -395,6 +395,28 @@ namespace Unlimotion.Test
 
             await Assert.That(task.Parents).IsEmpty();
             await TestHelpers.AssertTaskExistsOnDisk(fixture.DefaultTasksFolderPath, task.Id);
+        }
+
+        [Test]
+        public async Task TaskDeepLink_OpensExistingTaskWithoutChangingSelectionWhenMissing()
+        {
+            var task = await TestHelpers.CreateAndReturnNewTaskItem(mainWindowVM.Create, taskRepository);
+            mainWindowVM.SelectedWorkspaceMode = WorkspaceMode.Feed;
+            mainWindowVM.DetailsAreOpen = false;
+
+            var opened = mainWindowVM.TryOpenTaskById(task.Id!);
+
+            using (Assert.Multiple())
+            {
+                await Assert.That(opened).IsTrue();
+                await Assert.That(mainWindowVM.CurrentTaskItem).IsSameReferenceAs(task);
+                await Assert.That(mainWindowVM.SelectedWorkspaceMode).IsEqualTo(WorkspaceMode.Tasks);
+                await Assert.That(mainWindowVM.DetailsAreOpen).IsTrue();
+            }
+
+            var selected = mainWindowVM.CurrentTaskItem;
+            await Assert.That(mainWindowVM.TryOpenTaskById("missing-task")).IsFalse();
+            await Assert.That(mainWindowVM.CurrentTaskItem).IsSameReferenceAs(selected);
         }
 
         [Test]
@@ -1756,7 +1778,7 @@ namespace Unlimotion.Test
 
             ((NotificationManagerWrapperMock)mainWindowVM.ManagerWrapper).AskResult = true;
             
-            await TestHelpers.ActionNotCreateItems(() => mainWindowVM.Remove.Execute(null), taskRepository, -2);
+            await TestHelpers.ActionNotCreateItemsAsync(mainWindowVM.Remove, taskRepository, -2);
             
             await Assert.That(TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.RootTask4Id)).IsNull();
             await Assert.That(TestHelpers.GetStorageTaskItem(fixture.DefaultTasksFolderPath, MainWindowViewModelFixture.SubTask41Id)).IsNull();

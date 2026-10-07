@@ -26,9 +26,11 @@ namespace Unlimotion.Test;
 public class CliStatusJournalReloadUiTests
 {
     [Test]
-    [Arguments(false)]
-    [Arguments(true)]
-    public async Task StrictObservation_LeavesPendingJournalUntouched_UiReloadRecoversOwnCard(bool committed)
+    [Arguments(false, false)]
+    [Arguments(true, false)]
+    [Arguments(false, true)]
+    [Arguments(true, true)]
+    public async Task StrictObservation_LeavesPendingJournalUntouched_UiReloadRecoversOwnCard(bool committed, bool standalone)
     {
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
@@ -45,7 +47,9 @@ public class CliStatusJournalReloadUiTests
                 owner.CurrentTaskItem = card;
                 owner.DetailsAreOpen = true;
                 owner.SelectCurrentTask();
-                var view = new MainControl { DataContext = owner };
+                UserControl view = standalone ? new TaskCardView(owner, card) : new MainControl { DataContext = owner };
+                var activeTask = standalone ? TestHelpers.GetTask(owner, MainWindowViewModelFixture.RootTask1Id) : card;
+                owner.CurrentTaskItem = activeTask;
                 window = new Window { Width = 1400, Height = 900, Content = view };
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
@@ -104,6 +108,7 @@ public class CliStatusJournalReloadUiTests
                 Dispatcher.UIThread.RunJobs();
                 var reload = flyout.Items.OfType<MenuItem>().Single(item =>
                     AutomationProperties.GetAutomationId(item) == "CurrentTaskReloadButton");
+                await Assert.That(flyout.Items.OfType<MenuItem>().First()).IsSameReferenceAs(reload);
                 await Assert.That(reload.IsEffectivelyVisible && reload.IsEnabled).IsTrue();
                 await Assert.That(reload.Command).IsSameReferenceAs(card.ReloadTaskCommand);
                 reload.BringIntoView();
@@ -128,11 +133,12 @@ public class CliStatusJournalReloadUiTests
                     AutomationProperties.GetAutomationId(control) == "CurrentTaskTitleTextBox");
                 await Assert.That(title.Text).IsEqualTo(expectedTitle);
                 await Assert.That(card.Status).IsEqualTo(committed ? DomainTaskStatus.Completed : original.Status);
-                await Assert.That(owner.CurrentTaskItem).IsSameReferenceAs(card);
+                await Assert.That(owner.CurrentTaskItem).IsSameReferenceAs(activeTask);
                 await Assert.That(File.Exists(journal)).IsFalse();
                 await Assert.That(await File.ReadAllTextAsync(source)).IsEqualTo(committed ? after : before);
                 await Assert.That(File.ReadAllBytes(receipt).SequenceEqual(bytes[receipt])).IsTrue();
                 await Assert.That(File.GetLastWriteTimeUtc(receipt)).IsEqualTo(times[receipt]);
+                (view as TaskCardView)?.Dispose();
             }
             finally
             {

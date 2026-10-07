@@ -71,6 +71,8 @@ namespace Unlimotion.ViewModel
         private readonly object _pendingSavesLock = new();
         private readonly HashSet<Task> _pendingSaves = [];
         private readonly HashSet<Task> _pendingWriteProducers = [];
+        private readonly SemaphoreSlim _editorPersistenceGate = new(1, 1);
+        private Task? _pendingEditorFlushTask;
         private readonly CancellationTokenSource _writeProducerLifetime = new();
         private readonly object _editorStateLock = new();
         private bool _acceptingSaves = true;
@@ -89,7 +91,8 @@ namespace Unlimotion.ViewModel
         public bool IsTaskOperationBusy => Volatile.Read(ref _statusOperationCount) > 0 || _isReloading;
         public bool CanChangeTaskStatus => !IsTaskOperationBusy && !_isMissingFromStorage &&
             !_requiresStatusReadBack && _acceptingSaves;
-        public bool CanReloadTask => !IsTaskOperationBusy && !_isMissingFromStorage && _acceptingSaves;
+        public bool CanReloadTask => !IsTaskOperationBusy && !_isMissingFromStorage && _acceptingSaves &&
+            _pendingEditorFlushTask is not { IsCompleted: false };
         public bool IsMissingFromStorage => _isMissingFromStorage;
         public string TaskOperationError { get; private set; } = string.Empty;
         public string TaskOperationDetails { get; private set; } = string.Empty;
@@ -98,6 +101,7 @@ namespace Unlimotion.ViewModel
         public ReactiveCommand<Unit, Unit> ReloadTaskCommand { get; private set; } = null!;
         private Task? _sealedPendingSavesTask;
         private bool _isUpdatingFromModel;
+        private IDictionary<string, Newtonsoft.Json.Linq.JToken>? _extensionData;
         public bool IsHighlighted { get; set; }
         private TimeSpan? plannedPeriod;
         private DateCommands? commands;
@@ -182,13 +186,30 @@ namespace Unlimotion.ViewModel
             })
             .DistinctUntilChanged();
 
-        private bool HasPendingEditableChanges
+        public bool HasPendingEditableChanges
         {
             get
             {
                 lock (_editorStateLock)
                 {
                     return GetPendingEditableFieldsNoLock() != PendingTaskField.None;
+                }
+            }
+        }
+
+        /// <summary>A synchronous, read-only readiness check for reversible scope guards.</summary>
+        public bool HasPendingEditorPersistence
+        {
+            get
+            {
+                lock (_pendingSavesLock)
+                {
+                    if (HasPendingEditableChanges || _pendingEditorFlushTask is { IsCompleted: false }) return true;
+                    foreach (var save in _pendingSaves)
+                        if (!save.IsCompleted) return true;
+                    foreach (var producer in _pendingWriteProducers)
+                        if (!producer.IsCompleted) return true;
+                    return false;
                 }
             }
         }
@@ -210,21 +231,26 @@ namespace Unlimotion.ViewModel
             deferredCommandLifetime.AddToDispose(this);
             SaveItemCommand = ReactiveCommand.CreateFromTask(async () =>
             {
-                if (_isMissingFromStorage) return;
-                if (_isReloading)
+                await _editorPersistenceGate.WaitAsync();
+                try
                 {
-                    lock (_pendingSavesLock) _deferredAutosave = true;
-                    return;
+                    if (_isMissingFromStorage) return;
+                    if (_isReloading)
+                    {
+                        lock (_pendingSavesLock) _deferredAutosave = true;
+                        return;
+                    }
+                    if (_requiresStatusReadBack)
+                        throw new InvalidOperationException(L10n.Get("TaskStatusOutcomeUnknown"));
+                    var pendingEditor = CapturePendingEditorState();
+                    var revision = pendingEditor?.Revision ?? GetEditableRevision();
+                    var snapshot = pendingEditor is { } editor
+                        ? MergeAuthoritativeStateWithPendingLocalFields(Model, editor.Snapshot, editor.Fields)
+                        : TaskItemSnapshot.Clone(Model);
+                    await taskStorage.Update(snapshot);
+                    MarkEditableRevisionPersisted(revision, pendingEditor?.Fields ?? PendingTaskField.None);
                 }
-                if (_requiresStatusReadBack)
-                    throw new InvalidOperationException(L10n.Get("TaskStatusOutcomeUnknown"));
-                var pendingEditor = CapturePendingEditorState();
-                var revision = pendingEditor?.Revision ?? GetEditableRevision();
-                var snapshot = pendingEditor is { } editor
-                    ? MergeAuthoritativeStateWithPendingLocalFields(Model, editor.Snapshot, editor.Fields)
-                    : TaskItemSnapshot.Clone(Model);
-                await taskStorage.Update(snapshot);
-                MarkEditableRevisionPersisted(revision, pendingEditor?.Fields ?? PendingTaskField.None);
+                finally { _editorPersistenceGate.Release(); }
             });
             var saveExceptionSubscription = SaveItemCommand.ThrownExceptions
                 .Subscribe(new ObservableExceptionHandler(NotificationManager));
@@ -237,6 +263,20 @@ namespace Unlimotion.ViewModel
             CompletionCriteria.CollectionChanged += completionCriteriaChangedHandler;
             Disposable.Create(() => CompletionCriteria.CollectionChanged -= completionCriteriaChangedHandler).AddToDispose(this);
             RegisterCompletionCriteriaPropertyChangedSubscription();
+
+            NotifyCollectionChangedEventHandler areaIdsChangedHandler = (_, __) =>
+            {
+                if (CanTrackEditableChange)
+                {
+                    MarkEditableChanged(PendingTaskField.AreaIds);
+                }
+                if (CanAutosave)
+                {
+                    ExecuteSaveCommand();
+                }
+            };
+            AreaIds.CollectionChanged += areaIdsChangedHandler;
+            Disposable.Create(() => AreaIds.CollectionChanged -= areaIdsChangedHandler).AddToDispose(this);
 
             // Пересчитываем emoji текущей задачи и всех потомков при локальном изменении заголовка.
             ObserveProperty(nameof(Title), static task => task.Title)
@@ -672,6 +712,7 @@ namespace Unlimotion.ViewModel
                     PlannedDuration = PlannedDuration,
                     Importance = Importance,
                     Wanted = Wanted,
+                    AreaIds = AreaIds.ToList(),
                     IsCanBeCompleted = IsCanBeCompleted,
                     Version = Version,
                     BlocksTasks = Blocks.ToList(),
@@ -679,6 +720,7 @@ namespace Unlimotion.ViewModel
                     ContainsTasks = Contains.ToList(),
                     ParentTasks = Parents.ToList(),
                     Repeater = Repeater?.Model!,
+                    ExtensionData = CloneExtensionData(_extensionData),
                 };
             }
             set
@@ -788,6 +830,7 @@ namespace Unlimotion.ViewModel
         public int Importance { get; set; }
         [AlsoNotifyFor(nameof(WantedFromUi))]
         public bool Wanted { get; set; }
+        public ObservableCollection<string> AreaIds { get; } = new();
 
         public bool WantedFromUi
         {
@@ -1200,6 +1243,14 @@ namespace Unlimotion.ViewModel
             if (taskItem == null) throw new ArgumentNullException(nameof(taskItem));
             if (Id != taskItem.Id) throw new InvalidDataException("Id don't match");
 
+            // Ordinary save acknowledgements also hydrate through this overload. An older
+            // write must not replace a newer draft; status and graph fields stay authoritative.
+            if (CapturePendingEditorState() is { } pendingEditor)
+            {
+                taskItem = MergeAuthoritativeStateWithPendingLocalFields(
+                    taskItem, pendingEditor.Snapshot, pendingEditor.Fields);
+            }
+
             _isUpdatingFromModel = true;
             _completionCriteriaPropertyChangedSubscription.Disposable = Disposable.Empty;
             try
@@ -1225,11 +1276,13 @@ namespace Unlimotion.ViewModel
                 SynchronizeCollections(StatusHistory, taskItem.StatusHistory ?? new List<TaskStatusHistoryEntry>());
                 SynchronizeCollections(CompletionCriteria, taskItem.CompletionCriteria ?? new List<TaskCompletionCriterion>());
                 if (Version != taskItem.Version) Version = taskItem.Version;
+                _extensionData = CloneExtensionData(taskItem.ExtensionData);
 
                 SynchronizeCollections(Blocks, taskItem.BlocksTasks);
                 SynchronizeCollections(BlockedBy, taskItem.BlockedByTasks);
                 SynchronizeCollections(Contains, taskItem.ContainsTasks);
                 SynchronizeCollections(Parents, taskItem.ParentTasks);
+                SynchronizeCollections(AreaIds, taskItem.AreaIds ?? new List<string>());
 
                 if (taskItem.Repeater != null)
                 {
@@ -1270,10 +1323,7 @@ namespace Unlimotion.ViewModel
                 return false;
             }
 
-            var pendingEditor = CapturePendingEditorState();
-            Update(pendingEditor is { } editor
-                ? MergeAuthoritativeStateWithPendingLocalFields(taskItem, editor.Snapshot, editor.Fields)
-                : taskItem);
+            Update(taskItem);
             return true;
         }
 
@@ -1297,6 +1347,15 @@ namespace Unlimotion.ViewModel
                     return true;
                 }
             }
+        }
+
+        private static IDictionary<string, Newtonsoft.Json.Linq.JToken>? CloneExtensionData(
+            IDictionary<string, Newtonsoft.Json.Linq.JToken>? extensionData)
+        {
+            return extensionData?.ToDictionary(
+                pair => pair.Key,
+                pair => pair.Value.DeepClone(),
+                StringComparer.Ordinal);
         }
 
         public static void SynchronizeCollections(ObservableCollection<string> observableCollection, List<string> list)
@@ -1501,6 +1560,72 @@ namespace Unlimotion.ViewModel
                 return _pendingSaves.Count == 0
                     ? Task.CompletedTask
                     : Task.WhenAll(_pendingSaves.ToArray());
+            }
+        }
+
+        /// <summary>Persists throttled drafts without closing the task's write lifetime.</summary>
+        public Task FlushPendingEditorChangesAsync()
+        {
+            lock (_pendingSavesLock)
+            {
+                if (_pendingEditorFlushTask is not null) return _pendingEditorFlushTask;
+                if (!_acceptingSaves)
+                    return Task.FromException(new InvalidOperationException("The task is no longer accepting editor writes."));
+
+                // A finished failure belongs to the attempt that observed it, not every retry.
+                _pendingSaves.RemoveWhere(static task => task.IsCompleted);
+                _pendingWriteProducers.RemoveWhere(static task => task.IsCompleted);
+                if (_pendingSaves.Count == 0 && _pendingWriteProducers.Count == 0 && !HasPendingEditableChanges)
+                    return Task.CompletedTask;
+
+                var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                _pendingEditorFlushTask = completion.Task;
+                _pendingWriteProducers.Add(completion.Task);
+                NotifyTaskOperationState();
+                _ = ObserveWriteProducerFailureAsync(completion.Task);
+                _ = FlushPendingEditorChangesCoreAsync(completion);
+                return completion.Task;
+            }
+        }
+
+        private async Task FlushPendingEditorChangesCoreAsync(TaskCompletionSource completion)
+        {
+            Exception? failure = null;
+            try
+            {
+                while (true)
+                {
+                    if (_isMissingFromStorage || _isDisposed)
+                        throw new InvalidOperationException(L10n.Get("TaskReloadMissing"));
+                    if (_requiresStatusReadBack)
+                        throw new InvalidOperationException(L10n.Get("TaskStatusOutcomeUnknown"));
+                    Task[] producers;
+                    lock (_pendingSavesLock)
+                        producers = _pendingSaves.Concat(_pendingWriteProducers)
+                            .Where(task => !ReferenceEquals(task, completion.Task)).Distinct().ToArray();
+                    if (producers.Length > 0) await Task.WhenAll(producers);
+                    await DrainPendingEditorChangesAsync();
+                    lock (_pendingSavesLock)
+                    {
+                        _pendingSaves.RemoveWhere(static task => task.IsCompletedSuccessfully);
+                        _pendingWriteProducers.RemoveWhere(task =>
+                            !ReferenceEquals(task, completion.Task) && task.IsCompletedSuccessfully);
+                        if (_pendingSaves.Count == 0 && _pendingWriteProducers.Count == 1 && !HasPendingEditableChanges)
+                            break;
+                    }
+                }
+            }
+            catch (Exception exception) { failure = exception; }
+            finally
+            {
+                lock (_pendingSavesLock)
+                {
+                    _pendingWriteProducers.Remove(completion.Task);
+                    _pendingEditorFlushTask = null;
+                    NotifyTaskOperationState();
+                    if (failure is null) completion.TrySetResult();
+                    else completion.TrySetException(failure);
+                }
             }
         }
 
@@ -1827,16 +1952,23 @@ namespace Unlimotion.ViewModel
 
         private async Task DrainPendingEditorChangesAsync()
         {
-            while (CapturePendingEditorState() is { } pendingEditor)
+            await _editorPersistenceGate.WaitAsync();
+            try
             {
-                if (_isMissingFromStorage) return;
-                var editorSnapshot = MergeAuthoritativeStateWithPendingLocalFields(
-                    Model,
-                    pendingEditor.Snapshot,
-                    pendingEditor.Fields);
-                await _taskStorage.Update(editorSnapshot);
-                MarkEditableRevisionPersisted(pendingEditor.Revision, pendingEditor.Fields);
+                while (CapturePendingEditorState() is { } pendingEditor)
+                {
+                    if (_isMissingFromStorage || _isDisposed) return;
+                    if (_isReloading || _requiresStatusReadBack)
+                        throw new InvalidOperationException(L10n.Get("TaskStatusOutcomeUnknown"));
+                    var editorSnapshot = MergeAuthoritativeStateWithPendingLocalFields(
+                        Model,
+                        pendingEditor.Snapshot,
+                        pendingEditor.Fields);
+                    await _taskStorage.Update(editorSnapshot);
+                    MarkEditableRevisionPersisted(pendingEditor.Revision, pendingEditor.Fields);
+                }
             }
+            finally { _editorPersistenceGate.Release(); }
         }
 
         private void CompleteEditorWriteProducer(
@@ -1903,6 +2035,7 @@ namespace Unlimotion.ViewModel
             if (pendingFields.HasFlag(PendingTaskField.Repeater)) merged.Repeater = editorClone.Repeater;
             if (pendingFields.HasFlag(PendingTaskField.Importance)) merged.Importance = editorClone.Importance;
             if (pendingFields.HasFlag(PendingTaskField.Wanted)) merged.Wanted = editorClone.Wanted;
+            if (pendingFields.HasFlag(PendingTaskField.AreaIds)) merged.AreaIds = editorClone.AreaIds;
             return merged;
         }
 
@@ -1916,7 +2049,8 @@ namespace Unlimotion.ViewModel
             Importance = 1 << 3,
             Wanted = 1 << 4,
             Repeater = 1 << 5,
-            CompletionCriteria = 1 << 6
+            CompletionCriteria = 1 << 6,
+            AreaIds = 1 << 8
         }
 
         private readonly record struct PendingEditorState(
@@ -1962,7 +2096,8 @@ namespace Unlimotion.ViewModel
                          PendingTaskField.Importance,
                          PendingTaskField.Wanted,
                          PendingTaskField.Repeater,
-                         PendingTaskField.CompletionCriteria
+                         PendingTaskField.CompletionCriteria,
+                         PendingTaskField.AreaIds
                      })
             {
                 if (fields.HasFlag(field))
@@ -1979,7 +2114,8 @@ namespace Unlimotion.ViewModel
             PendingTaskField.Importance |
             PendingTaskField.Wanted |
             PendingTaskField.Repeater |
-            PendingTaskField.CompletionCriteria;
+            PendingTaskField.CompletionCriteria |
+            PendingTaskField.AreaIds;
 
         private void MarkEditableChanged(PendingTaskField fields)
         {

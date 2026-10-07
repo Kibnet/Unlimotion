@@ -12,13 +12,22 @@ public abstract partial class MainWindowScenariosBase<TSession> : UiTestBase<TSe
 {
     protected virtual string ExpectedCurrentTaskTitle => UnlimotionAppLaunchHost.CurrentTaskTitle;
 
+    protected virtual void PrepareMainTabSelection(string automationId) { }
+    protected virtual void InvokeWorkspaceBack() =>
+        throw new NotSupportedException("The runtime must invoke Back in the active workspace pane.");
+    protected virtual void ReopenFixtureTaskCard()
+    {
+        Page.WorkspaceRailAllTasksButton.Invoke();
+        Page.SelectTreeItem(static page => page.AllTasksTree, ExpectedCurrentTaskTitle, timeoutMs: 10_000);
+    }
+
     [Test]
     [NotInParallel(DesktopUiConstraint)]
     public async Task Main_window_loads_current_task_on_launch()
     {
         using (Assert.Multiple())
         {
-            await Assert.That(Page.MainTabs.AutomationId).IsEqualTo("MainTabs");
+            await Assert.That(Page.TaskCardDocument.AutomationId).IsEqualTo("TaskCardDocument");
             await UiAssert.TextEqualsAsync(
                 () => Page.CurrentTaskTitleTextBox.Text,
                 ExpectedCurrentTaskTitle);
@@ -29,7 +38,7 @@ public abstract partial class MainWindowScenariosBase<TSession> : UiTestBase<TSe
     [NotInParallel(DesktopUiConstraint)]
     public async Task Current_task_card_exposes_redesigned_sections_on_launch()
     {
-        await Assert.That(Page.MainTabs.AutomationId).IsEqualTo("MainTabs");
+        await Assert.That(Page.TaskCardDocument.AutomationId).IsEqualTo("TaskCardDocument");
 
         var card = WaitUntil(
             () => TryResolveDuringWait(() => Page.CurrentTaskCard),
@@ -56,8 +65,8 @@ public abstract partial class MainWindowScenariosBase<TSession> : UiTestBase<TSe
                 .IsEqualTo("CurrentTaskDescriptionSection");
             await Assert.That(Page.CurrentTaskPlanningSection.AutomationId)
                 .IsEqualTo("CurrentTaskPlanningSection");
-            await Assert.That(Page.CurrentTaskRepeaterSection.AutomationId)
-                .IsEqualTo("CurrentTaskRepeaterSection");
+            // The launch fixture has no planned start. Repeater controls are intentionally
+            // hidden until one is set; their show/hide contract has its own UI scenario.
             await Assert.That(Page.CurrentTaskRelationsSection.AutomationId)
                 .IsEqualTo("CurrentTaskRelationsSection");
         }
@@ -65,26 +74,16 @@ public abstract partial class MainWindowScenariosBase<TSession> : UiTestBase<TSe
 
     [Test]
     [NotInParallel(DesktopUiConstraint)]
-    public async Task Task_card_can_be_closed_and_reopened_from_details_toggle()
+    public async Task Task_card_can_be_closed_and_reopened_as_document()
     {
         await Assert.That(Page.CurrentTaskDetailsScrollViewer.AutomationId)
             .IsEqualTo("CurrentTaskDetailsScrollViewer");
         await UiAssert.TextEqualsAsync(
             () => Page.CurrentTaskTitleTextBox.Text,
             ExpectedCurrentTaskTitle);
-        await Assert.That(Page.DetailsPaneToggleButton.IsToggled).IsFalse();
-
-        Page.DetailsPaneToggleButton.Toggle();
-        WaitUntil(
-            () => Page.DetailsPaneToggleButton.IsToggled,
-            timeout: TimeSpan.FromSeconds(10),
-            timeoutMessage: "Details pane toggle did not switch to the closed state.");
-
-        Page.DetailsPaneToggleButton.Toggle();
-        WaitUntil(
-            () => !Page.DetailsPaneToggleButton.IsToggled,
-            timeout: TimeSpan.FromSeconds(10),
-            timeoutMessage: "Details pane toggle did not switch to the open state.");
+        Page.WorkspaceCloseActiveTabButton.Invoke();
+        await Assert.That(Page.TaskListDocument.AutomationId).IsEqualTo("TaskListDocument");
+        ReopenFixtureTaskCard();
         var detailsPane = WaitUntil(
             () => TryResolveDuringWait(() => Page.CurrentTaskDetailsScrollViewer),
             static control => control is not null,
@@ -103,30 +102,36 @@ public abstract partial class MainWindowScenariosBase<TSession> : UiTestBase<TSe
     [NotInParallel(DesktopUiConstraint)]
     public async Task Major_tabs_can_be_opened_from_main_window()
     {
-        await Assert.That(Page.MainTabs.AutomationId).IsEqualTo("MainTabs");
-
-        Page.SelectTabItem(static page => page.LastCreatedTabItem, timeoutMs: 10_000);
+        PrepareMainTabSelection("LastCreatedTabItem");
+        Page.WorkspaceRailLastCreatedButton.Invoke();
         await Assert.That(Page.LastCreatedTree.AutomationId).IsEqualTo("LastCreatedTree");
 
-        Page.SelectTabItem(static page => page.LastUpdatedTabItem, timeoutMs: 10_000);
+        PrepareMainTabSelection("LastUpdatedTabItem");
+        Page.WorkspaceRailLastUpdatedButton.Invoke();
         await Assert.That(Page.LastUpdatedTree.AutomationId).IsEqualTo("LastUpdatedTree");
 
-        Page.SelectTabItem(static page => page.UnlockedTabItem, timeoutMs: 10_000);
+        PrepareMainTabSelection("UnlockedTabItem");
+        Page.WorkspaceRailUnlockedButton.Invoke();
         await Assert.That(Page.UnlockedTree.AutomationId).IsEqualTo("UnlockedTree");
 
-        Page.SelectTabItem(static page => page.InProgressTabItem, timeoutMs: 10_000);
+        PrepareMainTabSelection("InProgressTabItem");
+        Page.WorkspaceRailInProgressButton.Invoke();
         await Assert.That(Page.InProgressTree.AutomationId).IsEqualTo("InProgressTree");
 
-        Page.SelectTabItem(static page => page.CompletedTabItem, timeoutMs: 10_000);
+        PrepareMainTabSelection("CompletedTabItem");
+        Page.WorkspaceRailCompletedButton.Invoke();
         await Assert.That(Page.CompletedTree.AutomationId).IsEqualTo("CompletedTree");
 
-        Page.SelectTabItem(static page => page.ArchivedTabItem, timeoutMs: 10_000);
+        PrepareMainTabSelection("ArchivedTabItem");
+        Page.WorkspaceRailArchivedButton.Invoke();
         await Assert.That(Page.ArchivedTree.AutomationId).IsEqualTo("ArchivedTree");
 
-        Page.SelectTabItem(static page => page.LastOpenedTabItem, timeoutMs: 10_000);
+        PrepareMainTabSelection("LastOpenedTabItem");
+        Page.WorkspaceRailLastOpenedButton.Invoke();
         await Assert.That(Page.LastOpenedTree.AutomationId).IsEqualTo("LastOpenedTree");
 
-        Page.SelectTabItem(static page => page.RoadmapTabItem, timeoutMs: 10_000);
+        PrepareMainTabSelection("RoadmapTabItem");
+        Page.WorkspaceRailRoadmapButton.Invoke();
         var roadmapRoot = WaitUntil(
             () => TryResolveDuringWait(() => Page.RoadmapRoot),
             static control => control is not null,
@@ -134,7 +139,7 @@ public abstract partial class MainWindowScenariosBase<TSession> : UiTestBase<TSe
             timeoutMessage: "Roadmap root did not become available.")!;
         await Assert.That(roadmapRoot.AutomationId).IsEqualTo("RoadmapRoot");
 
-        Page.SelectTabItem(static page => page.SettingsTabItem, timeoutMs: 10_000);
+        Page.ClickButton(static page => page.GlobalSettingsButton);
         var settingsRoot = WaitUntil(
             () => TryResolveDuringWait(() => Page.SettingsRoot),
             static control => control is not null,
@@ -147,9 +152,9 @@ public abstract partial class MainWindowScenariosBase<TSession> : UiTestBase<TSe
     [NotInParallel(DesktopUiConstraint)]
     public async Task Settings_ssh_backup_flow_shows_key_controls_for_ssh_remote()
     {
-        await Assert.That(Page.MainTabs.AutomationId).IsEqualTo("MainTabs");
+        await Assert.That(Page.TaskCardDocument.AutomationId).IsEqualTo("TaskCardDocument");
 
-        Page.SelectTabItem(static page => page.SettingsTabItem, timeoutMs: 10_000);
+        Page.ClickButton(static page => page.GlobalSettingsButton);
         _ = WaitUntil(
             () => TryResolveDuringWait(() => Page.SettingsRoot),
             static control => control is not null,
@@ -196,7 +201,7 @@ public abstract partial class MainWindowScenariosBase<TSession> : UiTestBase<TSe
     [NotInParallel(DesktopUiConstraint)]
     public async Task Card_relation_picker_can_be_opened_from_task_card()
     {
-        await Assert.That(Page.MainTabs.AutomationId).IsEqualTo("MainTabs");
+        await Assert.That(Page.TaskCardDocument.AutomationId).IsEqualTo("TaskCardDocument");
 
         Page.ClickButton(static page => page.CurrentTaskParentsRelationAddButton);
 
@@ -231,7 +236,7 @@ public abstract partial class MainWindowScenariosBase<TSession> : UiTestBase<TSe
     [NotInParallel(DesktopUiConstraint)]
     public async Task Card_blocking_relation_editor_can_be_opened_from_task_card()
     {
-        await Assert.That(Page.MainTabs.AutomationId).IsEqualTo("MainTabs");
+        await Assert.That(Page.TaskCardDocument.AutomationId).IsEqualTo("TaskCardDocument");
 
         Page.ClickButton(static page => page.CurrentTaskBlockingRelationAddButton);
 
@@ -263,7 +268,7 @@ public abstract partial class MainWindowScenariosBase<TSession> : UiTestBase<TSe
     [NotInParallel(DesktopUiConstraint)]
     public async Task Card_containing_relation_editor_can_be_opened_from_task_card()
     {
-        await Assert.That(Page.MainTabs.AutomationId).IsEqualTo("MainTabs");
+        await Assert.That(Page.TaskCardDocument.AutomationId).IsEqualTo("TaskCardDocument");
 
         Page.ClickButton(static page => page.CurrentTaskContainingRelationAddButton);
 
@@ -295,7 +300,7 @@ public abstract partial class MainWindowScenariosBase<TSession> : UiTestBase<TSe
     [NotInParallel(DesktopUiConstraint)]
     public async Task Card_blocked_relation_editor_can_be_opened_from_task_card()
     {
-        await Assert.That(Page.MainTabs.AutomationId).IsEqualTo("MainTabs");
+        await Assert.That(Page.TaskCardDocument.AutomationId).IsEqualTo("TaskCardDocument");
 
         Page.ClickButton(static page => page.CurrentTaskBlockedRelationAddButton);
 

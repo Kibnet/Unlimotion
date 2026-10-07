@@ -39,6 +39,14 @@ public static class UnlimotionAutomationScenarioData
     public const string TaskSpacesSpaceATitle = "Space A task";
     public const string TaskSpacesSpaceBTitle = "Space B task";
     public const string TaskSpacesWindowTitle = "Unlimotion Task Spaces";
+    public const string FeedCurrentTaskId = "feed-live-task";
+    public const string FeedCurrentTaskTitle = "Publish the Feed concept";
+    public const string FeedWindowTitle = "Unlimotion Feed";
+    public const string FeedNewestMarker = "Newest feed entry for chronology";
+    public const string FeedOlderMarker = "Older searchable feed entry";
+    public const string FeedPendingReviewMarker = "Pending review item from yesterday";
+    public const string FeedQuickCaptureMarker = "Captured from AppAutomation";
+    public const string FeedPermanentNoteRelativePath = "Проекты/Лента.md";
     public static readonly IReadOnlyList<string> ReadmeDemoLastOpenedTaskIds =
     [
         "launch-pilot",
@@ -66,6 +74,7 @@ public static class UnlimotionAutomationScenarioData
             UnlimotionAutomationScenario.TaskSpaces or
                 UnlimotionAutomationScenario.TaskSpacesDuplicateCatalogRecovery or
                 UnlimotionAutomationScenario.TaskSpacesOrphanCatalogRecovery => TaskSpacesTaskId,
+            UnlimotionAutomationScenario.Feed => FeedCurrentTaskId,
             _ => SmokeCurrentTaskId
         };
     }
@@ -126,6 +135,7 @@ public static class UnlimotionAutomationScenarioData
             UnlimotionAutomationScenario.TaskSpaces or
                 UnlimotionAutomationScenario.TaskSpacesDuplicateCatalogRecovery or
                 UnlimotionAutomationScenario.TaskSpacesOrphanCatalogRecovery => TaskSpacesSpaceATitle,
+            UnlimotionAutomationScenario.Feed => FeedCurrentTaskTitle,
             _ => SmokeCurrentTaskTitle
         };
     }
@@ -165,6 +175,7 @@ public static class UnlimotionAutomationScenarioData
             UnlimotionAutomationScenario.TaskSpaces or
                 UnlimotionAutomationScenario.TaskSpacesDuplicateCatalogRecovery or
                 UnlimotionAutomationScenario.TaskSpacesOrphanCatalogRecovery => TaskSpacesWindowTitle,
+            UnlimotionAutomationScenario.Feed => FeedWindowTitle,
             _ => null
         };
     }
@@ -195,6 +206,9 @@ public static class UnlimotionAutomationScenarioData
             case UnlimotionAutomationScenario.TaskSpacesOrphanCatalogRecovery:
                 SeedTaskSpaces(tasksPath);
                 break;
+            case UnlimotionAutomationScenario.Feed:
+                SeedFeedTasks(tasksPath);
+                break;
             default:
                 CopySmokeSnapshots(repositoryRoot, tasksPath);
                 break;
@@ -206,7 +220,8 @@ public static class UnlimotionAutomationScenarioData
         string configPath,
         string tasksPath,
         string? language = null,
-        string? theme = null)
+        string? theme = null,
+        string? noteVaultPath = null)
     {
         switch (scenario)
         {
@@ -231,10 +246,74 @@ public static class UnlimotionAutomationScenarioData
             case UnlimotionAutomationScenario.TaskSpacesOrphanCatalogRecovery:
                 WriteCorruptTaskSpacesConfig(configPath, tasksPath, duplicateSource: false);
                 break;
+            case UnlimotionAutomationScenario.Feed:
+                WriteFeedConfig(
+                    configPath,
+                    tasksPath,
+                    noteVaultPath ?? throw new ArgumentNullException(nameof(noteVaultPath)),
+                    language,
+                    theme);
+                break;
             default:
                 WriteSmokeConfig(configPath, tasksPath);
                 break;
         }
+    }
+
+    public static string GetFeedDailyRelativePath(DateOnly date) =>
+        $"Ежедневные/{date:yyyy-MM-dd}.md";
+
+    public static void SeedFeedVault(string vaultPath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(vaultPath);
+
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        var yesterday = today.AddDays(-1);
+        var todayPath = Path.Combine(vaultPath, GetFeedDailyRelativePath(today).Replace('/', Path.DirectorySeparatorChar));
+        var yesterdayPath = Path.Combine(vaultPath, GetFeedDailyRelativePath(yesterday).Replace('/', Path.DirectorySeparatorChar));
+        var permanentNotePath = Path.Combine(vaultPath, FeedPermanentNoteRelativePath.Replace('/', Path.DirectorySeparatorChar));
+        var areasPath = Path.Combine(vaultPath, ".unlimotion", "areas.json");
+
+        Directory.CreateDirectory(Path.GetDirectoryName(todayPath)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(permanentNotePath)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(areasPath)!);
+
+        File.WriteAllText(
+            todayPath,
+            $"---\nunlimotion-id: feed-day-{today:yyyyMMdd}\n---\n# {today:yyyy-MM-dd}\n\n" +
+            "## Unlimotion <!-- unlimotion-area:area-unlimotion -->\n" +
+            $"{FeedNewestMarker}\n\n" +
+            $"[{FeedCurrentTaskTitle}](unlimotion://task/{FeedCurrentTaskId})\n",
+            new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        File.WriteAllText(
+            yesterdayPath,
+            $"---\nunlimotion-id: feed-day-{yesterday:yyyyMMdd}\n---\n# {yesterday:yyyy-MM-dd}\n\n" +
+            "## Unlimotion <!-- unlimotion-area:area-unlimotion -->\n" +
+            $"{FeedOlderMarker}\n\n" +
+            $"- [ ] {FeedPendingReviewMarker}\n",
+            new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        File.WriteAllText(
+            permanentNotePath,
+            "---\nid: feed-concept-note\n---\n# Feed concept\n\nDurable thematic note seeded for the Feed scenario.\n",
+            new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        WriteJson(
+            areasPath,
+            new
+            {
+                SchemaVersion = 1,
+                Areas = new[]
+                {
+                    new
+                    {
+                        Id = "area-unlimotion",
+                        Name = "Unlimotion",
+                        ParentId = (string?)null,
+                        IsArchived = false,
+                        SortOrder = 0,
+                        DefaultNoteFolder = "Проекты"
+                    }
+                }
+            });
     }
 
     private static bool IsRussian(string? language)
@@ -326,6 +405,26 @@ public static class UnlimotionAutomationScenarioData
                     PushRefSpec = "refs/heads/space-b"
                 }
             });
+            var scenarioRoot = Path.GetDirectoryName(tasksPath)!;
+            var notesA = Path.Combine(scenarioRoot, "Notes-A");
+            var notesB = Path.Combine(scenarioRoot, "Notes-B");
+            SeedTaskSpaceNoteVault(notesA, "Space A note");
+            SeedTaskSpaceNoteVault(notesB, "Space B note");
+            settings.NoteSettings.Clear();
+            settings.NoteSettings.Add(new TaskSourceNoteSettings
+            {
+                SourceId = settings.Sources[0].Id,
+                RootPath = notesA,
+                IsFeedEnabled = true,
+                DayBoundaryMinutes = 0
+            });
+            settings.NoteSettings.Add(new TaskSourceNoteSettings
+            {
+                SourceId = "space-b",
+                RootPath = notesB,
+                IsFeedEnabled = true,
+                DayBoundaryMinutes = 0
+            });
             TaskSourceSettingsAdapter.Save(configuration, settings);
             TaskSourceSettingsAdapter.SyncLegacy(configuration, settings, settings.Sources[0]);
             configuration.GetSection("TaskStatusModel:MigrationNoticeShown").Set(true);
@@ -334,6 +433,15 @@ public static class UnlimotionAutomationScenarioData
         {
             (configuration as IDisposable)?.Dispose();
         }
+    }
+
+    private static void SeedTaskSpaceNoteVault(string rootPath, string marker)
+    {
+        var dailyDirectory = Path.Combine(rootPath, "Ежедневные");
+        Directory.CreateDirectory(dailyDirectory);
+        File.WriteAllText(
+            Path.Combine(dailyDirectory, $"{DateTime.Now:yyyy-MM-dd}.md"),
+            $"## Space\n{marker}\n");
     }
 
     private static void WriteCorruptTaskSpacesConfig(
@@ -569,6 +677,161 @@ public static class UnlimotionAutomationScenarioData
         };
 
         WriteJson(configPath, config);
+    }
+
+    private static void WriteFeedConfig(
+        string configPath,
+        string tasksPath,
+        string noteVaultPath,
+        string? language,
+        string? theme)
+    {
+        var languageMode = NormalizeReadmeLanguage(language);
+        var themeMode = string.Equals(theme, AppearanceSettings.DarkTheme, StringComparison.OrdinalIgnoreCase)
+            ? AppearanceSettings.DarkTheme
+            : AppearanceSettings.LightTheme;
+        var config = new
+        {
+            TaskStorage = new
+            {
+                Path = tasksPath,
+                URL = string.Empty,
+                Login = string.Empty,
+                Password = string.Empty,
+                IsServerMode = "False"
+            },
+            NoteVault = new
+            {
+                RootPath = noteVaultPath,
+                DayBoundaryMinutes = 0
+            },
+            Git = new
+            {
+                BackupEnabled = "False",
+                ShowStatusToasts = "False",
+                RemoteUrl = string.Empty,
+                Branch = "main",
+                UserName = string.Empty,
+                Password = string.Empty,
+                PullIntervalSeconds = "30",
+                PushIntervalSeconds = "60",
+                RemoteName = "origin",
+                PushRefSpec = "refs/heads/main",
+                CommitterName = "Unlimotion Feed",
+                CommitterEmail = "feed@unlimotion.app"
+            },
+            AllTasks = new
+            {
+                ShowCompleted = "True",
+                ShowArchived = "True",
+                ShowWanted = "False",
+                CurrentSortDefinition = "Comfort",
+                CurrentSortDefinitionForUnlocked = "Comfort"
+            },
+            TaskStatusModel = new
+            {
+                MigrationNoticeShown = "True"
+            },
+            Appearance = new
+            {
+                Theme = themeMode,
+                FontSize = AppearanceSettings.DefaultFontSize,
+                Language = languageMode
+            }
+        };
+
+        WriteJson(configPath, config);
+    }
+
+    private static void SeedFeedTasks(string tasksPath)
+    {
+        var seedTime = DateTimeOffset.Now;
+        var task = new TaskItem
+        {
+            Id = FeedCurrentTaskId,
+            Title = FeedCurrentTaskTitle,
+            Description = "Task referenced directly from the seeded daily Feed note.",
+            Status = Domain.TaskStatus.Prepared,
+            StatusHistory =
+            [
+                CreateStatusHistoryEntry(Domain.TaskStatus.NotReady, seedTime.AddMinutes(-2)),
+                CreateStatusHistoryEntry(Domain.TaskStatus.Prepared, seedTime.AddMinutes(-1))
+            ],
+            AreaIds = ["area-unlimotion"],
+            IsCanBeCompleted = true,
+            CreatedDateTime = seedTime.AddMinutes(-2),
+            UpdatedDateTime = seedTime.AddMinutes(-1),
+            Version = 1
+        };
+
+        WriteStatusContractTaskJson(Path.Combine(tasksPath, task.Id), task);
+    }
+
+    public static void SeedWorkspaceStoryTasks(string tasksPath)
+    {
+        var now = DateTimeOffset.Now;
+        var today = new DateTimeOffset(DateTime.Today, now.Offset);
+        var definitions = new (string Id, string Title, Domain.TaskStatus Status, TimeSpan? Duration,
+            DateTimeOffset? Begin, DateTimeOffset? End, string Description, string[] Parents,
+            string[] Blockers)[]
+        {
+            ("ux08-active", "UX08 Continue active work", Domain.TaskStatus.InProgress,
+                TimeSpan.FromMinutes(25), null, null, "The next step is to check the latest draft.", [], []),
+            ("ux08-finished", "UX08 Already finished in reality", Domain.TaskStatus.InProgress,
+                TimeSpan.FromMinutes(10), null, null, "The result is already delivered.", [], []),
+            ("ux08-short", "UX08 Five-minute action", Domain.TaskStatus.Prepared,
+                TimeSpan.FromMinutes(5), today.AddHours(8), today.AddHours(20), "One action completes this task.", [], []),
+            ("ux08-urgent", "UX08 Due today", Domain.TaskStatus.Prepared,
+                TimeSpan.FromMinutes(20), null, today.AddHours(20), "Several actions are needed.", [], []),
+            ("ux08-overdue", "UX08 Overdue action", Domain.TaskStatus.Prepared,
+                TimeSpan.FromMinutes(10), null, today.AddDays(-1).AddHours(20), "Past deadline.", [], []),
+            ("ux08-long", "UX08 Long available task", Domain.TaskStatus.Prepared,
+                TimeSpan.FromMinutes(55), null, null, "Longer work for later.", [], []),
+            ("ux08-blocked", "UX08 Blocked task", Domain.TaskStatus.Prepared,
+                TimeSpan.FromMinutes(5), null, null, "Requires an unfinished blocker.", [], ["ux08-active"]),
+            ("ux08-future", "UX08 Future task", Domain.TaskStatus.Prepared,
+                TimeSpan.FromMinutes(5), today.AddDays(1).AddHours(8), null, "Starts tomorrow.", [], []),
+            ("ux13-unprepared", "UX13 Needs planning", Domain.TaskStatus.NotReady,
+                null, null, null, string.Empty, [], []),
+            ("ux13-stale", "UX13 Obsolete task", Domain.TaskStatus.NotReady,
+                null, null, null, "No longer relevant.", [], []),
+            ("ux07-goal", "UX07 Launch site", Domain.TaskStatus.Prepared,
+                null, null, null, "Plan the site launch.", [], []),
+            ("ux07-second-goal", "UX07 Publish product", Domain.TaskStatus.Prepared,
+                null, null, null, "Second planning context.", [], []),
+            ("ux07-shared", "UX07 Product description", Domain.TaskStatus.Prepared,
+                TimeSpan.FromMinutes(20), null, null, "Shared project material.", ["ux07-goal"], []),
+            ("ux07-structure", "UX07 Agree site structure", Domain.TaskStatus.Prepared,
+                TimeSpan.FromMinutes(30), null, null, "First site step.", ["ux07-goal"], []),
+            ("ux07-prototype", "UX07 Build prototype", Domain.TaskStatus.Prepared,
+                TimeSpan.FromMinutes(60), null, null, "Depends on the structure.", ["ux07-goal"], [])
+        };
+        foreach (var definition in definitions)
+        {
+            var task = new TaskItem
+            {
+                Id = definition.Id,
+                Title = definition.Title,
+                Description = definition.Description,
+                Status = definition.Status,
+                StatusHistory = [CreateStatusHistoryEntry(definition.Status, now.AddMinutes(-1))],
+                PlannedDuration = definition.Duration,
+                PlannedBeginDateTime = definition.Begin,
+                PlannedEndDateTime = definition.End,
+                ParentTasks = [.. definition.Parents],
+                ContainsTasks = definitions.Where(candidate => candidate.Parents.Contains(definition.Id))
+                    .Select(candidate => candidate.Id).ToList(),
+                BlockedByTasks = [.. definition.Blockers],
+                BlocksTasks = definitions.Where(candidate => candidate.Blockers.Contains(definition.Id))
+                    .Select(candidate => candidate.Id).ToList(),
+                IsCanBeCompleted = definition.Blockers.Length == 0,
+                AreaIds = ["area-unlimotion"],
+                CreatedDateTime = now.AddMinutes(-2),
+                UpdatedDateTime = now.AddMinutes(-1),
+                Version = 1
+            };
+            WriteStatusContractTaskJson(Path.Combine(tasksPath, task.Id), task);
+        }
     }
 
     private static void SeedStatusContractTasks(string tasksPath)

@@ -16,6 +16,8 @@
 
 	<ItemGroup>
 		<PackageReference Include="Avalonia.Desktop" />
+		<PackageReference Include="Eremex.Avalonia.Controls" />
+		<PackageReference Include="Eremex.Avalonia.Themes.DeltaDesign" />
 		<PackageReference Include="AvaloniaUI.DiagnosticsSupport" Condition="'$(Configuration)' == 'Debug'" />
 		<PackageReference Include="Tmds.DBus.Protocol" />
 		<PackageReference Include="Velopack" />

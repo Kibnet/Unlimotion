@@ -12,6 +12,7 @@ using Avalonia.Input.Raw;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Unlimotion.ViewModel;
+using Unlimotion.ViewModel.Workspace;
 using Unlimotion.Views;
 using DomainTaskStatus = Unlimotion.Domain.TaskStatus;
 
@@ -32,7 +33,7 @@ internal static class FilterResetUiContract
     {
         var result = new FilterResetScenarioResult();
 
-        await using var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
             var fixture = new MainWindowViewModelFixture();
@@ -48,11 +49,12 @@ internal static class FilterResetUiContract
                 var notificationManager = (NotificationManagerWrapperMock)vm.ManagerWrapper;
                 notificationManager.AskResult = true;
 
-                var view = new MainControl { DataContext = vm };
+                var view = new MainScreen { DataContext = vm };
                 window = CreateWindow(view);
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
-                result.MainControlOpened = true;
+                result.WorkspaceOpened = true;
+                await Assert.That(view.GetVisualDescendants().OfType<MainControl>().Any()).IsFalse();
 
                 await ExecuteAllTasksResetAsync(
                     window,
@@ -95,7 +97,7 @@ internal static class FilterResetUiContract
 
     public static async Task AssertFilterResetScenarioResultAsync(FilterResetScenarioResult result)
     {
-        await Assert.That(result.MainControlOpened).IsTrue();
+        await Assert.That(result.WorkspaceOpened).IsTrue();
         await Assert.That(result.FilterPanelOpened).IsTrue();
         await Assert.That(result.ConfirmationAsked).IsTrue();
         await Assert.That(result.SearchReset).IsTrue();
@@ -108,19 +110,19 @@ internal static class FilterResetUiContract
 
     private static async Task ExecuteAllTasksResetAsync(
         Window window,
-        MainControl view,
+        MainScreen view,
         MainWindowViewModel vm,
         NotificationManagerWrapperMock notificationManager,
         bool defaultShowCompleted,
         bool defaultShowArchived,
         FilterResetScenarioResult result)
     {
-        SetActiveFilters(vm, vm.StatusFilters);
+        var document = await OpenDocumentAsync(window, view, vm, TaskListKind.AllTasks);
+        SetActiveFilters(vm, vm.StatusFilters, TaskListKind.AllTasks);
         notificationManager.ClearMessages();
 
-        SelectTab(view, 0);
-        var resetButton = OpenFilterPanelAndFindResetButton(
-            view,
+        var resetButton = await OpenFilterPanelAndFindResetButtonAsync(
+            window, document,
             "AllTasksFiltersButton",
             "AllTasksResetFiltersButton");
         result.FilterPanelOpened = true;
@@ -138,23 +140,24 @@ internal static class FilterResetUiContract
             defaultShowArchived) &&
             vm.ShowCompleted == defaultShowCompleted &&
             vm.ShowArchived == defaultShowArchived;
+        HideFilterFlyout(document, "AllTasksFiltersButton");
     }
 
     private static async Task ExecuteLastCreatedDateResetAsync(
         Window window,
-        MainControl view,
+        MainScreen view,
         MainWindowViewModel vm,
         NotificationManagerWrapperMock notificationManager,
         bool defaultShowCompleted,
         bool defaultShowArchived,
         FilterResetScenarioResult result)
     {
-        SetActiveFilters(vm, vm.LastCreatedStatusFilters);
+        var document = await OpenDocumentAsync(window, view, vm, TaskListKind.LastCreated);
+        SetActiveFilters(vm, vm.LastCreatedStatusFilters, TaskListKind.LastCreated);
         notificationManager.ClearMessages();
 
-        SelectTab(view, 1);
-        var resetButton = OpenFilterPanelAndFindResetButton(
-            view,
+        var resetButton = await OpenFilterPanelAndFindResetButtonAsync(
+            window, document,
             "LastCreatedFiltersButton",
             "LastCreatedResetFiltersButton");
 
@@ -170,11 +173,15 @@ internal static class FilterResetUiContract
                                  DateFilterRemainsCustom(vm.CompletedDateFilter) &&
                                  DateFilterRemainsCustom(vm.ArchivedDateFilter) &&
                                  DateFilterRemainsCustom(vm.LastUpdatedDateFilter);
+        result.SearchReset &= vm.LastCreatedFilter.Search.SearchText == string.Empty;
+        result.EmojiFiltersReset &= ToggleFiltersReset(vm.LastCreatedFilter.EmojiFilters) &&
+                                   ToggleFiltersReset(vm.LastCreatedFilter.EmojiExcludeFilters);
+        HideFilterFlyout(document, "LastCreatedFiltersButton");
     }
 
     private static async Task ExecuteUnlockedResetAsync(
         Window window,
-        MainControl view,
+        MainScreen view,
         MainWindowViewModel vm,
         NotificationManagerWrapperMock notificationManager,
         bool defaultShowCompleted,
@@ -182,12 +189,12 @@ internal static class FilterResetUiContract
         bool? defaultShowWanted,
         FilterResetScenarioResult result)
     {
-        SetActiveFilters(vm, vm.UnlockedStatusFilters);
+        var document = await OpenDocumentAsync(window, view, vm, TaskListKind.Unlocked);
+        SetActiveFilters(vm, vm.UnlockedStatusFilters, TaskListKind.Unlocked);
         notificationManager.ClearMessages();
 
-        SelectTab(view, 3);
-        var resetButton = OpenFilterPanelAndFindResetButton(
-            view,
+        var resetButton = await OpenFilterPanelAndFindResetButtonAsync(
+            window, document,
             "UnlockedFiltersButton",
             "UnlockedResetFiltersButton");
 
@@ -202,11 +209,16 @@ internal static class FilterResetUiContract
         result.DurationFiltersReset = ToggleFiltersReset(vm.DurationFilters) &&
                                       ToggleFiltersReset(vm.UnlockedTimeFilters);
         result.WantedFilterReset = vm.ShowWanted == defaultShowWanted;
+        result.SearchReset &= vm.UnlockedSearch.SearchText == string.Empty;
+        result.EmojiFiltersReset &= ToggleFiltersReset(vm.UnlockedEmojiFilters) &&
+                                   ToggleFiltersReset(vm.UnlockedEmojiExcludeFilters);
+        HideFilterFlyout(document, "UnlockedFiltersButton");
     }
 
     private static void SetActiveFilters(
         MainWindowViewModel vm,
-        IEnumerable<TaskStatusFilter> statusFilters)
+        IEnumerable<TaskStatusFilter> statusFilters,
+        TaskListKind kind)
     {
         vm.Search.SearchText = "Task";
         vm.ShowCompleted = true;
@@ -221,6 +233,18 @@ internal static class FilterResetUiContract
 
         SetFirstFilter(vm.EmojiFilters);
         SetFirstFilter(vm.EmojiExcludeFilters);
+        if (kind == TaskListKind.LastCreated)
+        {
+            vm.LastCreatedFilter.Search.SearchText = "Created filter draft";
+            SetFirstFilter(vm.LastCreatedFilter.EmojiFilters);
+            SetFirstFilter(vm.LastCreatedFilter.EmojiExcludeFilters);
+        }
+        if (kind == TaskListKind.Unlocked)
+        {
+            vm.UnlockedSearch.SearchText = "Unlocked filter draft";
+            SetFirstFilter(vm.UnlockedEmojiFilters);
+            SetFirstFilter(vm.UnlockedEmojiExcludeFilters);
+        }
         SetFirstFilter(vm.UnlockedTimeFilters);
         SetFirstFilter(vm.DurationFilters);
 
@@ -313,8 +337,9 @@ internal static class FilterResetUiContract
         };
     }
 
-    private static Button OpenFilterPanelAndFindResetButton(
-        MainControl view,
+    private static async Task<Button> OpenFilterPanelAndFindResetButtonAsync(
+        Window window,
+        TaskListDocumentView view,
         string filtersButtonAutomationId,
         string resetButtonAutomationId)
     {
@@ -324,8 +349,8 @@ internal static class FilterResetUiContract
             throw new InvalidOperationException($"Filter button '{filtersButtonAutomationId}' must use a Flyout.");
         }
 
-        flyout.ShowAt(filtersButton);
-        Dispatcher.UIThread.RunJobs();
+        await ClickControlAsync(window, filtersButton);
+        await WaitForUiAsync(() => flyout.IsOpen);
 
         if (flyout.Content is not Control flyoutContent)
         {
@@ -333,9 +358,11 @@ internal static class FilterResetUiContract
                 $"Filter button '{filtersButtonAutomationId}' flyout content was not found.");
         }
 
-        return FindControlInDetachedContent<Button>(flyoutContent, resetButtonAutomationId)
+        var reset = FindControlInDetachedContent<Button>(flyoutContent, resetButtonAutomationId)
                ?? throw new InvalidOperationException(
                    $"Reset button '{resetButtonAutomationId}' was not found in the filter flyout.");
+        await WaitForUiAsync(() => reset.IsEffectivelyVisible && reset.Bounds.Width > 0 && reset.Bounds.Height > 0);
+        return reset;
     }
 
     private static T FindControlByAutomationId<T>(Control root, string automationId)
@@ -369,27 +396,55 @@ internal static class FilterResetUiContract
                     StringComparison.Ordinal));
     }
 
-    private static void SelectTab(MainControl view, int index)
+    private static async Task<TaskListDocumentView> OpenDocumentAsync(
+        Window window, MainScreen view, MainWindowViewModel vm, TaskListKind kind)
     {
-        var tabControl = view.GetVisualDescendants().OfType<TabControl>().First();
-        tabControl.SelectedIndex = index;
-        Dispatcher.UIThread.RunJobs();
+        await Assert.That(await vm.OpenWorkspaceLocationAsync(WorkspaceLocation.ForTaskList(kind),
+            WorkspaceOpenDisposition.NewTab)).IsTrue();
+        await WaitForUiAsync(() => view.GetVisualDescendants().OfType<TaskListDocumentView>()
+            .Any(document => document.Kind == kind && document.IsEffectivelyVisible));
+        window.UpdateLayout();
+        return view.GetVisualDescendants().OfType<TaskListDocumentView>()
+            .Single(document => document.Kind == kind && document.IsEffectivelyVisible);
+    }
+
+    private static void HideFilterFlyout(TaskListDocumentView document, string id) =>
+        FindControlByAutomationId<DropDownButton>(document, id).Flyout?.Hide();
+
+    private static async Task WaitForUiAsync(Func<bool> condition)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (DateTime.UtcNow < deadline)
+        {
+            Dispatcher.UIThread.RunJobs();
+            if (condition()) return;
+            await Task.Delay(20);
+        }
+        throw new TimeoutException("The independent filter document did not reach the expected UI state.");
     }
 
     private static async Task ClickControlAsync(Window window, Control control)
     {
+        control.BringIntoView();
+        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
+        // Flyout buttons can belong to a separate PopupRoot. Injecting their
+        // coordinates into the main Window misses the physical button.
+        var inputRoot = TopLevel.GetTopLevel(control) ?? window;
+        inputRoot.UpdateLayout();
         var point = control.TranslatePoint(
             new Point(control.Bounds.Width / 2, control.Bounds.Height / 2),
-            window);
+            inputRoot);
         if (!point.HasValue)
         {
             throw new InvalidOperationException($"Cannot translate point for control {control.GetType().Name}.");
         }
 
-        window.MouseDown(point.Value, MouseButton.Left, RawInputModifiers.None);
-        window.MouseUp(point.Value, MouseButton.Left, RawInputModifiers.None);
+        inputRoot.MouseDown(point.Value, MouseButton.Left, RawInputModifiers.None);
+        inputRoot.MouseUp(point.Value, MouseButton.Left, RawInputModifiers.None);
         Dispatcher.UIThread.RunJobs();
-        await Task.CompletedTask;
+        await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
     }
 
     private static async Task DrainUiThrottlesAsync()
@@ -401,7 +456,7 @@ internal static class FilterResetUiContract
 
 internal sealed class FilterResetScenarioResult
 {
-    public bool MainControlOpened { get; set; }
+    public bool WorkspaceOpened { get; set; }
 
     public bool FilterPanelOpened { get; set; }
 

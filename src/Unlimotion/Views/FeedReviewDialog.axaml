@@ -1,0 +1,263 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:feed="clr-namespace:Unlimotion.ViewModel.Feed;assembly=Unlimotion.ViewModel"
+             xmlns:views="clr-namespace:Unlimotion.Views"
+             x:Class="Unlimotion.Views.FeedReviewDialog"
+             x:DataType="feed:FeedViewModel"
+             mc:Ignorable="d"
+             d:DesignWidth="760"
+             d:DesignHeight="700">
+    <Panel>
+    <TextBlock IsVisible="{Binding !IsReviewActive}" Text="{DynamicResource WorkspaceReviewComplete}"
+               Margin="20" FontSize="22" TextWrapping="Wrap" AutomationProperties.AutomationId="WorkspaceReviewComplete" />
+    <Border x:Name="ReviewFrame" Padding="20" IsVisible="{Binding IsReviewActive}"
+            CornerRadius="12"
+            Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
+            BorderBrush="{DynamicResource SystemAccentColor}"
+            BorderThickness="1"
+            AutomationProperties.ControlTypeOverride="Group"
+            AutomationProperties.IsControlElementOverride="True"
+            AutomationProperties.AutomationId="FeedReviewPanel">
+        <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto"
+              RowSpacing="12">
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
+                <TextBlock FontSize="20"
+                           FontWeight="SemiBold"
+                           Text="{DynamicResource GlobalReview}" />
+                <TextBlock Grid.Column="1"
+                           VerticalAlignment="Center"
+                           Text="{Binding CurrentReviewPosition}"
+                           ToolTip.Tip="{DynamicResource FeedReviewQueueOrderHint}"
+                           AutomationProperties.AutomationId="FeedReviewPositionText" />
+                <TextBlock Grid.Column="2"
+                           VerticalAlignment="Center"
+                           Text="{Binding CurrentReviewCount, StringFormat=/ {0}}"
+                           ToolTip.Tip="{DynamicResource FeedReviewQueueOrderHint}" />
+                <Button x:Name="ReviewCloseButton" Grid.Column="3"
+                        Padding="8,2"
+                        Content="×"
+                        Command="{Binding FinishReviewCommand}"
+                        AutomationProperties.Name="{DynamicResource GlobalClose}"
+                        AutomationProperties.AutomationId="FeedFinishReviewButton" />
+            </Grid>
+
+            <Grid Grid.Row="1"
+                  ColumnDefinitions="Auto,*,Auto"
+                  ColumnSpacing="8"
+                  IsVisible="{Binding !HasCreatedTask}">
+                <Button IsEnabled="{Binding CanNavigateReviewPrevious}"
+                        Command="{Binding PreviousReviewCommand}"
+                        Content="{DynamicResource FeedReviewPrevious}"
+                        AutomationProperties.AutomationId="FeedReviewPreviousButton" />
+                <Button Grid.Column="2"
+                        IsEnabled="{Binding CanNavigateReviewNext}"
+                        Command="{Binding NextReviewCommand}"
+                        Content="{DynamicResource FeedReviewNext}"
+                        AutomationProperties.AutomationId="FeedReviewNextButton" />
+            </Grid>
+
+            <Border Grid.Row="2"
+                    IsVisible="{Binding !HasCreatedTask}"
+                    Padding="12"
+                    CornerRadius="8"
+                    Background="{DynamicResource ThemeControlLowBrush}">
+                <StackPanel Spacing="8">
+                    <StackPanel Spacing="2">
+                        <TextBlock FontWeight="SemiBold"
+                                   TextWrapping="Wrap"
+                                   Text="{Binding CurrentReview.DisplayDate}" />
+                        <TextBlock Text="{Binding CurrentReview.RelativePath}"
+                                   TextWrapping="Wrap"
+                                   ToolTip.Tip="{Binding CurrentReviewFullPath}"
+                                   AutomationProperties.AutomationId="FeedReviewSourcePath" />
+                    </StackPanel>
+                    <ScrollViewer MaxHeight="180"
+                                  VerticalScrollBarVisibility="Auto">
+                        <TextBlock Text="{Binding CurrentReview.SelectedMarkdown}"
+                                   TextWrapping="Wrap"
+                                   AutomationProperties.AutomationId="FeedReviewSelectionText"
+                                   AutomationProperties.Name="{Binding CurrentReview.SelectedMarkdown}" />
+                    </ScrollViewer>
+                </StackPanel>
+            </Border>
+
+            <StackPanel Grid.Row="3"
+                        Spacing="3"
+                        IsVisible="{Binding !HasCreatedTask}">
+                <WrapPanel Orientation="Horizontal">
+                    <ComboBox ItemsSource="{Binding Areas}"
+                              MinWidth="220"
+                              Margin="0,0,8,4"
+                              SelectedItem="{Binding ReviewDestinationArea, Mode=TwoWay}"
+                              IsEnabled="{Binding CanModifyReviewSource}"
+                              SelectionChanged="OnReviewAreaSelectionChanged"
+                              AutomationProperties.AutomationId="FeedReviewAreaPicker">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="feed:FeedAreaOptionViewModel">
+                                <TextBlock Text="{Binding DestinationDisplayName}" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <Button Margin="0,0,4,0"
+                            Padding="8,4"
+                            IsEnabled="{Binding CurrentReview.CanExpandUp}"
+                            Command="{Binding ExpandSelectionUpCommand}"
+                            Content="↑+"
+                            AutomationProperties.Name="{DynamicResource FeedReviewExpandUp}"
+                            AutomationProperties.AutomationId="FeedReviewExpandUpButton" />
+                    <Button Margin="0,0,4,0"
+                            Padding="8,4"
+                            IsEnabled="{Binding CurrentReview.CanExpandDown}"
+                            Command="{Binding ExpandSelectionDownCommand}"
+                            Content="↓+"
+                            AutomationProperties.Name="{DynamicResource FeedReviewExpandDown}"
+                            AutomationProperties.AutomationId="FeedReviewExpandDownButton" />
+                    <Button Margin="0,0,4,0"
+                            Padding="8,4"
+                            IsEnabled="{Binding CurrentReview.CanShrinkUp}"
+                            Command="{Binding ShrinkSelectionUpCommand}"
+                            Content="↑−"
+                            AutomationProperties.Name="{DynamicResource FeedReviewShrinkUp}"
+                            AutomationProperties.AutomationId="FeedReviewShrinkUpButton" />
+                    <Button Padding="8,4"
+                            IsEnabled="{Binding CurrentReview.CanShrinkDown}"
+                            Command="{Binding ShrinkSelectionDownCommand}"
+                            Content="↓−"
+                            AutomationProperties.Name="{DynamicResource FeedReviewShrinkDown}"
+                            AutomationProperties.AutomationId="FeedReviewShrinkDownButton" />
+                </WrapPanel>
+                <TextBlock FontSize="11"
+                           Opacity="0.7"
+                           TextWrapping="Wrap"
+                           Text="{DynamicResource FeedReviewAreaSavesImmediately}" />
+            </StackPanel>
+
+            <StackPanel Grid.Row="4"
+                        Spacing="6"
+                        IsVisible="{Binding !HasCreatedTask}">
+                <TextBlock FontWeight="SemiBold"
+                           Text="{DynamicResource FeedReviewDecision}" />
+                <WrapPanel IsEnabled="{Binding CanModifyReviewSource}">
+                    <RadioButton Margin="0,0,12,4"
+                                 GroupName="FeedReviewDecision"
+                                 IsChecked="{Binding IsReviewTaskStage, Mode=OneWay}"
+                                 Command="{Binding ShowReviewTaskStageCommand}"
+                                 Content="{DynamicResource FeedReviewTaskAction}"
+                                 AutomationProperties.AutomationId="FeedReviewTaskActionButton" />
+                    <RadioButton Margin="0,0,12,4"
+                                 GroupName="FeedReviewDecision"
+                                 IsChecked="{Binding IsReviewNoteStage, Mode=OneWay}"
+                                 Command="{Binding ShowReviewNoteStageCommand}"
+                                 Content="{DynamicResource FeedReviewNoteAction}"
+                                 AutomationProperties.AutomationId="FeedReviewNoteActionButton" />
+                    <RadioButton Margin="0,0,12,4"
+                                 GroupName="FeedReviewDecision"
+                                 IsChecked="{Binding IsReviewLeaveStage, Mode=OneWay}"
+                                 Command="{Binding ShowReviewLeaveStageCommand}"
+                                 Content="{DynamicResource FeedReviewLeave}"
+                                 AutomationProperties.AutomationId="FeedReviewLeaveButton" />
+                    <RadioButton Margin="0,0,12,4"
+                                 GroupName="FeedReviewDecision"
+                                 IsChecked="{Binding IsReviewMoveTodayStage, Mode=OneWay}"
+                                 Command="{Binding ShowReviewMoveTodayStageCommand}"
+                                 Content="{DynamicResource FeedReviewMoveTodayShort}"
+                                 AutomationProperties.AutomationId="FeedReviewMoveTodayButton" />
+                    <RadioButton Margin="0,0,0,4"
+                                 GroupName="FeedReviewDecision"
+                                 IsChecked="{Binding IsReviewDeferredStage, Mode=OneWay}"
+                                 Command="{Binding ShowReviewDeferredStageCommand}"
+                                 Content="{DynamicResource FeedReviewDefer}"
+                                 AutomationProperties.AutomationId="FeedReviewSkipButton" />
+                </WrapPanel>
+                <TextBlock IsVisible="{Binding !HasReviewDecision}"
+                           Opacity="0.75"
+                           TextWrapping="Wrap"
+                           Text="{DynamicResource FeedReviewChooseDecision}" />
+            </StackPanel>
+
+            <ScrollViewer Grid.Row="5"
+                          VerticalScrollBarVisibility="Auto">
+                <StackPanel Spacing="10">
+                    <Border IsVisible="{Binding IsReviewTaskStage}"
+                            Padding="12"
+                            CornerRadius="8"
+                            BorderBrush="{DynamicResource ThemeBorderMidBrush}"
+                            BorderThickness="1">
+                        <StackPanel Spacing="8">
+                            <ItemsControl ItemsSource="{Binding ReviewTaskAreas}"
+                                          AutomationProperties.AutomationId="FeedReviewTaskAreas">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="feed:FeedTaskAreaOptionViewModel">
+                                        <CheckBox Margin="0,0,10,4"
+                                                  IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                                  Content="{Binding Area.DisplayName}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <views:TaskRelationsControl Draft="{Binding ReviewParents}" AutomationIdPrefix="FeedReviewDraftParents" />
+                            <Button Command="{Binding ApplyAreaParentDefaultsCommand}" Content="{DynamicResource FeedApplyAreaParents}" />
+                            <TextBlock IsVisible="{Binding IsTaskConversionUnavailable}"
+                                       Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+                                       Text="{DynamicResource FeedTaskConversionUnavailable}"
+                                       TextWrapping="Wrap" />
+                            <TextBlock Text="{DynamicResource FeedReviewTaskEffect}" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border IsVisible="{Binding IsReviewNoteStage}"
+                            Padding="12"
+                            CornerRadius="8"
+                            BorderBrush="{DynamicResource ThemeBorderMidBrush}"
+                            BorderThickness="1">
+                        <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="8">
+                            <TextBox Text="{Binding ReviewNoteTitle, Mode=TwoWay}"
+                                     PlaceholderText="{DynamicResource FeedReviewNoteTitle}"
+                                     AutomationProperties.AutomationId="FeedReviewNoteTitleBox" />
+                            <TextBox Grid.Row="1"
+                                     Text="{Binding ReviewNoteFolder, Mode=TwoWay}"
+                                     PlaceholderText="{DynamicResource FeedReviewNoteFolder}"
+                                     AutomationProperties.AutomationId="FeedReviewNoteFolderBox" />
+                            <TextBlock Grid.Row="2"
+                                       Text="{DynamicResource FeedReviewNoteEffect}"
+                                       TextWrapping="Wrap" />
+                        </Grid>
+                    </Border>
+
+                    <TextBlock IsVisible="{Binding IsReviewLeaveStage}"
+                               Text="{DynamicResource FeedReviewLeaveEffect}"
+                               TextWrapping="Wrap" />
+
+                    <StackPanel IsVisible="{Binding IsReviewMoveTodayStage}" Spacing="4">
+                        <TextBlock Text="{DynamicResource FeedReviewMoveTodayEffect}" TextWrapping="Wrap" />
+                        <TextBlock IsVisible="{Binding !CanMoveReviewToToday}"
+                                   Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+                                   Text="{DynamicResource FeedReviewMoveTodayUnavailable}"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+
+                    <TextBlock IsVisible="{Binding IsReviewDeferredStage}"
+                               Text="{DynamicResource FeedReviewDeferEffect}"
+                               TextWrapping="Wrap" />
+
+                    <TextBlock IsVisible="{Binding HasError}"
+                               Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+                               Text="{Binding ErrorMessage}"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+            </ScrollViewer>
+
+            <Button Grid.Row="6"
+                    HorizontalAlignment="Right"
+                    IsEnabled="{Binding CanConfirmReviewDecision}"
+                    Command="{Binding ConfirmReviewDecisionCommand}"
+                    Content="{DynamicResource FeedReviewConfirmAndNext}"
+                    AutomationProperties.AutomationId="FeedReviewConfirmButton" />
+        </Grid>
+    </Border>
+    </Panel>
+</UserControl>

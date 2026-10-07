@@ -65,115 +65,7 @@
         <Style Selector="TreeView.TaskTree Label.TaskTreeMetaLabel">
             <Setter Property="Margin" Value="0,0,16,0"/>
         </Style>
-        <Style Selector="Expander.TaskStatusHistoryExpander, Expander.TaskOperationDetailsExpander">
-            <Setter Property="HorizontalAlignment" Value="Stretch"/>
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Template">
-                <ControlTemplate>
-                    <Grid MinWidth="{TemplateBinding MinWidth}"
-                          MaxWidth="{TemplateBinding MaxWidth}"
-                          RowDefinitions="Auto,*">
-                        <ToggleButton x:Name="PART_HeaderSite"
-                                      HorizontalAlignment="Stretch"
-                                      HorizontalContentAlignment="Left"
-                                      VerticalContentAlignment="Center"
-                                      AutomationProperties.Name="{TemplateBinding Header}"
-                                      Background="Transparent"
-                                      BorderThickness="0"
-                                      Padding="0,5"
-                                      MinHeight="28"
-                                      CornerRadius="{TemplateBinding CornerRadius}"
-                                      IsEnabled="{TemplateBinding IsEnabled}"
-                                      IsChecked="{TemplateBinding IsExpanded, Mode=TwoWay}">
-                            <Grid ColumnDefinitions="14,*" ColumnSpacing="8" VerticalAlignment="Center">
-                                <PathIcon Width="14" Height="14" VerticalAlignment="Center"
-                                          Foreground="{DynamicResource TaskHistoryHeadingBrush}"
-                                          Data="M2,5 L3.4,3.6 L7,7.2 L10.6,3.6 L12,5 L7,10 Z"
-                                          IsVisible="{Binding !IsExpanded, RelativeSource={RelativeSource TemplatedParent}}">
-                                    <PathIcon.RenderTransform>
-                                        <RotateTransform Angle="-90"/>
-                                    </PathIcon.RenderTransform>
-                                </PathIcon>
-                                <PathIcon Width="14" Height="14" VerticalAlignment="Center"
-                                          Foreground="{DynamicResource TaskHistoryHeadingBrush}"
-                                          Data="M2,5 L3.4,3.6 L7,7.2 L10.6,3.6 L12,5 L7,10 Z"
-                                          IsVisible="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}}"/>
-                                <ContentPresenter x:Name="TaskHistoryHeading" Grid.Column="1"
-                                                  Content="{TemplateBinding Header}" VerticalAlignment="Center"
-                                                  Foreground="{DynamicResource TaskHistoryHeadingBrush}" FontWeight="SemiBold"/>
-                            </Grid>
-                        </ToggleButton>
-                        <!-- A custom name avoids Fluent's expanded-state border rule for #ExpanderContent. -->
-                        <Border Grid.Row="1"
-                                x:Name="TaskHistoryContent"
-                                IsVisible="{TemplateBinding IsExpanded}"
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="Transparent"
-                                BorderThickness="0"
-                                MinHeight="{TemplateBinding MinHeight}"
-                                HorizontalAlignment="Stretch"
-                                Padding="0,2,0,0">
-                            <ContentPresenter x:Name="PART_ContentPresenter"
-                                              Content="{TemplateBinding Content}"
-                                              ContentTemplate="{TemplateBinding ContentTemplate}"
-                                              HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                              VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"/>
-                        </Border>
-                    </Grid>
-                </ControlTemplate>
-            </Setter>
-        </Style>
-        <Style Selector="Expander.TaskStatusHistoryExpander /template/ ToggleButton#PART_HeaderSite:checked /template/ ContentPresenter">
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderBrush" Value="Transparent"/>
-        </Style>
-        <Style Selector="ToggleButton.HistoryMode">
-            <Setter Property="HorizontalContentAlignment" Value="Center"/>
-            <Setter Property="VerticalContentAlignment" Value="Center"/>
-            <Setter Property="Padding" Value="8,3"/>
-            <Setter Property="MinHeight" Value="28"/>
-            <Setter Property="MinWidth" Value="0"/>
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="CornerRadius" Value="4"/>
-        </Style>
-        <Style Selector="Button.HistoryIcon">
-            <Setter Property="HorizontalContentAlignment" Value="Center"/>
-            <Setter Property="VerticalContentAlignment" Value="Center"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
-            <Setter Property="Width" Value="28"/>
-            <Setter Property="Height" Value="28"/>
-            <Setter Property="MinWidth" Value="28"/>
-            <Setter Property="MinHeight" Value="28"/>
-            <Setter Property="Padding" Value="0"/>
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderThickness" Value="0"/>
-        </Style>
-        <Style Selector="Button.HistoryCommit">
-            <Setter Property="HorizontalContentAlignment" Value="Center"/>
-            <Setter Property="VerticalContentAlignment" Value="Center"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
-            <Setter Property="Padding" Value="0"/>
-            <Setter Property="MinWidth" Value="0"/>
-            <Setter Property="MinHeight" Value="20"/>
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Opacity" Value="0.6"/>
-            <Setter Property="FontSize" Value="{DynamicResource AppSmallFontSize}"/>
-        </Style>
-        <Style Selector="ListBox.HistoryEntries">
-            <Setter Property="Padding" Value="0"/>
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderThickness" Value="0"/>
-        </Style>
-        <Style Selector="ListBox.HistoryEntries ListBoxItem" x:DataType="unlimotion:TaskHistoryEntry">
-            <Setter Property="AutomationProperties.Name" Value="{Binding Heading}"/>
-            <Setter Property="Padding" Value="0,4"/>
-            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-        </Style>
-        <Style Selector="ListBox.HistoryEntries /template/ ScrollViewer">
-            <Setter Property="VerticalSnapPointsType" Value="None"/>
-        </Style>
+        <StyleInclude Source="/Views/TaskHistoryStyles.axaml"/>
         <Style Selector="Grid.FilterToolbar">
             <Setter Property="ColumnSpacing" Value="8"/>
             <Setter Property="Margin" Value="0,0,0,10"/>
@@ -234,11 +126,22 @@
             <Setter Property="Margin" Value="6"/>
             <Setter Property="RowSpacing" Value="6"/>
         </Style>
+        <Style Selector="StackPanel.TaskDetailsPanel.WorkspaceTaskRoute">
+            <Setter Property="MaxWidth" Value="760"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="18,18,18,32"/>
+            <Setter Property="Spacing" Value="12"/>
+        </Style>
         <Style Selector="Border.CurrentTaskDetailsPanelFrame">
             <Setter Property="Background" Value="{DynamicResource CurrentTaskDetailsPanelBackgroundBrush}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource CurrentTaskDetailsPanelBorderBrush}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="CornerRadius" Value="6"/>
+        </Style>
+        <Style Selector="Border.CurrentTaskDetailsPanelFrame.WorkspaceTaskRoute">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="CornerRadius" Value="0"/>
         </Style>
         <Style Selector="WrapPanel.TaskCommandBar">
             <Setter Property="Orientation" Value="Horizontal"/>
@@ -364,6 +267,17 @@
         </Style>
         <Style Selector="Border.CurrentTaskCard">
             <Setter Property="Padding" Value="10"/>
+        </Style>
+        <Style Selector="Grid.TaskDetailsPanel.WorkspaceTaskRoute Border.CurrentTaskCard.WorkspaceTaskRoute">
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+        <Style Selector="Grid.TaskDetailsPanel.WorkspaceTaskRoute TextBox.CurrentTaskTitleEditor">
+            <Setter Property="FontSize" Value="22"/>
+            <Setter Property="MinHeight" Value="38"/>
+        </Style>
+        <Style Selector="Grid.TaskDetailsPanel.WorkspaceTaskRoute TextBlock.TaskHeaderIdMeta">
+            <Setter Property="IsVisible" Value="False"/>
         </Style>
         <Style Selector="Grid.TaskDetailsPanel.TaskDetailsCompact Border.CurrentTaskCard">
             <Setter Property="Padding" Value="8"/>
@@ -504,6 +418,20 @@
         </Style>
         <Style Selector="Grid.TaskDetailsPanel.TaskDetailsCompact TextBox.TaskDescriptionEditor">
             <Setter Property="MinHeight" Value="72"/>
+        </Style>
+        <Style Selector="StackPanel.TaskDetailsPanel.WorkspaceTaskRoute TextBox.TaskDescriptionEditor">
+            <Setter Property="MinHeight" Value="34"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+        <Style Selector="StackPanel.TaskDetailsPanel.WorkspaceTaskRoute TextBox.TaskDescriptionEditor /template/ Border#PART_BorderElement">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+        <Style Selector="StackPanel.TaskDetailsPanel.WorkspaceTaskRoute TextBox.TaskDescriptionEditor:focus /template/ Border#PART_BorderElement">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
         </Style>
         <Style Selector="WrapPanel.TaskPlanningGroups">
             <Setter Property="Orientation" Value="Horizontal"/>
@@ -715,6 +643,15 @@
                                   Click="TaskTreeContextMenuItem_OnClick"
                                   AutomationProperties.AutomationId="CollapseAllTreeMenuItem"/>
                         <Separator/>
+                        <MenuItem Header="{DynamicResource WorkspaceOpenInNewTab}"
+                                  Tag="OpenWorkspaceTaskInNewTab"
+                                  Click="TaskTreeContextMenuItem_OnClick"
+                                  AutomationProperties.AutomationId="OpenTaskInNewWorkspaceTabMenuItem"/>
+                        <MenuItem Header="{DynamicResource WorkspaceOpenBeside}"
+                                  Tag="OpenWorkspaceTaskBeside"
+                                  Click="TaskTreeContextMenuItem_OnClick"
+                                  AutomationProperties.AutomationId="OpenTaskBesideMenuItem"/>
+                        <Separator/>
                         <MenuItem Header="{DynamicResource CopyTaskOutline}"
                                   Tag="CopyOutline"
                                   InputGesture="Ctrl+Shift+C"
@@ -796,7 +733,9 @@
                            AutomationProperties.AutomationId="TaskRepeaterListMarker"
                            Margin="4,0,4,0"
                            VerticalAlignment="Center" />
-                <unlimotion:EmojiTextBlock Grid.Column="2" EmojiText="{Binding Title}" VerticalAlignment="Center" HorizontalAlignment="Left" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" AutomationProperties.AutomationId="InlineTaskTitleTextBlock" Classes.IsWanted="{Binding Wanted}" Classes.IsCanBeCompleted="{Binding !IsCanBeCompleted}" PointerPressed="InlineTaskTitleText_OnPointerPressed"  />
+                <Grid Grid.Column="2" ColumnDefinitions="Auto,Auto,*" VerticalAlignment="Center">
+                    <unlimotion:EmojiTextBlock Grid.Column="2" EmojiText="{Binding Title}" VerticalAlignment="Center" HorizontalAlignment="Left" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" AutomationProperties.AutomationId="InlineTaskTitleTextBlock" Classes.IsWanted="{Binding Wanted}" Classes.IsCanBeCompleted="{Binding !IsCanBeCompleted}" PointerPressed="InlineTaskTitleText_OnPointerPressed"  />
+                </Grid>
             </Grid>
         </DataTemplate>
         <DataTemplate DataType="viewModel:TaskWrapperViewModel">
@@ -846,7 +785,8 @@
 
     <Grid RowDefinitions="Auto,*">
         <!--Адрес-->
-        <Grid Grid.Row="0" Grid.ColumnSpan="2" Margin="10,5" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+        <Grid Grid.Row="0" Grid.ColumnSpan="2" Margin="10,5" ColumnDefinitions="*" ColumnSpacing="8"
+              IsVisible="{Binding #mainControl.RouteTaskItem, Converter={x:Static ObjectConverters.IsNull}}">
             <unlimotion:EmojiTextBlock x:Name="BreadcrumbsTextBlock"
                                        AutomationProperties.AutomationId="BreadcrumbsTextBlock"
                                        EmojiText="{Binding BreadScrumbs}"
@@ -858,55 +798,12 @@
                                        FontWeight="Bold"
                                        HorizontalAlignment="Stretch"
                                        VerticalAlignment="Center"/>
-            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                <ComboBox Width="170"
-                          ItemsSource="{Binding Settings.TaskSpaces}"
-                          SelectedItem="{Binding Settings.HeaderTaskSpace, Mode=TwoWay}"
-                          IsEnabled="{Binding !Settings.IsTaskSpaceSwitching}"
-                          ToolTip.Tip="{DynamicResource TaskSpaceSelectorHint}"
-                          AutomationProperties.AutomationId="TaskSpaceSelector">
-                    <ComboBox.ItemTemplate>
-                        <DataTemplate DataType="viewModel:TaskSpaceOptionViewModel">
-                            <TextBlock Text="{Binding DisplayName}"
-                                       TextTrimming="CharacterEllipsis"
-                                       AutomationProperties.Name="{Binding DisplayName}"
-                                       ToolTip.Tip="{Binding SourceSummary}"/>
-                        </DataTemplate>
-                    </ComboBox.ItemTemplate>
-                </ComboBox>
-                <DropDownButton Classes="TaskCreateMenuButton TaskAccentOutlineButton TaskIconOnlyDropDownButton"
-                                Content="➕"
-                                ToolTip.Tip="{DynamicResource CreateTaskMenuTip}"
-                                AutomationProperties.Name="{DynamicResource CreateTaskMenuTip}"
-                                AutomationProperties.AutomationId="GlobalTaskCreateMenuButton">
-                    <DropDownButton.Flyout>
-                        <MenuFlyout>
-                            <MenuItem Classes="TaskCreateMenuItem"
-                                      Header="{DynamicResource NewTask}"
-                                      Command="{Binding Create}"
-                                      AutomationProperties.AutomationId="GlobalTaskCreateTaskMenuItem"/>
-                            <MenuItem Classes="TaskCreateMenuItem"
-                                      Header="{DynamicResource NewSibling}"
-                                      Command="{Binding CreateSibling}"
-                                      AutomationProperties.AutomationId="GlobalTaskCreateSiblingMenuItem"/>
-                            <MenuItem Classes="TaskCreateMenuItem"
-                                      Header="{DynamicResource NewBlockedSibling}"
-                                      Command="{Binding CreateBlockedSibling}"
-                                      AutomationProperties.AutomationId="GlobalTaskCreateBlockedSiblingMenuItem"/>
-                            <MenuItem Classes="TaskCreateMenuItem"
-                                      Header="{DynamicResource NewInner}"
-                                      Command="{Binding CreateInner}"
-                                      AutomationProperties.AutomationId="GlobalTaskCreateInnerMenuItem"/>
-                        </MenuFlyout>
-                    </DropDownButton.Flyout>
-                </DropDownButton>
-            </StackPanel>
         </Grid>
 
         <!--Панель навигации-->
         <SplitView x:Name="MainNavigationSplitView"
                    Grid.Row="1"
-                   IsPaneOpen="{Binding DetailsAreOpen}"
+                   IsPaneOpen="{Binding #mainControl.IsRouteDetailsOpen, Mode=TwoWay}"
                    DisplayMode="CompactInline"
                    UseLightDismissOverlayMode="False"
                    OpenPaneLength="{Binding #mainControl.Bounds.Width, Converter={converters:MinValueConverter}, ConverterParameter=600}"
@@ -934,7 +831,7 @@
                         </Style>
                     </TabControl.Styles>
                     <!--All Tasks-->
-                    <TabItem Header="{DynamicResource AllTasks}" IsSelected= "{Binding AllTasksMode, Mode=OneWayToSource}"
+                    <TabItem Header="{DynamicResource AllTasks}"
                              AutomationProperties.AutomationId="AllTasksTabItem">
                         <Grid RowDefinitions= "Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="Auto,*">
@@ -988,6 +885,7 @@
                                                                     ToolTip.Tip="{DynamicResource ResetFilters}"
                                                                     AutomationProperties.Name="{DynamicResource ResetFilters}"
                                                                     Command="{Binding ResetTaskFiltersCommand}"
+                                                                    CommandParameter="0"
                                                                     AutomationProperties.AutomationId="AllTasksResetFiltersButton">
                                                                 <StackPanel Orientation="Horizontal">
                                                                     <PathIcon Classes="FilterPanelResetIcon" Width="16" Height="16" Data="M17.65,6.35 C16.2,4.9 14.21,4 12,4 C7.58,4 4,7.58 4,12 C4,16.42 7.58,20 12,20 C15.73,20 18.84,17.45 19.73,14 L17.65,14 C16.82,16.33 14.61,18 12,18 C8.69,18 6,15.31 6,12 C6,8.69 8.69,6 12,6 C13.66,6 15.14,6.69 16.22,7.78 L13,11 L20,11 L20,4 Z"/>
@@ -1021,12 +919,12 @@
                         </Grid>
                     </TabItem>
                     <!--Last Created-->
-                    <TabItem Header="{DynamicResource LastCreated}" IsSelected="{Binding LastCreatedMode, Mode=OneWayToSource}"
+                    <TabItem Header="{DynamicResource LastCreated}"
                              AutomationProperties.AutomationId="LastCreatedTabItem">
                         <Grid RowDefinitions="Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="Auto,*">
                                 <WrapPanel Grid.Column="0" Classes="FilterToolbarItems">
-                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiFilters}"
+                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding LastCreatedFilter.EmojiFilters}"
                                                                            Watermark="{DynamicResource EmojiFilterSearchWatermark}"
                                                                            NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
                                                                            SummaryWidth="{x:Static views:EmojiFilterMultiSelectSearchBox.DefaultSummaryWidth}"
@@ -1036,7 +934,7 @@
                                                                            DropDownAutomationId="IncludeEmojiFilterDropDown"
                                                                            ListAutomationId="IncludeEmojiFilterList"
                                                                            NoMatchesAutomationId="IncludeEmojiFilterNoMatches"/>
-                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiExcludeFilters}"
+                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding LastCreatedFilter.EmojiExcludeFilters}"
                                                                            Watermark="{DynamicResource EmojiExcludeFilterSearchWatermark}"
                                                                            NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
                                                                            IsExclude="True"
@@ -1090,6 +988,7 @@
                                                                 ToolTip.Tip="{DynamicResource ResetFilters}"
                                                                 AutomationProperties.Name="{DynamicResource ResetFilters}"
                                                                 Command="{Binding ResetTaskFiltersCommand}"
+                                                                CommandParameter="1"
                                                                 AutomationProperties.AutomationId="LastCreatedResetFiltersButton">
                                                             <StackPanel Orientation="Horizontal">
                                                                 <PathIcon Classes="FilterPanelResetIcon" Width="16" Height="16" Data="M17.65,6.35 C16.2,4.9 14.21,4 12,4 C7.58,4 4,7.58 4,12 C4,16.42 7.58,20 12,20 C15.73,20 18.84,17.45 19.73,14 L17.65,14 C16.82,16.33 14.61,18 12,18 C8.69,18 6,15.31 6,12 C6,8.69 8.69,6 12,6 C13.66,6 15.14,6.69 16.22,7.78 L13,11 L20,11 L20,4 Z"/>
@@ -1103,7 +1002,7 @@
                                         </DropDownButton.Flyout>
                                     </DropDownButton>
                                 </WrapPanel>
-                                <searchControl:SearchBar Grid.Column="1" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
+                                <searchControl:SearchBar Grid.Column="1" Classes="FilterToolbarSearch" DataContext="{Binding LastCreatedFilter.Search}"/>
                             </Grid>
                             <TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
                                       ItemsSource="{Binding LastCreatedItems}"
@@ -1128,8 +1027,8 @@
                                                            AutomationProperties.AutomationId="TaskRepeaterListMarker"
                                                            Margin="4,0,4,0"
                                                            VerticalAlignment="Center" />
-                                                <Grid Grid.Column="4" VerticalAlignment="Center">
-                                                    <unlimotion:EmojiTextBlock EmojiText="{Binding TaskItem.Title}" VerticalAlignment="Center" HorizontalAlignment="Left" AutomationProperties.AutomationId="InlineTaskTitleTextBlock" Classes.IsWanted="{Binding TaskItem.Wanted}" PointerPressed="InlineTaskTitleText_OnPointerPressed"/>
+                                                <Grid Grid.Column="4" ColumnDefinitions="Auto,*" VerticalAlignment="Center">
+                                                    <unlimotion:EmojiTextBlock Grid.Column="1" EmojiText="{Binding TaskItem.Title}" VerticalAlignment="Center" HorizontalAlignment="Left" AutomationProperties.AutomationId="InlineTaskTitleTextBlock" Classes.IsWanted="{Binding TaskItem.Wanted}" PointerPressed="InlineTaskTitleText_OnPointerPressed"/>
                                                 </Grid>
                                             </Grid>
                                             <Button Classes="TaskRowRemoveButton"
@@ -1145,12 +1044,12 @@
                         </Grid>
                     </TabItem>
                     <!--Last Updated-->
-                    <TabItem Header="{DynamicResource LastUpdated}" IsSelected="{Binding LastUpdatedMode, Mode=OneWayToSource}"
+                    <TabItem Header="{DynamicResource LastUpdated}"
                              AutomationProperties.AutomationId="LastUpdatedTabItem">
                         <Grid RowDefinitions="Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="Auto,*">
                                 <WrapPanel Grid.Column="0" Classes="FilterToolbarItems">
-                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiFilters}"
+                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding LastUpdatedFilter.EmojiFilters}"
                                                                            Watermark="{DynamicResource EmojiFilterSearchWatermark}"
                                                                            NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
                                                                            SummaryWidth="{x:Static views:EmojiFilterMultiSelectSearchBox.DefaultSummaryWidth}"
@@ -1160,7 +1059,7 @@
                                                                            DropDownAutomationId="IncludeEmojiFilterDropDown"
                                                                            ListAutomationId="IncludeEmojiFilterList"
                                                                            NoMatchesAutomationId="IncludeEmojiFilterNoMatches"/>
-                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiExcludeFilters}"
+                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding LastUpdatedFilter.EmojiExcludeFilters}"
                                                                            Watermark="{DynamicResource EmojiExcludeFilterSearchWatermark}"
                                                                            NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
                                                                            IsExclude="True"
@@ -1214,6 +1113,7 @@
                                                                 ToolTip.Tip="{DynamicResource ResetFilters}"
                                                                 AutomationProperties.Name="{DynamicResource ResetFilters}"
                                                                 Command="{Binding ResetTaskFiltersCommand}"
+                                                                CommandParameter="2"
                                                                 AutomationProperties.AutomationId="LastUpdatedResetFiltersButton">
                                                             <StackPanel Orientation="Horizontal">
                                                                 <PathIcon Classes="FilterPanelResetIcon" Width="16" Height="16" Data="M17.65,6.35 C16.2,4.9 14.21,4 12,4 C7.58,4 4,7.58 4,12 C4,16.42 7.58,20 12,20 C15.73,20 18.84,17.45 19.73,14 L17.65,14 C16.82,16.33 14.61,18 12,18 C8.69,18 6,15.31 6,12 C6,8.69 8.69,6 12,6 C13.66,6 15.14,6.69 16.22,7.78 L13,11 L20,11 L20,4 Z"/>
@@ -1227,7 +1127,7 @@
                                         </DropDownButton.Flyout>
                                     </DropDownButton>
                                 </WrapPanel>
-                                <searchControl:SearchBar Grid.Column="1" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
+                                <searchControl:SearchBar Grid.Column="1" Classes="FilterToolbarSearch" DataContext="{Binding LastUpdatedFilter.Search}"/>
                             </Grid>
                             <TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
                                       ItemsSource="{Binding LastUpdatedItems}"
@@ -1252,8 +1152,8 @@
                                                            AutomationProperties.AutomationId="TaskRepeaterListMarker"
                                                            Margin="4,0,4,0"
                                                            VerticalAlignment="Center" />
-                                                <Grid Grid.Column="4" VerticalAlignment="Center">
-                                                    <unlimotion:EmojiTextBlock EmojiText="{Binding TaskItem.Title}" VerticalAlignment="Center" HorizontalAlignment="Left" AutomationProperties.AutomationId="InlineTaskTitleTextBlock" Classes.IsWanted="{Binding TaskItem.Wanted}" PointerPressed="InlineTaskTitleText_OnPointerPressed"/>
+                                                <Grid Grid.Column="4" ColumnDefinitions="Auto,*" VerticalAlignment="Center">
+                                                    <unlimotion:EmojiTextBlock Grid.Column="1" EmojiText="{Binding TaskItem.Title}" VerticalAlignment="Center" HorizontalAlignment="Left" AutomationProperties.AutomationId="InlineTaskTitleTextBlock" Classes.IsWanted="{Binding TaskItem.Wanted}" PointerPressed="InlineTaskTitleText_OnPointerPressed"/>
                                                 </Grid>
                                             </Grid>
                                             <Button Classes="TaskRowRemoveButton"
@@ -1269,12 +1169,12 @@
                         </Grid>
                     </TabItem>
                     <!--Unlocked-->
-                    <TabItem Header="{DynamicResource Unlocked}" IsSelected="{Binding UnlockedMode, Mode=OneWayToSource}"
+                    <TabItem Header="{DynamicResource Unlocked}"
                              AutomationProperties.AutomationId="UnlockedTabItem">
                         <Grid RowDefinitions="Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="Auto,*">
                                 <WrapPanel Grid.Column="0" Classes="FilterToolbarItems">
-                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiFilters}"
+                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding UnlockedEmojiFilters}"
                                                                            Watermark="{DynamicResource EmojiFilterSearchWatermark}"
                                                                            NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
                                                                            SummaryWidth="{x:Static views:EmojiFilterMultiSelectSearchBox.DefaultSummaryWidth}"
@@ -1284,7 +1184,7 @@
                                                                            DropDownAutomationId="IncludeEmojiFilterDropDown"
                                                                            ListAutomationId="IncludeEmojiFilterList"
                                                                            NoMatchesAutomationId="IncludeEmojiFilterNoMatches"/>
-                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiExcludeFilters}"
+                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding UnlockedEmojiExcludeFilters}"
                                                                            Watermark="{DynamicResource EmojiExcludeFilterSearchWatermark}"
                                                                            NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
                                                                            IsExclude="True"
@@ -1331,6 +1231,7 @@
                                                                 ToolTip.Tip="{DynamicResource ResetFilters}"
                                                                 AutomationProperties.Name="{DynamicResource ResetFilters}"
                                                                 Command="{Binding ResetTaskFiltersCommand}"
+                                                                CommandParameter="3"
                                                                 AutomationProperties.AutomationId="UnlockedResetFiltersButton">
                                                             <StackPanel Orientation="Horizontal">
                                                                 <PathIcon Classes="FilterPanelResetIcon" Width="16" Height="16" Data="M17.65,6.35 C16.2,4.9 14.21,4 12,4 C7.58,4 4,7.58 4,12 C4,16.42 7.58,20 12,20 C15.73,20 18.84,17.45 19.73,14 L17.65,14 C16.82,16.33 14.61,18 12,18 C8.69,18 6,15.31 6,12 C6,8.69 8.69,6 12,6 C13.66,6 15.14,6.69 16.22,7.78 L13,11 L20,11 L20,4 Z"/>
@@ -1344,7 +1245,7 @@
                                         </DropDownButton.Flyout>
                                     </DropDownButton>
                                 </WrapPanel>
-                                <searchControl:SearchBar Grid.Column="1" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
+                                <searchControl:SearchBar Grid.Column="1" Classes="FilterToolbarSearch" DataContext="{Binding UnlockedSearch}"/>
                             </Grid>
                             <TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
                                       ItemsSource="{Binding UnlockedItems}"
@@ -1368,8 +1269,8 @@
                                                            AutomationProperties.AutomationId="TaskRepeaterListMarker"
                                                            Margin="4,0,4,0"
                                                            VerticalAlignment="Center" />
-                                                <Grid Grid.Column="3" VerticalAlignment="Center">
-                                                    <unlimotion:EmojiTextBlock EmojiText="{Binding TaskItem.Title}" VerticalAlignment="Center" HorizontalAlignment="Left" AutomationProperties.AutomationId="InlineTaskTitleTextBlock" Classes.IsWanted="{Binding TaskItem.Wanted}" PointerPressed="InlineTaskTitleText_OnPointerPressed"/>
+                                                <Grid Grid.Column="3" ColumnDefinitions="Auto,*" VerticalAlignment="Center">
+                                                    <unlimotion:EmojiTextBlock Grid.Column="1" EmojiText="{Binding TaskItem.Title}" VerticalAlignment="Center" HorizontalAlignment="Left" AutomationProperties.AutomationId="InlineTaskTitleTextBlock" Classes.IsWanted="{Binding TaskItem.Wanted}" PointerPressed="InlineTaskTitleText_OnPointerPressed"/>
                                                 </Grid>
                                             </Grid>
                                             <Button Classes="TaskRowRemoveButton"
@@ -1385,12 +1286,12 @@
                         </Grid>
                     </TabItem>
                     <!--In Progress-->
-                    <TabItem Header="{DynamicResource InProgress}" IsSelected="{Binding InProgressMode, Mode=OneWayToSource}"
+                    <TabItem Header="{DynamicResource InProgress}"
                              AutomationProperties.AutomationId="InProgressTabItem">
                         <Grid RowDefinitions="Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="Auto,*">
                                 <WrapPanel Grid.Column="0" Classes="FilterToolbarItems">
-                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiFilters}"
+                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding InProgressFilter.EmojiFilters}"
                                                                            Watermark="{DynamicResource EmojiFilterSearchWatermark}"
                                                                            NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
                                                                            SummaryWidth="{x:Static views:EmojiFilterMultiSelectSearchBox.DefaultSummaryWidth}"
@@ -1400,7 +1301,7 @@
                                                                            DropDownAutomationId="IncludeEmojiFilterDropDown"
                                                                            ListAutomationId="IncludeEmojiFilterList"
                                                                            NoMatchesAutomationId="IncludeEmojiFilterNoMatches"/>
-                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiExcludeFilters}"
+                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding InProgressFilter.EmojiExcludeFilters}"
                                                                            Watermark="{DynamicResource EmojiExcludeFilterSearchWatermark}"
                                                                            NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
                                                                            IsExclude="True"
@@ -1435,6 +1336,7 @@
                                                                     ToolTip.Tip="{DynamicResource ResetFilters}"
                                                                     AutomationProperties.Name="{DynamicResource ResetFilters}"
                                                                     Command="{Binding ResetTaskFiltersCommand}"
+                                                                    CommandParameter="4"
                                                                     AutomationProperties.AutomationId="InProgressResetFiltersButton">
                                                                 <StackPanel Orientation="Horizontal">
                                                                     <PathIcon Classes="FilterPanelResetIcon" Width="16" Height="16" Data="M17.65,6.35 C16.2,4.9 14.21,4 12,4 C7.58,4 4,7.58 4,12 C4,16.42 7.58,20 12,20 C15.73,20 18.84,17.45 19.73,14 L17.65,14 C16.82,16.33 14.61,18 12,18 C8.69,18 6,15.31 6,12 C6,8.69 8.69,6 12,6 C13.66,6 15.14,6.69 16.22,7.78 L13,11 L20,11 L20,4 Z"/>
@@ -1448,7 +1350,7 @@
                                         </DropDownButton.Flyout>
                                     </DropDownButton>
                                 </WrapPanel>
-                                <searchControl:SearchBar Grid.Column="1" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
+                                <searchControl:SearchBar Grid.Column="1" Classes="FilterToolbarSearch" DataContext="{Binding InProgressFilter.Search}"/>
                             </Grid>
                             <TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
                                       ItemsSource="{Binding InProgressItems}"
@@ -1480,8 +1382,8 @@
                                                            AutomationProperties.AutomationId="TaskRepeaterListMarker"
                                                            Margin="4,0,4,0"
                                                            VerticalAlignment="Center" />
-                                                <Grid Grid.Column="5" VerticalAlignment="Center">
-                                                    <unlimotion:EmojiTextBlock EmojiText="{Binding TaskItem.Title}" VerticalAlignment="Center" HorizontalAlignment="Left" AutomationProperties.AutomationId="InlineTaskTitleTextBlock" Classes.IsWanted="{Binding TaskItem.Wanted}" PointerPressed="InlineTaskTitleText_OnPointerPressed"/>
+                                                <Grid Grid.Column="5" ColumnDefinitions="Auto,*" VerticalAlignment="Center">
+                                                    <unlimotion:EmojiTextBlock Grid.Column="1" EmojiText="{Binding TaskItem.Title}" VerticalAlignment="Center" HorizontalAlignment="Left" AutomationProperties.AutomationId="InlineTaskTitleTextBlock" Classes.IsWanted="{Binding TaskItem.Wanted}" PointerPressed="InlineTaskTitleText_OnPointerPressed"/>
                                                 </Grid>
                                             </Grid>
                                             <Button Classes="TaskRowRemoveButton"
@@ -1497,12 +1399,12 @@
                         </Grid>
                     </TabItem>
                     <!--Completed-->
-                    <TabItem Header="{DynamicResource Completed}" IsSelected="{Binding CompletedMode, Mode=OneWayToSource}"
+                    <TabItem Header="{DynamicResource Completed}"
                              AutomationProperties.AutomationId="CompletedTabItem">
                         <Grid RowDefinitions="Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="Auto,*">
                                 <WrapPanel Grid.Column="0" Classes="FilterToolbarItems">
-                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiFilters}"
+                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding CompletedFilter.EmojiFilters}"
                                                                            Watermark="{DynamicResource EmojiFilterSearchWatermark}"
                                                                            NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
                                                                            SummaryWidth="{x:Static views:EmojiFilterMultiSelectSearchBox.DefaultSummaryWidth}"
@@ -1512,7 +1414,7 @@
                                                                            DropDownAutomationId="IncludeEmojiFilterDropDown"
                                                                            ListAutomationId="IncludeEmojiFilterList"
                                                                            NoMatchesAutomationId="IncludeEmojiFilterNoMatches"/>
-                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiExcludeFilters}"
+                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding CompletedFilter.EmojiExcludeFilters}"
                                                                            Watermark="{DynamicResource EmojiExcludeFilterSearchWatermark}"
                                                                            NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
                                                                            IsExclude="True"
@@ -1566,6 +1468,7 @@
                                                                 ToolTip.Tip="{DynamicResource ResetFilters}"
                                                                 AutomationProperties.Name="{DynamicResource ResetFilters}"
                                                                 Command="{Binding ResetTaskFiltersCommand}"
+                                                                CommandParameter="5"
                                                                 AutomationProperties.AutomationId="CompletedResetFiltersButton">
                                                             <StackPanel Orientation="Horizontal">
                                                                 <PathIcon Classes="FilterPanelResetIcon" Width="16" Height="16" Data="M17.65,6.35 C16.2,4.9 14.21,4 12,4 C7.58,4 4,7.58 4,12 C4,16.42 7.58,20 12,20 C15.73,20 18.84,17.45 19.73,14 L17.65,14 C16.82,16.33 14.61,18 12,18 C8.69,18 6,15.31 6,12 C6,8.69 8.69,6 12,6 C13.66,6 15.14,6.69 16.22,7.78 L13,11 L20,11 L20,4 Z"/>
@@ -1579,7 +1482,7 @@
                                         </DropDownButton.Flyout>
                                     </DropDownButton>
                                 </WrapPanel>
-                                <searchControl:SearchBar Grid.Column="1" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
+                                <searchControl:SearchBar Grid.Column="1" Classes="FilterToolbarSearch" DataContext="{Binding CompletedFilter.Search}"/>
                             </Grid>
                             <TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
                                       ItemsSource="{Binding CompletedItems}"
@@ -1605,8 +1508,8 @@
                                                            AutomationProperties.AutomationId="TaskRepeaterListMarker"
                                                            Margin="4,0,4,0"
                                                            VerticalAlignment="Center" />
-                                                <Grid Grid.Column="4" VerticalAlignment="Center">
-                                                    <unlimotion:EmojiTextBlock EmojiText="{Binding TaskItem.Title}" VerticalAlignment="Center" HorizontalAlignment="Left" AutomationProperties.AutomationId="InlineTaskTitleTextBlock" Classes.IsWanted="{Binding TaskItem.Wanted}" PointerPressed="InlineTaskTitleText_OnPointerPressed"/>
+                                                <Grid Grid.Column="4" ColumnDefinitions="Auto,*" VerticalAlignment="Center">
+                                                    <unlimotion:EmojiTextBlock Grid.Column="1" EmojiText="{Binding TaskItem.Title}" VerticalAlignment="Center" HorizontalAlignment="Left" AutomationProperties.AutomationId="InlineTaskTitleTextBlock" Classes.IsWanted="{Binding TaskItem.Wanted}" PointerPressed="InlineTaskTitleText_OnPointerPressed"/>
                                                 </Grid>
                                             </Grid>
                                             <Button Classes="TaskRowRemoveButton"
@@ -1622,12 +1525,12 @@
                         </Grid>
                     </TabItem>
                     <!--Archived-->
-                    <TabItem Header="{DynamicResource Archived}" IsSelected="{Binding ArchivedMode, Mode=OneWayToSource}"
+                    <TabItem Header="{DynamicResource Archived}"
                              AutomationProperties.AutomationId="ArchivedTabItem">
                         <Grid RowDefinitions="Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="Auto,*">
                                 <WrapPanel Grid.Column="0" Classes="FilterToolbarItems">
-                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiFilters}"
+                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding ArchivedFilter.EmojiFilters}"
                                                                            Watermark="{DynamicResource EmojiFilterSearchWatermark}"
                                                                            NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
                                                                            SummaryWidth="{x:Static views:EmojiFilterMultiSelectSearchBox.DefaultSummaryWidth}"
@@ -1637,7 +1540,7 @@
                                                                            DropDownAutomationId="IncludeEmojiFilterDropDown"
                                                                            ListAutomationId="IncludeEmojiFilterList"
                                                                            NoMatchesAutomationId="IncludeEmojiFilterNoMatches"/>
-                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiExcludeFilters}"
+                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding ArchivedFilter.EmojiExcludeFilters}"
                                                                            Watermark="{DynamicResource EmojiExcludeFilterSearchWatermark}"
                                                                            NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
                                                                            IsExclude="True"
@@ -1672,7 +1575,12 @@
                                                             <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterDate}"/>
                                                             <WrapPanel>
                                                                 <CheckBox Content="{DynamicResource CustomPeriod}" IsChecked="{Binding ArchivedDateFilter.IsCustom}" Margin="0,0,12,6" VerticalAlignment="Center" />
-                                                                <ComboBox IsVisible="{Binding !ArchivedDateFilter.IsCustom}" ItemsSource="{Binding DateFilterDefinitions}" SelectedItem="{Binding ArchivedDateFilter.CurrentOption}" VerticalAlignment="Center" Margin="0,0,8,6" />
+                                                                <ComboBox IsVisible="{Binding !ArchivedDateFilter.IsCustom}"
+                                                                          ItemsSource="{Binding DateFilterDefinitions}"
+                                                                          SelectedItem="{Binding ArchivedDateFilter.CurrentOption}"
+                                                                          VerticalAlignment="Center"
+                                                                          Margin="0,0,8,6"
+                                                                          AutomationProperties.AutomationId="ArchivedDateFilterComboBox" />
                                                             </WrapPanel>
                                                             <WrapPanel IsVisible="{Binding ArchivedDateFilter.IsCustom}">
                                                                 <Label Content="{DynamicResource From}" Margin="0,0,6,6" VerticalAlignment="Center"/>
@@ -1691,6 +1599,7 @@
                                                                 ToolTip.Tip="{DynamicResource ResetFilters}"
                                                                 AutomationProperties.Name="{DynamicResource ResetFilters}"
                                                                 Command="{Binding ResetTaskFiltersCommand}"
+                                                                CommandParameter="6"
                                                                 AutomationProperties.AutomationId="ArchivedResetFiltersButton">
                                                             <StackPanel Orientation="Horizontal">
                                                                 <PathIcon Classes="FilterPanelResetIcon" Width="16" Height="16" Data="M17.65,6.35 C16.2,4.9 14.21,4 12,4 C7.58,4 4,7.58 4,12 C4,16.42 7.58,20 12,20 C15.73,20 18.84,17.45 19.73,14 L17.65,14 C16.82,16.33 14.61,18 12,18 C8.69,18 6,15.31 6,12 C6,8.69 8.69,6 12,6 C13.66,6 15.14,6.69 16.22,7.78 L13,11 L20,11 L20,4 Z"/>
@@ -1704,7 +1613,7 @@
                                         </DropDownButton.Flyout>
                                     </DropDownButton>
                                 </WrapPanel>
-                                <searchControl:SearchBar Grid.Column="1" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
+                                <searchControl:SearchBar Grid.Column="1" Classes="FilterToolbarSearch" DataContext="{Binding ArchivedFilter.Search}"/>
                             </Grid>
                             <TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
                                       ItemsSource="{Binding ArchivedItems}"
@@ -1730,8 +1639,8 @@
                                                            AutomationProperties.AutomationId="TaskRepeaterListMarker"
                                                            Margin="4,0,4,0"
                                                            VerticalAlignment="Center" />
-                                                <Grid Grid.Column="4" VerticalAlignment="Center">
-                                                    <unlimotion:EmojiTextBlock EmojiText="{Binding TaskItem.Title}" VerticalAlignment="Center" HorizontalAlignment="Left" AutomationProperties.AutomationId="InlineTaskTitleTextBlock" Classes.IsWanted="{Binding TaskItem.Wanted}" PointerPressed="InlineTaskTitleText_OnPointerPressed"/>
+                                                <Grid Grid.Column="4" ColumnDefinitions="Auto,*" VerticalAlignment="Center">
+                                                    <unlimotion:EmojiTextBlock Grid.Column="1" EmojiText="{Binding TaskItem.Title}" VerticalAlignment="Center" HorizontalAlignment="Left" AutomationProperties.AutomationId="InlineTaskTitleTextBlock" Classes.IsWanted="{Binding TaskItem.Wanted}" PointerPressed="InlineTaskTitleText_OnPointerPressed"/>
                                                 </Grid>
                                             </Grid>
                                             <Button Classes="TaskRowRemoveButton"
@@ -1747,7 +1656,7 @@
                         </Grid>
                     </TabItem>
                     <!--Last Opened-->
-                    <TabItem Header="{DynamicResource LastOpened}" IsSelected="{Binding LastOpenedMode, Mode=OneWayToSource}"
+                    <TabItem Header="{DynamicResource LastOpened}"
                              AutomationProperties.AutomationId="LastOpenedTabItem">
                         <Grid RowDefinitions="Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="Auto,*">
@@ -1776,6 +1685,7 @@
                                                                 ToolTip.Tip="{DynamicResource ResetFilters}"
                                                                 AutomationProperties.Name="{DynamicResource ResetFilters}"
                                                                 Command="{Binding ResetTaskFiltersCommand}"
+                                                                CommandParameter="7"
                                                                 AutomationProperties.AutomationId="LastOpenedResetFiltersButton">
                                                             <StackPanel Orientation="Horizontal">
                                                                 <PathIcon Classes="FilterPanelResetIcon" Width="16" Height="16" Data="M17.65,6.35 C16.2,4.9 14.21,4 12,4 C7.58,4 4,7.58 4,12 C4,16.42 7.58,20 12,20 C15.73,20 18.84,17.45 19.73,14 L17.65,14 C16.82,16.33 14.61,18 12,18 C8.69,18 6,15.31 6,12 C6,8.69 8.69,6 12,6 C13.66,6 15.14,6.69 16.22,7.78 L13,11 L20,11 L20,4 Z"/>
@@ -1789,7 +1699,7 @@
                                         </DropDownButton.Flyout>
                                     </DropDownButton>
                                 </WrapPanel>
-                                <searchControl:SearchBar Grid.Column="1" Classes="FilterToolbarSearch" DataContext="{Binding Search}"/>
+                                <searchControl:SearchBar Grid.Column="1" Classes="FilterToolbarSearch" DataContext="{Binding LastOpenedFilter.Search}"/>
                             </Grid>
                             <TreeView Grid.Row="1" AutoScrollToSelectedItem="True"
                                       ItemsSource="{Binding LastOpenedItems}"
@@ -1814,8 +1724,8 @@
                                                            AutomationProperties.AutomationId="TaskRepeaterListMarker"
                                                            Margin="4,0,4,0"
                                                            VerticalAlignment="Center" />
-                                                <Grid Grid.Column="4" VerticalAlignment="Center">
-                                                    <unlimotion:EmojiTextBlock EmojiText="{Binding TaskItem.Title}" VerticalAlignment="Center" HorizontalAlignment="Left" AutomationProperties.AutomationId="InlineTaskTitleTextBlock" Classes.IsWanted="{Binding TaskItem.Wanted}" Classes.IsCanBeCompleted="{Binding !TaskItem.IsCanBeCompleted}" PointerPressed="InlineTaskTitleText_OnPointerPressed"/>
+                                                <Grid Grid.Column="4" ColumnDefinitions="Auto,*" VerticalAlignment="Center">
+                                                    <unlimotion:EmojiTextBlock Grid.Column="1" EmojiText="{Binding TaskItem.Title}" VerticalAlignment="Center" HorizontalAlignment="Left" AutomationProperties.AutomationId="InlineTaskTitleTextBlock" Classes.IsWanted="{Binding TaskItem.Wanted}" Classes.IsCanBeCompleted="{Binding !TaskItem.IsCanBeCompleted}" PointerPressed="InlineTaskTitleText_OnPointerPressed"/>
                                                 </Grid>
                                             </Grid>
                                             <Button Classes="TaskRowRemoveButton"
@@ -1831,15 +1741,11 @@
                         </Grid>
                     </TabItem>
                     <!--Roadmap-->
-                    <TabItem Header="{DynamicResource Roadmap}" IsSelected="{Binding GraphMode, Mode=OneWayToSource}"
+                    <TabItem Header="{DynamicResource Roadmap}"
                              AutomationProperties.AutomationId="RoadmapTabItem">
                         <views:GraphControl DataContext="{Binding Graph}"/>
                     </TabItem>
                     <!--Settings-->
-                    <TabItem Header="{DynamicResource Settings}" IsSelected="{Binding SettingsMode, Mode=OneWayToSource}"
-                             AutomationProperties.AutomationId="SettingsTabItem">
-                        <views:SettingsControl DataContext="{Binding Settings}"/>
-                    </TabItem>
                 </TabControl>
                 <Button x:Name="MainTabsOverflowButton"
                         Classes="MainTabsOverflowButton"
@@ -1882,22 +1788,24 @@
             </Grid>
             <SplitView.Pane>
                 <Grid VerticalAlignment="Stretch" HorizontalAlignment="Stretch" ColumnDefinitions="*,Auto">
-                    <ToggleButton Width="20" Padding="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Content="↔️" VerticalAlignment="Stretch" Grid.Column="1" IsChecked="{Binding !DetailsAreOpen}"
+                    <ToggleButton Width="20" Padding="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Content="↔️" VerticalAlignment="Stretch" Grid.Column="1" IsChecked="{Binding #mainControl.IsRouteDetailsOpen, Mode=TwoWay}"
+                                  IsVisible="{Binding #mainControl.RouteTaskItem, Converter={x:Static ObjectConverters.IsNull}}"
                                   AutomationProperties.AutomationId="DetailsPaneToggleButton"></ToggleButton>
                     <Border x:Name="CurrentTaskDetailsPanelFrame"
                             Grid.Column="0"
                             Classes="CurrentTaskDetailsPanelFrame"
+                            Classes.WorkspaceTaskRoute="{Binding #mainControl.RouteTaskItem, Converter={x:Static ObjectConverters.IsNotNull}}"
                             AutomationProperties.ControlTypeOverride="Group"
                             AutomationProperties.IsControlElementOverride="True"
                             AutomationProperties.AutomationId="CurrentTaskDetailsPanelFrame"
-                            IsVisible="{Binding DetailsAreOpen}">
+                            IsVisible="{Binding #mainControl.IsRouteDetailsOpen}">
                         <Grid x:Name="TaskDetailsPanelRoot" Classes="TaskDetailsPanel">
                             <Border Classes="CurrentTaskCard"
                                     AutomationProperties.ControlTypeOverride="Group"
                                     AutomationProperties.IsControlElementOverride="True"
                                     AutomationProperties.AutomationId="CurrentTaskCard"
-                                    IsVisible="{Binding CurrentTaskItem, Converter={x:Static ObjectConverters.IsNotNull}}">
-                                <Grid RowDefinitions="*,Auto" DataContext="{Binding CurrentTaskItem}">
+                                    IsVisible="{Binding #mainControl.CardTaskItem, Converter={x:Static ObjectConverters.IsNotNull}}">
+                                <Grid RowDefinitions="*,Auto" DataContext="{Binding #mainControl.CardTaskItem}">
                         <ScrollViewer x:Name="CurrentTaskDetailsScrollViewer"
                                       AutomationProperties.AutomationId="CurrentTaskDetailsScrollViewer"
                                       HorizontalScrollBarVisibility="Disabled"
@@ -1906,7 +1814,7 @@
                                       behavior:KeyboardAwareScrollViewer.IsEnabled="True">
                                 <StackPanel Classes="CurrentTaskCardContent">
                                     <Grid Classes="TaskCardHeader"
-                                          ColumnDefinitions="Auto,*"
+                                          ColumnDefinitions="Auto,Auto,*"
                                           RowDefinitions="Auto,Auto"
                                           AutomationProperties.ControlTypeOverride="Group"
                                           AutomationProperties.IsControlElementOverride="True"
@@ -1916,10 +1824,11 @@
                                                   VerticalAlignment="Center"
                                                   ToolTip.Tip="{Binding StatusToolTip}"
                                                   AutomationProperties.AutomationId="CurrentTaskStatusButton"/>
-                                        <TextBox Grid.Column="1"
+                                        <TextBox Grid.Column="2"
                                                  x:Name="CurrentTaskTitleTextBox"
                                                  AutomationProperties.AutomationId="CurrentTaskTitleTextBox"
                                                  Classes="CurrentTaskTitleEditor BorderlessTextBoxChrome"
+                                                 ToolTip.Tip="{Binding Id}"
                                                  TextWrapping="Wrap"
                                                  Text="{Binding Title}"
                                                  PlaceholderText="{DynamicResource TitleWatermark}"
@@ -1947,6 +1856,11 @@
                                                        AutomationProperties.ControlTypeOverride="Group"
                                                        AutomationProperties.IsControlElementOverride="True"
                                                        AutomationProperties.AutomationId="CurrentTaskCommandBar">
+                                                <Button x:Name="CurrentTaskSourceButton" IsVisible="False"
+                                                        Content="{DynamicResource WorkspaceGoToSource}" Click="OnTaskSourceClick"
+                                                        AutomationProperties.AutomationId="CurrentTaskSourceButton" />
+                                                <Button Content="{DynamicResource WorkspaceAddNextStep}" Click="OnAddNextStepClick"
+                                                        AutomationProperties.AutomationId="CurrentTaskNextStepButton" />
                                                 <DropDownButton Classes="TaskActionsMenuButton TaskAccentOutlineButton TaskIconOnlyDropDownButton"
                                                                 Content="⚙"
                                                                 ToolTip.Tip="{DynamicResource TaskActionsMenuTip}"
@@ -2056,6 +1970,21 @@
                                                      AcceptsReturn="True"
                                                      AcceptsTab="True"
                                                      HorizontalAlignment="Stretch"/>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <Border Classes="TaskCardSection"
+                                            AutomationProperties.ControlTypeOverride="Group"
+                                            AutomationProperties.IsControlElementOverride="True"
+                                            AutomationProperties.AutomationId="CurrentTaskClassificationSection">
+                                        <StackPanel Classes="TaskCardSectionContent">
+                                            <TextBlock Classes="TaskCardSectionTitle"
+                                                       Text="{DynamicResource TaskClassificationTitle}" />
+                                            <views:TaskClassificationControl Task="{Binding}"
+                                                                             Owner="{Binding MainWindow}"
+                                                                             AreaOptions="{Binding MainWindow.Feed.Areas}"
+                                                                             AreaDefinitions="{Binding MainWindow.Feed.AreaManagement.ClassificationAreas}"
+                                                                             AutomationIdPrefix="CurrentTaskClassification" />
                                         </StackPanel>
                                     </Border>
 
@@ -2249,66 +2178,9 @@
                                             AutomationProperties.IsControlElementOverride="True"
                                             AutomationProperties.AutomationId="CurrentTaskRelationsSection">
                                         <StackPanel Classes="TaskCardSectionContent">
-                                    <Grid Classes="RelationSectionHeader" ColumnDefinitions="*,Auto">
-                                        <StackPanel Orientation="Horizontal" Spacing="6">
-                                            <Label Content="{DynamicResource ParentsTasks}"/>
-                                            <TextBlock Text="{Binding ItemCount, ElementName=CurrentItemParentsTree}" Opacity="0.5" VerticalAlignment="Center"/>
-                                        </StackPanel>
-                                        <Button Grid.Column="1"
-                                                Classes="RelationAddButton TaskAccentOutlineButton"
-                                                Content="＋"
-                                                ToolTip.Tip="{DynamicResource AddParentRelation}"
-                                                AutomationProperties.Name="{DynamicResource AddParentRelation}"
-                                                Click="RelationAddButton_OnClick"
-                                                Tag="Parents"
-                                                AutomationProperties.AutomationId="CurrentTaskParentsRelationAddButton"/>
-                                    </Grid>
-                                    <Border Classes="RelationEditorCard"
-                                            DataContext="{Binding MainWindow.CurrentRelationEditor}"
-                                            IsVisible="{Binding IsOpenForParents}">
-                                        <StackPanel Classes="RelationPickerRow">
-                                            <TextBlock Text="{Binding Header}" FontWeight="Bold"/>
-                                            <TextBox Classes="RelationEditorSearch"
-                                                     Text="{Binding Query, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                     PlaceholderText="{Binding Watermark}"
-                                                     KeyDown="RelationEditorControl_OnKeyDown"
-                                                     AutomationProperties.AutomationId="CurrentTaskParentsRelationAddInput"/>
-                                            <ListBox Classes="RelationEditorSuggestions"
-                                                     ItemsSource="{Binding Suggestions}"
-                                                     SelectedItem="{Binding SelectedCandidate, Mode=TwoWay}"
-                                                     DoubleTapped="RelationEditorSuggestions_OnDoubleTapped"
-                                                     KeyDown="RelationEditorControl_OnKeyDown"
-                                                     AutomationProperties.AutomationId="CurrentTaskParentsRelationSuggestions"/>
-                                            <TextBlock Text="{Binding EmptyStateText}"
-                                                       IsVisible="{Binding !HasSuggestions}"
-                                                       Opacity="0.7"
-                                                       TextWrapping="Wrap"/>
-                                            <Grid ColumnDefinitions="Auto,Auto" ColumnSpacing="8" HorizontalAlignment="Right">
-                                                <Button Content="{DynamicResource Cancel}"
-                                                        Command="{Binding CancelCommand}"
-                                                        AutomationProperties.AutomationId="CurrentTaskParentsRelationAddCancelButton"/>
-                                                <Button Grid.Column="1"
-                                                        Content="{DynamicResource Add}"
-                                                        Command="{Binding ConfirmCommand}"
-                                                        AutomationProperties.AutomationId="CurrentTaskParentsRelationAddConfirmButton"/>
-                                            </Grid>
-                                        </StackPanel>
-                                    </Border>
-                                    <TreeView DataContext="{Binding MainWindow}"
-                                              ItemsSource="{Binding CurrentItemParents.SubTasks}"
-                                              IsVisible="{Binding !!ItemCount, ElementName=CurrentItemParentsTree}"
-                                              SelectionMode="Multiple"
-                                              Classes="TaskTree RelationTaskTree"
-                                              ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                                              PointerPressed="TaskTree_OnPointerPressed"
-                                              AutomationProperties.AutomationId="CurrentItemParentsTree"
-                                              x:Name="CurrentItemParentsTree">
-                                        <TreeView.ItemTemplate>
-                                            <TreeDataTemplate DataType="viewModel:TaskWrapperViewModel" ItemsSource="{Binding SubTasks}">
-                                                <ContentControl Content="{Binding .}" PointerPressed="InputElement_OnPointerPressed" PointerMoved="InputElement_OnPointerMoved" PointerReleased="InputElement_OnPointerReleased" DoubleTapped="Task_OnDoubleTapped"/>
-                                            </TreeDataTemplate>
-                                        </TreeView.ItemTemplate>
-                                    </TreeView>
+                                    <views:TaskRelationsControl Owner="{Binding MainWindow}"
+                                                                TargetTask="{Binding}"
+                                                                OpenParentTaskOnDoubleTap="True"/>
 
                                     <Grid Classes="RelationSectionHeader" ColumnDefinitions="*,Auto">
                                         <StackPanel Orientation="Horizontal" Spacing="6">

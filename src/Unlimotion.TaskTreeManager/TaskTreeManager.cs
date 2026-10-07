@@ -501,6 +501,7 @@ public class TaskTreeManager
                     PlannedDuration = change.PlannedDuration,
                     Repeater = change.Repeater,
                     Wanted = change.Wanted,
+                    AreaIds = change.AreaIds?.ToList() ?? [],
                     Version = 1,
                 };
                 clone.EnsureStatusHistory(ResolveStatusAuthor(clone));
@@ -1279,6 +1280,7 @@ public class TaskTreeManager
             Repeater = snapshot.Repeater,
             Importance = snapshot.Importance,
             Wanted = snapshot.Wanted,
+            AreaIds = snapshot.AreaIds?.ToList() ?? [],
             Version = 1,
             AgentExecution = null,
             ExtensionData = snapshot.ExtensionData

@@ -10,15 +10,25 @@ using System.Linq;
 using System.Reactive.Concurrency;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
+using Unlimotion.ViewModel.Feed;
 using Unlimotion.ViewModel.Search;
+using Unlimotion.ViewModel.Workspace;
 using Unlimotion.ViewModel.Localization;
 using DomainTaskStatus = Unlimotion.Domain.TaskStatus;
 using L10n = Unlimotion.ViewModel.Localization.Localization;
 
 namespace Unlimotion.ViewModel
 {
+    public enum WorkspaceMode
+    {
+        Tasks,
+        Feed
+    }
+
+
     public enum TreeCommandKind
     {
         ExpandCurrentNested,
@@ -32,10 +42,22 @@ namespace Unlimotion.ViewModel
     }
 
     [AddINotifyPropertyChangedInterface]
-    public class MainWindowViewModel : DisposableList
+    public partial class MainWindowViewModel : DisposableList
     {
         public bool IsInitialized { get; private set; }
         private DisposableList connectionDisposableList = new DisposableListRealization();
+        internal Func<ObservableCollectionExtended<TaskWrapperViewModel>>? RootCollectionFactory { get; set; }
+        internal IScheduler? EmojiSearchRefreshScheduler { get; set; }
+        internal IScheduler? RootUiDeliveryScheduler { get; set; }
+        internal IScheduler? RootSelectionRestoreScheduler { get; set; }
+        internal Action<string, long>? RootDeliveryTrace { get; set; }
+        private int _allTasksSelectionRestoreVersion;
+        private bool _isRestoringAllTasksSelection;
+
+        private bool HasAllTasksDocument => IsWorkspaceShellAttached && WorkspaceNavigation.Panes.SelectMany(pane => pane.Tabs)
+            .Any(tab => tab.CurrentLocation is { Kind: WorkspaceLocationKind.Tasks, TaskListKind: TaskListKind.AllTasks });
+
+        public void CancelAllTasksSelectionRestore() => _allTasksSelectionRestoreVersion++;
         private bool _isCompletedTabInitialized;
         private bool _isArchivedTabInitialized;
         private bool _isInProgressTabInitialized;
@@ -45,6 +67,11 @@ namespace Unlimotion.ViewModel
         private bool _isUnlockedTabInitialized;
         private bool _isLastOpenedTabInitialized;
         private bool _isSynchronizingStatusFilters;
+        private bool _isApplyingWorkspaceLocation;
+        private long _workspaceScopeRevision;
+        private int _workspaceActivationCount;
+        public bool IsWorkspaceShellAttached { get; set; }
+        public bool IsLegacyReviewOverlayVisible { get; private set; }
         private readonly bool _defaultShowCompleted;
         private readonly bool _defaultShowArchived;
         private readonly bool? _defaultShowWanted;
@@ -84,6 +111,61 @@ namespace Unlimotion.ViewModel
             _getTaskStorage = getTaskStorage;
             _taskTreeExpansionStatePath = taskTreeExpansionStatePath;
             Settings = settings ?? new SettingsViewModel(_configuration);
+            Feed = new FeedViewModel();
+            WorkspaceNavigation = new WorkspaceNavigationViewModel(WorkspaceLocation.TasksRoot, CommitWorkspaceTabAsync);
+            WorkspaceNavigation.HasPendingEditorChanges = HasPendingWorkspaceTabChanges;
+            WorkspaceNavigation.CaptureViewState = tab =>
+            {
+                var state = CaptureWorkspaceTabState?.Invoke(tab);
+                var displayed = state is FeedWorkspaceViewState feedState ? feedState.Location : state as WorkspaceLocation;
+                if (displayed is not null && tab.CurrentLocation?.ObjectKey == displayed.ObjectKey)
+                    WorkspaceNavigation.UpdateLocation(tab, displayed);
+                return state;
+            };
+            WorkspaceNavigation.RestoreViewState = (tab, entry) => RestoreWorkspaceTabState?.Invoke(tab, entry.ViewState);
+            WorkspaceNavigation.WhenAnyValue(navigation => navigation.LastNavigationNotice)
+                .Where(notice => notice == WorkspaceNavigationNotice.ExistingHistoryDocumentFocused)
+                .Subscribe(_ => ManagerWrapper?.SuccessToast(L10n.Get("WorkspaceExistingHistoryDocumentFocused")))
+                .AddToDispose(this);
+            Feed.NavigationLocationOpened = RecordFeedNavigation;
+            Feed.NavigateToTaskWithDispositionRequested = NavigateFeedTask;
+            Feed.NavigateToWorkspaceLocationRequested = NavigateFeedWorkspaceLocationAsync;
+            Feed.WorkspaceScopeChanged = ResetWorkspaceForCurrentScope;
+            Feed.WorkspaceScopeChanging = async () =>
+            {
+                try
+                {
+                    if (!await CommitAllWorkspaceDraftsAsync().ConfigureAwait(true)) return false;
+                }
+                catch (Exception exception)
+                {
+                    ManagerWrapper?.ErrorToast(exception.Message);
+                    return false;
+                }
+                WorkspaceNavigation.InvalidatePendingNavigation();
+                _workspaceScopeRevision++;
+                return true;
+            };
+            Feed.PresentReviewSourceRequested = PresentReviewSourceAsync;
+            InitializeWorkspaceExtras();
+            Feed.WhenAnyValue(feed => feed.IsReviewActive).Subscribe(active =>
+                IsLegacyReviewOverlayVisible = active && !IsWorkspaceShellAttached)
+                .AddToDispose(this);
+            Disposables.Add(Feed);
+            OpenQuickCaptureCommand = ReactiveCommand.Create(() => OpenQuickCapture(isTask: false))
+                .AddToDisposeAndReturn(this);
+            OpenQuickTaskCaptureCommand = ReactiveCommand.Create(() => OpenQuickCapture(isTask: true))
+                .AddToDisposeAndReturn(this);
+            CloseQuickCaptureCommand = ReactiveCommand.Create(CloseQuickCapture)
+                .AddToDisposeAndReturn(this);
+            SaveQuickCaptureCommand = ReactiveCommand.CreateFromTask(SaveQuickCaptureCoreAsync)
+                .AddToDisposeAndReturn(this);
+            OpenSettingsCommand = ReactiveCommand.Create(OpenSettings)
+                .AddToDisposeAndReturn(this);
+            CloseSettingsCommand = ReactiveCommand.Create(CloseSettings)
+                .AddToDisposeAndReturn(this);
+            OpenReviewCommand = ReactiveCommand.CreateFromTask(OpenReviewCoreAsync)
+                .AddToDisposeAndReturn(this);
             Graph = graph ?? new GraphViewModel();
             CurrentAllTasksItems = EmptyTaskWrappers;
             UnlockedItems = EmptyTaskWrappers;
@@ -94,10 +176,12 @@ namespace Unlimotion.ViewModel
             LastUpdatedItems = EmptyTaskWrappers;
             LastOpenedItems = EmptyTaskWrappers;
             Graph.SetMainWindowViewModel(this);
-            Graph.Search = Search;
-            ResetTaskFiltersCommand = ReactiveCommand.Create(ConfirmResetTaskFilters)
+            Graph.Search = RoadmapFilter.Search;
+            ResetTaskFiltersCommand = ReactiveCommand.Create<string?>(ConfirmResetTaskFilters)
                 .AddToDisposeAndReturn(this);
             Search.IsFuzzySearch = Settings.IsFuzzySearch;
+            UnlockedSearch.IsFuzzySearch = Settings.IsFuzzySearch;
+            foreach (var scope in OtherTaskListFilters) scope.Search.IsFuzzySearch = Settings.IsFuzzySearch;
             var configuredShowCompleted = _configuration?.GetSection("AllTasks:ShowCompleted").Get<bool?>() == true;
             var configuredShowArchived = _configuration?.GetSection("AllTasks:ShowArchived").Get<bool?>() == true;
             StatusFilters = CreateStatusFilters(
@@ -145,6 +229,7 @@ namespace Unlimotion.ViewModel
             _defaultShowCompleted = ShowCompleted;
             _defaultShowArchived = ShowArchived;
             _defaultShowWanted = ShowWanted;
+            Graph.ShowWanted = ShowWanted;
             var sortName = _configuration?.GetSection("AllTasks:CurrentSortDefinition").Get<string>();
             var sortNameForUnlocked = _configuration?.GetSection("AllTasks:CurrentSortDefinitionForUnlocked").Get<string>();
             CurrentSortDefinition = SortDefinitions.FirstOrDefault(s => s.MatchesPersistedValue(sortName)) ?? SortDefinitions.First();
@@ -208,7 +293,12 @@ namespace Unlimotion.ViewModel
                 })
                 .AddToDispose(this);
             this.WhenAnyValue(m => m.Settings.IsFuzzySearch)
-                .Subscribe(b => Search.IsFuzzySearch = b)
+                .Subscribe(b =>
+                {
+                    Search.IsFuzzySearch = b;
+                    UnlockedSearch.IsFuzzySearch = b;
+                    foreach (var scope in OtherTaskListFilters) scope.Search.IsFuzzySearch = b;
+                })
                 .AddToDispose(this);
             CurrentRelationEditor = new TaskRelationEditorViewModel(
                 () => taskRepository?.Tasks.Items ?? Enumerable.Empty<TaskItemViewModel>(),
@@ -273,6 +363,7 @@ namespace Unlimotion.ViewModel
             {
                 filter.RefreshLocalization();
             }
+
 
             foreach (var task in taskRepository?.Tasks.Items.ToArray() ?? Array.Empty<TaskItemViewModel>())
             {
@@ -425,6 +516,7 @@ namespace Unlimotion.ViewModel
                 SelectCurrentTask();
                 if (newTask != null)
                 {
+                    if (IsWorkspaceShellAttached) await OpenWorkspaceTaskAsync(newTask);
                     RequestTitleFocusForCurrentTask();
                 }
 
@@ -469,6 +561,7 @@ namespace Unlimotion.ViewModel
 
                 if (newTask != null)
                 {
+                    if (IsWorkspaceShellAttached) await OpenWorkspaceTaskAsync(newTask);
                     RequestTitleFocusForCurrentTask();
                 }
             }).AddToDisposeAndReturn(connectionDisposableList);
@@ -525,7 +618,7 @@ namespace Unlimotion.ViewModel
                     if (m != null)
                     {
                         _lastSelectedAllTasksItem = m.TaskItem;
-                        if (CurrentTaskItem != m.TaskItem)
+                        if (!(_isRestoringAllTasksSelection && HasAllTasksDocument) && CurrentTaskItem != m.TaskItem)
                             CurrentTaskItem = m.TaskItem;
                     }
                 })
@@ -659,6 +752,7 @@ namespace Unlimotion.ViewModel
             SelectCurrentTask();
             if (newTask != null)
             {
+                if (IsWorkspaceShellAttached) await OpenWorkspaceTaskAsync(newTask);
                 RequestTitleFocusForCurrentTask();
             }
 
@@ -704,7 +798,9 @@ namespace Unlimotion.ViewModel
         public Task BindInitializedStorage(ITaskStorage storage)
         {
             ArgumentNullException.ThrowIfNull(storage);
+            _workspaceScopeRevision++;
             storage.BindToCurrentSynchronizationContext();
+            WorkspaceNavigation.Reset(WorkspaceLocation.TasksRoot);
             ResetTaskSpaceSelection();
             DetailsAreOpen = false;
             Search.SearchText = string.Empty;
@@ -715,7 +811,8 @@ namespace Unlimotion.ViewModel
 
         public void ClearTaskSpaceSurface()
         {
-            IsInitialized = false;
+            _workspaceScopeRevision++;
+            WorkspaceNavigation.Reset(WorkspaceLocation.TasksRoot);
             ResetTaskSpaceSelection();
             DetailsAreOpen = false;
             Search.SearchText = string.Empty;
@@ -724,6 +821,8 @@ namespace Unlimotion.ViewModel
             connectionDisposableList.Dispose();
             connectionDisposableList.Disposables.Clear();
             taskRepository = null;
+            Feed.OnTaskStorageChanged();
+            IsInitialized = false;
         }
 
         private void ResetTaskSpaceSelection()
@@ -741,6 +840,7 @@ namespace Unlimotion.ViewModel
             CurrentLastOpenedItem = null;
             _lastSelectedAllTasksItem = null;
         }
+
 
         private async Task ConnectCore(ITaskStorage? suppliedStorage, bool storageAlreadyInitialized)
         {
@@ -806,6 +906,7 @@ namespace Unlimotion.ViewModel
                     }
                 }
                 taskRepository = taskStorage;
+                Feed.OnTaskStorageChanged();
 
                 // Retain a missing open card so its detached local draft can still be copied.
                 // Explicit deletion/navigation clears the card through its existing commands.
@@ -853,7 +954,21 @@ namespace Unlimotion.ViewModel
                 .AddToDispose(connectionDisposableList);
 
             EmojiFilters = _emojiFilters;
-            Graph.EmojiFilters = _emojiFilters;
+            SyncEmojiFilterCopies(_emojiFilters, UnlockedEmojiFilters);
+            foreach (var scope in OtherTaskListFilters)
+                SyncEmojiFilterCopies(_emojiFilters, scope.EmojiFilters);
+            System.Collections.Specialized.NotifyCollectionChangedEventHandler unlockedEmojiHandler =
+                (_, _) =>
+                {
+                    SyncEmojiFilterCopies(_emojiFilters, UnlockedEmojiFilters);
+                    foreach (var scope in OtherTaskListFilters)
+                        SyncEmojiFilterCopies(_emojiFilters, scope.EmojiFilters);
+                };
+            ((System.Collections.Specialized.INotifyCollectionChanged)_emojiFilters).CollectionChanged += unlockedEmojiHandler;
+            Disposable.Create(() => ((System.Collections.Specialized.INotifyCollectionChanged)_emojiFilters)
+                    .CollectionChanged -= unlockedEmojiHandler)
+                .AddToDispose(connectionDisposableList);
+            Graph.EmojiFilters = RoadmapFilter.ReadOnlyEmojiFilters;
 
             taskRepository.Tasks
                 .Connect()
@@ -881,7 +996,22 @@ namespace Unlimotion.ViewModel
                 .AddToDispose(connectionDisposableList);
 
             EmojiExcludeFilters = _emojiExcludeFilters;
-            Graph.EmojiExcludeFilters = _emojiExcludeFilters;
+            SyncEmojiFilterCopies(_emojiExcludeFilters, UnlockedEmojiExcludeFilters);
+            foreach (var scope in OtherTaskListFilters)
+                SyncEmojiFilterCopies(_emojiExcludeFilters, scope.EmojiExcludeFilters);
+            System.Collections.Specialized.NotifyCollectionChangedEventHandler unlockedEmojiExcludeHandler =
+                (_, _) =>
+                {
+                    SyncEmojiFilterCopies(_emojiExcludeFilters, UnlockedEmojiExcludeFilters);
+                    foreach (var scope in OtherTaskListFilters)
+                        SyncEmojiFilterCopies(_emojiExcludeFilters, scope.EmojiExcludeFilters);
+                };
+            ((System.Collections.Specialized.INotifyCollectionChanged)_emojiExcludeFilters)
+                .CollectionChanged += unlockedEmojiExcludeHandler;
+            Disposable.Create(() => ((System.Collections.Specialized.INotifyCollectionChanged)_emojiExcludeFilters)
+                    .CollectionChanged -= unlockedEmojiExcludeHandler)
+                .AddToDispose(connectionDisposableList);
+            Graph.EmojiExcludeFilters = RoadmapFilter.ReadOnlyEmojiExcludeFilters;
 
             var wantedFilter = this.WhenAnyValue(m => m.ShowWanted)
                 .Select(filter =>
@@ -930,31 +1060,38 @@ namespace Unlimotion.ViewModel
                     return (Func<TaskItemViewModel, bool>)Predicate;
                 });
 
-            var emojiFilter = _emojiFilters.ToObservableChangeSet()
-                .AutoRefreshOnObservable(filter => filter.WhenAnyValue(e => e.ShowTasks))
-                .ToCollection()
-                .Select(filter =>
-                {
-                    bool Predicate(TaskItemViewModel task)
+            var roadmapWantedFilter = Graph.WhenAnyValue(graph => graph.ShowWanted)
+                .Select(filter => (Func<TaskItemViewModel, bool>)(task =>
+                    !filter.HasValue || task.Wanted == filter.Value));
+
+            IObservable<Func<TaskItemViewModel, bool>> CreateUnlockedEmojiFilter(
+                ObservableCollection<EmojiFilter> filters, bool exclude) =>
+                filters.ToObservableChangeSet()
+                    .AutoRefreshOnObservable(filter => filter.WhenAnyValue(e => e.ShowTasks))
+                    .ToCollection()
+                    .Select(options => (Func<TaskItemViewModel, bool>)(task =>
                     {
-                        if (filter.All(e => !e.ShowTasks))
-                        {
-                            return true;
-                        }
-
-                        foreach (var item in filter.Where(e => e.ShowTasks))
-                        {
-                            if (string.IsNullOrEmpty(item?.Emoji)) continue;
-
-                            if (task.GetAllEmoji.Contains(item.Emoji) || (task.Title ?? "").Contains(item.Emoji))
-                                return true;
-                        }
-
-                        return false;
-                    }
-
-                    return (Func<TaskItemViewModel, bool>)Predicate;
-                });
+                        var selected = options.Where(option => option.ShowTasks
+                            && !string.IsNullOrEmpty(option.Emoji)).ToArray();
+                        if (selected.Length == 0) return true;
+                        var matches = selected.Any(option => task.GetAllEmoji.Contains(option.Emoji)
+                            || (task.Title ?? string.Empty).Contains(option.Emoji));
+                        return exclude ? !matches : matches;
+                    }));
+            var unlockedEmojiFilter = CreateUnlockedEmojiFilter(UnlockedEmojiFilters, exclude: false);
+            var unlockedEmojiExcludeFilter = CreateUnlockedEmojiFilter(UnlockedEmojiExcludeFilters, exclude: true);
+            var lastCreatedEmojiFilter = CreateUnlockedEmojiFilter(LastCreatedFilter.EmojiFilters, exclude: false);
+            var lastCreatedEmojiExcludeFilter = CreateUnlockedEmojiFilter(LastCreatedFilter.EmojiExcludeFilters, exclude: true);
+            var lastUpdatedEmojiFilter = CreateUnlockedEmojiFilter(LastUpdatedFilter.EmojiFilters, exclude: false);
+            var lastUpdatedEmojiExcludeFilter = CreateUnlockedEmojiFilter(LastUpdatedFilter.EmojiExcludeFilters, exclude: true);
+            var inProgressEmojiFilter = CreateUnlockedEmojiFilter(InProgressFilter.EmojiFilters, exclude: false);
+            var inProgressEmojiExcludeFilter = CreateUnlockedEmojiFilter(InProgressFilter.EmojiExcludeFilters, exclude: true);
+            var completedEmojiFilter = CreateUnlockedEmojiFilter(CompletedFilter.EmojiFilters, exclude: false);
+            var completedEmojiExcludeFilter = CreateUnlockedEmojiFilter(CompletedFilter.EmojiExcludeFilters, exclude: true);
+            var archivedEmojiFilter = CreateUnlockedEmojiFilter(ArchivedFilter.EmojiFilters, exclude: false);
+            var archivedEmojiExcludeFilter = CreateUnlockedEmojiFilter(ArchivedFilter.EmojiExcludeFilters, exclude: true);
+            var roadmapEmojiFilter = CreateUnlockedEmojiFilter(RoadmapFilter.EmojiFilters, exclude: false);
+            var roadmapEmojiExcludeFilter = CreateUnlockedEmojiFilter(RoadmapFilter.EmojiExcludeFilters, exclude: true);
 
             var unlockedTimeFilter = UnlockedTimeFilters.ToObservableChangeSet()
                 .AutoRefreshOnObservable(filter => filter.WhenAnyValue(e => e.ShowTasks))
@@ -1002,7 +1139,7 @@ namespace Unlimotion.ViewModel
                         if (filter.Item1 == null || filter.Item2 == null)
                             return true;
 
-                        var dateTime = task.ArchiveDateTime?.Add(DateTimeOffset.Now.Offset).Date;
+                        var dateTime = task.ArchiveDateTime?.LocalDateTime.Date;
                         return filter.Item1 <= dateTime && dateTime <= filter.Item2;
                     }
 
@@ -1016,13 +1153,14 @@ namespace Unlimotion.ViewModel
             //
             #region Поиск
 
-            var searchInput = this.WhenAnyValue(vm => vm.Search.SearchText, vm => vm.Search.IsFuzzySearch)
-                .DistinctUntilChanged();
-
-            var searchTopFilter = searchInput
-                .Publish(shared => shared.Take(1).Concat(
-                    shared.Throttle(TimeSpan.FromMilliseconds(SearchDefinition.DefaultThrottleMs), RxSchedulers.MainThreadScheduler)))
-                .Select(searchText =>
+            IObservable<Func<TaskItemViewModel, bool>> CreateSearchTopFilter(SearchDefinition search)
+            {
+                var searchInput = search.WhenAnyValue(vm => vm.SearchText, vm => vm.IsFuzzySearch)
+                    .DistinctUntilChanged();
+                return searchInput.Publish(shared => shared.Take(1).Concat(
+                        shared.Throttle(TimeSpan.FromMilliseconds(SearchDefinition.DefaultThrottleMs),
+                            RxSchedulers.MainThreadScheduler)))
+                    .Select(searchText =>
                 {
                     var userText = (searchText.Item1 ?? "").Trim();
                     var fuzzyText = searchText.Item2;
@@ -1062,6 +1200,16 @@ namespace Unlimotion.ViewModel
                         return true;
                     };
                 });
+            }
+
+            var searchTopFilter = CreateSearchTopFilter(Search);
+            var unlockedSearchTopFilter = CreateSearchTopFilter(UnlockedSearch);
+            var lastCreatedSearchTopFilter = CreateSearchTopFilter(LastCreatedFilter.Search);
+            var lastUpdatedSearchTopFilter = CreateSearchTopFilter(LastUpdatedFilter.Search);
+            var inProgressSearchTopFilter = CreateSearchTopFilter(InProgressFilter.Search);
+            var completedSearchTopFilter = CreateSearchTopFilter(CompletedFilter.Search);
+            var archivedSearchTopFilter = CreateSearchTopFilter(ArchivedFilter.Search);
+            var lastOpenedSearchTopFilter = CreateSearchTopFilter(LastOpenedFilter.Search);
 
             #endregion Поиск
 
@@ -1095,10 +1243,13 @@ namespace Unlimotion.ViewModel
             #region Roots
 
             var wasAllTasksSearchActive = false;
+            int? pendingSelectionRestoreVersion = null;
+            long pendingSelectionRestoreScope = 0;
+            var rootItems = RootCollectionFactory?.Invoke() ?? new ObservableCollectionExtended<TaskWrapperViewModel>();
             var emojiRootFilter = _emojiFilters.ToObservableChangeSet()
                 .AutoRefreshOnObservable(filter => filter.WhenAnyValue(e => e.ShowTasks))
                 .AutoRefreshOnObservable(filter => this.Search.WhenAnyValue(s => s.SearchText)
-                    .Throttle(TimeSpan.FromMilliseconds(SearchDefinition.DefaultThrottleMs))
+                    .Throttle(TimeSpan.FromMilliseconds(SearchDefinition.DefaultThrottleMs), EmojiSearchRefreshScheduler ?? DefaultScheduler.Instance)
                     .DistinctUntilChanged())
                 .ToCollection()
                 .Select(filter =>
@@ -1139,7 +1290,7 @@ namespace Unlimotion.ViewModel
                     return (Func<TaskItemViewModel, bool>)Predicate;
                 });
 
-            var roadmapRootFilter = _emojiFilters.ToObservableChangeSet()
+            var roadmapRootFilter = RoadmapFilter.EmojiFilters.ToObservableChangeSet()
                 .AutoRefreshOnObservable(filter => filter.WhenAnyValue(e => e.ShowTasks))
                 .ToCollection()
                 .Select(filter =>
@@ -1165,7 +1316,7 @@ namespace Unlimotion.ViewModel
                     return (Func<TaskItemViewModel, bool>)Predicate;
                 });
 
-            taskRepository.Tasks
+            var rootChanges = taskRepository.Tasks
                 .Connect()
                 .AutoRefreshOnObservable(m => m.Parents.ToObservableChangeSet())
                 .AutoRefreshOnObservable(m => m.WhenAny(
@@ -1190,29 +1341,47 @@ namespace Unlimotion.ViewModel
                     return wrapper;
                 })
                 .Sort(sortObservable)
-                .TreatMovesAsRemoveAdd()
-                // Use the current-thread trampoline so the initial projection remains synchronous,
-                // while a task edit raised from CollectionChanged is queued until the current
-                // notification completes. This prevents nested Avalonia container mutations.
-                .ObserveOn(CurrentThreadScheduler.Instance)
-                .Bind(out _currentItems, resetThreshold: 1)
-                .Subscribe(_ =>
-                {
-                    var isSearchActive = !string.IsNullOrWhiteSpace(Search.SearchText);
-                    if (!isSearchActive && wasAllTasksSearchActive && AllTasksMode)
-                    {
-                        // Clearing a filter can arrive as more than one change set. Keep the
-                        // restore pending until the selected task's replacement wrapper exists.
-                        wasAllTasksSearchActive = !RestoreCurrentAllTasksSelectionAfterSearchClear();
-                    }
-                    else
-                    {
-                        wasAllTasksSearchActive = isSearchActive;
-                    }
-                })
-                .AddToDispose(connectionDisposableList);
+                .TreatMovesAsRemoveAdd();
 
-            CurrentAllTasksItems = _currentItems;
+            await BindRootProjectionOnOwner(ownerThreadId =>
+            {
+                (ownerThreadId == null
+                    ? rootChanges.ObserveOn(CurrentThreadScheduler.Instance)
+                    : DeliverRootProjection(rootChanges, RootUiDeliveryScheduler ?? RxSchedulers.MainThreadScheduler, ownerThreadId.Value, RootDeliveryTrace))
+                    .Bind(rootItems, new SortedObservableCollectionAdaptor<TaskWrapperViewModel, string>(1))
+                    .Subscribe(_ =>
+                    {
+                        var isSearchActive = !string.IsNullOrWhiteSpace(Search.SearchText);
+                        if (!isSearchActive && wasAllTasksSearchActive && (AllTasksMode || HasAllTasksDocument))
+                        {
+                            if (pendingSelectionRestoreVersion is null)
+                            {
+                                pendingSelectionRestoreVersion = _allTasksSelectionRestoreVersion;
+                                pendingSelectionRestoreScope = WorkspaceNavigation.ScopeRevision;
+                            }
+                            if (pendingSelectionRestoreVersion != _allTasksSelectionRestoreVersion ||
+                                pendingSelectionRestoreScope != WorkspaceNavigation.ScopeRevision)
+                            {
+                                wasAllTasksSearchActive = false;
+                                pendingSelectionRestoreVersion = null;
+                                return;
+                            }
+                            // Clearing a filter can arrive as more than one change set. Keep the
+                            // restore pending until the selected task's replacement wrapper exists.
+                            wasAllTasksSearchActive = !RestoreCurrentAllTasksSelectionAfterSearchClear();
+                            if (!wasAllTasksSearchActive) pendingSelectionRestoreVersion = null;
+                        }
+                        else
+                        {
+                            wasAllTasksSearchActive = isSearchActive;
+                            pendingSelectionRestoreVersion = null;
+                        }
+                    })
+                    .AddToDispose(connectionDisposableList);
+
+                _currentItems = new ReadOnlyObservableCollection<TaskWrapperViewModel>(rootItems);
+                CurrentAllTasksItems = _currentItems;
+            }, SynchronizationContext.Current, RxSchedulers.MainThreadScheduler);
 
             #endregion Roots
 
@@ -1245,10 +1414,10 @@ namespace Unlimotion.ViewModel
                     .Filter(unlockedStatusFilter)
                     .Filter(unlockedTimeFilter)
                     .Filter(durationFilter)
-                    .Filter(emojiFilter)
-                    .Filter(emojiExcludeFilter)
+                    .Filter(unlockedEmojiFilter)
+                    .Filter(unlockedEmojiExcludeFilter)
                     .Filter(wantedFilter)
-                    .Filter(searchTopFilter)
+                    .Filter(unlockedSearchTopFilter)
                     .Transform(item =>
                     {
                         var actions = TrackExpansionState(new TaskWrapperActions
@@ -1256,6 +1425,7 @@ namespace Unlimotion.ViewModel
                             ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
                             RemoveAction = RemoveTask,
                             GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
+                            Filter = new() { },
                         }, "UnlockedTree");
                         var wrapper = new TaskWrapperViewModel(null, item, actions);
                         return wrapper;
@@ -1284,7 +1454,7 @@ namespace Unlimotion.ViewModel
                         if (filter.Item1 == null || filter.Item2 == null)
                             return true;
 
-                        var dateTime = task.CompletedDateTime?.Add(DateTimeOffset.Now.Offset).Date;
+                        var dateTime = task.CompletedDateTime?.LocalDateTime.Date;
                         return filter.Item1 <= dateTime && dateTime <= filter.Item2;
                     }
 
@@ -1312,9 +1482,9 @@ namespace Unlimotion.ViewModel
                         x => x.GetAllEmoji))
                     .Filter(m => m.Status == DomainTaskStatus.InProgress)
                     .Filter(inProgressStatusFilter)
-                    .Filter(emojiFilter)
-                    .Filter(emojiExcludeFilter)
-                    .Filter(searchTopFilter)
+                    .Filter(inProgressEmojiFilter)
+                    .Filter(inProgressEmojiExcludeFilter)
+                    .Filter(inProgressSearchTopFilter)
                     .Transform(item =>
                     {
                         var actions = TrackExpansionState(new TaskWrapperActions
@@ -1322,6 +1492,7 @@ namespace Unlimotion.ViewModel
                             ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
                             RemoveAction = RemoveTask,
                             GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
+                            Filter = new() { },
                         }, "InProgressTree");
                         var wrapper = new TaskWrapperViewModel(null, item, actions);
                         return wrapper;
@@ -1352,7 +1523,7 @@ namespace Unlimotion.ViewModel
                         if (filter.Item1 == null || filter.Item2 == null)
                             return true;
 
-                        var dateTime = task.CreatedDateTime.Add(DateTimeOffset.Now.Offset).Date;
+                        var dateTime = task.CreatedDateTime.LocalDateTime.Date;
                         return filter.Item1 <= dateTime && dateTime <= filter.Item2;
                     }
 
@@ -1404,9 +1575,9 @@ namespace Unlimotion.ViewModel
                     .Filter(m => m.Status == DomainTaskStatus.Completed)
                     .Filter(completedStatusFilter)
                     .Filter(completedDateFilter)
-                    .Filter(emojiFilter)
-                    .Filter(emojiExcludeFilter)
-                    .Filter(searchTopFilter)
+                    .Filter(completedEmojiFilter)
+                    .Filter(completedEmojiExcludeFilter)
+                    .Filter(completedSearchTopFilter)
                     .Transform(item =>
                     {
                         var actions = TrackExpansionState(new TaskWrapperActions
@@ -1414,6 +1585,7 @@ namespace Unlimotion.ViewModel
                             ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
                             RemoveAction = RemoveTask,
                             GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
+                            Filter = new() { },
                         }, "CompletedTree");
                         var wrapper = new TaskWrapperViewModel(null, item, actions);
                         return wrapper;
@@ -1445,9 +1617,9 @@ namespace Unlimotion.ViewModel
                     .Filter(m => m.Status == DomainTaskStatus.Archived)
                     .Filter(archivedStatusFilter)
                     .Filter(archiveDateFilter)
-                    .Filter(emojiFilter)
-                    .Filter(emojiExcludeFilter)
-                    .Filter(searchTopFilter)
+                    .Filter(archivedEmojiFilter)
+                    .Filter(archivedEmojiExcludeFilter)
+                    .Filter(archivedSearchTopFilter)
                     .Transform(item =>
                     {
                         var actions = TrackExpansionState(new TaskWrapperActions
@@ -1455,6 +1627,7 @@ namespace Unlimotion.ViewModel
                             ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
                             RemoveAction = RemoveTask,
                             GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
+                            Filter = new() { },
                         }, "ArchivedTree");
                         var wrapper = new TaskWrapperViewModel(null, item, actions);
                         return wrapper;
@@ -1485,9 +1658,9 @@ namespace Unlimotion.ViewModel
                         x => x.GetAllEmoji))
                     .Filter(lastCreatedStatusFilter)
                     .Filter(lastCreatedDateFilter)
-                    .Filter(emojiFilter)
-                    .Filter(emojiExcludeFilter)
-                    .Filter(searchTopFilter)
+                    .Filter(lastCreatedEmojiFilter)
+                    .Filter(lastCreatedEmojiExcludeFilter)
+                    .Filter(lastCreatedSearchTopFilter)
                     .Transform(item =>
                     {
                         var actions = TrackExpansionState(new TaskWrapperActions
@@ -1495,6 +1668,7 @@ namespace Unlimotion.ViewModel
                             ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
                             RemoveAction = RemoveTask,
                             GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
+                            Filter = new() { },
                         }, "LastCreatedTree");
                         var wrapper = new TaskWrapperViewModel(null, item, actions);
                         return wrapper;
@@ -1526,9 +1700,9 @@ namespace Unlimotion.ViewModel
                         x => x.GetAllEmoji))
                     .Filter(lastUpdatedStatusFilter)
                     .Filter(lastUpdatedDateFilter)
-                    .Filter(emojiFilter)
-                    .Filter(emojiExcludeFilter)
-                    .Filter(searchTopFilter)
+                    .Filter(lastUpdatedEmojiFilter)
+                    .Filter(lastUpdatedEmojiExcludeFilter)
+                    .Filter(lastUpdatedSearchTopFilter)
                     .Transform(item =>
                     {
                         var actions = TrackExpansionState(new TaskWrapperActions
@@ -1536,6 +1710,7 @@ namespace Unlimotion.ViewModel
                             ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
                             RemoveAction = RemoveTask,
                             GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
+                            Filter = new() { },
                         }, "LastUpdatedTree");
                         var wrapper = new TaskWrapperViewModel(null, item, actions);
                         return wrapper;
@@ -1560,9 +1735,9 @@ namespace Unlimotion.ViewModel
                     .Connect()
                     .AutoRefreshOnObservable(m => m.WhenAnyValue(x => x.Status))
                     .Filter(roadmapStatusFilter)
-                    .Filter(emojiFilter)
-                    .Filter(emojiExcludeFilter)
-                    .Filter(wantedFilter)
+                    .Filter(roadmapEmojiFilter)
+                    .Filter(roadmapEmojiExcludeFilter)
+                    .Filter(roadmapWantedFilter)
                     .Transform(item =>
                     {
                         var actions = new TaskWrapperActions
@@ -1570,7 +1745,7 @@ namespace Unlimotion.ViewModel
                             ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
                             RemoveAction = RemoveTask,
                             GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
-                            Filter = new() { roadmapStatusFilter, emojiExcludeFilter },
+                            Filter = new() { roadmapStatusFilter, roadmapEmojiExcludeFilter },
                         };
                         var wrapper = new TaskWrapperViewModel(null, item, actions);
                         return wrapper;
@@ -1588,7 +1763,7 @@ namespace Unlimotion.ViewModel
                         m => m.UnlockedDateTime, (c, s, u) => c.Value && s.Value != DomainTaskStatus.Archived))
                     .Filter(roadmapStatusFilter)
                     .Filter(roadmapRootFilter)
-                    .Filter(emojiExcludeFilter)
+                    .Filter(roadmapEmojiExcludeFilter)
                     .Transform(item =>
                     {
                         var actions = new TaskWrapperActions
@@ -1597,7 +1772,7 @@ namespace Unlimotion.ViewModel
                             RemoveAction = RemoveTask,
                             GetBreadScrumbs = BredScrumbsAlgorithms.WrapperParent,
                             SortComparer = sortObservable,
-                            Filter = new() { roadmapStatusFilter, emojiExcludeFilter },
+                            Filter = new() { roadmapStatusFilter, roadmapEmojiExcludeFilter },
                         };
                         var wrapper = new TaskWrapperViewModel(null, item, actions);
                         return wrapper;
@@ -1611,7 +1786,7 @@ namespace Unlimotion.ViewModel
             }
 
             var lastOpenedSearchFilter =
-                searchTopFilter.Select(p => new Func<TaskWrapperViewModel, bool>(w => p(w.TaskItem)));
+                lastOpenedSearchTopFilter.Select(p => new Func<TaskWrapperViewModel, bool>(w => p(w.TaskItem)));
 
             this.WhenAnyValue(m => m.CompletedMode)
                 .Where(mode => mode)
@@ -1706,6 +1881,7 @@ namespace Unlimotion.ViewModel
                             ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
                             RemoveAction = m => RemoveTask(m),
                             GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
+                            Filter = new() { },
                         }, "LastOpenedTree");
                         var wrapper = new TaskWrapperViewModel(null, item.Item1, actions)
                         {
@@ -1876,6 +2052,9 @@ namespace Unlimotion.ViewModel
 
         public void SelectCurrentTask()
         {
+            // Workspace documents own their tree selection. The shell's last task is
+            // compatibility state, not an instruction to select it in every list.
+            if (IsWorkspaceShellAttached) return;
             if (AllTasksMode ^ UnlockedMode ^ InProgressMode ^ CompletedMode ^ ArchivedMode ^ GraphMode ^ LastCreatedMode ^ LastUpdatedMode ^ LastOpenedMode)
             {
                 if (AllTasksMode)
@@ -1925,12 +2104,349 @@ namespace Unlimotion.ViewModel
             }
         }
 
-        public void ConfirmResetTaskFilters()
+        public bool TryOpenTaskById(string taskId)
+        {
+            var task = FindTaskById(taskId);
+            if (task is null)
+            {
+                return false;
+            }
+
+            _ = OpenWorkspaceTaskAsync(task);
+            return true;
+        }
+
+        public async Task<bool> TryOpenTaskByIdAsync(string taskId,
+            WorkspaceOpenDisposition disposition = WorkspaceOpenDisposition.CurrentTab)
+        {
+            var task = FindTaskById(taskId);
+            return task is not null && await OpenWorkspaceTaskAsync(task, disposition);
+        }
+
+        public async Task<bool> OpenWorkspaceTaskAsync(TaskItemViewModel task,
+            WorkspaceOpenDisposition disposition = WorkspaceOpenDisposition.CurrentTab)
+        {
+            ArgumentNullException.ThrowIfNull(task);
+            return await OpenWorkspaceLocationAsync(WorkspaceLocation.ForTask(task.Id, task.Title), disposition);
+        }
+
+        public async Task<bool> OpenWorkspaceLocationAsync(
+            WorkspaceLocation location,
+            WorkspaceOpenDisposition disposition = WorkspaceOpenDisposition.CurrentTab)
+        {
+            ArgumentNullException.ThrowIfNull(location);
+            if (location.Kind == WorkspaceLocationKind.Task && FindTaskById(location.Id) is null)
+                return false;
+
+            var scopeRevision = _workspaceScopeRevision;
+            var existing = WorkspaceNavigation.GetOpenObject(location);
+            // An explicit link must reveal its target even when its stored locator
+            // already matches: the user may have manually scrolled away since then.
+            var restoreLocator = existing is null || location.HasExplicitLocator;
+            if (!await WorkspaceNavigation.OpenAsync(location, disposition).ConfigureAwait(true)) return false;
+            if (scopeRevision != _workspaceScopeRevision) return false;
+            return await ActivateWorkspaceLocationAsync(WorkspaceNavigation.ActiveTab.CurrentLocation, restoreLocator).ConfigureAwait(true);
+        }
+
+        public Task<bool> OpenWorkspaceRootAsync(WorkspaceMode mode) =>
+            OpenWorkspaceLocationAsync(
+                mode == WorkspaceMode.Feed ? WorkspaceLocation.FeedRoot : WorkspaceLocation.TasksRoot);
+
+        public async Task<bool> NavigateWorkspaceBackAsync(WorkspacePaneViewModel? pane = null)
+        {
+            if (!await WorkspaceNavigation.GoBackAsync(pane ?? WorkspaceNavigation.ActivePane).ConfigureAwait(true)) return false;
+            return await ActivateWorkspaceLocationAsync(WorkspaceNavigation.ActiveTab.CurrentLocation,
+                WorkspaceNavigation.LastNavigationNotice != WorkspaceNavigationNotice.ExistingHistoryDocumentFocused).ConfigureAwait(true);
+        }
+
+        public async Task<bool> NavigateWorkspaceForwardAsync(WorkspacePaneViewModel? pane = null)
+        {
+            if (!await WorkspaceNavigation.GoForwardAsync(pane ?? WorkspaceNavigation.ActivePane).ConfigureAwait(true)) return false;
+            return await ActivateWorkspaceLocationAsync(WorkspaceNavigation.ActiveTab.CurrentLocation,
+                WorkspaceNavigation.LastNavigationNotice != WorkspaceNavigationNotice.ExistingHistoryDocumentFocused).ConfigureAwait(true);
+        }
+
+        public async Task<bool> SelectWorkspaceTabAsync(WorkspacePaneViewModel pane, WorkspaceNavigationTabViewModel tab)
+        {
+            if (!await WorkspaceNavigation.SelectTabAsync(pane, tab).ConfigureAwait(true)) return false;
+            return await ActivateWorkspaceLocationAsync(tab.CurrentLocation, restoreLocator: false).ConfigureAwait(true);
+        }
+
+        public async Task<bool> NavigateWorkspaceHistoryAsync(WorkspacePaneViewModel pane, int historyIndex)
+        {
+            if (!await WorkspaceNavigation.GoToHistoryEntryAsync(pane, historyIndex).ConfigureAwait(true)) return false;
+            return await ActivateWorkspaceLocationAsync(WorkspaceNavigation.ActiveTab.CurrentLocation,
+                WorkspaceNavigation.LastNavigationNotice != WorkspaceNavigationNotice.ExistingHistoryDocumentFocused).ConfigureAwait(true);
+        }
+
+        public void ActivateWorkspacePane(WorkspacePaneViewModel pane)
+        {
+            WorkspaceNavigation.ActivatePane(pane);
+            if (pane.ActiveTab?.CurrentLocation is not { } location) return;
+            SelectedWorkspaceMode = location.Mode;
+            if (location.Kind == WorkspaceLocationKind.Task
+                && FindTaskById(location.Id) is { } task)
+            {
+                CurrentTaskItem = task;
+                DetailsAreOpen = true;
+            }
+            else if (location.Kind == WorkspaceLocationKind.Tasks)
+            {
+                DetailsAreOpen = false;
+            }
+        }
+
+        public TaskItemViewModel? ResolveTaskById(string taskId) => FindTaskById(taskId);
+
+        public Func<WorkspaceLocation?>? CaptureActiveFeedLocation { get; set; }
+        public Func<WorkspaceNavigationTabViewModel, object?>? CaptureWorkspaceTabState { get; set; }
+        public Action<WorkspaceNavigationTabViewModel, object?>? RestoreWorkspaceTabState { get; set; }
+
+        public async Task<bool> CloseWorkspaceTabAsync(
+            WorkspacePaneViewModel pane,
+            WorkspaceNavigationTabViewModel tab)
+        {
+            var fallback = pane == WorkspaceNavigation.PrimaryPane
+                ? WorkspaceLocation.TasksRoot
+                : WorkspaceLocation.FeedRoot;
+            var isReview = tab.CurrentLocation?.Kind == WorkspaceLocationKind.Review;
+            var previousActiveTab = WorkspaceNavigation.ActiveTab;
+            if (!await WorkspaceNavigation.CloseTabAsync(pane, tab, fallback).ConfigureAwait(true)) return false;
+            if (isReview && Feed.IsReviewActive) Feed.FinishReviewCommand.Execute(null);
+            if (!ReferenceEquals(previousActiveTab, WorkspaceNavigation.ActiveTab))
+                await ActivateWorkspaceLocationAsync(WorkspaceNavigation.ActiveTab.CurrentLocation, restoreLocator: false).ConfigureAwait(true);
+            return true;
+        }
+
+        public async Task<bool> CloseWorkspaceSecondaryPaneAsync()
+        {
+            var hasReview = WorkspaceNavigation.SecondaryPane?.Tabs.Any(tab => tab.CurrentLocation?.Kind == WorkspaceLocationKind.Review) == true;
+            if (!await WorkspaceNavigation.CloseSecondaryPaneAsync(WorkspaceLocation.TasksRoot).ConfigureAwait(true)) return false;
+            if (hasReview && Feed.IsReviewActive) Feed.FinishReviewCommand.Execute(null);
+            await ActivateWorkspaceLocationAsync(WorkspaceNavigation.ActiveTab.CurrentLocation, restoreLocator: false).ConfigureAwait(true);
+            return true;
+        }
+
+        public async Task<bool> MoveWorkspaceTabAsync(WorkspacePaneViewModel pane, WorkspaceNavigationTabViewModel tab)
+        {
+            if (!await WorkspaceNavigation.MoveTabAsync(pane, tab)) return false;
+            await ActivateWorkspaceLocationAsync(WorkspaceNavigation.ActiveTab.CurrentLocation, restoreLocator: false);
+            return true;
+        }
+
+        public async Task<bool> MergeWorkspacePanesAsync()
+        {
+            if (!await WorkspaceNavigation.MergePanesAsync()) return false;
+            await ActivateWorkspaceLocationAsync(WorkspaceNavigation.ActiveTab.CurrentLocation, restoreLocator: false);
+            return true;
+        }
+
+        private WorkspaceLocation? reviewSourceLocation;
+
+        public async Task ShowReviewSourceAsync()
+        {
+            if (reviewSourceLocation is not { } source) return;
+            await OpenWorkspaceLocationAsync(source, WorkspaceOpenDisposition.AdjacentPane);
+        }
+
+        private async Task PresentReviewSourceAsync(FeedSearchNavigationRequestedEventArgs navigation)
+        {
+            if (!IsWorkspaceShellAttached) return;
+            var source = navigation.Day is null
+                ? WorkspaceLocation.ForNote(navigation.RelativePath, System.IO.Path.GetFileNameWithoutExtension(navigation.RelativePath), navigation.BlockIndex.ToString())
+                : WorkspaceLocation.ForFeedDay(navigation.RelativePath, navigation.Day.DisplayDate, navigation.BlockIndex.ToString());
+            if (!await WorkspaceNavigation.ShowPairAsync(source, WorkspaceLocation.ReviewRoot with { Title = L10n.Get("GlobalReview") }))
+                throw new InvalidOperationException(L10n.Get("FeedDocumentConflictPending"));
+            reviewSourceLocation = source;
+        }
+
+        private async Task<bool> CommitWorkspaceTabAsync(WorkspaceNavigationTabViewModel tab)
+        {
+            try
+            {
+                if (tab.CurrentLocation?.Mode == WorkspaceMode.Feed)
+                    await Feed.CommitActiveEditorsAsync().ConfigureAwait(true);
+                else if (tab.CurrentLocation is { Kind: WorkspaceLocationKind.Task } location
+                    && FindTaskById(location.Id) is { } task)
+                    await task.FlushPendingEditorChangesAsync().ConfigureAwait(true);
+                else if (tab.CurrentLocation?.Kind == WorkspaceLocationKind.Tasks)
+                    await FlushPendingTaskEditorsAsync().ConfigureAwait(true);
+                return true;
+            }
+            catch (Exception exception)
+            {
+                ManagerWrapper?.ErrorToast(exception.Message);
+                return false;
+            }
+        }
+
+        private bool HasPendingWorkspaceTabChanges(WorkspaceNavigationTabViewModel tab)
+        {
+            if (tab.CurrentLocation?.Mode == WorkspaceMode.Feed)
+                return Feed.HasPendingEditorChanges;
+            if (tab.CurrentLocation is { Kind: WorkspaceLocationKind.Task } location)
+                return FindTaskById(location.Id)?.HasPendingEditorPersistence == true;
+            return tab.CurrentLocation?.Kind == WorkspaceLocationKind.Tasks
+                && (taskRepository?.Tasks.Items.Any(task => task.HasPendingEditorPersistence) ?? false);
+        }
+
+        /// <summary>Commits document and inline task drafts before replacing their storage scope.</summary>
+        public async Task CommitWorkspaceEditorsAsync()
+        {
+            if (!await CommitAllWorkspaceDraftsAsync().ConfigureAwait(true))
+                throw new InvalidOperationException(L10n.Get("WorkspaceDraftSaveFailed"));
+            WorkspaceNavigation.InvalidatePendingNavigation();
+            _workspaceScopeRevision++;
+        }
+
+        private async Task<bool> CommitAllWorkspaceDraftsAsync()
+        {
+            while (true)
+            {
+                if (!await WorkspaceNavigation.CommitAllEditorsAsync().ConfigureAwait(true)) return false;
+                await Feed.CommitActiveEditorsAsync().ConfigureAwait(true);
+                // Includes inline task editors with no open card; no storage scan.
+                await FlushPendingTaskEditorsAsync().ConfigureAwait(true);
+                // Any surface can be edited while another awaits storage. Check
+                // all surfaces in the same UI turn before invalidating the scope.
+                if (!Feed.HasPendingEditorChanges
+                    && !(taskRepository?.Tasks.Items.Any(task => task.HasPendingEditorPersistence) ?? false))
+                    return true;
+            }
+        }
+
+        private async Task FlushPendingTaskEditorsAsync()
+        {
+            while (true)
+            {
+                foreach (var task in taskRepository?.Tasks.Items.ToArray() ?? [])
+                    await task.FlushPendingEditorChangesAsync().ConfigureAwait(true);
+                // Another visible editor can change while a different task awaits
+                // storage. Recheck the entire cache before leaving this UI turn.
+                if (!(taskRepository?.Tasks.Items.Any(task => task.HasPendingEditorPersistence) ?? false))
+                    return;
+            }
+        }
+
+        private void RecordFeedNavigation(WorkspaceLocation location)
+        {
+            if (_isApplyingWorkspaceLocation) return;
+            if (WorkspaceNavigation.ActiveTab.CurrentLocation?.HistoryKey == location.HistoryKey) return;
+            _ = OpenWorkspaceLocationAsync(location);
+        }
+
+        private Task<bool> NavigateFeedWorkspaceLocationAsync(
+            WorkspaceLocation location,
+            WorkspaceOpenDisposition disposition)
+        {
+            if (location.Kind == WorkspaceLocationKind.Feed
+                && CaptureActiveFeedLocation?.Invoke() is { Kind: WorkspaceLocationKind.Feed } current)
+                location = location with { StateKey = current.StateKey };
+            return OpenWorkspaceLocationAsync(location, disposition);
+        }
+
+        private void NavigateFeedTask(TaskItemViewModel task, WorkspaceOpenDisposition disposition)
+        {
+            _ = OpenWorkspaceTaskAsync(task, disposition);
+        }
+
+        private void ResetWorkspaceForCurrentScope()
+        {
+            _workspaceScopeRevision++;
+            reviewSourceLocation = null;
+            ReloadPinnedNotes();
+            IsNextStepOpen = false;
+            var preferredMode = WorkspaceNavigation.ActiveTab.CurrentLocation?.Mode ?? SelectedWorkspaceMode;
+            var root = preferredMode == WorkspaceMode.Feed && Settings.IsFeedEnabled
+                ? WorkspaceLocation.FeedRoot
+                : WorkspaceLocation.TasksRoot;
+            WorkspaceNavigation.Reset(root);
+            SelectedWorkspaceMode = root.Mode;
+            DetailsAreOpen = false;
+        }
+
+        private async Task<bool> ActivateWorkspaceLocationAsync(WorkspaceLocation? location, bool restoreLocator = true)
+        {
+            if (location is null) return false;
+            var scopeRevision = _workspaceScopeRevision;
+            var tab = WorkspaceNavigation.ActiveTab;
+            _workspaceActivationCount++;
+            _isApplyingWorkspaceLocation = true;
+            try
+            {
+                SelectedWorkspaceMode = location.Mode;
+                switch (location.Kind)
+                {
+                    case WorkspaceLocationKind.Tasks:
+                        DetailsAreOpen = false;
+                        break;
+                    case WorkspaceLocationKind.Task:
+                        if (FindTaskById(location.Id) is not { } task)
+                        {
+                            ManagerWrapper?.ErrorToast(L10n.Format("TaskDeepLinkTaskNotFound", location.Id));
+                            DetailsAreOpen = false;
+                            SelectedWorkspaceMode = WorkspaceMode.Tasks;
+                            return false;
+                        }
+                        CurrentTaskItem = task;
+                        DetailsAreOpen = true;
+                        // A document card must not change selection/scroll in another list pane.
+                        if (!IsWorkspaceShellAttached) SelectCurrentTask();
+                        break;
+                    case WorkspaceLocationKind.Feed:
+                        await Feed.ActivateDocumentAsync(null).ConfigureAwait(true);
+                        if (!IsCurrentActivation()) return false;
+                        if (restoreLocator && location.Id != "feed")
+                            await Feed.RestoreWorkspaceLocationAsync(location).ConfigureAwait(true);
+                        break;
+                    case WorkspaceLocationKind.Note:
+                        if (Feed.DocumentWorkspace.Find(location.Id) is { } document)
+                            await Feed.ActivateDocumentAsync(document).ConfigureAwait(true);
+                        else
+                            await Feed.OpenVaultLinkAsync(location.Id, null, wikiLink: true, materializeOnly: true).ConfigureAwait(true);
+                        if (!IsCurrentActivation()) return false;
+                        if (restoreLocator) await Feed.RestoreWorkspaceLocationAsync(location).ConfigureAwait(true);
+                        break;
+                }
+                return IsCurrentActivation();
+            }
+            finally
+            {
+                _workspaceActivationCount--;
+                _isApplyingWorkspaceLocation = _workspaceActivationCount > 0;
+            }
+            bool IsCurrentActivation() => scopeRevision == _workspaceScopeRevision
+                && ReferenceEquals(tab, WorkspaceNavigation.ActivePane.ActiveTab)
+                && tab.CurrentLocation?.LocatorKey == location.LocatorKey;
+        }
+
+        public void ConfirmResetTaskFilters(string? category)
         {
             ManagerWrapper.Ask(
                 L10n.Get("ResetFiltersConfirmHeader"),
                 L10n.Get("ResetFiltersConfirmMessage"),
-                ResetCurrentTabFilters);
+                () =>
+                {
+                    if (int.TryParse(category, out var index)) ResetTaskFiltersForCategory(index);
+                    else ResetCurrentTabFilters();
+                });
+        }
+
+        public void ResetTaskFiltersForCategory(int category)
+        {
+            switch (category)
+            {
+                case 0: ResetAllTasksTabFilters(); break;
+                case 1: ResetLastCreatedTabFilters(); break;
+                case 2: ResetLastUpdatedTabFilters(); break;
+                case 3: ResetUnlockedTabFilters(); break;
+                case 4: ResetInProgressTabFilters(); break;
+                case 5: ResetCompletedTabFilters(); break;
+                case 6: ResetArchivedTabFilters(); break;
+                case 7: ResetLastOpenedTabFilters(); break;
+                case 8: ResetRoadmapTabFilters(); break;
+                default: throw new ArgumentOutOfRangeException(nameof(category));
+            }
         }
 
         public void ResetCurrentTabFilters()
@@ -1971,6 +2487,12 @@ namespace Unlimotion.ViewModel
             {
                 ResetRoadmapTabFilters();
             }
+            else
+            {
+                // The standalone task control can have its first tab selected before
+                // its selection notification is attached. That route is All Tasks.
+                ResetAllTasksTabFilters();
+            }
         }
 
         private void ResetAllTasksTabFilters()
@@ -1982,24 +2504,23 @@ namespace Unlimotion.ViewModel
 
         private void ResetLastCreatedTabFilters()
         {
-            ResetSearchFilter();
-            ResetEmojiFilters();
+            LastCreatedFilter.Reset();
             ResetCompletionVisibilityFilters(LastCreatedStatusFilterSettingsSection, LastCreatedStatusFilters);
             ResetDateFilter(LastCreatedDateFilter);
         }
 
         private void ResetLastUpdatedTabFilters()
         {
-            ResetSearchFilter();
-            ResetEmojiFilters();
+            LastUpdatedFilter.Reset();
             ResetCompletionVisibilityFilters(LastUpdatedStatusFilterSettingsSection, LastUpdatedStatusFilters);
             ResetDateFilter(LastUpdatedDateFilter);
         }
 
         private void ResetUnlockedTabFilters()
         {
-            ResetSearchFilter();
-            ResetEmojiFilters();
+            UnlockedSearch.SearchText = string.Empty;
+            ResetToggleFilters(UnlockedEmojiFilters);
+            ResetToggleFilters(UnlockedEmojiExcludeFilters);
             ResetCompletionVisibilityFilters(UnlockedStatusFilterSettingsSection, UnlockedStatusFilters);
             ShowWanted = _defaultShowWanted;
             ResetToggleFilters(UnlockedTimeFilters);
@@ -2008,8 +2529,7 @@ namespace Unlimotion.ViewModel
 
         private void ResetInProgressTabFilters()
         {
-            ResetSearchFilter();
-            ResetEmojiFilters();
+            InProgressFilter.Reset();
             ResetCompletionVisibilityFilters(
                 InProgressStatusFilterSettingsSection,
                 InProgressStatusFilters,
@@ -2018,8 +2538,7 @@ namespace Unlimotion.ViewModel
 
         private void ResetCompletedTabFilters()
         {
-            ResetSearchFilter();
-            ResetEmojiFilters();
+            CompletedFilter.Reset();
             ResetCompletionVisibilityFilters(
                 CompletedStatusFilterSettingsSection,
                 CompletedStatusFilters,
@@ -2029,8 +2548,7 @@ namespace Unlimotion.ViewModel
 
         private void ResetArchivedTabFilters()
         {
-            ResetSearchFilter();
-            ResetEmojiFilters();
+            ArchivedFilter.Reset();
             ResetCompletionVisibilityFilters(
                 ArchivedStatusFilterSettingsSection,
                 ArchivedStatusFilters,
@@ -2040,8 +2558,7 @@ namespace Unlimotion.ViewModel
 
         private void ResetLastOpenedTabFilters()
         {
-            ResetSearchFilter();
-            ResetEmojiFilters();
+            LastOpenedFilter.Reset();
             ResetCompletionVisibilityFilters(LastOpenedStatusFilterSettingsSection, LastOpenedStatusFilters);
         }
 
@@ -2049,12 +2566,11 @@ namespace Unlimotion.ViewModel
         {
             var onlyUnlocked = Graph.OnlyUnlocked;
 
-            ResetSearchFilter();
-            ResetEmojiFilters();
+            RoadmapFilter.Reset();
 
             if (onlyUnlocked)
             {
-                ShowWanted = _defaultShowWanted;
+                Graph.ShowWanted = _defaultShowWanted;
             }
             else
             {
@@ -2073,6 +2589,35 @@ namespace Unlimotion.ViewModel
         {
             ResetToggleFilters(EmojiFilters);
             ResetToggleFilters(EmojiExcludeFilters);
+        }
+
+        private static void SyncEmojiFilterCopies(
+            IEnumerable<EmojiFilter> source,
+            ObservableCollection<EmojiFilter> target)
+        {
+            var selected = target.Where(filter => filter.ShowTasks).Select(filter => filter.Emoji)
+                .ToHashSet(StringComparer.Ordinal);
+            var expanded = target.ToDictionary(filter => filter.Emoji,
+                filter => filter.IsHierarchyExpanded, StringComparer.Ordinal);
+            var copies = source.Select(filter => new EmojiFilter
+            {
+                Title = filter.Title,
+                Emoji = filter.Emoji,
+                SortText = filter.SortText,
+                Source = filter.Source,
+                ShowTasks = selected.Contains(filter.Emoji),
+                HierarchyDepth = filter.HierarchyDepth,
+                HasHierarchyChildren = filter.HasHierarchyChildren,
+                IsHierarchyExpanded = expanded.GetValueOrDefault(filter.Emoji, filter.IsHierarchyExpanded)
+            }).ToArray();
+            foreach (var copy in copies)
+            {
+                var parentEmoji = source.FirstOrDefault(item => item.Emoji == copy.Emoji)?.HierarchyParent?.Emoji;
+                if (parentEmoji is not null)
+                    copy.HierarchyParent = copies.FirstOrDefault(item => item.Emoji == parentEmoji);
+            }
+            target.Clear();
+            foreach (var copy in copies) target.Add(copy);
         }
 
         private void ResetCompletionVisibilityFilters(
@@ -2360,6 +2905,24 @@ namespace Unlimotion.ViewModel
 
         public bool TryHandleTaskCardBackGesture()
         {
+            if (IsWorkspaceShellAttached)
+            {
+                var location = WorkspaceNavigation.ActiveTab.CurrentLocation;
+                if (location?.Kind == WorkspaceLocationKind.Task)
+                {
+                    _ = WorkspaceNavigation.CanGoBack
+                        ? NavigateWorkspaceBackAsync()
+                        : OpenWorkspaceRootAsync(WorkspaceMode.Tasks);
+                    return true;
+                }
+
+                if (location?.Kind != WorkspaceLocationKind.Tasks) return false;
+                var workspaceTask = ResolveTaskCardBackGestureTask();
+                if (workspaceTask is null) return false;
+                _ = OpenWorkspaceTaskAsync(workspaceTask);
+                return true;
+            }
+
             var taskItem = ResolveTaskCardBackGestureTask();
             if (taskItem == null)
             {
@@ -2777,7 +3340,8 @@ namespace Unlimotion.ViewModel
 
         private bool RestoreCurrentAllTasksSelection(bool useLastSelectedFallback = false)
         {
-            var taskItem = CurrentTaskItem ??
+            var ownsSelection = HasAllTasksDocument;
+            var taskItem = (ownsSelection ? _lastSelectedAllTasksItem : CurrentTaskItem) ??
                            (useLastSelectedFallback ? _lastSelectedAllTasksItem : null);
             if (taskItem == null)
             {
@@ -2796,24 +3360,39 @@ namespace Unlimotion.ViewModel
                 return false;
             }
 
-            if (CurrentTaskItem == null)
+            if (!ownsSelection && CurrentTaskItem == null)
             {
                 CurrentTaskItem = taskItem;
             }
 
-            ExpandParentNodesForTask(taskItem);
+            _isRestoringAllTasksSelection = true;
+            try { ExpandParentNodesForTask(taskItem); }
+            finally { _isRestoringAllTasksSelection = false; }
             return IsSameTask(CurrentAllTasksItem?.TaskItem, taskItem);
         }
 
         private bool RestoreCurrentAllTasksSelectionAfterSearchClear()
         {
             var restored = RestoreCurrentAllTasksSelection(useLastSelectedFallback: true);
-            RxSchedulers.MainThreadScheduler.Schedule(() =>
-                RestoreCurrentAllTasksSelection(useLastSelectedFallback: true));
+            var retryScheduler = RootSelectionRestoreScheduler ?? RxSchedulers.MainThreadScheduler;
+            var version = _allTasksSelectionRestoreVersion;
+            var scope = WorkspaceNavigation.ScopeRevision;
+            void Retry()
+            {
+                if (version == _allTasksSelectionRestoreVersion && scope == WorkspaceNavigation.ScopeRevision)
+                    RestoreCurrentAllTasksSelection(useLastSelectedFallback: true);
+            }
+            retryScheduler.Schedule(Retry);
             // TreeView can clear SelectedItem after processing search-clear collection changes.
-            RxSchedulers.MainThreadScheduler.Schedule(TimeSpan.FromMilliseconds(50), () =>
-                RestoreCurrentAllTasksSelection(useLastSelectedFallback: true));
-            return restored;
+            retryScheduler.Schedule(TimeSpan.FromMilliseconds(50), Retry);
+            // The UI search stage can add the parents before the emoji stage removes
+            // the promoted search child. That old root wrapper is only a transient
+            // selection; retain the pending restore until the normal tree owns it.
+            var selected = CurrentAllTasksItem;
+            var promotedChildPendingRemoval = selected != null && selected.TaskItem.Parents.Count > 0 &&
+                EmojiFilters.All(filter => !filter.ShowTasks) &&
+                CurrentAllTasksItems.Any(item => ReferenceEquals(item, selected));
+            return restored && !promotedChildPendingRemoval;
         }
 
         private void ExpandParentNodesForTask(TaskItemViewModel? taskItem)
@@ -2863,6 +3442,143 @@ namespace Unlimotion.ViewModel
         private TaskItemViewModel? _lastSelectedAllTasksItem;
         public ReadOnlyObservableCollection<TaskWrapperViewModel> CurrentAllTasksItems { get; set; }
 
+        internal const int MaximumPendingRootBatches = 4096;
+        // A context's presence does not identify the UI thread. Capture the owner from
+        // work actually run by the UI scheduler; Connect awaits the completed initial bind.
+        // Context-free model callers retain their synchronous current-thread projection.
+        internal static Task BindRootProjectionOnOwner(Action<int?> bind, SynchronizationContext? context, IScheduler uiScheduler)
+        {
+            if (context == null)
+            {
+                bind(null);
+                return Task.CompletedTask;
+            }
+            return BindOnUiAsync();
+
+            async Task BindOnUiAsync()
+            {
+                var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                using var scheduled = uiScheduler.Schedule(() =>
+                {
+                    try { bind(Environment.CurrentManagedThreadId); completion.SetResult(); }
+                    catch (Exception error) { completion.SetException(error); }
+                });
+                await completion.Task;
+            }
+        }
+
+        internal static IObservable<T> DeliverRootProjection<T>(IObservable<T> source, IScheduler uiScheduler, int uiThreadId, Action<string, long>? trace = null) =>
+            Observable.Create<T>(observer =>
+            {
+                var gate = new object();
+                var pending = new Queue<Action>();
+                var upstream = new SingleAssignmentDisposable();
+                var postedWork = new SerialDisposable();
+                var disposed = false;
+                var draining = false;
+                var posted = false;
+                var batchId = 0L;
+
+                void Dispose()
+                {
+                    lock (gate)
+                    {
+                        disposed = true;
+                        pending.Clear();
+                    }
+                    postedWork.Dispose();
+                    upstream.Dispose();
+                }
+
+                void Drain()
+                {
+                    lock (gate)
+                    {
+                        if (disposed || draining) return;
+                        draining = true;
+                        posted = false;
+                    }
+                    try
+                    {
+                        while (true)
+                        {
+                            Action publish;
+                            lock (gate)
+                            {
+                                if (disposed || pending.Count == 0)
+                                {
+                                    draining = false;
+                                    return;
+                                }
+                                publish = pending.Dequeue();
+                            }
+                            // Do not hold the queue lock through a consumer: a notification can
+                            // cause a nested source edit. Its batch is drained after this one ends.
+                            publish();
+                        }
+                    }
+                    catch
+                    {
+                        Dispose();
+                        throw;
+                    }
+                    finally
+                    {
+                        lock (gate) draining = false;
+                    }
+                }
+
+                void Enqueue(Action publish)
+                {
+                    var owner = Environment.CurrentManagedThreadId == uiThreadId;
+                    SingleAssignmentDisposable? scheduled = null;
+                    var overflow = false;
+                    lock (gate)
+                    {
+                        if (disposed) return;
+                        overflow = pending.Count >= MaximumPendingRootBatches;
+                        if (!overflow)
+                        {
+                            var id = ++batchId;
+                            trace?.Invoke("accepted", id);
+                            pending.Enqueue(() => { trace?.Invoke("published", id); publish(); });
+                        }
+                        if (!overflow && !owner && !draining && !posted)
+                        {
+                            posted = true;
+                            scheduled = new SingleAssignmentDisposable();
+                            // Assign the cancellation slot before posting. A fast dispatcher can
+                            // finish this callback before Schedule returns; its late assignment
+                            // must never cancel a newer worker batch's post.
+                            postedWork.Disposable = scheduled;
+                        }
+                    }
+                    if (overflow)
+                    {
+                        Dispose();
+                        throw new InvalidOperationException("The root UI projection exceeded its pending batch limit.");
+                    }
+                    // Every direct owner update drains earlier accepted worker batches too.
+                    // ObserveOn's acquired loop alone cannot provide this synchronous fast path.
+                    if (owner) Drain();
+                    else if (scheduled != null)
+                    {
+                        try { scheduled.Disposable = uiScheduler.Schedule(Drain); }
+                        catch
+                        {
+                            Dispose();
+                            throw;
+                        }
+                    }
+                }
+
+                upstream.Disposable = source.Subscribe(
+                    value => Enqueue(() => observer.OnNext(value)),
+                    error => Enqueue(() => { try { observer.OnError(error); } finally { Dispose(); } }),
+                    () => Enqueue(() => { try { observer.OnCompleted(); } finally { Dispose(); } }));
+                return Disposable.Create(Dispose);
+            });
+
         private ReadOnlyObservableCollection<TaskWrapperViewModel> _unlockedItems = EmptyTaskWrappers;
         public ReadOnlyObservableCollection<TaskWrapperViewModel> UnlockedItems { get; set; }
 
@@ -2908,6 +3624,16 @@ namespace Unlimotion.ViewModel
         public TaskWrapperViewModel CurrentItemBlockedBy { get; private set; } = null!;
         public TaskRelationEditorViewModel CurrentRelationEditor { get; }
         public SearchDefinition Search { get; set; } = new();
+        public TaskListFilterScope LastCreatedFilter { get; } = new();
+        public TaskListFilterScope LastUpdatedFilter { get; } = new();
+        public TaskListFilterScope InProgressFilter { get; } = new();
+        public TaskListFilterScope CompletedFilter { get; } = new();
+        public TaskListFilterScope ArchivedFilter { get; } = new();
+        public TaskListFilterScope LastOpenedFilter { get; } = new();
+        public TaskListFilterScope RoadmapFilter { get; } = new();
+        private TaskListFilterScope[] OtherTaskListFilters =>
+            [LastCreatedFilter, LastUpdatedFilter, InProgressFilter, CompletedFilter,
+                ArchivedFilter, LastOpenedFilter, RoadmapFilter];
 
         public ICommand Create { get; set; } = null!;
 
@@ -2978,16 +3704,144 @@ namespace Unlimotion.ViewModel
         [AlsoNotifyFor(nameof(CurrentWantedFilter))]
         public bool? ShowWanted { get; set; }
 
+        public SearchDefinition UnlockedSearch { get; } = new();
+
         public SettingsViewModel Settings { get; set; }
+        public FeedViewModel Feed { get; }
+
+        public ICommand OpenQuickCaptureCommand { get; }
+
+        public ICommand OpenQuickTaskCaptureCommand { get; }
+
+        public ICommand CloseQuickCaptureCommand { get; }
+
+        public ICommand SaveQuickCaptureCommand { get; }
+
+        public ICommand OpenSettingsCommand { get; }
+
+        public ICommand CloseSettingsCommand { get; }
+
+        public ICommand OpenReviewCommand { get; }
+
+        public bool IsQuickCaptureOpen { get; private set; }
+
+        public bool IsQuickCaptureTask { get; set; }
+
+        public bool IsSettingsOpen { get; private set; }
+
+        public void OpenQuickCapture(bool isTask)
+        {
+            IsSettingsOpen = false;
+            Feed.ResetQuickCaptureTaskResult();
+            IsQuickCaptureTask = isTask;
+            IsQuickCaptureOpen = true;
+        }
+
+        public void CloseQuickCapture()
+        {
+            IsQuickCaptureOpen = false;
+        }
+
+        public void OpenSettings()
+        {
+            IsQuickCaptureOpen = false;
+            IsSettingsOpen = true;
+        }
+
+        public void CloseSettings()
+        {
+            IsSettingsOpen = false;
+        }
+
+        public bool CloseTopmostOverlay()
+        {
+            if (IsNextStepOpen)
+            {
+                CloseNextStepCommand.Execute(null);
+                return true;
+            }
+            if (IsSettingsOpen)
+            {
+                CloseSettings();
+                return true;
+            }
+
+            if (IsQuickCaptureOpen)
+            {
+                CloseQuickCapture();
+                return true;
+            }
+
+            if (Feed.IsReviewActive && !IsWorkspaceShellAttached)
+            {
+                Feed.FinishReviewCommand.Execute(null);
+                return true;
+            }
+
+            return false;
+        }
+
+        private async Task SaveQuickCaptureCoreAsync()
+        {
+            if (IsQuickCaptureTask)
+            {
+                await Feed.CaptureTaskAsync();
+                return;
+            }
+
+            await Feed.CaptureAsync();
+            if (string.IsNullOrEmpty(Feed.QuickCaptureText) && !Feed.HasError)
+            {
+                CloseQuickCapture();
+            }
+        }
+
+        private async Task OpenReviewCoreAsync()
+        {
+            IsQuickCaptureOpen = false;
+            IsSettingsOpen = false;
+            IsNextStepOpen = false;
+            if (IsWorkspaceShellAttached && Feed.IsReviewActive)
+            {
+                await OpenWorkspaceLocationAsync(WorkspaceLocation.ReviewRoot with { Title = L10n.Get("GlobalReview") });
+                return;
+            }
+            await Feed.StartReviewAsync();
+            if (IsWorkspaceShellAttached && !Feed.IsReviewActive)
+                await OpenWorkspaceLocationAsync(WorkspaceLocation.ReviewRoot with { Title = L10n.Get("GlobalReview") });
+        }
+
+        [AlsoNotifyFor(nameof(IsTasksMode), nameof(IsFeedMode))]
+        public WorkspaceMode SelectedWorkspaceMode { get; set; } = WorkspaceMode.Tasks;
+
+        public bool IsTasksMode
+        {
+            get => SelectedWorkspaceMode == WorkspaceMode.Tasks;
+            set
+            {
+                if (value) _ = OpenWorkspaceRootAsync(WorkspaceMode.Tasks);
+            }
+        }
+
+        public bool IsFeedMode
+        {
+            get => SelectedWorkspaceMode == WorkspaceMode.Feed;
+            set => _ = OpenWorkspaceRootAsync(value ? WorkspaceMode.Feed : WorkspaceMode.Tasks);
+        }
+
         public GraphViewModel Graph { get; set; }
+
+        public WorkspaceNavigationViewModel WorkspaceNavigation { get; }
 
         private ReadOnlyObservableCollection<EmojiFilter> _emojiFilters = EmptyEmojiFilters;
         public ReadOnlyObservableCollection<EmojiFilter> EmojiFilters { get; set; } = EmptyEmojiFilters;
+        public ObservableCollection<EmojiFilter> UnlockedEmojiFilters { get; } = [];
 
         public EmojiFilter AllEmojiFilter { get; } = new() { Emoji = "", Title = "All", ShowTasks = false, SortText = "\u0000" };
 
         private ReadOnlyObservableCollection<EmojiFilter> _emojiExcludeFilters = EmptyEmojiFilters;
         public ReadOnlyObservableCollection<EmojiFilter> EmojiExcludeFilters { get; set; } = EmptyEmojiFilters;
+        public ObservableCollection<EmojiFilter> UnlockedEmojiExcludeFilters { get; } = [];
 
         public EmojiFilter AllEmojiExcludeFilter { get; } = new() { Emoji = "", Title = "All", ShowTasks = false, SortText = "\u0000" };
 

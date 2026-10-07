@@ -16,6 +16,7 @@ using Unlimotion.Domain;
 using Unlimotion.Storage;
 using Unlimotion.UiTests.Authoring.Pages;
 using Unlimotion.ViewModel;
+using Unlimotion.ViewModel.Workspace;
 using DomainTaskStatus = Unlimotion.Domain.TaskStatus;
 
 namespace Unlimotion.UiTests.Headless.Tests;
@@ -28,12 +29,14 @@ public sealed class CliLiveRefreshHeadlessTests
     [Test]
     public async Task CliChanges_RefreshOpenDesktopProjection()
     {
+        await Task.CompletedTask.ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
         MainWindowViewModel? capturedViewModel = null;
         using var session = DesktopAppSession.Launch(
             UnlimotionAppLaunchHost.CreateHeadlessLaunchOptions(
                 UnlimotionAutomationScenario.CliLiveRefresh,
                 language: "en",
                 afterViewModelPrepared: viewModel => capturedViewModel = viewModel));
+        ShowHeadlessWindow(session.MainWindow);
 
         var viewModel = capturedViewModel
             ?? throw new InvalidOperationException("CLI live-refresh view model was not captured.");
@@ -43,6 +46,9 @@ public sealed class CliLiveRefreshHeadlessTests
         var fileStorage = storage.TaskTreeManager.Storage as FileStorage
             ?? throw new InvalidOperationException("CLI live-refresh scenario did not use FileStorage.");
         var persistedReader = CreateExternalStorage(fileStorage.Path);
+        await OpenListAsync(viewModel).ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
+        await OpenCardAsync(viewModel, UnlimotionAutomationScenarioData.CliLiveRefreshTaskId, WorkspaceOpenDisposition.AdjacentPane)
+            .ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
         var page = new MainWindowPage(new HeadlessControlResolver(session.MainWindow));
         var statusPicker = GetNativeControl<TaskStatusPicker>(page.CurrentTaskStatusButton);
         var allTasksTree = GetNativeControl<TreeView>(page.AllTasksTree);
@@ -103,12 +109,13 @@ public sealed class CliLiveRefreshHeadlessTests
                       UnlimotionAutomationScenarioData.CliLiveRefreshTaskId,
                       DomainTaskStatus.Completed),
             () => DescribeRefreshState(fileStorage, storage, viewModel));
-
+        await Task.CompletedTask.ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
     }
 
     [Test]
     public async Task Apply_RefreshesOpenDesktopProjection()
     {
+        await Task.CompletedTask.ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
         MainWindowViewModel? capturedViewModel = null;
         using var session = DesktopAppSession.Launch(
             UnlimotionAppLaunchHost.CreateHeadlessLaunchOptions(
@@ -123,6 +130,9 @@ public sealed class CliLiveRefreshHeadlessTests
         BindHeadlessSynchronizationContext(storage);
         var fileStorage = storage.TaskTreeManager.Storage as FileStorage
             ?? throw new InvalidOperationException("Apply live-refresh scenario did not use FileStorage.");
+        ShowHeadlessWindow(session.MainWindow);
+        await OpenCardAsync(viewModel, UnlimotionAutomationScenarioData.CliLiveRefreshTaskId)
+            .ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
         var page = new MainWindowPage(new HeadlessControlResolver(session.MainWindow));
         var titleTextBox = GetNativeControl<TextBox>(page.CurrentTaskTitleTextBox);
         var taskId = UnlimotionAutomationScenarioData.CliLiveRefreshTaskId;
@@ -163,17 +173,20 @@ public sealed class CliLiveRefreshHeadlessTests
         {
             File.Delete(requestPath);
         }
+        await Task.CompletedTask.ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
     }
 
     [Test]
     public async Task ExternalWriterCreateRelationAndDelete_RefreshOpenDesktopProjection()
     {
+        await Task.CompletedTask.ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
         MainWindowViewModel? capturedViewModel = null;
         using var session = DesktopAppSession.Launch(
             UnlimotionAppLaunchHost.CreateHeadlessLaunchOptions(
                 UnlimotionAutomationScenario.CliLiveRefresh,
                 language: "en",
                 afterViewModelPrepared: viewModel => capturedViewModel = viewModel));
+        ShowHeadlessWindow(session.MainWindow);
 
         var viewModel = capturedViewModel
             ?? throw new InvalidOperationException("External graph view model was not captured.");
@@ -184,14 +197,12 @@ public sealed class CliLiveRefreshHeadlessTests
             ?? throw new InvalidOperationException("External graph scenario did not use FileStorage.");
         var writer = CreateExternalStorage(fileStorage.Path);
         var page = new MainWindowPage(new HeadlessControlResolver(session.MainWindow));
-        var titleTextBox = GetNativeControl<TextBox>(page.CurrentTaskTitleTextBox);
-        var containsTree = GetNativeControl<TreeView>(page.CurrentItemContainsTree);
-        var parentsTree = GetNativeControl<TreeView>(page.CurrentItemParentsTree);
         var child = CreateTask(UnlimotionAutomationScenarioData.CliLiveRefreshChildTaskId, "External graph child");
         await writer.Save(child);
         await Assert.That((await RequireTaskAsync(writer, child.Id)).Id).IsEqualTo(child.Id);
         await WaitForUiAsync(() => TryGetTask(storage, child.Id, out _));
-        SelectCurrentTask(viewModel, RequireTask(storage, child.Id));
+        await OpenCardAsync(viewModel, child.Id).ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
+        var titleTextBox = GetNativeControl<TextBox>(page.CurrentTaskTitleTextBox);
         await WaitForUiAsync(() => string.Equals(
             titleTextBox.Text,
             child.Title,
@@ -217,13 +228,18 @@ public sealed class CliLiveRefreshHeadlessTests
             return parent.ContainsTasks.Any(item => item.Id == child.Id) &&
                    currentChild.ParentsTasks.Any(item => item.Id == parent.Id);
         });
-        SelectCurrentTask(viewModel, RequireTask(storage, UnlimotionAutomationScenarioData.CliLiveRefreshParentTaskId));
+        await OpenCardAsync(viewModel, UnlimotionAutomationScenarioData.CliLiveRefreshParentTaskId)
+            .ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
+        var containsTree = GetNativeControl<TreeView>(page.CurrentItemContainsTree);
         await WaitForUiAsync(() => ContainsRenderedTask(containsTree, child.Id));
-        SelectCurrentTask(viewModel, RequireTask(storage, child.Id));
+        await OpenCardAsync(viewModel, child.Id).ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
+        var parentsTree = GetNativeControl<TreeView>(page.CurrentItemParentsTree);
         await WaitForUiAsync(() => ContainsRenderedTask(
             parentsTree,
             UnlimotionAutomationScenarioData.CliLiveRefreshParentTaskId));
-        SelectCurrentTask(viewModel, RequireTask(storage, UnlimotionAutomationScenarioData.CliLiveRefreshParentTaskId));
+        await OpenCardAsync(viewModel, UnlimotionAutomationScenarioData.CliLiveRefreshParentTaskId)
+            .ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
+        containsTree = GetNativeControl<TreeView>(page.CurrentItemContainsTree);
 
         await writer.WithDirectoryLockAsync(async () =>
         {
@@ -243,11 +259,15 @@ public sealed class CliLiveRefreshHeadlessTests
         });
 
         await Assert.That(File.Exists(Path.Combine(fileStorage.Path, child.Id))).IsFalse();
+        await Task.CompletedTask.ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
     }
 
     [Test]
     public async Task ExternalAliasIdChange_ReplacesOldDesktopProjection()
     {
+        // TUnit may start the next serialized test inline on the preceding
+        // session's UI continuation; synchronous Launch must run off that thread.
+        await Task.CompletedTask.ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
         MainWindowViewModel? capturedViewModel = null;
         using var session = DesktopAppSession.Launch(
             UnlimotionAppLaunchHost.CreateHeadlessLaunchOptions(
@@ -262,6 +282,8 @@ public sealed class CliLiveRefreshHeadlessTests
         BindHeadlessSynchronizationContext(storage);
         var fileStorage = storage.TaskTreeManager.Storage as FileStorage
             ?? throw new InvalidOperationException("Alias refresh scenario did not use FileStorage.");
+        ShowHeadlessWindow(session.MainWindow);
+        await OpenListAsync(viewModel).ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
         var page = new MainWindowPage(new HeadlessControlResolver(session.MainWindow));
         var allTasksTree = GetNativeControl<TreeView>(page.AllTasksTree);
         var oldId = UnlimotionAutomationScenarioData.CliLiveRefreshTaskId;
@@ -281,10 +303,28 @@ public sealed class CliLiveRefreshHeadlessTests
             ContainsRenderedTask(allTasksTree, replacementId));
         await Assert.That(File.Exists(sourcePath)).IsTrue();
         await Assert.That(File.Exists(Path.Combine(fileStorage.Path, replacementId))).IsFalse();
+        await Task.CompletedTask.ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
     }
 
     private static TaskItemViewModel CurrentTask(MainWindowViewModel viewModel) =>
         viewModel.CurrentTaskItem ?? throw new InvalidOperationException("Current task disappeared during CLI refresh test.");
+
+    private static void ShowHeadlessWindow(Window window) => DispatchUi(() =>
+    {
+        // Launch creates the native window but does not show it. Relation controls
+        // initialize their projections on AttachedToVisualTree, as they do in the app.
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+    });
+
+    private static void DispatchUi(Action action)
+    {
+        if (Dispatcher.UIThread.CheckAccess()) action();
+        else HeadlessRuntime.Dispatch(action);
+    }
+
+    private static T DispatchUi<T>(Func<T> action) => Dispatcher.UIThread.CheckAccess()
+        ? action() : HeadlessRuntime.Dispatch(action);
 
     private static TControl GetNativeControl<TControl>(IUiControl wrappedControl)
         where TControl : Control
@@ -335,22 +375,26 @@ public sealed class CliLiveRefreshHeadlessTests
         var deadline = DateTimeOffset.UtcNow + RefreshTimeout;
         while (DateTimeOffset.UtcNow < deadline)
         {
-            if (HeadlessRuntime.Dispatch(() =>
+            if (await ObserveUiAsync(() =>
                 {
                     Dispatcher.UIThread.RunJobs();
                     return condition();
-                }))
+                }).ConfigureAwait(ConfigureAwaitOptions.ForceYielding))
             {
                 return;
             }
 
-            await Task.Delay(TimeSpan.FromMilliseconds(50));
+            await Task.Delay(TimeSpan.FromMilliseconds(50)).ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
         }
 
         throw new TimeoutException(
             "Desktop UI did not converge to the externally persisted task state. " +
-            (diagnostic?.Invoke() ?? string.Empty));
+            (diagnostic is null ? string.Empty : await ObserveUiAsync(diagnostic).ConfigureAwait(ConfigureAwaitOptions.ForceYielding)));
     }
+
+    private static Task<T> ObserveUiAsync<T>(Func<T> observation) => Dispatcher.UIThread.CheckAccess()
+        ? Task.FromResult(observation())
+        : HeadlessRuntime.Session.Dispatch(() => Task.FromResult(observation()), CancellationToken.None);
 
     private static void BindHeadlessSynchronizationContext(UnifiedTaskStorage storage)
     {
@@ -366,8 +410,29 @@ public sealed class CliLiveRefreshHeadlessTests
         }
     }
 
-    private static void SelectCurrentTask(MainWindowViewModel viewModel, TaskItemViewModel task) =>
-        HeadlessRuntime.Dispatch(() => viewModel.CurrentTaskItem = task);
+    private static async Task OpenCardAsync(MainWindowViewModel viewModel, string taskId,
+        WorkspaceOpenDisposition disposition = WorkspaceOpenDisposition.CurrentTab)
+    {
+        // Headless dispatch may complete inline on its UI thread. ForceYielding
+        // without ContinueOnCapturedContext guarantees the next provider resolver
+        // runs on the thread pool, even when both route and wait already completed.
+        var opened = await HeadlessRuntime.Session.Dispatch<bool>(
+            () => viewModel.TryOpenTaskByIdAsync(taskId, disposition), CancellationToken.None)
+            .ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
+        if (!opened) throw new InvalidOperationException($"Cannot open task document {taskId}.");
+        await WaitForUiAsync(() => viewModel.WorkspaceNavigation.ActiveTab.CurrentLocation?.Id == taskId)
+            .ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
+    }
+
+    private static async Task OpenListAsync(MainWindowViewModel viewModel)
+    {
+        var opened = await HeadlessRuntime.Session.Dispatch<bool>(
+            () => viewModel.OpenWorkspaceLocationAsync(WorkspaceLocation.ForTaskList(TaskListKind.AllTasks)),
+            CancellationToken.None).ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
+        if (!opened) throw new InvalidOperationException("Cannot open All Tasks document.");
+        await WaitForUiAsync(() => viewModel.WorkspaceNavigation.ActiveTab.CurrentLocation?.TaskListKind == TaskListKind.AllTasks)
+            .ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
+    }
 
     private static bool ContainsRenderedTask(TreeView tree, string taskId) =>
         tree.ItemsSource?.OfType<TaskWrapperViewModel>().Any(item =>
@@ -384,7 +449,7 @@ public sealed class CliLiveRefreshHeadlessTests
 
     private static bool GetStatusOptionEnabled(TaskStatusPicker statusPicker, string automationId)
     {
-        return HeadlessRuntime.Dispatch(() =>
+        return DispatchUi(() =>
         {
             var onClick = FindMethod(statusPicker.GetType(), "OnClick")
                 ?? throw new InvalidOperationException("TaskStatusPicker did not expose OnClick.");
@@ -499,6 +564,6 @@ public sealed class CliLiveRefreshHeadlessTests
     private sealed class HeadlessSynchronizationContext : SynchronizationContext
     {
         public override void Post(SendOrPostCallback callback, object? state) =>
-            HeadlessRuntime.Dispatch(() => callback(state));
+            Dispatcher.UIThread.Post(() => callback(state));
     }
 }

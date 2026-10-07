@@ -2,11 +2,13 @@ using AppAutomation.Abstractions;
 using AppAutomation.Avalonia.Headless.Automation;
 using AppAutomation.Avalonia.Headless.Session;
 using AppAutomation.TUnit;
+using Avalonia.Threading;
 using ReactiveUI;
 using TUnit.Assertions;
 using TUnit.Core;
 using Unlimotion.AppAutomation.TestHost;
 using Unlimotion.UiTests.Authoring.Pages;
+using Unlimotion.UiTests.Headless.Infrastructure;
 using Unlimotion.ViewModel;
 using Unlimotion.UiTests.Headless.Infrastructure;
 using Avalonia.Threading;
@@ -27,11 +29,19 @@ public sealed class SettingsRemoteTypeHeadlessTests
             DesktopAppSession.Launch(
                 UnlimotionAppLaunchHost.CreateHeadlessLaunchOptions(
                     UnlimotionAutomationScenario.GitRemoteSwitch,
-                    afterViewModelPrepared: vm => _vm = vm)));
+                    afterViewModelPrepared: vm => _vm = vm,
+                    viewModelFactoryDispatcher: factory => HeadlessRuntime.Dispatch(factory),
+                    prepareViewModelDispatcher: HeadlessSessionHooks.PrepareAsync,
+                    headlessWindowCleanup: HeadlessSessionHooks.CloseWindow)));
     }
 
     protected override MainWindowPage CreatePage(MainWindowHeadlessTests.HeadlessRuntimeSession session)
     {
+        HeadlessRuntime.Dispatch(() =>
+        {
+            session.Inner.MainWindow.Show();
+            Dispatcher.UIThread.RunJobs();
+        });
         return new MainWindowPage(new HeadlessControlResolver(session.Inner.MainWindow));
     }
 
@@ -40,7 +50,7 @@ public sealed class SettingsRemoteTypeHeadlessTests
     public async Task Settings_remote_type_switch_creates_ssh_copy_for_single_http_remote()
     {
         using var presentation = new HeadlessWindowPresentation(Session.Inner.MainWindow);
-        Page.SelectTabItem(static page => page.SettingsTabItem, timeoutMs: 10_000);
+        Page.ClickButton(static page => page.GlobalSettingsButton);
         _ = WaitUntil(
             () => TryResolveDuringWait(() => Page.SettingsRoot),
             static control => control is not null,
@@ -135,7 +145,7 @@ public sealed class SettingsRemoteTypeHeadlessTests
     [NotInParallel(DesktopUiConstraint)]
     public async Task Settings_refresh_metadata_fills_empty_remote_url_from_current_local_storage()
     {
-        Page.SelectTabItem(static page => page.SettingsTabItem, timeoutMs: 10_000);
+        Page.ClickButton(static page => page.GlobalSettingsButton);
         _ = WaitUntil(
             () => TryResolveDuringWait(() => Page.SettingsRoot),
             static control => control is not null,
@@ -153,7 +163,7 @@ public sealed class SettingsRemoteTypeHeadlessTests
         _vm.Settings.GitRemoteUrl = string.Empty;
         await Assert.That(_vm.Settings.RefreshGitMetadataCommand?.CanExecute(null)).IsTrue();
 
-        _vm.Settings.RefreshGitMetadataCommand!.Execute(null);
+        Page.ClickButton(static page => page.RefreshGitMetadataButton);
 
         var selectedRemote = WaitUntil(
             () => new RemoteMetadataWaitState(_vm?.Settings.GitRemoteName, _vm?.Settings.GitRemoteUrl),

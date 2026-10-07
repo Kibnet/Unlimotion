@@ -29,6 +29,7 @@ using Newtonsoft.Json.Linq;
 using Unlimotion.Domain;
 using Unlimotion.ViewModel;
 using Unlimotion.ViewModel.Localization;
+using Unlimotion.ViewModel.Workspace;
 using Unlimotion.Views;
 using DomainTaskStatus = Unlimotion.Domain.TaskStatus;
 
@@ -97,7 +98,8 @@ public class MainControlTaskCardLayoutUiTests
                 var (view, createdWindow) = await CreateArrangedMainControlAsync(fixture, 1400, 900);
                 window = createdWindow;
 
-                foreach (var automationId in SectionAutomationIds.Concat(KeyControlAutomationIds))
+                foreach (var automationId in SectionAutomationIds.Concat(KeyControlAutomationIds)
+                             .Where(static id => id != "CurrentTaskIdTextBlock"))
                 {
                     var control = FindControlByAutomationId<Control>(view, automationId);
                     AssertVisibleAndArranged(control, automationId);
@@ -106,7 +108,7 @@ public class MainControlTaskCardLayoutUiTests
                 var detailsPanelFrame = FindControlByAutomationId<Border>(view, "CurrentTaskDetailsPanelFrame");
                 var card = FindControlByAutomationId<Border>(view, "CurrentTaskCard");
                 var header = FindControlByAutomationId<Control>(card, "CurrentTaskHeader");
-                var createMenuButton = FindControlByAutomationId<DropDownButton>(view, "GlobalTaskCreateMenuButton");
+                var createMenuButton = FindControlByAutomationId<Button>(view, "GlobalCreateMenuButton");
                 var actionsMenuButton = FindControlByAutomationId<DropDownButton>(view, "CurrentTaskActionsMenuButton");
                 var titleTextBox = FindControlByAutomationId<TextBox>(view, "CurrentTaskTitleTextBox");
                 var descriptionTextBox = FindControlByAutomationId<TextBox>(view, "CurrentTaskDescriptionTextBox");
@@ -114,10 +116,12 @@ public class MainControlTaskCardLayoutUiTests
                 var setDurationButton = FindControlByAutomationId<DropDownButton>(view, "CurrentTaskSetDurationButton");
                 var setEndButton = FindControlByAutomationId<DropDownButton>(view, "CurrentTaskSetEndButton");
 
-                AssertTaskDetailsPanelFrameUsesVisibleBorder(detailsPanelFrame);
+                AssertVisibleAndArranged(detailsPanelFrame, "CurrentTaskDetailsPanelFrame");
+                await Assert.That(detailsPanelFrame.Classes.Contains("WorkspaceTaskRoute")).IsTrue();
+                await Assert.That(detailsPanelFrame.BorderThickness).IsEqualTo(new Thickness(0));
                 AssertTaskCardIsContentContainer(card);
-                AssertHasClass(createMenuButton, "TaskCreateMenuButton");
-                AssertIconOnlyDropDownButton(createMenuButton, "➕", 42);
+                AssertHasClass(createMenuButton, "GlobalCreateButton");
+                AssertIconOnlyButton(createMenuButton, "➕", 42);
                 AssertCreateMenuContainsTaskCommands(createMenuButton);
                 AssertHasClass(actionsMenuButton, "TaskActionsMenuButton");
                 AssertIconOnlyDropDownButton(actionsMenuButton, "⚙", 36);
@@ -134,7 +138,7 @@ public class MainControlTaskCardLayoutUiTests
                 AssertIconOnlyDropDownButton(setDurationButton, "⏱", 40);
                 AssertIconOnlyDropDownButton(setEndButton, "🏁", 40);
 
-                AssertTaskActionsMenuSitsAfterIdBelowTitle(view);
+                AssertTaskActionsMenuSitsBelowTitle(view);
                 AssertDesktopPlanningGroupsStayCompactRow(view);
                 AssertDesktopRepeaterControlsStayCompact(view);
                 AssertStatusHistoryLivesAtTaskCardBottomAndExpandsDown(view);
@@ -524,17 +528,22 @@ public class MainControlTaskCardLayoutUiTests
                     FindControlByAutomationId<Button>(view, "CurrentTaskParentsRelationAddButton"),
                     FindControlByAutomationId<Button>(view, "CurrentTaskBlockingRelationAddButton"),
                     FindControlByAutomationId<Button>(view, "CurrentTaskContainingRelationAddButton"),
-                    FindControlByAutomationId<Button>(view, "CurrentTaskBlockedRelationAddButton"),
-                    FindControlByAutomationId<DropDownButton>(view, "GlobalTaskCreateMenuButton")
+                    FindControlByAutomationId<Button>(view, "CurrentTaskBlockedRelationAddButton")
                 ];
+                var globalCreateButton = FindControlByAutomationId<Button>(view, "GlobalCreateMenuButton");
 
-                AssertTaskDetailsPanelFrameUsesVisibleBorder(detailsPanelFrame);
+                AssertVisibleAndArranged(detailsPanelFrame, "CurrentTaskDetailsPanelFrame");
+                await Assert.That(detailsPanelFrame.Classes.Contains("WorkspaceTaskRoute")).IsTrue();
+                await Assert.That(detailsPanelFrame.BorderThickness).IsEqualTo(new Thickness(0));
                 AssertTaskCardIsContentContainer(card);
                 foreach (var button in accentOutlineButtons)
                 {
                     AssertDoesNotUseLightThemeAccentBackground(button);
                     AssertHasClass(button, "TaskAccentOutlineButton");
                 }
+
+                AssertDoesNotUseLightThemeAccentBackground(globalCreateButton);
+                AssertHasClass(globalCreateButton, "GlobalCreateButton");
             }
             finally
             {
@@ -555,7 +564,7 @@ public class MainControlTaskCardLayoutUiTests
     [Test]
     public async Task CurrentTaskCard_DesktopRepeaterLayout_UsesCompactControls()
     {
-        var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        var session = HeadlessUnitTestSession.StartNew(typeof(SkiaHeadlessAppBuilder));
         try
         {
             await session.DispatchAsync(async () =>
@@ -943,6 +952,8 @@ public class MainControlTaskCardLayoutUiTests
                 };
                 var splitView = view.GetVisualDescendants().OfType<SplitView>().First();
 
+                await Assert.That(await vm.OpenWorkspaceRootAsync(WorkspaceMode.Tasks)).IsTrue();
+
                 vm.CurrentAllTasksItems = new ReadOnlyObservableCollection<TaskWrapperViewModel>(items);
                 vm.CurrentAllTasksItem = null;
                 vm.CurrentTaskItem = null;
@@ -951,15 +962,20 @@ public class MainControlTaskCardLayoutUiTests
                 RunLayoutJobs();
                 await Assert.That(splitView.IsPaneOpen).IsFalse();
 
-                var createMenuButton = FindControlByAutomationId<DropDownButton>(view, "GlobalTaskCreateMenuButton");
+                var createMenuButton = FindControlByAutomationId<Button>(view, "GlobalCreateMenuButton");
                 await Assert.That(IsVisibleAndArranged(createMenuButton)).IsTrue();
 
                 var handled = vm.TryHandleTaskCardBackGesture();
                 RunLayoutJobs();
 
                 await Assert.That(handled).IsTrue();
-                await Assert.That(splitView.IsPaneOpen).IsTrue();
+                await Assert.That(WaitFor(() => splitView.IsPaneOpen
+                    && vm.WorkspaceNavigation.ActiveTab.CurrentLocation?.Id == task.Id)).IsTrue();
                 await Assert.That(vm.CurrentTaskItem).IsEqualTo(task);
+
+                await Assert.That(vm.TryHandleTaskCardBackGesture()).IsTrue();
+                await Assert.That(WaitFor(() => !splitView.IsPaneOpen
+                    && vm.WorkspaceNavigation.ActiveTab.CurrentLocation?.Kind == WorkspaceLocationKind.Tasks)).IsTrue();
             }
             finally
             {
@@ -1080,7 +1096,7 @@ public class MainControlTaskCardLayoutUiTests
                 var (view, createdWindow) = await CreateArrangedMainControlAsync(fixture, width, 844);
                 window = createdWindow;
 
-                var createMenuButton = FindControlByAutomationId<DropDownButton>(view, "GlobalTaskCreateMenuButton");
+                var createMenuButton = FindControlByAutomationId<Button>(view, "GlobalCreateMenuButton");
                 AssertCreateMenuContainsTaskCommands(createMenuButton);
                 AssertCreateMenuUsesTouchFriendlyItems(createMenuButton);
                 AssertHorizontallyContained(view, createMenuButton);
@@ -1129,7 +1145,7 @@ public class MainControlTaskCardLayoutUiTests
                 var commandBar = FindControlByAutomationId<Control>(view, "CurrentTaskCommandBar");
                 var header = FindControlByAutomationId<Control>(card, "CurrentTaskHeader");
                 var title = FindControlByAutomationId<TextBox>(card, "CurrentTaskTitleTextBox");
-                var createMenuButton = FindControlByAutomationId<DropDownButton>(view, "GlobalTaskCreateMenuButton");
+                var createMenuButton = FindControlByAutomationId<Button>(view, "GlobalCreateMenuButton");
                 var actionsMenuButton = FindControlByAutomationId<DropDownButton>(view, "CurrentTaskActionsMenuButton");
 
                 AssertNoHorizontalOverflow(scrollViewer, card);
@@ -1140,14 +1156,14 @@ public class MainControlTaskCardLayoutUiTests
                 await Assert.That(IsVisibleAndArranged(parentEmojiTrail)).IsTrue();
                 await Assert.That(parentEmojiTrail.EmojiText).IsEqualTo(LongEmojiAncestorTrail);
                 AssertHorizontallyContained(scrollViewer, parentEmojiTrail);
-                AssertHasClass(createMenuButton, "TaskCreateMenuButton");
+                AssertHasClass(createMenuButton, "GlobalCreateButton");
                 AssertCreateMenuContainsTaskCommands(createMenuButton);
                 AssertHorizontallyContained(view, createMenuButton);
                 AssertHasClass(actionsMenuButton, "TaskActionsMenuButton");
                 AssertActionsMenuContainsTaskCommands(actionsMenuButton);
                 await Assert.That(IsVisibleAndArranged(actionsMenuButton)).IsTrue();
 
-                foreach (var automationId in KeyControlAutomationIds)
+                foreach (var automationId in KeyControlAutomationIds.Where(static id => id != "CurrentTaskIdTextBlock"))
                 {
                     var control = FindControlByAutomationId<Control>(card, automationId);
                     await Assert.That(control.Bounds.Width).IsGreaterThan(0);
@@ -2148,7 +2164,7 @@ public class MainControlTaskCardLayoutUiTests
         currentTask.PlannedBeginDateTime ??= DateTime.Today;
         configureCurrentTask?.Invoke(currentTask);
 
-        var view = new MainControl
+        var shell = new MainScreen
         {
             DataContext = vm,
             Width = width,
@@ -2156,28 +2172,29 @@ public class MainControlTaskCardLayoutUiTests
         };
         if (fontSize.HasValue)
         {
-            view.FontSize = fontSize.Value;
+            shell.FontSize = fontSize.Value;
         }
         var window = new Window
         {
             Width = width,
             Height = height,
-            Content = view
+            Content = shell
         };
 
         window.Show();
         try
         {
+            RunLayoutJobs();
+            var view = shell.GetVisualDescendants().OfType<MainControl>().Single();
             ArrangeMainControlForTest(window, view, width, height);
             EnsureDetailsPaneArranged(window, view, width, height);
+            return (view, window);
         }
         catch
         {
             window.Close();
             throw;
         }
-
-        return (view, window);
     }
 
     private const int LongEmojiAncestorCount = 8;
@@ -2283,6 +2300,12 @@ public class MainControlTaskCardLayoutUiTests
         view.Arrange(new Rect(0, 0, width, height));
         RunLayoutJobs();
     }
+
+    private static bool WaitFor(Func<bool> predicate) => SpinWait.SpinUntil(() =>
+    {
+        Dispatcher.UIThread.RunJobs();
+        return predicate();
+    }, TimeSpan.FromSeconds(3));
 
     private static void EnsureDetailsPaneArranged(Window window, MainControl view, double width, double height)
     {
@@ -2409,6 +2432,13 @@ public class MainControlTaskCardLayoutUiTests
                     AutomationProperties.GetAutomationId(candidate),
                     automationId,
                     StringComparison.Ordinal));
+
+        control ??= TopLevel.GetTopLevel(root)?.GetVisualDescendants()
+            .OfType<T>()
+            .FirstOrDefault(candidate => string.Equals(
+                AutomationProperties.GetAutomationId(candidate),
+                automationId,
+                StringComparison.Ordinal));
 
         return control ?? throw new InvalidOperationException($"Control with AutomationId '{automationId}' was not found.");
     }
@@ -2753,7 +2783,7 @@ public class MainControlTaskCardLayoutUiTests
         return Colors.Transparent;
     }
 
-    private static void AssertCreateMenuContainsTaskCommands(DropDownButton createMenuButton)
+    private static void AssertCreateMenuContainsTaskCommands(Button createMenuButton)
     {
         if (createMenuButton.Flyout is not MenuFlyout menuFlyout)
         {
@@ -2783,7 +2813,7 @@ public class MainControlTaskCardLayoutUiTests
         }
     }
 
-    private static void AssertCreateMenuUsesTouchFriendlyItems(DropDownButton createMenuButton)
+    private static void AssertCreateMenuUsesTouchFriendlyItems(Button createMenuButton)
     {
         if (createMenuButton.Flyout is not MenuFlyout menuFlyout)
         {
@@ -2862,6 +2892,23 @@ public class MainControlTaskCardLayoutUiTests
     private static bool IsFocused(Window? window, Control control)
     {
         return ReferenceEquals(window?.FocusManager?.GetFocusedElement(), control) || control.IsFocused;
+    }
+
+    private static void AssertTaskActionsMenuSitsBelowTitle(Control root)
+    {
+        var title = FindControlByAutomationId<Control>(root, "CurrentTaskTitleTextBox");
+        var actionsMenuButton = FindControlByAutomationId<Control>(root, "CurrentTaskActionsMenuButton");
+
+        var titleBottom = GetBottomEdge(root, title);
+        var actionsTop = GetTopEdge(root, actionsMenuButton);
+
+        if (actionsTop < titleBottom - 1)
+        {
+            throw new InvalidOperationException(
+                $"Task actions menu should sit below the title row: " +
+                $"titleBottom={titleBottom:F1}; actionsTop={actionsTop:F1}.");
+        }
+
     }
 
     private static void AssertTaskActionsMenuSitsAfterIdBelowTitle(Control root)

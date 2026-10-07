@@ -93,7 +93,7 @@ public sealed class SettingsFileRecoveryFlaUiTests
                 throw new InvalidOperationException("The early shell must offer exactly Open folder and Close.");
             }
             if (FindVisible(session, "CurrentTaskTitleTextBox") != null ||
-                FindVisible(session, "AllTasksTabItem") != null || FindVisible(session, "TaskSpaceRecoveryOverlay") != null)
+                FindVisible(session, "TaskListDocument") != null || FindVisible(session, "TaskSpaceRecoveryOverlay") != null)
             {
                 throw new InvalidOperationException("Task controls must not be created for unreadable settings.");
             }

@@ -959,7 +959,7 @@ public class MainControlTaskStatusIconUiTests
     [Test]
     public async Task TaskItemViewModel_CompletionCriterionChange_SavesOnMainThreadAfterThrottle()
     {
-        var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        var session = HeadlessUnitTestSession.StartNew(typeof(SkiaHeadlessAppBuilder));
         try
         {
             await session.DispatchAsync(async () =>

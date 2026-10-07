@@ -152,6 +152,8 @@ namespace Unlimotion.Views
                 true);
             KeyDown += RoadmapEditor_KeyDown;
             RoadmapViewport.Control.KeyDown += RoadmapEditor_KeyDown;
+            AddHandler(ContextRequestedEvent, RoadmapTask_OnContextRequested,
+                RoutingStrategies.Tunnel, true);
         }
 
         protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
@@ -1313,8 +1315,12 @@ namespace Unlimotion.Views
 
         private void RoadmapInlineTitleText_OnPointerPressed(object? sender, PointerPressedEventArgs e)
         {
+            // Node actions are touch targets, not title-navigation gestures.
+            if (e.Source is Control source && (source is Button || source.GetVisualAncestors().OfType<Button>().Any()))
+                return;
             if (e.Handled ||
-                e.KeyModifiers != KeyModifiers.None ||
+                e.KeyModifiers != KeyModifiers.None &&
+                !(e.KeyModifiers == KeyModifiers.Control && this.FindParent<TaskListDocumentView>() is not null) ||
                 !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
             {
                 return;
@@ -1428,6 +1434,17 @@ namespace Unlimotion.Views
             TaskItemViewModel taskItem,
             PointerPressedEventArgs e)
         {
+            if (this.FindParent<TaskListDocumentView>() is not null &&
+                e.KeyModifiers is KeyModifiers.None or KeyModifiers.Control &&
+                ResolveMainWindowViewModel(context) is { } workspaceOwner)
+            {
+                _ = workspaceOwner.OpenWorkspaceTaskAsync(taskItem,
+                    e.KeyModifiers == KeyModifiers.Control
+                        ? Unlimotion.ViewModel.Workspace.WorkspaceOpenDisposition.NewTab
+                        : Unlimotion.ViewModel.Workspace.WorkspaceOpenDisposition.CurrentTab);
+                e.Handled = true;
+                return;
+            }
             var now = DateTimeOffset.UtcNow;
             var lastClickElapsed = lastRoadmapInlineTitleClickAt == null
                 ? TimeSpan.MaxValue
@@ -2260,7 +2277,9 @@ namespace Unlimotion.Views
                 : ResolveMainWindowViewModel(context);
             if (owner != null)
             {
-                owner.DetailsAreOpen = !owner.DetailsAreOpen;
+                if (this.FindParent<TaskListDocumentView>() is not null)
+                    _ = owner.OpenWorkspaceTaskAsync(taskItem);
+                else owner.DetailsAreOpen = !owner.DetailsAreOpen;
             }
 
             return owner;

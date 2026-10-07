@@ -30,11 +30,38 @@ namespace Unlimotion.Domain
         public RepeaterPattern? Repeater { get; set; }
         public int Importance { get; set; }
         public bool Wanted { get; set; }
+        public List<string> AreaIds { get; set; } = new();
         public int Version { get; set; } = 0;
         public AgentExecutionRecord? AgentExecution { get; set; }
 
-        [JsonExtensionData]
+        [JsonIgnore]
         public IDictionary<string, JToken>? ExtensionData { get; set; }
+
+        private bool isDeserializing;
+
+        // Keep arbitrary metadata, but never revive the retired top-level goal flag.
+        [JsonExtensionData]
+        private IDictionary<string, JToken>? SerializedExtensionData
+        {
+            get => isDeserializing
+                ? ExtensionData ??= new Dictionary<string, JToken>()
+                : CopyCurrentExtensionData(ExtensionData);
+            set => ExtensionData = value;
+        }
+
+        public static IDictionary<string, JToken>? CopyCurrentExtensionData(IDictionary<string, JToken>? data) =>
+            data?.Where(pair => !string.Equals(pair.Key, "IsGoal", StringComparison.OrdinalIgnoreCase))
+                .ToDictionary(pair => pair.Key, pair => pair.Value?.DeepClone()!);
+
+        [OnDeserializing]
+        private void BeginDeserialization(StreamingContext context) => isDeserializing = true;
+
+        [OnDeserialized]
+        private void CompleteDeserialization(StreamingContext context)
+        {
+            isDeserializing = false;
+            ExtensionData = CopyCurrentExtensionData(ExtensionData);
+        }
 
         [IgnoreDataMember]
         [JsonIgnore]

@@ -2,11 +2,19 @@ using AppAutomation.Abstractions;
 using AppAutomation.Avalonia.Headless.Automation;
 using AppAutomation.Avalonia.Headless.Session;
 using AppAutomation.TUnit;
+using Avalonia;
+using Avalonia.Automation;
+using Avalonia.Controls;
+using Avalonia.Headless;
+using Avalonia.Input;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
 using TUnit.Assertions;
 using TUnit.Core;
 using Unlimotion.AppAutomation.TestHost;
 using Unlimotion.UiTests.Authoring.Pages;
 using Unlimotion.UiTests.Authoring.Tests;
+using Unlimotion.UiTests.Headless.Infrastructure;
 using Unlimotion.ViewModel;
 
 namespace Unlimotion.UiTests.Headless.Tests;
@@ -24,17 +32,60 @@ public abstract class ReadmeDemoHeadlessTestsBase
 
     protected override MainWindowHeadlessTests.HeadlessRuntimeSession LaunchSession()
     {
-        return new MainWindowHeadlessTests.HeadlessRuntimeSession(
+        var session = new MainWindowHeadlessTests.HeadlessRuntimeSession(
             DesktopAppSession.Launch(
                 UnlimotionAppLaunchHost.CreateHeadlessLaunchOptions(
                     UnlimotionAutomationScenario.ReadmeDemo,
                     Language,
-                    vm => _vm = vm)));
+                    vm => _vm = vm,
+                    viewModelFactoryDispatcher: factory => HeadlessRuntime.Dispatch(factory),
+                    prepareViewModelDispatcher: HeadlessSessionHooks.PrepareAsync,
+                    headlessWindowCleanup: HeadlessSessionHooks.CloseWindow)));
+        HeadlessRuntime.Session.Dispatch<bool>(async () =>
+        {
+            session.Inner.MainWindow.Width = 1600;
+            session.Inner.MainWindow.Height = 800;
+            session.Inner.MainWindow.Show();
+            Dispatcher.UIThread.RunJobs();
+            session.Inner.MainWindow.UpdateLayout();
+            await GetMainWindowViewModel().TryOpenTaskByIdAsync(
+                UnlimotionAppLaunchHost.GetCurrentTaskId(UnlimotionAutomationScenario.ReadmeDemo, Language));
+            return true;
+        }, CancellationToken.None).GetAwaiter().GetResult();
+        return session;
     }
 
     protected override MainWindowPage CreatePage(MainWindowHeadlessTests.HeadlessRuntimeSession session)
     {
         return new MainWindowPage(new HeadlessControlResolver(session.Inner.MainWindow));
+    }
+
+    protected override void PrepareMainTabSelection(string automationId) => HeadlessRuntime.Dispatch(() =>
+    {
+        Session.Inner.MainWindow.Width = 1600;
+        Session.Inner.MainWindow.Show();
+        Dispatcher.UIThread.RunJobs();
+        Session.Inner.MainWindow.UpdateLayout();
+    });
+
+    protected override void ReopenFixtureTaskCard()
+    {
+        Page.WorkspaceRailAllTasksButton.Invoke();
+        var taskId = UnlimotionAppLaunchHost.GetCurrentTaskId(UnlimotionAutomationScenario.ReadmeDemo, Language);
+        var title = WaitUntil(() => HeadlessRuntime.Dispatch(() => Session.Inner.MainWindow.GetVisualDescendants()
+                .OfType<Control>().FirstOrDefault(control => control.IsEffectivelyVisible &&
+                    AutomationProperties.GetAutomationId(control) == "TaskTitle_" + taskId)),
+            control => control is not null, timeout: TimeSpan.FromSeconds(10),
+            timeoutMessage: "README fixture did not expose the task title to reopen.")!;
+        HeadlessRuntime.Dispatch(() =>
+        {
+            title.BringIntoView();
+            Session.Inner.MainWindow.UpdateLayout();
+            var point = title.TranslatePoint(new Point(title.Bounds.Width / 2, title.Bounds.Height / 2), Session.Inner.MainWindow)!.Value;
+            Session.Inner.MainWindow.MouseDown(point, MouseButton.Left);
+            Session.Inner.MainWindow.MouseUp(point, MouseButton.Left);
+            Dispatcher.UIThread.RunJobs();
+        });
     }
 
     [Test]
@@ -59,19 +110,19 @@ public abstract class ReadmeDemoHeadlessTestsBase
             await Assert.That(FindExpandedWrapper(vm.CurrentAllTasksItems, expectedCurrentTaskId) is not null).IsTrue();
         }
 
-        Page.SelectTabItem(static page => page.LastCreatedTabItem, timeoutMs: 10_000);
+        Page.WorkspaceRailLastCreatedButton.Invoke();
         WaitForExpandedTree(() => vm.LastCreatedItems.Count > 0 && AllParentNodesExpanded(vm.LastCreatedItems));
         await Assert.That(AllParentNodesExpanded(vm.LastCreatedItems)).IsTrue();
 
-        Page.SelectTabItem(static page => page.LastUpdatedTabItem, timeoutMs: 10_000);
+        Page.WorkspaceRailLastUpdatedButton.Invoke();
         WaitForExpandedTree(() => vm.LastUpdatedItems.Count > 0 && AllParentNodesExpanded(vm.LastUpdatedItems));
         await Assert.That(AllParentNodesExpanded(vm.LastUpdatedItems)).IsTrue();
 
-        Page.SelectTabItem(static page => page.UnlockedTabItem, timeoutMs: 10_000);
+        Page.WorkspaceRailUnlockedButton.Invoke();
         WaitForExpandedTree(() => vm.UnlockedItems.Count > 0 && AllParentNodesExpanded(vm.UnlockedItems));
         await Assert.That(AllParentNodesExpanded(vm.UnlockedItems)).IsTrue();
 
-        Page.SelectTabItem(static page => page.LastOpenedTabItem, timeoutMs: 10_000);
+        Page.WorkspaceRailLastOpenedButton.Invoke();
         WaitForExpandedTree(() => vm.LastOpenedItems.Count > 0 && AllParentNodesExpanded(vm.LastOpenedItems));
         await Assert.That(AllParentNodesExpanded(vm.LastOpenedItems)).IsTrue();
     }

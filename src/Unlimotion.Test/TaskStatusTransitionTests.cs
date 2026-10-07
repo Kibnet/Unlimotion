@@ -157,7 +157,8 @@ public class TaskStatusTransitionTests
             PlannedEndDateTime = plannedBegin.AddHours(8),
             ContainsTasks = [left.Id, right.Id],
             BlocksTasks = [externalBlocked.Id],
-            BlockedByTasks = [externalBlocker.Id]
+            BlockedByTasks = [externalBlocker.Id],
+            AreaIds = ["work", "personal"]
         };
 
         await storage.Save(externalBlocker);
@@ -189,6 +190,7 @@ public class TaskStatusTransitionTests
             await Assert.That(cloneRoot.UnlockedDateTime).IsNull();
             await Assert.That(cloneRoot.CompletedDateTime).IsNull();
             await Assert.That(cloneRoot.ArchiveDateTime).IsNull();
+            await Assert.That(cloneRoot.AreaIds).IsEquivalentTo(source.AreaIds);
 
             await Assert.That(cloneLeft.Status).IsEqualTo(DomainTaskStatus.NotReady);
             await Assert.That(cloneRight.Status).IsEqualTo(DomainTaskStatus.NotReady);
@@ -514,7 +516,7 @@ public class TaskStatusTransitionTests
     [Test]
     public async Task TaskItemViewModel_StatusOptions_EnablesCompletedWhenCriterionBecomesSatisfied()
     {
-        var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        var session = HeadlessUnitTestSession.StartNew(typeof(SkiaHeadlessAppBuilder));
         var storage = new InMemoryStorage();
         using var taskStorage = new UnifiedTaskStorage(new TaskTreeManager(storage));
         TaskItemViewModel viewModel = null!;
@@ -578,7 +580,7 @@ public class TaskStatusTransitionTests
         var previousInterval = TaskItemViewModel.InProgressElapsedRefreshInterval;
         var previousScheduler = TaskItemViewModel.InProgressElapsedRefreshScheduler;
         TaskItemViewModel.InProgressElapsedRefreshInterval = TimeSpan.FromMilliseconds(10);
-        var session = HeadlessUnitTestSession.StartNew(typeof(App));
+        var session = HeadlessUnitTestSession.StartNew(typeof(SkiaHeadlessAppBuilder));
 
         try
         {

@@ -8,6 +8,11 @@ public interface IUiTestSession : IDisposable
 {
 }
 
+public interface IUiTestWaitPump
+{
+    void PumpUiWaitObservation();
+}
+
 public static class UiAssert
 {
     private static readonly UiWaitOptions DefaultWaitOptions = new()
@@ -94,7 +99,7 @@ public abstract class UiTestBase<TSession, TPage>
 
     protected abstract TPage CreatePage(TSession session);
 
-    protected static void WaitUntil(
+    protected void WaitUntil(
         Func<bool> condition,
         TimeSpan? timeout = null,
         TimeSpan? pollInterval = null,
@@ -110,7 +115,7 @@ public abstract class UiTestBase<TSession, TPage>
             cancellationToken);
     }
 
-    protected static T WaitUntil<T>(
+    protected T WaitUntil<T>(
         Func<T> valueFactory,
         Predicate<T> condition,
         TimeSpan? timeout = null,
@@ -119,14 +124,14 @@ public abstract class UiTestBase<TSession, TPage>
         CancellationToken cancellationToken = default)
     {
         return UiWait.Until(
-            valueFactory,
+            () => ObserveWithUiPump(valueFactory),
             condition,
             CreateWaitOptions(timeout, pollInterval),
             timeoutMessage,
             cancellationToken);
     }
 
-    protected static Task<T> WaitUntilAsync<T>(
+    protected Task<T> WaitUntilAsync<T>(
         Func<T> valueFactory,
         Predicate<T> condition,
         TimeSpan? timeout = null,
@@ -135,14 +140,14 @@ public abstract class UiTestBase<TSession, TPage>
         CancellationToken cancellationToken = default)
     {
         return UiWait.UntilAsync(
-            valueFactory,
+            () => ObserveWithUiPump(valueFactory),
             condition,
             CreateWaitOptions(timeout, pollInterval),
             timeoutMessage,
             cancellationToken);
     }
 
-    protected static void RetryUntil(
+    protected void RetryUntil(
         Func<bool> attempt,
         TimeSpan? timeout = null,
         TimeSpan? pollInterval = null,
@@ -181,6 +186,14 @@ public abstract class UiTestBase<TSession, TPage>
         session?.Dispose();
         session = null;
         page = null;
+    }
+
+    private T ObserveWithUiPump<T>(Func<T> observation)
+    {
+        // Headless has no continuously running native message loop between
+        // dispatches. File-only waits must also allow queued UI work to finish.
+        (session as IUiTestWaitPump)?.PumpUiWaitObservation();
+        return observation();
     }
 
     private static UiWaitOptions CreateWaitOptions(TimeSpan? timeout, TimeSpan? pollInterval)

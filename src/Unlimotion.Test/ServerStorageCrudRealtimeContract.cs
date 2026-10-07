@@ -18,6 +18,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Raven.Client.Documents;
 using Raven.Client.Documents.Operations.Indexes;
+using Raven.Client.Documents.Linq;
 using Raven.Client.Documents.Session;
 using ServiceStack;
 using ServiceStack.Auth;
@@ -497,6 +498,19 @@ internal static class ServerStorageCrudRealtimeContract
             };
         }
 
+        public async Task<string> DescribeTaskQueryAsync(string taskId, string expectedOwner)
+        {
+            using var session = _host.Services.GetRequiredService<IDocumentStore>().OpenAsyncSession();
+            var document = await session.LoadAsync<TaskItem>(taskId);
+            var results = await session.Query<TaskItem>()
+                .Statistics(out var statistics)
+                .Where(task => task.Id == taskId && task.UserId == expectedOwner)
+                .ToListAsync();
+            return $"LiveTaskApi store: requested={taskId}; directLoadExists={document is not null}; " +
+                $"directIdMatches={document?.Id == taskId}; ownerMatches={document?.UserId == expectedOwner}; " +
+                $"scopedQueryCount={results.Count}; index={statistics.IndexName}; stale={statistics.IsStale}";
+        }
+
         public async ValueTask DisposeAsync()
         {
             using var cleanupTrace = TestExecutionTrace.Phase("LiveHost/cleanup");
@@ -652,6 +666,11 @@ internal static class ServerStorageCrudRealtimeContract
         public override void Configure(Container container)
         {
             container.Register(c => _serviceProvider.GetRequiredService<IDocumentStore>());
+            GlobalRequestFilters.Add((request, _, dto) =>
+            {
+                if (dto is GetTask task)
+                    Console.WriteLine($"LiveTaskApi GetTask binding: path={request.PathInfo}; boundId={task.Id}");
+            });
             container.Register(c => _serviceProvider.GetRequiredService<IAsyncDocumentSession>())
                 .ReusedWithin(ReuseScope.Request);
             container.Register(c => _serviceProvider.GetRequiredService<AutoMapper.IMapper>());

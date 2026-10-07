@@ -112,7 +112,7 @@ public abstract class StatusContractScenariosBase<TSession> : MainWindowScenario
 
     protected virtual void OpenArchivedTab()
     {
-        Page.SelectTabItem(static page => page.ArchivedTabItem, timeoutMs: 10_000);
+        Page.WorkspaceRailArchivedButton.Invoke();
     }
 
     protected virtual string OpenActionsAndInvokeArchiveCommand()
@@ -141,7 +141,7 @@ public abstract class StatusContractScenariosBase<TSession> : MainWindowScenario
 
     protected virtual void SelectStatusContractTask(string taskId, string title)
     {
-        Page.SelectTabItem(static page => page.AllTasksTabItem, timeoutMs: 10_000);
+        Page.WorkspaceRailAllTasksButton.Invoke();
         Page.SelectTreeItem(static page => page.AllTasksTree, title, timeoutMs: 10_000);
     }
 

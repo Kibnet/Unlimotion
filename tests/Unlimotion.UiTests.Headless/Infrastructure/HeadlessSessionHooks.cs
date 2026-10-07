@@ -2,6 +2,7 @@ using System;
 using System.Reflection;
 using System.Threading.Tasks;
 using AppAutomation.Avalonia.Headless.Session;
+using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia;
 using Avalonia.Threading;
@@ -18,7 +19,17 @@ public static class HeadlessSessionHooks
     [Before(TestSession)]
     public static void SetupSession()
     {
-        _session = HeadlessSessionFactory.StartNew(UnlimotionAppLaunchHost.AvaloniaAppType);
+        // Keep regular interaction tests on the fast semantic backend. Skia is opt-in
+        // for screenshot runs because legacy tests synchronously dispatch to the UI thread.
+        var renderedScreenshots = string.Equals(
+            Environment.GetEnvironmentVariable("UNLIMOTION_RENDERED_HEADLESS_SCREENSHOTS"),
+            "1",
+            StringComparison.Ordinal);
+        _session = HeadlessSessionFactory.StartNew(
+            renderedScreenshots
+                ? typeof(RenderedHeadlessAppBuilder)
+                : UnlimotionAppLaunchHost.AvaloniaAppType,
+            AvaloniaTestIsolationLevel.PerAssembly);
         HeadlessRuntime.SetSession(_session);
     }
 
@@ -105,6 +116,37 @@ public static class HeadlessSessionHooks
         var session = _session;
         _session = null;
         if (session is not null) await session.DisposeAsync();
+    }
+
+    public static void CloseWindow(Window window)
+    {
+        ArgumentNullException.ThrowIfNull(window);
+        void CloseCore()
+        {
+            window.DataContext = null;
+            window.Content = null;
+            window.Close();
+            Dispatcher.UIThread.RunJobs();
+        }
+
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            CloseCore();
+        }
+        else
+        {
+            HeadlessRuntime.Dispatch(CloseCore);
+        }
+    }
+
+    public static async Task PrepareAsync(Func<Task> action)
+    {
+        // Keep the headless dispatcher pumping while storage publishes to its captured UI context.
+        await HeadlessRuntime.Session.Dispatch<bool>(async () =>
+        {
+            await action();
+            return true;
+        }, CancellationToken.None).ConfigureAwait(false);
     }
 
     [After(TestSession)]

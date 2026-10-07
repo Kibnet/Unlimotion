@@ -841,7 +841,7 @@ public sealed class TaskApplicationCommandService
                 criteria.TryGetValue(item.Id, out var expected) && item.Text == expected.Text && item.IsSatisfied == expected.IsSatisfied) &&
             task.Importance == 0 && !task.Wanted && task.Version == 1 &&
             task.UserId == TaskItem.NormalizeAuthor(author) && task.AgentExecution == null &&
-            task.Repeater == null &&
+            task.Repeater == null && task.AreaIds.Count == 0 &&
             (task.ExtensionData == null || task.ExtensionData.Count == 0) &&
             task.StatusHistory.Select(item => item.Status).SequenceEqual(expectedHistory) &&
             task.StatusHistory.All(item => item.Author == TaskItem.NormalizeAuthor(author));

@@ -15,6 +15,7 @@ namespace Unlimotion.Views;
 public partial class TaskHistoryFieldChangeView : UserControl
 {
     private MainControl? _owner;
+    private TaskCardView? _cardOwner;
     public bool IsDetailsExpanded => DetailsPanel.IsVisible;
 
     public TaskHistoryFieldChangeView()
@@ -24,19 +25,23 @@ public partial class TaskHistoryFieldChangeView : UserControl
         DataContextChanged += (_, _) =>
         {
             _owner?.CloseTaskHistoryDetails(this);
+            _cardOwner?.CloseTaskHistoryDetails(this);
             CollapseDetails();
             Dispatcher.UIThread.Post(UpdateComparisonLayout);
         };
         AttachedToVisualTree += (_, _) =>
         {
             _owner = this.FindAncestorOfType<MainControl>();
+            _cardOwner = this.FindAncestorOfType<TaskCardView>();
             UpdateComparisonLayout();
         };
         DetachedFromVisualTree += (_, _) =>
         {
             _owner?.CloseTaskHistoryDetails(this);
+            _cardOwner?.CloseTaskHistoryDetails(this);
             CollapseDetails();
             _owner = null;
+            _cardOwner = null;
         };
     }
 
@@ -144,7 +149,7 @@ public partial class TaskHistoryFieldChangeView : UserControl
 
     private string? RelatedTaskTitle(TaskHistoryFieldChange change) =>
         change.HasSingleValue && change.ReferencedTaskId is { } id
-            ? _owner?.ResolveTaskHistoryTaskTitle(id) : null;
+            ? _cardOwner?.ResolveTaskHistoryTaskTitle(id) ?? _owner?.ResolveTaskHistoryTaskTitle(id) : null;
 
     private string PresentValue(TaskHistoryFieldChange change, string value, bool oldSide, bool preview)
     {
@@ -174,12 +179,15 @@ public partial class TaskHistoryFieldChangeView : UserControl
     {
         if (this.FindAncestorOfType<MainControl>() is { } main)
             await main.ToggleTaskHistoryDetailsAsync(this);
+        else if (this.FindAncestorOfType<TaskCardView>() is { } card)
+            await card.ToggleTaskHistoryDetailsAsync(this);
         e.Handled = true;
     }
 
     private void CloseDetailsButton_OnClick(object? sender, RoutedEventArgs e)
     {
         this.FindAncestorOfType<MainControl>()?.CloseTaskHistoryDetails(this);
+        this.FindAncestorOfType<TaskCardView>()?.CloseTaskHistoryDetails(this);
         Dispatcher.UIThread.Post(() =>
         {
             if (!IsDetailsExpanded && TopLevel.GetTopLevel(this) is not null)

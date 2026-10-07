@@ -25,6 +25,8 @@ namespace Unlimotion.Interface
         public RepeaterPatternHubMold? Repeater { get; set; }
         public int Importance { get; set; }
         public bool Wanted { get; set; }
+        public int? TaskClassificationSchemaVersion { get; set; }
+        public List<string>? AreaIds { get; set; }
         public int Version { get; set; } = 0;
     }
 }

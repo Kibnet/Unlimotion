@@ -34,16 +34,16 @@ internal static class Program
 
     private static readonly IReadOnlyList<ReadmeCaptureStep> CaptureSteps =
     [
-        new("all-tasks", "all-tasks.png", static page => page.AllTasksTabItem, "All Tasks", 1000),
-        new("last-created", "last-created.png", static page => page.LastCreatedTabItem, "Last Created", 900),
-        new("last-updated", "last-updated.png", static page => page.LastUpdatedTabItem, "Last Updated", 900),
-        new("unlocked", "unlocked.png", static page => page.UnlockedTabItem, "Unlocked", 900),
-        new("in-progress", "in-progress.png", static page => page.InProgressTabItem, "In Progress", 900),
-        new("completed", "completed.png", static page => page.CompletedTabItem, "Completed", 900),
-        new("archived", "archived.png", static page => page.ArchivedTabItem, "Archived", 900),
-        new("last-opened", "last-opened.png", static page => page.LastOpenedTabItem, "Last Opened", 900),
-        new("roadmap", "roadmap.png", static page => page.RoadmapTabItem, "Roadmap", 5000),
-        new("settings", "settings.png", static page => page.SettingsTabItem, "Settings", 1100)
+        new("all-tasks", "all-tasks.png", static page => page.WorkspaceRailAllTasksButton, "All Tasks", 1000),
+        new("last-created", "last-created.png", static page => page.WorkspaceRailLastCreatedButton, "Last Created", 900),
+        new("last-updated", "last-updated.png", static page => page.WorkspaceRailLastUpdatedButton, "Last Updated", 900),
+        new("unlocked", "unlocked.png", static page => page.WorkspaceRailUnlockedButton, "Unlocked", 900),
+        new("in-progress", "in-progress.png", static page => page.WorkspaceRailInProgressButton, "In Progress", 900),
+        new("completed", "completed.png", static page => page.WorkspaceRailCompletedButton, "Completed", 900),
+        new("archived", "archived.png", static page => page.WorkspaceRailArchivedButton, "Archived", 900),
+        new("last-opened", "last-opened.png", static page => page.WorkspaceRailLastOpenedButton, "Last Opened", 900),
+        new("roadmap", "roadmap.png", static page => page.WorkspaceRailRoadmapButton, "Roadmap", 5000),
+        new("settings", "settings.png", null, "Settings", 1100)
     ];
 
     private static readonly IReadOnlyList<string> GeneratedFileNames =
@@ -211,6 +211,8 @@ internal static class Program
 
         using var session = FlaUiDesktopAppSession.Launch(launchOptions);
         var page = new MainWindowPage(new FlaUiControlResolver(session.MainWindow, session.ConditionFactory));
+        EnsureDesktopTaskCard(session, page, UnlimotionAppLaunchHost.GetCurrentTaskId(
+            UnlimotionAutomationScenario.ReadmeDemo, language.LanguageMode));
         var currentTaskTitle = UnlimotionAppLaunchHost.GetCurrentTaskTitle(
             UnlimotionAutomationScenario.ReadmeDemo,
             language.LanguageMode);
@@ -220,20 +222,14 @@ internal static class Program
             TimeSpan.FromSeconds(20),
             $"current task '{currentTaskTitle}'");
 
-        if (!page.DetailsPaneToggleButton.IsToggled)
-        {
-            page.DetailsPaneToggleButton.Toggle();
-            WaitFor(
-                () => page.DetailsPaneToggleButton.IsToggled,
-                TimeSpan.FromSeconds(10),
-                "details pane closed for filter toolbar capture");
-        }
+        // List documents and task cards are separate workspace surfaces.
 
         ResizeWindowExact(session.MainWindow, 390, 760);
         session.MainWindow.Focus();
         Pause(800);
 
-        page.SelectTabItem(static ui => ui.AllTasksTabItem, timeoutMs: 10_000);
+        SelectDesktopCaptureTab(page, session.MainWindow, session.ConditionFactory,
+            CaptureSteps.Single(step => step.Key == "all-tasks"));
         Pause(800);
         SaveFilterToolbarCapture(
             session.MainWindow,
@@ -247,7 +243,8 @@ internal static class Program
             Path.Combine(outputRoot, "task-narrow-alltasks-open.png"),
             "task-narrow-alltasks-open");
 
-        page.SelectTabItem(static ui => ui.LastCreatedTabItem, timeoutMs: 10_000);
+        SelectDesktopCaptureTab(page, session.MainWindow, session.ConditionFactory,
+            CaptureSteps.Single(step => step.Key == "last-created"));
         Pause(800);
         SaveFilterToolbarCapture(
             session.MainWindow,
@@ -261,7 +258,8 @@ internal static class Program
             Path.Combine(outputRoot, "task-narrow-lastcreated-open.png"),
             "task-narrow-lastcreated-open");
 
-        page.SelectTabItem(static ui => ui.RoadmapTabItem, timeoutMs: 10_000);
+        SelectDesktopCaptureTab(page, session.MainWindow, session.ConditionFactory,
+            CaptureSteps.Single(step => step.Key == "roadmap"));
         Pause(1200);
         SaveFilterToolbarCapture(
             session.MainWindow,
@@ -279,7 +277,8 @@ internal static class Program
         session.MainWindow.Focus();
         Pause(800);
 
-        page.SelectTabItem(static ui => ui.AllTasksTabItem, timeoutMs: 10_000);
+        SelectDesktopCaptureTab(page, session.MainWindow, session.ConditionFactory,
+            CaptureSteps.Single(step => step.Key == "all-tasks"));
         Pause(800);
         SaveFilterToolbarCapture(
             session.MainWindow,
@@ -305,6 +304,8 @@ internal static class Program
 
         using var session = FlaUiDesktopAppSession.Launch(launchOptions);
         var page = new MainWindowPage(new FlaUiControlResolver(session.MainWindow, session.ConditionFactory));
+        EnsureDesktopTaskCard(session, page, UnlimotionAppLaunchHost.GetCurrentTaskId(
+            UnlimotionAutomationScenario.ReadmeDemo, language.LanguageMode));
         var currentTaskTitle = UnlimotionAppLaunchHost.GetCurrentTaskTitle(
             UnlimotionAutomationScenario.ReadmeDemo,
             language.LanguageMode);
@@ -314,20 +315,14 @@ internal static class Program
             TimeSpan.FromSeconds(20),
             $"current task '{currentTaskTitle}'");
 
-        if (!page.DetailsPaneToggleButton.IsToggled)
-        {
-            page.DetailsPaneToggleButton.Toggle();
-            WaitFor(
-                () => page.DetailsPaneToggleButton.IsToggled,
-                TimeSpan.FromSeconds(10),
-                "details pane closed for wanted filter capture");
-        }
+        // List documents and task cards are separate workspace surfaces.
 
         ResizeWindowExact(session.MainWindow, 760, 760);
         session.MainWindow.Focus();
         Pause(800);
 
-        page.SelectTabItem(static ui => ui.UnlockedTabItem, timeoutMs: 10_000);
+        SelectDesktopCaptureTab(page, session.MainWindow, session.ConditionFactory,
+            CaptureSteps.Single(step => step.Key == "unlocked"));
         Pause(800);
         OpenFilterPanel(
             session.MainWindow,
@@ -612,6 +607,7 @@ internal static class Program
     {
         using var session = LaunchTaskCardUxReviewSession(languageMode, reviewCase.TaskId, noBuildBeforeLaunch);
         var page = new MainWindowPage(new FlaUiControlResolver(session.MainWindow, session.ConditionFactory));
+        EnsureDesktopTaskCard(session, page, reviewCase.TaskId);
         WaitForTaskCardReviewTask(page, reviewCase, languageMode);
 
         ResizeDesktopWindow(session.MainWindow, DesktopCaptureWindowWidth, DesktopCaptureWindowHeight);
@@ -636,6 +632,7 @@ internal static class Program
     {
         using var session = LaunchTaskCardUxReviewSession(languageMode, reviewCase.TaskId, noBuildBeforeLaunch);
         var page = new MainWindowPage(new FlaUiControlResolver(session.MainWindow, session.ConditionFactory));
+        EnsureDesktopTaskCard(session, page, reviewCase.TaskId);
         WaitForTaskCardReviewTask(page, reviewCase, languageMode);
 
         ResizeWindowExact(session.MainWindow, 390, 844);
@@ -686,6 +683,7 @@ internal static class Program
 
         using var session = LaunchTaskCardUxReviewSession(languageMode, reviewCase.TaskId, noBuildBeforeLaunch);
         var page = new MainWindowPage(new FlaUiControlResolver(session.MainWindow, session.ConditionFactory));
+        EnsureDesktopTaskCard(session, page, reviewCase.TaskId);
         WaitForTaskCardReviewTask(page, reviewCase, languageMode);
 
         if (isPhone)
@@ -909,6 +907,8 @@ internal static class Program
 
         using var session = FlaUiDesktopAppSession.Launch(launchOptions);
         var page = new MainWindowPage(new FlaUiControlResolver(session.MainWindow, session.ConditionFactory));
+        EnsureDesktopTaskCard(session, page, UnlimotionAppLaunchHost.GetCurrentTaskId(
+            UnlimotionAutomationScenario.ReadmeDemo, languageMode));
 
         WaitFor(
             () => string.Equals(page.CurrentTaskTitleTextBox.Text, currentTaskTitle, StringComparison.Ordinal),
@@ -921,6 +921,8 @@ internal static class Program
         Pause(1000);
 
         var gifFrames = new List<GifFrame>();
+        SelectDesktopCaptureTab(page, session.MainWindow, session.ConditionFactory,
+            CaptureSteps.Single(step => step.Key == "all-tasks"));
 
         CaptureCurrentDesktopWindow(
             session.MainWindow,
@@ -989,6 +991,8 @@ internal static class Program
                     languageMode));
             var page = new MainWindowPage(new HeadlessControlResolver(session.MainWindow));
             var mainWindow = GetHeadlessMainWindow(session.MainWindow);
+            EnsureHeadlessTaskCard(mainWindow, UnlimotionAppLaunchHost.GetCurrentTaskId(
+                UnlimotionAutomationScenario.ReadmeDemo, languageMode));
 
             WaitFor(
                 () => string.Equals(page.CurrentTaskTitleTextBox.Text, currentTaskTitle, StringComparison.Ordinal),
@@ -1002,9 +1006,13 @@ internal static class Program
 
             foreach (var step in CaptureSteps)
             {
-                if (!string.Equals(step.Key, "all-tasks", StringComparison.Ordinal))
+                if (string.Equals(step.Key, "settings", StringComparison.Ordinal))
                 {
-                    page.SelectTabItem(step.Selector, timeoutMs: 10_000);
+                    page.GlobalSettingsButton.Invoke();
+                }
+                else
+                {
+                    step.Selector!.Compile()(page).Invoke();
                 }
 
                 if (string.Equals(step.Key, "roadmap", StringComparison.Ordinal))
@@ -1113,15 +1121,17 @@ internal static class Program
                     UnlimotionAutomationScenario.ReadmeDemo,
                     languageMode);
 
+            var mainWindow = GetHeadlessMainWindow(session.MainWindow);
+            EnsureHeadlessTaskCard(mainWindow, UnlimotionAppLaunchHost.GetCurrentTaskId(
+                UnlimotionAutomationScenario.ReadmeDemo, languageMode));
             WaitFor(
                 () => string.Equals(page.CurrentTaskTitleTextBox.Text, currentTaskTitle, StringComparison.Ordinal),
                 TimeSpan.FromSeconds(20),
                 $"headless current task '{currentTaskTitle}'");
 
-            page.SelectTabItem(static ui => ui.RoadmapTabItem, timeoutMs: 10_000);
+            page.WorkspaceRailRoadmapButton.Invoke();
             WaitForRoadmapRoot(page);
 
-            var mainWindow = GetHeadlessMainWindow(session.MainWindow);
             mainWindow.Width = DesktopCaptureWindowWidth;
             mainWindow.Height = DesktopCaptureWindowHeight;
             return CaptureHeadlessWindowBitmap(mainWindow);
@@ -1252,86 +1262,77 @@ internal static class Program
             "Settings root");
     }
 
+    private static void EnsureDesktopTaskCard(FlaUiDesktopAppSession session, MainWindowPage page, string taskId)
+    {
+        ResizeDesktopWindow(session.MainWindow, DesktopCaptureWindowWidth, DesktopCaptureWindowHeight);
+        SelectDesktopCaptureTab(page, session.MainWindow, session.ConditionFactory,
+            CaptureSteps.Single(step => step.Key == "all-tasks"));
+        FlaUI.Core.AutomationElements.AutomationElement? title = null;
+        WaitFor(() =>
+        {
+            title = session.MainWindow.FindFirstDescendant(session.ConditionFactory.ByAutomationId("TaskTitle_" + taskId));
+            if (title is null) return false;
+            title.Patterns.ScrollItem.PatternOrDefault?.ScrollIntoView();
+            return !title.IsOffscreen && title.BoundingRectangle.Width > 0;
+        }, TimeSpan.FromSeconds(10), $"README task title '{taskId}'");
+        title!.Click();
+        Pause(350);
+    }
+
+    private static void EnsureHeadlessTaskCard(Window window, string taskId)
+    {
+        HeadlessRuntime.Session.Dispatch<bool>(async () =>
+        {
+            window.Width = DesktopCaptureWindowWidth;
+            window.Height = DesktopCaptureWindowHeight;
+            window.Show();
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            window.UpdateLayout();
+            var owner = window.DataContext as Unlimotion.ViewModel.MainWindowViewModel
+                ?? throw new InvalidOperationException("README host has no workspace view model.");
+            if (!await owner.TryOpenTaskByIdAsync(taskId))
+                throw new InvalidOperationException($"README task '{taskId}' could not be opened.");
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            window.UpdateLayout();
+            return true;
+        }, CancellationToken.None).GetAwaiter().GetResult();
+    }
+
     private static void SelectDesktopCaptureTab(
         MainWindowPage page,
         FlaUiWindow window,
         FlaUI.Core.Conditions.ConditionFactory conditionFactory,
         ReadmeCaptureStep step)
     {
-        try
+        if (step.Key == "settings")
         {
-            page.SelectTabItem(step.Selector, timeoutMs: 10_000);
+            page.GlobalSettingsButton.Invoke();
             return;
         }
-        catch (FlaUI.Core.Exceptions.ElementNotAvailableException)
+
+        // The expanded rail is the same document navigation used in the app.
+        // Select there, then restore the capture viewport for narrow-layout media.
+        var original = window.BoundingRectangle;
+        var expand = original.Width < 1600;
+        if (expand) ResizeWindowExact(window, 1600, (int)original.Height);
+        try
         {
-            if (TrySelectMainTabFromOverflow(window, conditionFactory, step.Key))
+            WaitFor(() =>
             {
-                return;
-            }
-
-            throw;
-        }
-    }
-
-    private static bool TrySelectMainTabFromOverflow(
-        FlaUiWindow window,
-        FlaUI.Core.Conditions.ConditionFactory conditionFactory,
-        string stepKey)
-    {
-        var tabAutomationId = stepKey switch
-        {
-            "roadmap" => "RoadmapTabItem",
-            "settings" => "SettingsTabItem",
-            _ => null
-        };
-
-        if (tabAutomationId is null)
-        {
-            return false;
-        }
-
-        var overflowButton = window.FindFirstDescendant(conditionFactory.ByAutomationId("MainTabsOverflowButton"));
-        var overflowInvoke = overflowButton?.Patterns.Invoke.PatternOrDefault;
-        if (overflowButton is null)
-        {
-            return false;
-        }
-
-        if (overflowInvoke is not null)
-        {
-            overflowInvoke.Invoke();
-        }
-        else
-        {
-            overflowButton.Click();
-        }
-
-        var menuItemAutomationId = $"MainTabsOverflow{tabAutomationId}";
-        for (var attempt = 0; attempt < 20; attempt++)
-        {
-            var menuItem = window.Automation.GetDesktop()
-                .FindFirstDescendant(conditionFactory.ByAutomationId(menuItemAutomationId));
-            if (menuItem is not null)
-            {
-                var menuItemInvoke = menuItem.Patterns.Invoke.PatternOrDefault;
-                if (menuItemInvoke is not null)
+                try
                 {
-                    menuItemInvoke.Invoke();
+                    var button = window.FindFirstDescendant(conditionFactory.ByAutomationId(step.Selector!.Compile()(page).AutomationId));
+                    return button is not null && !button.IsOffscreen;
                 }
-                else
-                {
-                    menuItem.Click();
-                }
-
-                Pause(500);
-                return true;
-            }
-
-            Pause(150);
+                catch { return false; }
+            }, TimeSpan.FromSeconds(10), $"workspace rail document '{step.DisplayName}'");
+            step.Selector!.Compile()(page).Invoke();
+            Pause(350);
         }
-
-        return false;
+        finally
+        {
+            if (expand) ResizeWindowExact(window, (int)original.Width, (int)original.Height);
+        }
     }
 
     private static void CaptureCurrentHeadlessWindow(
@@ -1908,7 +1909,7 @@ internal static class Program
     private sealed record ReadmeCaptureStep(
         string Key,
         string FileName,
-        Expression<Func<MainWindowPage, ITabItemControl>> Selector,
+        Expression<Func<MainWindowPage, global::AppAutomation.Abstractions.IButtonControl>>? Selector,
         string DisplayName,
         int DelayAfterSelectMs);
 

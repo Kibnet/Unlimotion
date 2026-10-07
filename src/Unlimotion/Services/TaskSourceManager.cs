@@ -97,6 +97,7 @@ public sealed class TaskSourceManager : ITaskSourceManager
             nextSettings,
             descriptor.Id,
             new GitSettings { BackupEnabled = false });
+        TaskSourceSettingsAdapter.EnsureNoteSettings(nextSettings, descriptor.Id);
         TaskSourceSettingsAdapter.ApplyCatalogMutation(
             _configuration,
             _settings,
@@ -154,6 +155,8 @@ public sealed class TaskSourceManager : ITaskSourceManager
             string.Equals(server.SourceId, sourceId, StringComparison.Ordinal));
         nextSettings.SyncSettings.RemoveAll(sync =>
             string.Equals(sync.SourceId, sourceId, StringComparison.Ordinal));
+        nextSettings.NoteSettings.RemoveAll(note =>
+            string.Equals(note.SourceId, sourceId, StringComparison.Ordinal));
         TaskSourceSettingsAdapter.ApplyCatalogMutation(
             _configuration,
             _settings,
@@ -289,6 +292,7 @@ public sealed class TaskSourceManager : ITaskSourceManager
             preparedSettings,
             descriptor.Id,
             new GitSettings { BackupEnabled = false });
+        TaskSourceSettingsAdapter.EnsureNoteSettings(preparedSettings, descriptor.Id);
         preparedSettings.ActiveSourceId = descriptor.Id;
         return await PrepareActivationCoreAsync(
                 previousSettings,
@@ -642,6 +646,13 @@ public sealed class TaskSourceManager : ITaskSourceManager
             {
                 SourceId = sync.SourceId,
                 Git = CloneGitSettings(sync.Git)
+            }).ToList(),
+            NoteSettings = settings.NoteSettings.Select(note => new TaskSourceNoteSettings
+            {
+                SourceId = note.SourceId,
+                RootPath = note.RootPath,
+                IsFeedEnabled = note.IsFeedEnabled,
+                DayBoundaryMinutes = note.DayBoundaryMinutes
             }).ToList(),
             LegacyProjection = new TaskSourceLegacyProjectionState
             {
