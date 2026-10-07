@@ -654,4 +654,6 @@ ID: {1}</value></data>
   <data name="TaskHistoryFieldRepeater" xml:space="preserve"><value>Repeater</value></data>
   <data name="TaskHistoryFieldImportance" xml:space="preserve"><value>Importance</value></data>
   <data name="TaskHistoryFieldWanted" xml:space="preserve"><value>Wanted</value></data>  <data name="TaskHistoryMergeFirstParent" xml:space="preserve"><value>Merge commit: changes are compared with the first parent.</value></data>
+  <data name="TaskDeepLinkTaskNotFound" xml:space="preserve"><value>Task {0} was not found in the active task space.</value></data>
+  <data name="TaskDeepLinkOpenFailed" xml:space="preserve"><value>Could not open the task link: {0}</value></data>
 </root>

@@ -1,6 +1,7 @@
 //#define LIVE
 
 using System;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -62,6 +63,11 @@ public class App : Application
     private static string? _pendingConfigPath;
     private static UnlimotionClientOptions _pendingClientOptions = new();
     private static IApplicationUpdateService? _pendingUpdateService;
+    private static ITaskDeepLinkActivationSource? _pendingTaskDeepLinkActivationSource;
+    private static TaskDeepLink? _pendingStartupTaskDeepLink;
+    private TaskDeepLinkActivationCoordinator? _taskDeepLinkCoordinator;
+    private AvaloniaTaskDeepLinkActivationSource? _platformTaskDeepLinkActivationSource;
+    private bool _taskDeepLinkStartupCompleted;
 
     private IConfiguration? _configuration;
     private IMapper? _mapper;
@@ -201,6 +207,11 @@ public class App : Application
         }
 
         // Set up commands on SettingsViewModel
+        ((INotifyPropertyChanged)_mainWindowViewModel).PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName == nameof(MainWindowViewModel.IsInitialized))
+                Dispatcher.UIThread.Post(() => _taskDeepLinkCoordinator?.ProcessPending());
+        };
         SetupSettingsCommands(settingsViewModel);
         WireTaskSpaceSettingsPersistenceState(settingsViewModel);
         RefreshTaskSpaces(settingsViewModel);
@@ -1636,6 +1647,24 @@ public class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
+        if ((OperatingSystem.IsMacOS() || OperatingSystem.IsAndroid())
+            && this.TryGetFeature<IActivatableLifetime>() is { } activatableLifetime)
+        {
+            _platformTaskDeepLinkActivationSource = new AvaloniaTaskDeepLinkActivationSource(activatableLifetime);
+            TaskDeepLinkCoordinator.Attach(_platformTaskDeepLinkActivationSource);
+        }
+        // The launch URI predates any warm requests buffered by the broker.
+        // Queue it first so a later click during startup remains the final target.
+        if (_pendingStartupTaskDeepLink is { } link)
+        {
+            _pendingStartupTaskDeepLink = null;
+            TaskDeepLinkCoordinator.Queue(link);
+        }
+        if (_pendingTaskDeepLinkActivationSource is { } source)
+        {
+            _pendingTaskDeepLinkActivationSource = null;
+            TaskDeepLinkCoordinator.Attach(source);
+        }
         if (_startupSettingsRecovery is { Status: SettingsRecoveryStatus.Blocked } blocked &&
             ApplicationLifetime is IClassicDesktopStyleApplicationLifetime recoveryDesktop)
         {
@@ -1661,6 +1690,11 @@ public class App : Application
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
+            desktop.Exit += (_, _) =>
+            {
+                _taskDeepLinkCoordinator?.Dispose();
+                _platformTaskDeepLinkActivationSource?.Dispose();
+            };
             desktop.ShutdownRequested += (_, args) =>
             {
                 try
@@ -1763,9 +1797,59 @@ public class App : Application
             vm.ManagerWrapper?.ErrorToast(L10n.Format("ConnectStorageFailed", ex.Message, hint));
         }
 
+        _taskDeepLinkStartupCompleted = true;
+        if (vm.IsInitialized) _taskDeepLinkCoordinator?.ProcessPending();
         ShowSettingsRecoveryWarning();
         _startupUpdateSettings = vm.Settings;
         RequestStartupUpdateCheck(vm.Settings);
+    }
+
+    private TaskDeepLinkActivationCoordinator TaskDeepLinkCoordinator =>
+        _taskDeepLinkCoordinator ??= new(
+            () => _taskDeepLinkStartupCompleted && _mainWindowViewModel?.IsInitialized == true,
+            link => ActivateTaskDeepLink(_mainWindowViewModel!, link,
+                (ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow),
+            action => Dispatcher.UIThread.Post(action));
+
+    public static void ConfigureTaskDeepLinkActivation(ITaskDeepLinkActivationSource source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        if (Current is App app) app.TaskDeepLinkCoordinator.Attach(source);
+        else _pendingTaskDeepLinkActivationSource = source;
+    }
+
+    public static void ConfigureStartupTaskDeepLink(TaskDeepLink link)
+    {
+        ArgumentNullException.ThrowIfNull(link);
+        if (Current is App app) app.TaskDeepLinkCoordinator.Queue(link);
+        else _pendingStartupTaskDeepLink = link;
+    }
+
+    internal static void ActivateTaskDeepLink(MainWindowViewModel viewModel, TaskDeepLink link, Window? window)
+    {
+        try
+        {
+            if (!viewModel.TryOpenTaskById(link.TaskId))
+                viewModel.ManagerWrapper?.ErrorToast(L10n.Format("TaskDeepLinkTaskNotFound", link.TaskId));
+        }
+        catch (Exception exception)
+        {
+            viewModel.ManagerWrapper?.ErrorToast(L10n.Format("TaskDeepLinkOpenFailed", exception.Message));
+        }
+        if (window is not null)
+        {
+            try
+            {
+                if (window.WindowState == WindowState.Minimized) window.WindowState = WindowState.Normal;
+                if (!window.IsVisible) window.Show();
+                window.Activate();
+            }
+            catch (InvalidOperationException exception)
+            {
+                // An activation racing shutdown must not crash the UI dispatcher.
+                Debug.WriteLine($"Task deep-link window activation failed: {exception}");
+            }
+        }
     }
 
     private void ShowSettingsRecoveryWarning()

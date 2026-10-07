@@ -288,6 +288,13 @@ Removing a space from Settings does not delete its JSON files or remote reposito
 
 ## CLI and automation
 
+### Task links
+
+Use `unlimotion://task/<ID>` in Obsidian or other applications, for example `unlimotion://task/feed-12422d3acca249db950bccce95f0d723`.
+The link opens the ordinary task card in the active task space. It does not switch storage or create a task; a missing ID produces a notification.
+
+Windows registration uses the Velopack install/update lifecycle; Linux uses a desktop entry, macOS a bundle URL scheme, and Android an intent filter. Source/debug and portable Windows builds do not register the handler automatically. Platform declarations do not replace native link-click testing in the installed application on each target OS.
+
 The CLI works with a local task directory without launching the UI. Scripts and agents can read tasks and relations, create tasks, update criteria and statuses, claim work, and record questions, answers and results.
 
 Installing through `dotnet tool` requires the **.NET 10 SDK**; the CLI itself runs on the .NET 10 runtime. The self-contained desktop builds do not need a separate .NET installation.
