@@ -23,7 +23,7 @@ public sealed class FeedAreaParentContractTests
         await storage.Save(new TaskItem { Id = "root", Title = "Родитель" });
         var identity = new FeedTaskSourceIdentity("space", "binding-a");
         var target = new TaskStorageFeedTaskCreationTarget(() => repository, () => identity);
-        var draft = new FeedTaskDraft("feed-op", "op", "Задача", "", false, [], ["root", "root"], identity);
+        var draft = new FeedTaskDraft("feed-op", "op", "Задача", "", [], ["root", "root"], identity);
         await target.CreateOrGetAsync(draft);
         await target.CreateOrGetAsync(draft);
         await Assert.That((await storage.Load(draft.TaskId))!.ParentTasks).IsEquivalentTo(["root"]);
@@ -37,7 +37,7 @@ public sealed class FeedAreaParentContractTests
         using var repository = new UnifiedTaskStorage(new TaskTreeManager(storage));
         await repository.Init();
         var target = new TaskStorageFeedTaskCreationTarget(() => repository);
-        await Assert.That(() => target.CreateOrGetAsync(new FeedTaskDraft("feed-op", "op", "Задача", "", false, [], ["missing"])))
+        await Assert.That(() => target.CreateOrGetAsync(new FeedTaskDraft("feed-op", "op", "Задача", "", [], ["missing"])))
             .Throws<InvalidOperationException>();
         await Assert.That(await storage.Load("feed-op")).IsNull();
     }
@@ -67,7 +67,7 @@ public sealed class FeedAreaParentContractTests
         var identity = new FeedTaskSourceIdentity("space-b", "binding-b");
         var service = new FeedTaskConversionService(vault, parser, new MarkdownMutationService(parser), new RejectingTarget(), journal,
             taskSourceIdentityProvider: () => identity);
-        var descriptor = new FeedTaskConversionRecoveryDescriptor("op", new MarkdownBlockSelection(0, 1), "hash", null, "Задача", "", false, []);
+        var descriptor = new FeedTaskConversionRecoveryDescriptor("op", new MarkdownBlockSelection(0, 1), "hash", null, "Задача", "", []);
         foreach (var source in new FeedTaskSourceIdentity?[] { null, new("space-a", "binding-a"), new("space-b", "binding-old") })
         {
             var record = new FeedTaskConversionRecord(source is null ? 2 : 3, "vault", "op", FeedTaskConversionState.Pending,

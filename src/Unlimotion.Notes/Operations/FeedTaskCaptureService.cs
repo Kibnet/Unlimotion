@@ -13,7 +13,6 @@ public sealed record FeedTaskCaptureRequest(
     AreaReference? Area,
     string? ExpectedSourceRevision,
     IReadOnlyList<string> AreaIds,
-    bool IsGoal = false,
     IReadOnlyList<string>? ParentTaskIds = null,
     FeedTaskSourceIdentity? TaskSourceIdentity = null);
 
@@ -89,7 +88,7 @@ public sealed class FeedTaskCaptureService(
                 null, DateTimeOffset.UtcNow,
                 new FeedTaskConversionRecoveryDescriptor(request.OperationId, selection,
                     FeedOperationHash.Compute(string.Concat(selected.Select(block => block.Raw))),
-                    null, title, description, request.IsGoal, request.AreaIds.ToArray(),
+                    null, title, description, request.AreaIds.ToArray(),
                     InputLocators: FeedOperationLocatorFactory.ForSelection(path, document, selection)),
                 CaptureIntent: new FeedTaskCaptureIntent(request.Capture, request.Area, original?.Revision,
                     FeedOperationHash.Compute(plan.UpdatedText), hasBom, plan.UpdatedText),
@@ -100,7 +99,7 @@ public sealed class FeedTaskCaptureService(
         else if (operation.CaptureIntent is { } intent
                  && (!string.Equals(intent.CaptureText, request.Capture, StringComparison.Ordinal)
                      || intent.Area != request.Area
-                     || operation.RecoveryDescriptor?.IsGoal != request.IsGoal
+                     || operation.RecoveryDescriptor is null
                      || !operation.RecoveryDescriptor.AreaIds.SequenceEqual(request.AreaIds, StringComparer.Ordinal)))
         {
             throw new InvalidDataException("The capture operation ID belongs to a different draft.");

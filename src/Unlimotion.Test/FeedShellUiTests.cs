@@ -992,7 +992,7 @@ public class FeedShellUiTests
     }
 
     [Test]
-    public async Task WorkspaceShell_AllAndUnlockedPanesKeepGoalAndSearchFiltersSeparate()
+    public async Task WorkspaceShell_AllAndUnlockedPanesKeepSearchFiltersSeparate()
     {
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
@@ -1022,21 +1022,6 @@ public class FeedShellUiTests
                 ((Flyout)allFilters.Flyout!).ShowAt(allFilters);
                 ((Flyout)unlockedFilters.Flyout!).ShowAt(unlockedFilters);
                 RunLayoutJobs();
-                var allGoal = FindControlByAutomationId<ComboBox>(
-                    (Control)((Flyout)allFilters.Flyout!).Content!, "AllTasksGoalFilterComboBox");
-                var unlockedGoal = FindControlByAutomationId<ComboBox>(
-                    (Control)((Flyout)unlockedFilters.Flyout!).Content!, "UnlockedGoalFilterComboBox");
-                allGoal.SelectedItem = TaskGoalFilterOption.Find(TaskGoalFilterMode.Goals);
-                RunLayoutJobs();
-                await Assert.That(owner.GoalFilterMode).IsEqualTo(TaskGoalFilterMode.Goals);
-                await Assert.That(owner.UnlockedGoalFilterMode).IsEqualTo(TaskGoalFilterMode.All);
-                await Assert.That(unlockedGoal.SelectedItem)
-                    .IsEqualTo(TaskGoalFilterOption.Find(TaskGoalFilterMode.All));
-                unlockedGoal.SelectedItem = TaskGoalFilterOption.Find(TaskGoalFilterMode.Regular);
-                RunLayoutJobs();
-                await Assert.That(owner.GoalFilterMode).IsEqualTo(TaskGoalFilterMode.Goals);
-                await Assert.That(owner.UnlockedGoalFilterMode).IsEqualTo(TaskGoalFilterMode.Regular);
-
                 owner.Search.SearchText = "all-only";
                 owner.UnlockedSearch.SearchText = "unlocked-only";
                 await Assert.That(owner.Search.SearchText).IsEqualTo("all-only");
@@ -1051,13 +1036,6 @@ public class FeedShellUiTests
                     "LastCreatedFiltersButton");
                 ((Flyout)lastCreatedFilters.Flyout!).ShowAt(lastCreatedFilters);
                 RunLayoutJobs();
-                var lastCreatedGoal = FindControlByAutomationId<ComboBox>(
-                    (Control)((Flyout)lastCreatedFilters.Flyout!).Content!, "LastCreatedGoalFilterComboBox");
-                lastCreatedGoal.SelectedItem = TaskGoalFilterOption.Find(TaskGoalFilterMode.Regular);
-                RunLayoutJobs();
-                await Assert.That(owner.LastCreatedFilter.GoalFilterMode).IsEqualTo(TaskGoalFilterMode.Regular);
-                await Assert.That(owner.GoalFilterMode).IsEqualTo(TaskGoalFilterMode.Goals);
-                await Assert.That(owner.UnlockedGoalFilterMode).IsEqualTo(TaskGoalFilterMode.Regular);
                 owner.LastCreatedFilter.Search.SearchText = "created-only";
                 await Assert.That(owner.Search.SearchText).IsEqualTo("all-only");
                 await Assert.That(owner.UnlockedSearch.SearchText).IsEqualTo("unlocked-only");
@@ -1069,9 +1047,7 @@ public class FeedShellUiTests
                     (Control)((Flyout)allFilters.Flyout!).Content!, "AllTasksResetFiltersButton");
                 allReset.Command!.Execute(allReset.CommandParameter);
                 RunLayoutJobs();
-                await Assert.That(owner.GoalFilterMode).IsEqualTo(TaskGoalFilterMode.All);
                 await Assert.That(owner.Search.SearchText).IsEmpty();
-                await Assert.That(owner.LastCreatedFilter.GoalFilterMode).IsEqualTo(TaskGoalFilterMode.Regular);
                 await Assert.That(owner.LastCreatedFilter.Search.SearchText).IsEqualTo("created-only");
             }
             finally

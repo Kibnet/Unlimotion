@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
-using System.ComponentModel;
 using System.Linq;
 using ReactiveUI;
 using L10n = Unlimotion.ViewModel.Localization.Localization;
@@ -16,20 +15,17 @@ public sealed class TaskClassificationEditorViewModel : ReactiveObject, IDisposa
     private readonly Action<TaskClassificationSnapshot>? draftChanged;
     private readonly ObservableCollection<string> draftAreaIds = new();
     private TaskClassificationAreaDefinition[] areaDefinitions = [];
-    private bool draftIsGoal;
     private bool isSynchronizing;
     private bool isEditingSupported;
 
     private TaskClassificationEditorViewModel(
         TaskItemViewModel? task,
-        bool draftIsGoal,
         IEnumerable<string> selectedAreaIds,
         IEnumerable<TaskClassificationAreaDefinition> areas,
         Func<bool>? supportsEditing,
         Action<TaskClassificationSnapshot>? draftChanged)
     {
         this.task = task;
-        this.draftIsGoal = draftIsGoal;
         this.supportsEditing = supportsEditing ?? (() => true);
         this.draftChanged = draftChanged;
         foreach (var areaId in selectedAreaIds.Where(static id => !string.IsNullOrWhiteSpace(id)).Distinct(StringComparer.Ordinal))
@@ -39,7 +35,6 @@ public sealed class TaskClassificationEditorViewModel : ReactiveObject, IDisposa
 
         if (task is not null)
         {
-            ((INotifyPropertyChanged)task).PropertyChanged += TaskOnPropertyChanged;
             task.AreaIds.CollectionChanged += TaskAreaIdsOnCollectionChanged;
         }
 
@@ -50,12 +45,6 @@ public sealed class TaskClassificationEditorViewModel : ReactiveObject, IDisposa
     public ObservableCollection<TaskClassificationAreaOptionViewModel> Areas { get; } = new();
 
     public ObservableCollection<TaskClassificationChipViewModel> SelectedAreas { get; } = new();
-
-    public bool IsGoal
-    {
-        get => task?.IsGoal ?? draftIsGoal;
-        set => TrySetGoal(value);
-    }
 
     public bool IsEditingSupported
     {
@@ -82,7 +71,6 @@ public sealed class TaskClassificationEditorViewModel : ReactiveObject, IDisposa
         ArgumentNullException.ThrowIfNull(task);
         return new TaskClassificationEditorViewModel(
             task,
-            task.IsGoal,
             task.AreaIds,
             areas,
             supportsEditing,
@@ -90,41 +78,16 @@ public sealed class TaskClassificationEditorViewModel : ReactiveObject, IDisposa
     }
 
     public static TaskClassificationEditorViewModel ForDraft(
-        bool isGoal,
         IEnumerable<string>? selectedAreaIds,
         IEnumerable<TaskClassificationAreaDefinition> areas,
         Action<TaskClassificationSnapshot>? changed = null,
         Func<bool>? supportsEditing = null) =>
         new(
             task: null,
-            isGoal,
             selectedAreaIds ?? [],
             areas,
             supportsEditing,
             changed);
-
-    public bool TrySetGoal(bool value)
-    {
-        RefreshCapability();
-        if (!IsEditingSupported)
-        {
-            this.RaisePropertyChanged(nameof(IsGoal));
-            return false;
-        }
-
-        if (task is not null)
-        {
-            task.IsGoal = value;
-        }
-        else if (draftIsGoal != value)
-        {
-            draftIsGoal = value;
-            this.RaisePropertyChanged(nameof(IsGoal));
-            NotifyDraftChanged();
-        }
-
-        return true;
-    }
 
     public bool TrySetAreaSelected(string areaId, bool selected)
     {
@@ -220,7 +183,6 @@ public sealed class TaskClassificationEditorViewModel : ReactiveObject, IDisposa
     {
         if (task is not null)
         {
-            ((INotifyPropertyChanged)task).PropertyChanged -= TaskOnPropertyChanged;
             task.AreaIds.CollectionChanged -= TaskAreaIdsOnCollectionChanged;
         }
 
@@ -237,14 +199,6 @@ public sealed class TaskClassificationEditorViewModel : ReactiveObject, IDisposa
         if (!isSynchronizing)
         {
             TrySetAreaSelected(option.Id, selected);
-        }
-    }
-
-    private void TaskOnPropertyChanged(object? sender, PropertyChangedEventArgs eventArgs)
-    {
-        if (eventArgs.PropertyName is null or nameof(TaskItemViewModel.IsGoal))
-        {
-            this.RaisePropertyChanged(nameof(IsGoal));
         }
     }
 
@@ -284,11 +238,10 @@ public sealed class TaskClassificationEditorViewModel : ReactiveObject, IDisposa
     }
 
     private void NotifyDraftChanged() => draftChanged?.Invoke(new TaskClassificationSnapshot(
-        draftIsGoal,
         draftAreaIds.Distinct(StringComparer.Ordinal).ToArray()));
 }
 
-public sealed record TaskClassificationSnapshot(bool IsGoal, IReadOnlyList<string> AreaIds);
+public sealed record TaskClassificationSnapshot(IReadOnlyList<string> AreaIds);
 
 public sealed record TaskClassificationAreaDefinition(
     string Id,

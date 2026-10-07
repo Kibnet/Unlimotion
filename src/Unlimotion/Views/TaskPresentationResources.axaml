@@ -122,13 +122,6 @@
             <Setter Property="Opacity" Value="0.72"/>
             <Setter Property="Margin" Value="0,0,0,4"/>
         </Style>
-        <Style Selector="TextBlock.TaskGoalIndicator">
-            <Setter Property="Margin" Value="0,0,6,0"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
-            <Setter Property="FontSize" Value="12"/>
-            <Setter Property="Foreground" Value="{DynamicResource AccentButtonBackground}"/>
-            <Setter Property="Opacity" Value="0.72"/>
-        </Style>
         <Style Selector="Button.FilterPanelResetButton">
             <Setter Property="MinHeight" Value="34"/>
             <Setter Property="Padding" Value="10,6"/>
@@ -702,9 +695,6 @@
         <DataTemplate DataType="viewModel:WantedFilterOption">
             <TextBlock Text="{Binding Title}" VerticalAlignment="Center"/>
         </DataTemplate>
-        <DataTemplate DataType="viewModel:TaskGoalFilterOption">
-            <TextBlock Text="{Binding Title}" VerticalAlignment="Center"/>
-        </DataTemplate>
         <DataTemplate DataType="viewModel:TaskStatusFilter">
             <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="8">
                 <CheckBox IsChecked="{Binding ShowTasks}" VerticalAlignment="Center"/>
@@ -756,12 +746,6 @@
                            Margin="4,0,4,0"
                            VerticalAlignment="Center" />
                 <Grid Grid.Column="2" ColumnDefinitions="Auto,Auto,*,Auto" VerticalAlignment="Center">
-                    <TextBlock Classes="TaskGoalIndicator"
-                               Text="★"
-                               IsVisible="{Binding IsGoal}"
-                               ToolTip.Tip="{DynamicResource TaskIsGoal}"
-                               AutomationProperties.Name="{DynamicResource TaskIsGoal}"
-                               AutomationProperties.AutomationId="TaskGoalIndicator"/>
                     <unlimotion:EmojiTextBlock Grid.Column="2" EmojiText="{Binding Title}" VerticalAlignment="Center" HorizontalAlignment="Left" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" AutomationProperties.AutomationId="{Binding Id, StringFormat='TaskTitle_{0}'}" Classes.IsWanted="{Binding Wanted}" Classes.IsCanBeCompleted="{Binding !IsCanBeCompleted}" PointerPressed="InlineTaskTitleText_OnPointerPressed"  />
                     <Button Grid.Column="3" Content="⋯" MinWidth="32" MinHeight="32"
                             Margin="4,0,0,0" Padding="0" Background="Transparent" BorderBrush="Transparent"

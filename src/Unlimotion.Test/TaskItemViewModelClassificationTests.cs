@@ -12,19 +12,17 @@ namespace Unlimotion.Test;
 public sealed class TaskItemViewModelClassificationTests
 {
     [Test]
-    public async Task Model_RoundTrip_PreservesGoalAndSeveralAreas()
+    public async Task Model_RoundTrip_PreservesSeveralAreas()
     {
         var storage = new CapturingTaskStorage();
         using var viewModel = new TaskItemViewModel(
-            CreateTask(isGoal: true, ["area/work", "area/product"]),
+            CreateTask(["area/work", "area/product"]),
             storage,
             () => false);
 
         var model = viewModel.Model;
 
-        await Assert.That(viewModel.IsGoal).IsTrue();
         await Assert.That(viewModel.AreaIds).IsEquivalentTo(["area/work", "area/product"]);
-        await Assert.That(model.IsGoal).IsTrue();
         await Assert.That(model.AreaIds).IsEquivalentTo(["area/work", "area/product"]);
     }
 
@@ -33,16 +31,15 @@ public sealed class TaskItemViewModelClassificationTests
     {
         var storage = new CapturingTaskStorage();
         using var viewModel = new TaskItemViewModel(
-            CreateTask(isGoal: false, ["area/old"]),
+            CreateTask(["area/old"]),
             storage,
             () => false);
-        var updated = CreateTask(isGoal: true, ["area/new", "area/shared"]);
+        var updated = CreateTask(["area/new", "area/shared"]);
         updated.Title = "Updated title";
 
         viewModel.Update(updated);
 
         await Assert.That(viewModel.Title).IsEqualTo("Updated title");
-        await Assert.That(viewModel.IsGoal).IsTrue();
         await Assert.That(viewModel.AreaIds).IsEquivalentTo(["area/new", "area/shared"]);
     }
 
@@ -50,7 +47,7 @@ public sealed class TaskItemViewModelClassificationTests
     public async Task Model_RoundTrip_PreservesUnknownExtensionData()
     {
         var storage = new CapturingTaskStorage();
-        var source = CreateTask(isGoal: false, []);
+        var source = CreateTask([]);
         source.ExtensionData = new Dictionary<string, JToken>
         {
             ["futureField"] = JObject.Parse("{\"nested\":[1,2,3]}")
@@ -68,11 +65,10 @@ public sealed class TaskItemViewModelClassificationTests
             roundTrip.ExtensionData["futureField"])).IsFalse();
     }
 
-    private static TaskItem CreateTask(bool isGoal, List<string> areaIds) => new()
+    private static TaskItem CreateTask(List<string> areaIds) => new()
     {
         Id = "task-1",
         Title = "Task",
-        IsGoal = isGoal,
         AreaIds = areaIds,
         ContainsTasks = [],
         ParentTasks = [],

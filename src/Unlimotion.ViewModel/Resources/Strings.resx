@@ -242,8 +242,7 @@
   <data name="FeedReviewLeave" xml:space="preserve"><value>Keep</value></data>
   <data name="FeedReviewSkip" xml:space="preserve"><value>Skip</value></data>
   <data name="FeedReviewMoveToday" xml:space="preserve"><value>Move to today</value></data>
-  <data name="FeedReviewTaskOptions" xml:space="preserve"><value>Task or goal</value></data>
-  <data name="FeedReviewGoal" xml:space="preserve"><value>Goal</value></data>
+  <data name="FeedReviewTaskOptions" xml:space="preserve"><value>Task</value></data>
   <data name="FeedReviewCreateTask" xml:space="preserve"><value>Create task</value></data>
   <data name="FeedReviewNoteTitle" xml:space="preserve"><value>Note title</value></data>
   <data name="FeedReviewNoteFolder" xml:space="preserve"><value>Thematic folder</value></data>
@@ -308,8 +307,7 @@
   <data name="FeedDraftRecoveryStale" xml:space="preserve"><value>The note changed after this draft was saved. Keep the draft for conflict recovery or discard it explicitly.</value></data>
   <data name="TaskAreas" xml:space="preserve"><value>Areas</value></data>
   <data name="TaskClassificationTitle" xml:space="preserve"><value>Classification</value></data>
-  <data name="TaskClassificationOldServerExplanation" xml:space="preserve"><value>This server does not support goal and area fields. Classification editing is disabled to prevent data loss.</value></data>
-  <data name="TaskIsGoal" xml:space="preserve"><value>Goal</value></data>
+  <data name="TaskClassificationOldServerExplanation" xml:space="preserve"><value>This server does not support task areas. Area editing is disabled to prevent data loss.</value></data>
   <data name="MarkdownBlockedLinkHelp" xml:space="preserve"><value>The URI scheme is unsafe, so this link is inactive.</value></data>
   <data name="MarkdownBlockedLinkName" xml:space="preserve"><value>Blocked link: {0}</value></data>
   <data name="MarkdownBlockedLinkTooltip" xml:space="preserve"><value>Unsafe URI scheme blocked</value></data>
@@ -885,9 +883,6 @@ ID: {1}</value></data>
   <data name="AreaExternalConflict" xml:space="preserve"><value>Areas were changed both in Unlimotion and externally. Choose which version to keep.</value></data>
   <data name="AreaUseLocalDraft" xml:space="preserve"><value>Use Unlimotion version</value></data>
   <data name="AreaUseExternal" xml:space="preserve"><value>Use external version</value></data>
-  <data name="TaskGoalFilterAll" xml:space="preserve"><value>All</value></data>
-  <data name="TaskGoalFilterGoals" xml:space="preserve"><value>Goals</value></data>
-  <data name="TaskGoalFilterRegular" xml:space="preserve"><value>Regular</value></data>
   <data name="FeedChronologyAutomationName" xml:space="preserve">
     <value>Chronology: {0} days</value>
   </data>

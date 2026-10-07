@@ -14,6 +14,56 @@ namespace Unlimotion.Test;
 public sealed class FeedQuickTaskCaptureTests
 {
     [Test]
+    [Arguments(FeedTaskConversionState.Pending, true)]
+    [Arguments(FeedTaskConversionState.Pending, false)]
+    [Arguments(FeedTaskConversionState.TaskCreated, true)]
+    [Arguments(FeedTaskConversionState.TaskCreated, false)]
+    [Arguments(FeedTaskConversionState.Completed, true)]
+    [Arguments(FeedTaskConversionState.Completed, false)]
+    public async Task LegacyGoalCapture_RetainsStableTaskAndSourceAcrossEveryCheckpoint(FeedTaskConversionState checkpoint, bool legacyGoal)
+    {
+        using var directory = new TempNotesDirectory();
+        var vault = new FileNoteVault(directory.Path);
+        var parser = new MarkdownDocumentParser();
+        var mutations = new MarkdownMutationService(parser);
+        var daily = new DailyNoteService(vault, parser, mutations);
+        var target = new IdempotentRecordingTarget();
+        var journal = new FeedTaskConversionTests.LegacyGoalCheckpointJournal(checkpoint, legacyGoal);
+        var identity = new FeedTaskSourceIdentity("space", "legacy-capture-binding");
+        var service = new FeedTaskCaptureService(vault, daily, parser, mutations, target, journal,
+            taskSourceIdentityProvider: () => identity);
+        var request = new FeedTaskCaptureRequest("vault", "legacy-capture", new DateOnly(2026, 10, 7),
+            "Capture survives upgrade", null, null, ["work"], ["parent"], identity);
+        _ = await NotesTestSupport.CaptureAsync<IOException>(() => service.CaptureAsync(request));
+        await Assert.That(journal.PersistedJson).Contains("isGoal");
+        var checkpointJson = journal.PersistedJson;
+        var checkpointSource = (await daily.OpenDayAsync(request.Date))?.Text;
+        _ = await NotesTestSupport.CaptureAsync<InvalidDataException>(() =>
+            service.CaptureAsync(request with { AreaIds = ["other-area"] }));
+        _ = await NotesTestSupport.CaptureAsync<InvalidDataException>(() =>
+            service.CaptureAsync(request with { Capture = "Different capture" }));
+        await Assert.That(journal.PersistedJson).IsEqualTo(checkpointJson);
+        await Assert.That((await daily.OpenDayAsync(request.Date))?.Text).IsEqualTo(checkpointSource);
+        var result = await service.CaptureAsync(request);
+        await Assert.That(result.TaskId).IsEqualTo("feed-legacy-capture");
+        await Assert.That(target.Tasks.Count).IsEqualTo(1);
+        await Assert.That(target.Tasks[0].AreaIds).IsEquivalentTo(["work"]);
+        await Assert.That(target.Tasks[0].ParentTaskIds!).IsEquivalentTo(["parent"]);
+        await Assert.That((await vault.ReadAsync(result.SourcePath))!.Text.CountOccurrences("unlimotion://task/feed-legacy-capture")).IsEqualTo(1);
+    }
+
+    private sealed class IdempotentRecordingTarget : IFeedTaskCreationTarget
+    {
+        public List<FeedTaskDraft> Tasks { get; } = [];
+        public Task<FeedCreatedTask> CreateOrGetAsync(FeedTaskDraft draft, CancellationToken cancellationToken = default)
+        {
+            var existing = Tasks.SingleOrDefault(task => task.TaskId == draft.TaskId);
+            if (existing is null) Tasks.Add(draft);
+            return Task.FromResult(new FeedCreatedTask(draft.TaskId, draft.Title));
+        }
+    }
+
+    [Test]
     [Arguments("# План\n\nСделать релиз", "# План", "Сделать релиз")]
     [Arguments("Сделать релиз\n\n# План", "Сделать релиз", "# План")]
     public async Task Capture_HeadingAtEitherBoundaryIsNotSilentlyExcluded(string input, string title, string description)

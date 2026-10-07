@@ -69,7 +69,7 @@ namespace Unlimotion.Test
 
         public MainWindowViewModelFixture() : this(null) { }
 
-        public MainWindowViewModelFixture(Func<string, ITaskStorage>? taskStorageFactoryOverride)
+        public MainWindowViewModelFixture(Func<string, ITaskStorage>? taskStorageFactoryOverride, string? legacyGoalFilter = null)
         {
             guid = new ThreadLocal<Guid> { Value = Guid.NewGuid() };
             fixtureDirectory = Path.Combine(Environment.CurrentDirectory, $"MainWindowViewModelFixture_{UniquiId}");
@@ -93,6 +93,8 @@ namespace Unlimotion.Test
             // Create configuration
             IConfigurationRoot configuration = WritableJsonConfigurationFabric.Create(uniqueConfigName, reloadOnChange: false);
             configurationDisposable = configuration as IDisposable;
+            if (legacyGoalFilter is not null)
+                configuration.GetSection("AllTasks:GoalFilter").Set(legacyGoalFilter);
 
             // Create mapper
             var mapper = AppModelMapping.ConfigureMapping();

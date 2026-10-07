@@ -242,8 +242,7 @@
   <data name="FeedReviewLeave" xml:space="preserve"><value>Оставить</value></data>
   <data name="FeedReviewSkip" xml:space="preserve"><value>Пропустить</value></data>
   <data name="FeedReviewMoveToday" xml:space="preserve"><value>Перенести на сегодня</value></data>
-  <data name="FeedReviewTaskOptions" xml:space="preserve"><value>Задача или цель</value></data>
-  <data name="FeedReviewGoal" xml:space="preserve"><value>Цель</value></data>
+  <data name="FeedReviewTaskOptions" xml:space="preserve"><value>Задача</value></data>
   <data name="FeedReviewCreateTask" xml:space="preserve"><value>Создать задачу</value></data>
   <data name="FeedReviewNoteTitle" xml:space="preserve"><value>Название заметки</value></data>
   <data name="FeedReviewNoteFolder" xml:space="preserve"><value>Тематическая папка</value></data>
@@ -308,8 +307,7 @@
   <data name="FeedDraftRecoveryStale" xml:space="preserve"><value>После сохранения черновика заметка изменилась. Оставьте черновик для разрешения конфликта или явно удалите его.</value></data>
   <data name="TaskAreas" xml:space="preserve"><value>Области</value></data>
   <data name="TaskClassificationTitle" xml:space="preserve"><value>Классификация</value></data>
-  <data name="TaskClassificationOldServerExplanation" xml:space="preserve"><value>Этот сервер не поддерживает признаки цели и областей. Редактирование отключено, чтобы не потерять данные.</value></data>
-  <data name="TaskIsGoal" xml:space="preserve"><value>Цель</value></data>
+  <data name="TaskClassificationOldServerExplanation" xml:space="preserve"><value>Этот сервер не поддерживает области задач. Редактирование отключено, чтобы не потерять данные.</value></data>
   <data name="MarkdownBlockedLinkHelp" xml:space="preserve"><value>URI-схема небезопасна, поэтому ссылка неактивна.</value></data>
   <data name="MarkdownBlockedLinkName" xml:space="preserve"><value>Заблокированная ссылка: {0}</value></data>
   <data name="MarkdownBlockedLinkTooltip" xml:space="preserve"><value>Небезопасная URI-схема заблокирована</value></data>
@@ -885,9 +883,6 @@ ID: {1}</value></data>
   <data name="AreaExternalConflict" xml:space="preserve"><value>Области были изменены и в Unlimotion, и извне. Выберите, какую версию сохранить.</value></data>
   <data name="AreaUseLocalDraft" xml:space="preserve"><value>Использовать версию Unlimotion</value></data>
   <data name="AreaUseExternal" xml:space="preserve"><value>Использовать внешнюю версию</value></data>
-  <data name="TaskGoalFilterAll" xml:space="preserve"><value>Все</value></data>
-  <data name="TaskGoalFilterGoals" xml:space="preserve"><value>Цели</value></data>
-  <data name="TaskGoalFilterRegular" xml:space="preserve"><value>Обычные</value></data>
   <data name="FeedChronologyAutomationName" xml:space="preserve">
     <value>Хронология: дней — {0}</value>
   </data>

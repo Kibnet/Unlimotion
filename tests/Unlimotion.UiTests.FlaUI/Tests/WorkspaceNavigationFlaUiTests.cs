@@ -77,6 +77,13 @@ public sealed class WorkspaceNavigationFlaUiTests
             var title = secondary.FindFirstDescendant(session.ConditionFactory.ByAutomationId("CurrentTaskTitleTextBox"))?.AsTextBox();
             if (title?.Text != "UX08 Five-minute action")
                 throw new InvalidOperationException("The context-menu task target is not the right-clicked row.");
+            var cardControls = secondary.FindAllDescendants();
+            if (cardControls.Any(element =>
+                    element.Properties.AutomationId.ValueOrDefault?.Contains("Goal", StringComparison.Ordinal) == true))
+                throw new InvalidOperationException("Standalone task card still exposes retired goal controls.");
+            if (!cardControls.Any(element =>
+                    element.Properties.AutomationId.ValueOrDefault == "CurrentTaskClassificationAreaPickerToggle"))
+                throw new InvalidOperationException("Removing the goal control also removed task areas.");
             if (secondary.FindAllDescendants().Any(element => !element.IsOffscreen &&
                     element.Properties.AutomationId.ValueOrDefault is "MainTabs" or "TaskListDocument"))
                 throw new InvalidOperationException("Standalone task card still contains a nested task list.");

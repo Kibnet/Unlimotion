@@ -96,13 +96,6 @@
             <Setter Property="Opacity" Value="0.72"/>
             <Setter Property="Margin" Value="0,0,0,4"/>
         </Style>
-        <Style Selector="TextBlock.TaskGoalIndicator">
-            <Setter Property="Margin" Value="0,0,6,0"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
-            <Setter Property="FontSize" Value="12"/>
-            <Setter Property="Foreground" Value="{DynamicResource AccentButtonBackground}"/>
-            <Setter Property="Opacity" Value="0.72"/>
-        </Style>
         <Style Selector="Button.FilterPanelResetButton">
             <Setter Property="MinHeight" Value="34"/>
             <Setter Property="Padding" Value="10,6"/>
@@ -690,9 +683,6 @@
         <DataTemplate DataType="viewModel:WantedFilterOption">
             <TextBlock Text="{Binding Title}" VerticalAlignment="Center"/>
         </DataTemplate>
-        <DataTemplate DataType="viewModel:TaskGoalFilterOption">
-            <TextBlock Text="{Binding Title}" VerticalAlignment="Center"/>
-        </DataTemplate>
         <DataTemplate DataType="viewModel:TaskStatusFilter">
             <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="8">
                 <CheckBox IsChecked="{Binding ShowTasks}" VerticalAlignment="Center"/>
@@ -744,12 +734,6 @@
                            Margin="4,0,4,0"
                            VerticalAlignment="Center" />
                 <Grid Grid.Column="2" ColumnDefinitions="Auto,Auto,*" VerticalAlignment="Center">
-                    <TextBlock Classes="TaskGoalIndicator"
-                               Text="★"
-                               IsVisible="{Binding IsGoal}"
-                               ToolTip.Tip="{DynamicResource TaskIsGoal}"
-                               AutomationProperties.Name="{DynamicResource TaskIsGoal}"
-                               AutomationProperties.AutomationId="TaskGoalIndicator"/>
                     <unlimotion:EmojiTextBlock Grid.Column="2" EmojiText="{Binding Title}" VerticalAlignment="Center" HorizontalAlignment="Left" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" AutomationProperties.AutomationId="InlineTaskTitleTextBlock" Classes.IsWanted="{Binding Wanted}" Classes.IsCanBeCompleted="{Binding !IsCanBeCompleted}" PointerPressed="InlineTaskTitleText_OnPointerPressed"  />
                 </Grid>
             </Grid>
@@ -895,7 +879,6 @@
                                                                 <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterState}"/>
                                                                 <WrapPanel>
                                                                     <ComboBox ItemsSource="{Binding StatusFilters}" MinWidth="220" Margin="0,0,8,6" AutomationProperties.AutomationId="AllTasksStatusFilterComboBox"/>
-                                                                    <ComboBox ItemsSource="{Binding TaskGoalFilterDefinitions}" SelectedItem="{Binding CurrentGoalFilter}" MinWidth="160" Margin="0,0,8,6" ToolTip.Tip="{DynamicResource TaskIsGoal}" AutomationProperties.Name="{DynamicResource TaskIsGoal}" AutomationProperties.AutomationId="AllTasksGoalFilterComboBox"/>
                                                                 </WrapPanel>
                                                             </StackPanel>
                                                             <Button Classes="FilterPanelResetButton"
@@ -999,7 +982,6 @@
                                                             <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterState}"/>
                                                             <WrapPanel>
                                                                 <ComboBox ItemsSource="{Binding LastCreatedStatusFilters}" MinWidth="220" Margin="0,0,8,6" AutomationProperties.AutomationId="LastCreatedStatusFilterComboBox"/>
-                                                                <ComboBox ItemsSource="{Binding TaskGoalFilterDefinitions}" SelectedItem="{Binding LastCreatedFilter.CurrentGoalFilter}" MinWidth="160" Margin="0,0,8,6" ToolTip.Tip="{DynamicResource TaskIsGoal}" AutomationProperties.Name="{DynamicResource TaskIsGoal}" AutomationProperties.AutomationId="LastCreatedGoalFilterComboBox"/>
                                                             </WrapPanel>
                                                         </StackPanel>
                                                         <Button Classes="FilterPanelResetButton"
@@ -1046,12 +1028,6 @@
                                                            Margin="4,0,4,0"
                                                            VerticalAlignment="Center" />
                                                 <Grid Grid.Column="4" ColumnDefinitions="Auto,*" VerticalAlignment="Center">
-                                                    <TextBlock Classes="TaskGoalIndicator"
-                                                               Text="★"
-                                                               IsVisible="{Binding TaskItem.IsGoal}"
-                                                               ToolTip.Tip="{DynamicResource TaskIsGoal}"
-                                                               AutomationProperties.Name="{DynamicResource TaskIsGoal}"
-                                                               AutomationProperties.AutomationId="TaskGoalIndicator"/>
                                                     <unlimotion:EmojiTextBlock Grid.Column="1" EmojiText="{Binding TaskItem.Title}" VerticalAlignment="Center" HorizontalAlignment="Left" AutomationProperties.AutomationId="InlineTaskTitleTextBlock" Classes.IsWanted="{Binding TaskItem.Wanted}" PointerPressed="InlineTaskTitleText_OnPointerPressed"/>
                                                 </Grid>
                                             </Grid>
@@ -1131,7 +1107,6 @@
                                                             <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterState}"/>
                                                             <WrapPanel>
                                                                 <ComboBox ItemsSource="{Binding LastUpdatedStatusFilters}" MinWidth="220" Margin="0,0,8,6" AutomationProperties.AutomationId="LastUpdatedStatusFilterComboBox"/>
-                                                                <ComboBox ItemsSource="{Binding TaskGoalFilterDefinitions}" SelectedItem="{Binding LastUpdatedFilter.CurrentGoalFilter}" MinWidth="160" Margin="0,0,8,6" ToolTip.Tip="{DynamicResource TaskIsGoal}" AutomationProperties.Name="{DynamicResource TaskIsGoal}" AutomationProperties.AutomationId="LastUpdatedGoalFilterComboBox"/>
                                                             </WrapPanel>
                                                         </StackPanel>
                                                         <Button Classes="FilterPanelResetButton"
@@ -1178,12 +1153,6 @@
                                                            Margin="4,0,4,0"
                                                            VerticalAlignment="Center" />
                                                 <Grid Grid.Column="4" ColumnDefinitions="Auto,*" VerticalAlignment="Center">
-                                                    <TextBlock Classes="TaskGoalIndicator"
-                                                               Text="★"
-                                                               IsVisible="{Binding TaskItem.IsGoal}"
-                                                               ToolTip.Tip="{DynamicResource TaskIsGoal}"
-                                                               AutomationProperties.Name="{DynamicResource TaskIsGoal}"
-                                                               AutomationProperties.AutomationId="TaskGoalIndicator"/>
                                                     <unlimotion:EmojiTextBlock Grid.Column="1" EmojiText="{Binding TaskItem.Title}" VerticalAlignment="Center" HorizontalAlignment="Left" AutomationProperties.AutomationId="InlineTaskTitleTextBlock" Classes.IsWanted="{Binding TaskItem.Wanted}" PointerPressed="InlineTaskTitleText_OnPointerPressed"/>
                                                 </Grid>
                                             </Grid>
@@ -1248,7 +1217,6 @@
                                                             <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterState}"/>
                                                             <WrapPanel>
                                                                 <ComboBox ItemsSource="{Binding UnlockedStatusFilters}" MinWidth="220" Margin="0,0,8,6" AutomationProperties.AutomationId="UnlockedStatusFilterComboBox"/>
-                                                                <ComboBox ItemsSource="{Binding TaskGoalFilterDefinitions}" SelectedItem="{Binding CurrentUnlockedGoalFilter}" MinWidth="160" Margin="0,0,8,6" ToolTip.Tip="{DynamicResource TaskIsGoal}" AutomationProperties.Name="{DynamicResource TaskIsGoal}" AutomationProperties.AutomationId="UnlockedGoalFilterComboBox"/>
                                                                 <ComboBox ItemsSource="{Binding WantedFilterDefinitions}" SelectedItem="{Binding CurrentWantedFilter}" MinWidth="160" Margin="0,0,8,6" AutomationProperties.AutomationId="UnlockedWantedFilterComboBox"/>
                                                             </WrapPanel>
                                                         </StackPanel>
@@ -1302,12 +1270,6 @@
                                                            Margin="4,0,4,0"
                                                            VerticalAlignment="Center" />
                                                 <Grid Grid.Column="3" ColumnDefinitions="Auto,*" VerticalAlignment="Center">
-                                                    <TextBlock Classes="TaskGoalIndicator"
-                                                               Text="★"
-                                                               IsVisible="{Binding TaskItem.IsGoal}"
-                                                               ToolTip.Tip="{DynamicResource TaskIsGoal}"
-                                                               AutomationProperties.Name="{DynamicResource TaskIsGoal}"
-                                                               AutomationProperties.AutomationId="TaskGoalIndicator"/>
                                                     <unlimotion:EmojiTextBlock Grid.Column="1" EmojiText="{Binding TaskItem.Title}" VerticalAlignment="Center" HorizontalAlignment="Left" AutomationProperties.AutomationId="InlineTaskTitleTextBlock" Classes.IsWanted="{Binding TaskItem.Wanted}" PointerPressed="InlineTaskTitleText_OnPointerPressed"/>
                                                 </Grid>
                                             </Grid>
@@ -1368,7 +1330,6 @@
                                                                 <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterState}"/>
                                                                 <WrapPanel>
                                                                     <ComboBox ItemsSource="{Binding InProgressStatusFilters}" MinWidth="220" Margin="0,0,8,6" AutomationProperties.AutomationId="InProgressStatusFilterComboBox"/>
-                                                                <ComboBox ItemsSource="{Binding TaskGoalFilterDefinitions}" SelectedItem="{Binding InProgressFilter.CurrentGoalFilter}" MinWidth="160" Margin="0,0,8,6" ToolTip.Tip="{DynamicResource TaskIsGoal}" AutomationProperties.Name="{DynamicResource TaskIsGoal}" AutomationProperties.AutomationId="InProgressGoalFilterComboBox"/>
                                                                 </WrapPanel>
                                                             </StackPanel>
                                                             <Button Classes="FilterPanelResetButton"
@@ -1422,12 +1383,6 @@
                                                            Margin="4,0,4,0"
                                                            VerticalAlignment="Center" />
                                                 <Grid Grid.Column="5" ColumnDefinitions="Auto,*" VerticalAlignment="Center">
-                                                    <TextBlock Classes="TaskGoalIndicator"
-                                                               Text="★"
-                                                               IsVisible="{Binding TaskItem.IsGoal}"
-                                                               ToolTip.Tip="{DynamicResource TaskIsGoal}"
-                                                               AutomationProperties.Name="{DynamicResource TaskIsGoal}"
-                                                               AutomationProperties.AutomationId="TaskGoalIndicator"/>
                                                     <unlimotion:EmojiTextBlock Grid.Column="1" EmojiText="{Binding TaskItem.Title}" VerticalAlignment="Center" HorizontalAlignment="Left" AutomationProperties.AutomationId="InlineTaskTitleTextBlock" Classes.IsWanted="{Binding TaskItem.Wanted}" PointerPressed="InlineTaskTitleText_OnPointerPressed"/>
                                                 </Grid>
                                             </Grid>
@@ -1488,7 +1443,6 @@
                                                             <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterState}"/>
                                                             <WrapPanel>
                                                                 <ComboBox ItemsSource="{Binding CompletedStatusFilters}" MinWidth="220" Margin="0,0,8,6" AutomationProperties.AutomationId="CompletedStatusFilterComboBox"/>
-                                                                <ComboBox ItemsSource="{Binding TaskGoalFilterDefinitions}" SelectedItem="{Binding CompletedFilter.CurrentGoalFilter}" MinWidth="160" Margin="0,0,8,6" ToolTip.Tip="{DynamicResource TaskIsGoal}" AutomationProperties.Name="{DynamicResource TaskIsGoal}" AutomationProperties.AutomationId="CompletedGoalFilterComboBox"/>
                                                             </WrapPanel>
                                                         </StackPanel>
                                                         <StackPanel>
@@ -1555,12 +1509,6 @@
                                                            Margin="4,0,4,0"
                                                            VerticalAlignment="Center" />
                                                 <Grid Grid.Column="4" ColumnDefinitions="Auto,*" VerticalAlignment="Center">
-                                                    <TextBlock Classes="TaskGoalIndicator"
-                                                               Text="★"
-                                                               IsVisible="{Binding TaskItem.IsGoal}"
-                                                               ToolTip.Tip="{DynamicResource TaskIsGoal}"
-                                                               AutomationProperties.Name="{DynamicResource TaskIsGoal}"
-                                                               AutomationProperties.AutomationId="TaskGoalIndicator"/>
                                                     <unlimotion:EmojiTextBlock Grid.Column="1" EmojiText="{Binding TaskItem.Title}" VerticalAlignment="Center" HorizontalAlignment="Left" AutomationProperties.AutomationId="InlineTaskTitleTextBlock" Classes.IsWanted="{Binding TaskItem.Wanted}" PointerPressed="InlineTaskTitleText_OnPointerPressed"/>
                                                 </Grid>
                                             </Grid>
@@ -1621,7 +1569,6 @@
                                                             <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterState}"/>
                                                             <WrapPanel>
                                                                 <ComboBox ItemsSource="{Binding ArchivedStatusFilters}" MinWidth="220" Margin="0,0,8,6" AutomationProperties.AutomationId="ArchivedStatusFilterComboBox"/>
-                                                                <ComboBox ItemsSource="{Binding TaskGoalFilterDefinitions}" SelectedItem="{Binding ArchivedFilter.CurrentGoalFilter}" MinWidth="160" Margin="0,0,8,6" ToolTip.Tip="{DynamicResource TaskIsGoal}" AutomationProperties.Name="{DynamicResource TaskIsGoal}" AutomationProperties.AutomationId="ArchivedGoalFilterComboBox"/>
                                                             </WrapPanel>
                                                         </StackPanel>
                                                         <StackPanel>
@@ -1693,12 +1640,6 @@
                                                            Margin="4,0,4,0"
                                                            VerticalAlignment="Center" />
                                                 <Grid Grid.Column="4" ColumnDefinitions="Auto,*" VerticalAlignment="Center">
-                                                    <TextBlock Classes="TaskGoalIndicator"
-                                                               Text="★"
-                                                               IsVisible="{Binding TaskItem.IsGoal}"
-                                                               ToolTip.Tip="{DynamicResource TaskIsGoal}"
-                                                               AutomationProperties.Name="{DynamicResource TaskIsGoal}"
-                                                               AutomationProperties.AutomationId="TaskGoalIndicator"/>
                                                     <unlimotion:EmojiTextBlock Grid.Column="1" EmojiText="{Binding TaskItem.Title}" VerticalAlignment="Center" HorizontalAlignment="Left" AutomationProperties.AutomationId="InlineTaskTitleTextBlock" Classes.IsWanted="{Binding TaskItem.Wanted}" PointerPressed="InlineTaskTitleText_OnPointerPressed"/>
                                                 </Grid>
                                             </Grid>
@@ -1738,7 +1679,6 @@
                                                             <TextBlock Classes="FilterPanelGroupTitle" Text="{DynamicResource FilterState}"/>
                                                             <WrapPanel>
                                                                 <ComboBox ItemsSource="{Binding LastOpenedStatusFilters}" MinWidth="220" Margin="0,0,8,6" AutomationProperties.AutomationId="LastOpenedStatusFilterComboBox"/>
-                                                                <ComboBox ItemsSource="{Binding TaskGoalFilterDefinitions}" SelectedItem="{Binding LastOpenedFilter.CurrentGoalFilter}" MinWidth="160" Margin="0,0,8,6" ToolTip.Tip="{DynamicResource TaskIsGoal}" AutomationProperties.Name="{DynamicResource TaskIsGoal}" AutomationProperties.AutomationId="LastOpenedGoalFilterComboBox"/>
                                                             </WrapPanel>
                                                         </StackPanel>
                                                         <Button Classes="FilterPanelResetButton"
@@ -1785,12 +1725,6 @@
                                                            Margin="4,0,4,0"
                                                            VerticalAlignment="Center" />
                                                 <Grid Grid.Column="4" ColumnDefinitions="Auto,*" VerticalAlignment="Center">
-                                                    <TextBlock Classes="TaskGoalIndicator"
-                                                               Text="★"
-                                                               IsVisible="{Binding TaskItem.IsGoal}"
-                                                               ToolTip.Tip="{DynamicResource TaskIsGoal}"
-                                                               AutomationProperties.Name="{DynamicResource TaskIsGoal}"
-                                                               AutomationProperties.AutomationId="TaskGoalIndicator"/>
                                                     <unlimotion:EmojiTextBlock Grid.Column="1" EmojiText="{Binding TaskItem.Title}" VerticalAlignment="Center" HorizontalAlignment="Left" AutomationProperties.AutomationId="InlineTaskTitleTextBlock" Classes.IsWanted="{Binding TaskItem.Wanted}" Classes.IsCanBeCompleted="{Binding !TaskItem.IsCanBeCompleted}" PointerPressed="InlineTaskTitleText_OnPointerPressed"/>
                                                 </Grid>
                                             </Grid>
@@ -1890,13 +1824,6 @@
                                                   VerticalAlignment="Center"
                                                   ToolTip.Tip="{Binding StatusToolTip}"
                                                   AutomationProperties.AutomationId="CurrentTaskStatusButton"/>
-                                        <TextBlock Grid.Column="1"
-                                                   Classes="TaskGoalIndicator"
-                                                   Text="★"
-                                                   IsVisible="{Binding IsGoal}"
-                                                   ToolTip.Tip="{DynamicResource TaskIsGoal}"
-                                                   AutomationProperties.Name="{DynamicResource TaskIsGoal}"
-                                                   AutomationProperties.AutomationId="CurrentTaskGoalIndicator"/>
                                         <TextBox Grid.Column="2"
                                                  x:Name="CurrentTaskTitleTextBox"
                                                  AutomationProperties.AutomationId="CurrentTaskTitleTextBox"

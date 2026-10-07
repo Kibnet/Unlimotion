@@ -13,6 +13,57 @@ namespace Unlimotion.Test;
 public sealed class FeedTaskConversionTests
 {
     [Test]
+    [Arguments(FeedTaskConversionState.Pending, true)]
+    [Arguments(FeedTaskConversionState.Pending, false)]
+    [Arguments(FeedTaskConversionState.TaskCreated, true)]
+    [Arguments(FeedTaskConversionState.TaskCreated, false)]
+    [Arguments(FeedTaskConversionState.Completed, true)]
+    [Arguments(FeedTaskConversionState.Completed, false)]
+    public async Task LegacyGoalJournal_RetriesEveryCheckpointWithoutDuplicateTaskOrLink(FeedTaskConversionState checkpoint, bool legacyGoal)
+    {
+        using var directory = new TempNotesDirectory();
+        var vault = new FileNoteVault(directory.Path);
+        var source = await vault.CreateAsync("note.md", "- [ ] Legacy draft\n");
+        var parser = new MarkdownDocumentParser();
+        var target = new RecordingTaskTarget();
+        var journal = new LegacyGoalCheckpointJournal(checkpoint, legacyGoal);
+        var service = CreateService(vault, parser, target, journal);
+        var request = new FeedTaskConversionRequest("vault", "legacy", "note.md", source.Revision,
+            new MarkdownBlockSelection(0, 1), ["work"]);
+        _ = await NotesTestSupport.CaptureAsync<IOException>(() => service.ConvertAsync(request));
+        await Assert.That(journal.PersistedJson).Contains("isGoal");
+        var result = await service.ConvertAsync(request);
+        await Assert.That(result.TaskId).IsEqualTo("feed-legacy");
+        await Assert.That(target.Tasks.Count).IsEqualTo(1);
+        await Assert.That(target.Tasks[0].AreaIds).IsEquivalentTo(["work"]);
+        await Assert.That((await vault.ReadAsync("note.md"))!.Text.CountOccurrences("unlimotion://task/feed-legacy")).IsEqualTo(1);
+    }
+
+    internal sealed class LegacyGoalCheckpointJournal(FeedTaskConversionState checkpoint, bool legacyGoal) : IFeedTaskConversionJournal
+    {
+        private static readonly System.Text.Json.JsonSerializerOptions Options = new(System.Text.Json.JsonSerializerDefaults.Web);
+        private bool interrupted;
+        public string PersistedJson { get; private set; } = string.Empty;
+
+        public Task<FeedTaskConversionRecord?> LoadAsync(string vaultId, string operationId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(string.IsNullOrEmpty(PersistedJson) ? null : System.Text.Json.JsonSerializer.Deserialize<FeedTaskConversionRecord>(PersistedJson, Options));
+
+        public Task SaveAsync(FeedTaskConversionRecord record, CancellationToken cancellationToken = default)
+        {
+            var json = System.Text.Json.Nodes.JsonNode.Parse(System.Text.Json.JsonSerializer.Serialize(record, Options))!;
+            if (!interrupted && record.State == checkpoint)
+            {
+                json["recoveryDescriptor"]!["isGoal"] = legacyGoal;
+                PersistedJson = json.ToJsonString();
+                interrupted = true;
+                throw new IOException("Checkpoint persisted by an older version.");
+            }
+            PersistedJson = json.ToJsonString();
+            return Task.CompletedTask;
+        }
+    }
+
+    [Test]
     public async Task ConversionPersistsTaskFirstAndReplacesWholeSelectionWithOneLiveLink()
     {
         using var directory = new TempNotesDirectory();
@@ -32,15 +83,13 @@ public sealed class FeedTaskConversionTests
             path,
             source.Revision,
             new MarkdownBlockSelection(selected.Index, 1),
-            ["work", "project"],
-            IsGoal: true));
+            ["work", "project"]));
 
         var updated = await vault.ReadAsync(path);
         await Assert.That(target.Tasks.Count).IsEqualTo(1);
         await Assert.That(target.Tasks[0].TaskId).IsEqualTo("feed-operation1");
         await Assert.That(target.Tasks[0].Title).IsEqualTo("Подготовить режим Ленты");
         await Assert.That(target.Tasks[0].Description).Contains("Согласовать блочный разбор.");
-        await Assert.That(target.Tasks[0].IsGoal).IsTrue();
         await Assert.That(target.Tasks[0].AreaIds).IsEquivalentTo(["work", "project"]);
         await Assert.That(updated!.Text).Contains("[Подготовить режим Ленты](unlimotion://task/feed-operation1)");
         await Assert.That(updated.Text).DoesNotContain("Согласовать блочный разбор.");
@@ -60,7 +109,7 @@ public sealed class FeedTaskConversionTests
         var service = CreateService(vault, parser, target, journal);
         var request = new FeedTaskConversionRequest(
             "vault1", "operation1", "Ежедневные/2026-08-23.md", source.Revision,
-            new MarkdownBlockSelection(0, 1), [], false);
+            new MarkdownBlockSelection(0, 1), []);
 
         _ = await NotesTestSupport.CaptureAsync<IOException>(() => service.ConvertAsync(request));
         var result = await service.ConvertAsync(request);
@@ -83,7 +132,7 @@ public sealed class FeedTaskConversionTests
         var service = CreateService(vault, parser, target, journal);
         var request = new FeedTaskConversionRequest(
             "vault1", "operation1", "Ежедневные/2026-08-23.md", source.Revision,
-            new MarkdownBlockSelection(0, 1), [], false);
+            new MarkdownBlockSelection(0, 1), []);
 
         _ = await NotesTestSupport.CaptureAsync<IOException>(() => service.ConvertAsync(request));
         var retry = await service.ConvertAsync(request);
@@ -110,7 +159,7 @@ public sealed class FeedTaskConversionTests
         _ = await NotesTestSupport.CaptureAsync<VaultRevisionConflictException>(() => service.ConvertAsync(
             new FeedTaskConversionRequest(
                 "vault1", "operation1", "Ежедневные/2026-08-23.md", source.Revision,
-                new MarkdownBlockSelection(0, 1), [], false)));
+                new MarkdownBlockSelection(0, 1), [])));
 
         var updated = await vault.ReadAsync("Ежедневные/2026-08-23.md");
         await Assert.That(target.Tasks.Count).IsEqualTo(1);
@@ -140,7 +189,7 @@ public sealed class FeedTaskConversionTests
 
         await service.ConvertAsync(new FeedTaskConversionRequest(
             "vault1", "operation1", path, source.Revision,
-            new MarkdownBlockSelection(0, 1), [], false));
+            new MarkdownBlockSelection(0, 1), []));
 
         await Assert.That(revisions.Documents.Count).IsEqualTo(1);
         await Assert.That(revisions.Documents[0].VaultId).IsEqualTo("vault1");
@@ -165,7 +214,7 @@ public sealed class FeedTaskConversionTests
             vault, parser, new MarkdownMutationService(parser), target, firstJournal);
         var request = new FeedTaskConversionRequest(
             "vault1", "task-restart", sourcePath, original.Revision,
-            new MarkdownBlockSelection(0, 1), ["work"], true, "session1");
+            new MarkdownBlockSelection(0, 1), ["work"], "session1");
 
         _ = await firstService.ConvertAsync(request);
         var replacedSource = await vault.ReadAsync(sourcePath);
@@ -215,7 +264,7 @@ public sealed class FeedTaskConversionTests
         var service = CreateService(vault, parser, target, journal);
         var request = new FeedTaskConversionRequest(
             "vault1", "task-drift", sourcePath, original.Revision,
-            new MarkdownBlockSelection(0, 1), [], false, "session1");
+            new MarkdownBlockSelection(0, 1), [], "session1");
 
         _ = await service.ConvertAsync(request);
         var completedSource = await vault.ReadAsync(sourcePath);

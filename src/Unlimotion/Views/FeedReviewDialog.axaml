@@ -186,11 +186,6 @@
                             BorderBrush="{DynamicResource ThemeBorderMidBrush}"
                             BorderThickness="1">
                         <StackPanel Spacing="8">
-                            <ToggleSwitch IsChecked="{Binding ReviewTaskIsGoal, Mode=TwoWay}"
-                                          OnContent="{DynamicResource DialogYes}"
-                                          OffContent="{DynamicResource DialogNo}"
-                                          Content="{DynamicResource FeedReviewGoal}"
-                                          AutomationProperties.AutomationId="FeedReviewTaskGoalToggle" />
                             <ItemsControl ItemsSource="{Binding ReviewTaskAreas}"
                                           AutomationProperties.AutomationId="FeedReviewTaskAreas">
                                 <ItemsControl.ItemsPanel>

@@ -34,7 +34,7 @@ public sealed class TaskStorageFeedTaskCreationTargetTests
         await storage.Save(existing);
         if (cached) await repository.Update(existing);
         var target = new TaskStorageFeedTaskCreationTarget(() => repository);
-        var draft = new FeedTaskDraft(existing.Id, "ours", "Новая задача", "Контекст", false, []);
+        var draft = new FeedTaskDraft(existing.Id, "ours", "Новая задача", "Контекст", []);
         await Assert.That(() => target.CreateOrGetAsync(draft)).Throws<InvalidDataException>();
         await Assert.That(() => target.FindOwnedAsync(draft)).Throws<InvalidDataException>();
         await Assert.That((await storage.Load(existing.Id))!.Title).IsEqualTo("Чужая задача");
@@ -55,7 +55,7 @@ public sealed class TaskStorageFeedTaskCreationTargetTests
             });
             var target = new TaskStorageFeedTaskCreationTarget(() => repository);
             await Task.Run(() => target.CreateOrGetAsync(new FeedTaskDraft(
-                "feed-background", "background", "Фоновая задача", "", false, [])));
+                "feed-background", "background", "Фоновая задача", "", [])));
             await Assert.That(wrongThread).IsFalse();
             await Assert.That(repository.Tasks.Count).IsEqualTo(1);
         }, CancellationToken.None);
@@ -73,7 +73,6 @@ public sealed class TaskStorageFeedTaskCreationTargetTests
             "operation1",
             "Задача из Ленты",
             "Контекст Markdown",
-            true,
             ["work", "project"]);
 
         var first = await target.CreateOrGetAsync(draft);
@@ -86,7 +85,6 @@ public sealed class TaskStorageFeedTaskCreationTargetTests
         await Assert.That(stored).IsNotNull();
         await Assert.That(stored!.Title).IsEqualTo(draft.Title);
         await Assert.That(stored.Description).IsEqualTo(draft.Description);
-        await Assert.That(stored.IsGoal).IsTrue();
         await Assert.That(stored.AreaIds).IsEquivalentTo(draft.AreaIds);
         await Assert.That(stored.PlannedBeginDateTime).IsNull();
         await Assert.That(stored.PlannedEndDateTime).IsNull();
@@ -104,7 +102,6 @@ public sealed class TaskStorageFeedTaskCreationTargetTests
             "operation-unsupported",
             "Задача",
             string.Empty,
-            true,
             ["work"]);
 
         await Assert.That(() => target.CreateOrGetAsync(draft))

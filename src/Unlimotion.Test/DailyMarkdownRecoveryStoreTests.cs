@@ -144,7 +144,6 @@ public class DailyMarkdownRecoveryStoreTests
                 "source-output-hash",
                 "Задача",
                 string.Empty,
-                false,
                 [])));
 
         await operationJournal.ResolveKeepBothAsync("vault1", "note-keep-both");

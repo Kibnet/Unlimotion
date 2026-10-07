@@ -323,7 +323,7 @@ public sealed class FeedAuxiliaryUiTests
     }
 
     [Test]
-    public async Task TaskClassification_MultipleAreasAndGoal_AutosaveAndRenderChips()
+    public async Task TaskClassification_MultipleAreas_AutosaveAndRenderChips()
     {
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
@@ -357,13 +357,11 @@ public sealed class FeedAuxiliaryUiTests
             {
                 window.Show();
                 RunLayoutJobs();
-                editor.TrySetGoal(true);
                 editor.TrySetAreaSelected("work", true);
                 editor.TrySetAreaSelected("product", true);
                 await Assert.That(WaitFor(() => storage.Snapshots.Any(snapshot =>
-                    snapshot.IsGoal && snapshot.AreaIds.Contains("work") && snapshot.AreaIds.Contains("product")))).IsTrue();
+                    snapshot.AreaIds.Contains("work") && snapshot.AreaIds.Contains("product")))).IsTrue();
 
-                var goal = FindControl<CheckBox>(view, "FeedTaskClassificationGoalCheckBox");
                 var chips = FindControl<ItemsControl>(view, "FeedTaskClassificationSelectedAreaChips");
                 var areaPicker = FindControl<ToggleButton>(view, "FeedTaskClassificationAreaPickerToggle");
                 var areaOptions = FindControl<ListBox>(view, "FeedTaskClassificationAreaOptionsList", requireEnabled: false);
@@ -373,21 +371,17 @@ public sealed class FeedAuxiliaryUiTests
                 await Assert.That(areaOptions.IsEffectivelyVisible).IsTrue();
                 using (Assert.Multiple())
                 {
-                    await Assert.That(task.IsGoal).IsTrue();
                     await Assert.That(task.AreaIds).IsEquivalentTo(["work", "product"]);
                     await Assert.That(editor.SelectedAreas.Count).IsEqualTo(2);
                     await Assert.That(storage.Snapshots.Any(snapshot =>
-                        snapshot.IsGoal && snapshot.AreaIds.Contains("work") && snapshot.AreaIds.Contains("product"))).IsTrue();
-                    await Assert.That(goal.IsChecked).IsTrue();
+                        snapshot.AreaIds.Contains("work") && snapshot.AreaIds.Contains("product"))).IsTrue();
                     await Assert.That(chips.ItemCount).IsEqualTo(2);
                 }
 
-                editor.TrySetGoal(false);
                 editor.TrySetAreaSelected("work", false);
                 await Assert.That(WaitFor(() => storage.Snapshots.Any(snapshot =>
-                    !snapshot.IsGoal && snapshot.AreaIds.SequenceEqual(new[] { "product" })))).IsTrue();
+                    snapshot.AreaIds.SequenceEqual(new[] { "product" })))).IsTrue();
                 RunLayoutJobs();
-                await Assert.That(goal.IsChecked).IsFalse();
                 await Assert.That(chips.ItemCount).IsEqualTo(1);
             }
             finally
@@ -404,7 +398,6 @@ public sealed class FeedAuxiliaryUiTests
         await session.DispatchAsync(async () =>
         {
             using var editor = TaskClassificationEditorViewModel.ForDraft(
-                isGoal: false,
                 selectedAreaIds: [],
                 areas: [new TaskClassificationAreaDefinition("work", "Работа")],
                 supportsEditing: static () => false);
@@ -418,19 +411,15 @@ public sealed class FeedAuxiliaryUiTests
             {
                 window.Show();
                 RunLayoutJobs();
-                var goal = FindControl<CheckBox>(view, "FeedTaskClassificationGoalCheckBox", requireEnabled: false);
                 var areas = FindControl<ToggleButton>(view, "FeedTaskClassificationAreaPickerToggle", requireEnabled: false);
                 var explanation = FindControl<TextBlock>(view, "FeedTaskClassificationBlockedExplanation", requireEnabled: false);
 
                 using (Assert.Multiple())
                 {
-                    await Assert.That(goal.IsEnabled).IsFalse();
                     await Assert.That(areas.IsEnabled).IsFalse();
                     await Assert.That(explanation.IsVisible).IsTrue();
                     await Assert.That(explanation.Text).IsNotEmpty();
-                    await Assert.That(editor.TrySetGoal(true)).IsFalse();
                     await Assert.That(editor.TrySetAreaSelected("work", true)).IsFalse();
-                    await Assert.That(editor.IsGoal).IsFalse();
                     await Assert.That(editor.SelectedAreas).IsEmpty();
                 }
             }
@@ -469,9 +458,7 @@ public sealed class FeedAuxiliaryUiTests
                     await Assert.That(classification!.Task).IsSameReferenceAs(task);
                     await Assert.That(classification.Owner).IsSameReferenceAs(owner);
                     await Assert.That(classification.EffectiveEditor).IsNotNull();
-                    await Assert.That(FindControl<CheckBox>(
-                        classification,
-                        "CurrentTaskClassificationGoalCheckBox")).IsNotNull();
+                    await Assert.That(FindControl<ToggleButton>(classification, "CurrentTaskClassificationAreaPickerToggle")).IsNotNull();
                 }
             }
             finally

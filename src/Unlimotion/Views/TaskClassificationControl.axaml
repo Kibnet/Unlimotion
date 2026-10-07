@@ -14,10 +14,6 @@
                 AutomationProperties.ControlTypeOverride="Group"
                 AutomationProperties.Name="{DynamicResource TaskClassificationTitle}"
                 x:Name="ClassificationRoot">
-        <CheckBox x:Name="GoalCheckBox"
-                  IsChecked="{Binding IsGoal, Mode=TwoWay}"
-                  IsEnabled="{Binding IsEditingSupported}"
-                  Content="{DynamicResource TaskIsGoal}" />
 
         <TextBlock IsVisible="{Binding IsEditingBlocked}"
                    Text="{Binding EditingBlockedExplanation}"

@@ -1259,8 +1259,8 @@ public sealed partial class MainWindowHeadlessTests
 
         SelectStoryTaskFromTree("AllTasksTree", "ux07-goal");
         WaitForVisibleTaskCard("UX07 Launch site");
-        await Assert.That(HeadlessRuntime.Dispatch(() => FindNativeControlByAutomationId<Control>(
-            "CurrentTaskGoalIndicator").IsVisible)).IsTrue();
+        await Assert.That(HeadlessRuntime.Dispatch(() => TryFindNativeControlByAutomationId<Control>(
+            "CurrentTaskGoalIndicator") is null)).IsTrue();
         var plan = HeadlessRuntime.Dispatch(() => GetHeadlessMainWindowViewModel().taskRepository!.Tasks.Items
             .Single(task => task.Id == "ux07-goal").ContainsTasks.Select(child => child.Id).ToArray());
         await Assert.That(plan).Contains("ux07-structure");

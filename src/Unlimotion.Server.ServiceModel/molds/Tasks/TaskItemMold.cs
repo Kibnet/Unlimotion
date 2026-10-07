@@ -65,8 +65,6 @@ namespace Unlimotion.Server.ServiceModel.Molds.Tasks
         public int Importance { get; set; }
         [Description("Желаемость")]
         public bool Wanted { get; set; }
-        [Description("Является целью")]
-        public bool IsGoal { get; set; }
         [Description("Области")]
         public List<string> AreaIds { get; set; }
         [Description("Создан в предыдущей версии приложения")]

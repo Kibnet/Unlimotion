@@ -23,7 +23,6 @@ public sealed class TaskClassificationCompatibilityTests
 
         await Assert.That(storedTask.Title).IsEqualTo("Legacy title update");
         await Assert.That(storedTask.Status).IsEqualTo(DomainTaskStatus.InProgress);
-        await Assert.That(storedTask.IsGoal).IsTrue();
         await Assert.That(storedTask.AreaIds).IsEquivalentTo(["area/original", "area/shared"]);
     }
 
@@ -35,12 +34,10 @@ public sealed class TaskClassificationCompatibilityTests
         var newClientUpdate = CreateHubUpdate();
         newClientUpdate.TaskClassificationSchemaVersion =
             TaskStorageCapabilities.CurrentTaskClassificationSchemaVersion;
-        newClientUpdate.IsGoal = false;
         newClientUpdate.AreaIds = ["area/new"];
 
         mapper.Map(newClientUpdate, storedTask);
 
-        await Assert.That(storedTask.IsGoal).IsFalse();
         await Assert.That(storedTask.AreaIds).IsEquivalentTo(["area/new"]);
     }
 
@@ -52,12 +49,10 @@ public sealed class TaskClassificationCompatibilityTests
         var partialUpdate = CreateHubUpdate();
         partialUpdate.TaskClassificationSchemaVersion =
             TaskStorageCapabilities.CurrentTaskClassificationSchemaVersion;
-        partialUpdate.IsGoal = false;
         partialUpdate.AreaIds = null;
 
         mapper.Map(partialUpdate, storedTask);
 
-        await Assert.That(storedTask.IsGoal).IsFalse();
         await Assert.That(storedTask.AreaIds).IsEquivalentTo(["area/original", "area/shared"]);
     }
 
@@ -98,7 +93,6 @@ public sealed class TaskClassificationCompatibilityTests
 
         await Assert.That(outbound).IsNotNull();
         await Assert.That(outbound!.TaskClassificationSchemaVersion).IsNull();
-        await Assert.That(outbound.IsGoal).IsNull();
         await Assert.That(outbound.AreaIds).IsNull();
     }
 
@@ -116,7 +110,6 @@ public sealed class TaskClassificationCompatibilityTests
         await Assert.That(outbound).IsNotNull();
         await Assert.That(outbound!.TaskClassificationSchemaVersion)
             .IsEqualTo(TaskStorageCapabilities.CurrentTaskClassificationSchemaVersion);
-        await Assert.That(outbound.IsGoal).IsTrue();
         await Assert.That(outbound.AreaIds).IsEquivalentTo(["area/original", "area/shared"]);
     }
 
@@ -127,7 +120,6 @@ public sealed class TaskClassificationCompatibilityTests
         Title = "Stored title",
         Description = "Stored description",
         Status = DomainTaskStatus.Prepared,
-        IsGoal = true,
         AreaIds = ["area/original", "area/shared"],
         ContainsTasks = new List<string>(),
         ParentTasks = new List<string>(),

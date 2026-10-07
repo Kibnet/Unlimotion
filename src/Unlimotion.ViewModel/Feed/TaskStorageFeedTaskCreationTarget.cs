@@ -55,7 +55,7 @@ public sealed class TaskStorageFeedTaskCreationTarget(
         if (!SupportsClassificationFor(repository))
         {
             throw new InvalidOperationException(
-                "The active task storage does not support goal and area classification.");
+                "The active task storage does not support task areas.");
         }
 
         // Resolve all parents before creating anything. A missing/archived root never silently becomes a rootless task.
@@ -77,7 +77,6 @@ public sealed class TaskStorageFeedTaskCreationTarget(
             Id = draft.TaskId,
             Title = draft.Title,
             Description = draft.Description,
-            IsGoal = draft.IsGoal,
             AreaIds = draft.AreaIds.Distinct(StringComparer.Ordinal).ToList(),
             ExtensionData = new Dictionary<string, JToken>(StringComparer.Ordinal)
             {

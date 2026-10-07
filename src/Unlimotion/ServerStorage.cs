@@ -348,7 +348,6 @@ public class ServerStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskReloadR
             // classification out of the outbound update entirely so an ordinary
             // task save cannot be mistaken for a classification write.
             hubTask.TaskClassificationSchemaVersion = null;
-            hubTask.IsGoal = null;
             hubTask.AreaIds = null;
         }
 

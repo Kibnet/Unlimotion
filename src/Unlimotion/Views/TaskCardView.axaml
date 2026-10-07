@@ -61,13 +61,6 @@
                                                   VerticalAlignment="Center"
                                                   ToolTip.Tip="{Binding StatusToolTip}"
                                                   AutomationProperties.AutomationId="CurrentTaskStatusButton"/>
-                                        <TextBlock Grid.Column="1"
-                                                   Classes="TaskGoalIndicator"
-                                                   Text="★"
-                                                   IsVisible="{Binding IsGoal}"
-                                                   ToolTip.Tip="{DynamicResource TaskIsGoal}"
-                                                   AutomationProperties.Name="{DynamicResource TaskIsGoal}"
-                                                   AutomationProperties.AutomationId="CurrentTaskGoalIndicator"/>
                                         <TextBox Grid.Column="2"
                                                  x:Name="CurrentTaskTitleTextBox"
                                                  AutomationProperties.AutomationId="CurrentTaskTitleTextBox"

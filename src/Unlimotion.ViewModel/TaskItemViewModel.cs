@@ -712,7 +712,6 @@ namespace Unlimotion.ViewModel
                     PlannedDuration = PlannedDuration,
                     Importance = Importance,
                     Wanted = Wanted,
-                    IsGoal = IsGoal,
                     AreaIds = AreaIds.ToList(),
                     IsCanBeCompleted = IsCanBeCompleted,
                     Version = Version,
@@ -831,7 +830,6 @@ namespace Unlimotion.ViewModel
         public int Importance { get; set; }
         [AlsoNotifyFor(nameof(WantedFromUi))]
         public bool Wanted { get; set; }
-        public bool IsGoal { get; set; }
         public ObservableCollection<string> AreaIds { get; } = new();
 
         public bool WantedFromUi
@@ -1274,7 +1272,6 @@ namespace Unlimotion.ViewModel
                 if (PlannedDuration != taskItem.PlannedDuration) PlannedDuration = taskItem.PlannedDuration;
                 if (Importance != taskItem.Importance) Importance = taskItem.Importance;
                 if (Wanted != taskItem.Wanted) Wanted = taskItem.Wanted;
-                if (IsGoal != taskItem.IsGoal) IsGoal = taskItem.IsGoal;
                 if (Status != taskItem.Status) Status = taskItem.Status;
                 SynchronizeCollections(StatusHistory, taskItem.StatusHistory ?? new List<TaskStatusHistoryEntry>());
                 SynchronizeCollections(CompletionCriteria, taskItem.CompletionCriteria ?? new List<TaskCompletionCriterion>());
@@ -2038,7 +2035,6 @@ namespace Unlimotion.ViewModel
             if (pendingFields.HasFlag(PendingTaskField.Repeater)) merged.Repeater = editorClone.Repeater;
             if (pendingFields.HasFlag(PendingTaskField.Importance)) merged.Importance = editorClone.Importance;
             if (pendingFields.HasFlag(PendingTaskField.Wanted)) merged.Wanted = editorClone.Wanted;
-            if (pendingFields.HasFlag(PendingTaskField.IsGoal)) merged.IsGoal = editorClone.IsGoal;
             if (pendingFields.HasFlag(PendingTaskField.AreaIds)) merged.AreaIds = editorClone.AreaIds;
             return merged;
         }
@@ -2054,7 +2050,6 @@ namespace Unlimotion.ViewModel
             Wanted = 1 << 4,
             Repeater = 1 << 5,
             CompletionCriteria = 1 << 6,
-            IsGoal = 1 << 7,
             AreaIds = 1 << 8
         }
 
@@ -2072,7 +2067,6 @@ namespace Unlimotion.ViewModel
             nameof(Importance) => PendingTaskField.Importance,
             nameof(Wanted) => PendingTaskField.Wanted,
             nameof(Repeater) => PendingTaskField.Repeater,
-            nameof(IsGoal) => PendingTaskField.IsGoal,
             _ => PendingTaskField.None
         };
 
@@ -2103,7 +2097,6 @@ namespace Unlimotion.ViewModel
                          PendingTaskField.Wanted,
                          PendingTaskField.Repeater,
                          PendingTaskField.CompletionCriteria,
-                         PendingTaskField.IsGoal,
                          PendingTaskField.AreaIds
                      })
             {
@@ -2122,7 +2115,6 @@ namespace Unlimotion.ViewModel
             PendingTaskField.Wanted |
             PendingTaskField.Repeater |
             PendingTaskField.CompletionCriteria |
-            PendingTaskField.IsGoal |
             PendingTaskField.AreaIds;
 
         private void MarkEditableChanged(PendingTaskField fields)

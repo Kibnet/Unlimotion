@@ -64,7 +64,7 @@ public sealed class FeedLegacySourceBindingTests
 
     private static FeedTaskConversionRecord CreateLegacy() => new(2, "vault", "op", FeedTaskConversionState.TaskCreated,
         "note.md", "rev", "feed-op", null, DateTimeOffset.UtcNow,
-        new FeedTaskConversionRecoveryDescriptor("op", new MarkdownBlockSelection(0, 1), "hash", null, "Задача", "", false, []));
+        new FeedTaskConversionRecoveryDescriptor("op", new MarkdownBlockSelection(0, 1), "hash", null, "Задача", "", []));
 
     private sealed class LookupTarget(Func<FeedCreatedTask?> lookup) : IFeedTaskCreationTarget
     {

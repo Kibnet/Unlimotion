@@ -954,9 +954,8 @@ public sealed partial class MainWindowHeadlessTests
                 TryFindNativeControlByAutomationId<Control>(automationId)?.IsEffectivelyVisible == true;
             bool IsDeclaredVisible(string automationId) =>
                 TryFindNativeControlByAutomationId<Control>(automationId)?.IsVisible == true;
-            var createdGoal = TryFindNativeControlByAutomationId<Control>("FeedCreatedTaskGoalToggle");
             var createdAreas = TryFindNativeControlByAutomationId<Control>("FeedCreatedTaskAreas");
-            if (createdGoal is null || createdAreas is null)
+            if (createdAreas is null)
             {
                 var owner = GetHeadlessMainWindowViewModel();
                 var descendants = Session.Inner.MainWindow
@@ -993,8 +992,6 @@ public sealed partial class MainWindowHeadlessTests
                 feed.HasCreatedTask,
                 feed.CanModifyReviewSource,
                 legacyActionsVisible,
-                IsVisible("FeedReviewTaskGoalToggle"),
-                IsDeclaredVisible("FeedCreatedTaskGoalToggle"),
                 IsDeclaredVisible("FeedCreatedTaskAreas"),
                 createdTask.AreaIds.Contains(area.Area.Identity) == selected,
                 taskCount);
@@ -1584,8 +1581,6 @@ public sealed partial class MainWindowHeadlessTests
         bool HasCreatedTask,
         bool CanModifyReviewSource,
         bool LegacyActionsVisible,
-        bool DraftGoalVisible,
-        bool CreatedGoalVisible,
         bool CreatedAreasVisible,
         bool AreaMutationApplied,
         int TaskCount);

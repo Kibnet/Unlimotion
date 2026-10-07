@@ -958,7 +958,6 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
 
     public ObservableCollection<FeedTaskAreaOptionViewModel> ReviewTaskAreas { get; } = new();
 
-    public bool ReviewTaskIsGoal { get; set; }
 
     [AlsoNotifyFor(nameof(CanConfirmReviewDecision))]
     public string ReviewNoteTitle { get; set; } = string.Empty;
@@ -2410,7 +2409,6 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
                     day.Revision,
                     currentReviewSelection,
                     selectedAreaIds,
-                    ReviewTaskIsGoal,
                     reviewCoordinator.CurrentSessionId,
                     EffectiveParentIds(selectedAreaIds, useReviewDraft: true),
                     TaskSourceIdentityProvider?.Invoke()),
@@ -2756,7 +2754,6 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
         currentReviewOperationId = null;
         CreatedTaskReference = null;
         ReviewDecisionStage = FeedReviewDecisionStage.None;
-        ReviewTaskIsGoal = false;
         ReviewNoteTitle = SuggestTitle(block.Raw);
         ReviewDestinationArea = ResolveDestinationAreaOption(candidate.Locator.AreaIdentity)
             ?? FeedAreaOptionViewModel.NoArea;
@@ -3350,7 +3347,7 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
                         var target = TaskCreationTarget ?? throw new InvalidOperationException(L10n.Get("FeedRecoveryRetryHint"));
                         var recovery = pending.RecoveryDescriptor!;
                         await target.FindOwnedAsync(new FeedTaskDraft(pending.TaskId, pending.OperationId,
-                            recovery.Title, recovery.Description, recovery.IsGoal, recovery.AreaIds,
+                            recovery.Title, recovery.Description, recovery.AreaIds,
                             pending.ParentTaskIds, pending.TaskSourceIdentity), cancellationToken);
                     }
                     await journal.ResolveKeepBothAsync(vaultId, item.OperationId, cancellationToken)
@@ -6768,7 +6765,6 @@ public sealed partial class FeedViewModel : ReactiveObject, IDisposable
             null);
         currentReviewOperationId = null;
         CreatedTaskReference = null;
-        ReviewTaskIsGoal = false;
         ReviewNoteTitle = SuggestTitle(anchor.Raw);
         ReviewDestinationArea = ResolveDestinationAreaOption(anchor.AreaId ?? anchor.AreaName)
             ?? FeedAreaOptionViewModel.NoArea;

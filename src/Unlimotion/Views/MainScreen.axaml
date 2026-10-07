@@ -716,11 +716,6 @@
                                                    Text="{Binding Feed.QuickCaptureCreatedTaskReference.DisplayTitle}"
                                                    TextWrapping="Wrap"
                                                    FontWeight="SemiBold" />
-                                        <ToggleSwitch Grid.Column="2"
-                                                      OnContent="{DynamicResource DialogYes}"
-                                                      OffContent="{DynamicResource DialogNo}"
-                                                      IsChecked="{Binding Feed.QuickCaptureCreatedTaskReference.Task.IsGoal, Mode=TwoWay}"
-                                                      Content="{DynamicResource FeedReviewGoal}" />
                                     </Grid>
                                     <views:TaskRelationsControl Owner="{Binding}"
                                                                 TargetTask="{Binding Feed.QuickCaptureCreatedTaskReference.Task}"

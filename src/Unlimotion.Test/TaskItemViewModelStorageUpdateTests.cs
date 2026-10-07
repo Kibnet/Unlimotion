@@ -69,7 +69,6 @@ public sealed class TaskItemViewModelStorageUpdateTests
     [Arguments(nameof(TaskItemViewModel.Wanted))]
     [Arguments(nameof(TaskItemViewModel.Repeater))]
     [Arguments(nameof(TaskItemViewModel.CompletionCriteria))]
-    [Arguments(nameof(TaskItemViewModel.IsGoal))]
     [Arguments(nameof(TaskItemViewModel.AreaIds))]
     public async Task StorageUpdate_PreservesOnlyTheLocallyChangedEditableField(string changedField)
     {
@@ -96,7 +95,6 @@ public sealed class TaskItemViewModelStorageUpdateTests
             PlannedDuration = TimeSpan.FromHours(6),
             Importance = 2,
             Wanted = false,
-            IsGoal = false,
             AreaIds = ["storage-area"],
             Repeater = new RepeaterPattern { Type = RepeaterType.Monthly, Period = 3 },
             CompletionCriteria = [new TaskCompletionCriterion { Id = "storage", Text = "storage criterion" }],
@@ -120,7 +118,6 @@ public sealed class TaskItemViewModelStorageUpdateTests
             changedField == nameof(TaskItemViewModel.Importance) ? 9 : 2);
         await Assert.That(viewModel.Wanted).IsEqualTo(
             changedField == nameof(TaskItemViewModel.Wanted));
-        await Assert.That(viewModel.IsGoal).IsEqualTo(changedField == nameof(TaskItemViewModel.IsGoal));
         await Assert.That(viewModel.AreaIds).IsEquivalentTo(
             new[] { changedField == nameof(TaskItemViewModel.AreaIds) ? "local-area" : "storage-area" });
         await Assert.That(viewModel.Repeater!.Type).IsEqualTo(
@@ -144,9 +141,6 @@ public sealed class TaskItemViewModelStorageUpdateTests
                 break;
             case nameof(TaskItemViewModel.Wanted):
                 await Assert.That(viewModel.Wanted).IsTrue();
-                break;
-            case nameof(TaskItemViewModel.IsGoal):
-                await Assert.That(viewModel.IsGoal).IsTrue();
                 break;
             case nameof(TaskItemViewModel.AreaIds):
                 await Assert.That(viewModel.AreaIds.Single()).IsEqualTo("local-area");
@@ -324,9 +318,6 @@ public sealed class TaskItemViewModelStorageUpdateTests
                 break;
             case nameof(TaskItemViewModel.Wanted):
                 viewModel.Wanted = true;
-                break;
-            case nameof(TaskItemViewModel.IsGoal):
-                viewModel.IsGoal = true;
                 break;
             case nameof(TaskItemViewModel.AreaIds):
                 viewModel.AreaIds.Add("local-area");

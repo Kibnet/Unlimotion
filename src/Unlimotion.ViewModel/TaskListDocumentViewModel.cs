@@ -10,7 +10,6 @@ namespace Unlimotion.ViewModel;
 public sealed record TaskListFilterSnapshot(
     string SearchText,
     bool IsFuzzySearch,
-    TaskGoalFilterMode GoalFilter,
     string? SortId,
     bool? Wanted,
     IReadOnlyDictionary<DomainTaskStatus, bool> Statuses,
@@ -89,8 +88,6 @@ public sealed class TaskListDocumentViewModel(MainWindowViewModel owner, TaskLis
     public TaskListFilterSnapshot CaptureFilters() => new(
         Search.SearchText ?? string.Empty,
         Search.IsFuzzySearch,
-        Kind == TaskListKind.AllTasks ? Owner.GoalFilterMode
-            : Kind == TaskListKind.Unlocked ? Owner.UnlockedGoalFilterMode : FilterScope!.GoalFilterMode,
         Kind == TaskListKind.AllTasks ? Owner.CurrentSortDefinition?.Id
             : Kind == TaskListKind.Unlocked ? Owner.CurrentSortDefinitionForUnlocked?.Id : null,
         Kind == TaskListKind.Unlocked ? Owner.ShowWanted
@@ -114,9 +111,6 @@ public sealed class TaskListDocumentViewModel(MainWindowViewModel owner, TaskLis
     {
         Search.SearchText = state.SearchText;
         Search.IsFuzzySearch = state.IsFuzzySearch;
-        if (Kind == TaskListKind.AllTasks) Owner.GoalFilterMode = state.GoalFilter;
-        else if (Kind == TaskListKind.Unlocked) Owner.UnlockedGoalFilterMode = state.GoalFilter;
-        else FilterScope!.GoalFilterMode = state.GoalFilter;
 
         if (state.SortId is { } sortId && Owner.SortDefinitions.FirstOrDefault(sort => sort.Id == sortId) is { } definition)
         {

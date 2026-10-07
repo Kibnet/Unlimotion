@@ -14,9 +14,7 @@ public static class TaskItemSnapshot
         BlockedByTasks = task.BlockedByTasks?.ToList() ?? [],
         Repeater = CloneRepeater(task.Repeater),
         AgentExecution = CloneAgentExecution(task.AgentExecution),
-        ExtensionData = task.ExtensionData?.ToDictionary(
-            static pair => pair.Key,
-            static pair => pair.Value == null ? null! : pair.Value.DeepClone())
+        ExtensionData = TaskItem.CopyCurrentExtensionData(task.ExtensionData)
     };
 
     private static TaskCompletionCriterion CloneCriterion(TaskCompletionCriterion criterion) =>

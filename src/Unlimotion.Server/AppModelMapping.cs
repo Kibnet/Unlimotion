@@ -45,16 +45,6 @@ namespace Unlimotion.Server
                 .ForMember(m => m.ExtensionData, e => e.Ignore())
                 .ForMember(m => m.AgentExecution, e => e.Ignore())
                 .ForMember(
-                    task => task.IsGoal,
-                    options =>
-                    {
-                        options.PreCondition(mold =>
-                            mold.TaskClassificationSchemaVersion >=
-                            TaskStorageCapabilities.CurrentTaskClassificationSchemaVersion &&
-                            mold.IsGoal.HasValue);
-                        options.MapFrom(mold => mold.IsGoal!.Value);
-                    })
-                .ForMember(
                     task => task.AreaIds,
                     options =>
                     {

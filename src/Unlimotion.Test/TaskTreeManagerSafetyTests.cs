@@ -134,11 +134,10 @@ public sealed class TaskTreeManagerSafetyTests
     }
 
     [Test]
-    public async Task CloneTask_PreservesGoalClassificationAndAreas()
+    public async Task CloneTask_PreservesAreas()
     {
         var storage = new InMemoryStorage();
         var source = CreateTask("classified-source", DomainTaskStatus.Prepared);
-        source.IsGoal = true;
         source.AreaIds = ["work", "personal"];
         await storage.Save(source);
         var manager = new TaskTreeManager(storage);
@@ -147,10 +146,8 @@ public sealed class TaskTreeManagerSafetyTests
         var clone = result.Single(task => task.Id != source.Id);
         var persisted = await storage.Load(clone.Id);
 
-        await Assert.That(clone.IsGoal).IsTrue();
         await Assert.That(clone.AreaIds).IsEquivalentTo(source.AreaIds);
         await Assert.That(persisted).IsNotNull();
-        await Assert.That(persisted!.IsGoal).IsTrue();
         await Assert.That(persisted.AreaIds).IsEquivalentTo(source.AreaIds);
     }
 

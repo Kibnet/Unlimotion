@@ -1520,7 +1520,6 @@ public class FeedControlUiTests
                     FeedOperationHash.Compute(completedText),
                     "Подготовить отчёт",
                     string.Empty,
-                    false,
                     [],
                     reviewSessionId,
                     inputLocators,

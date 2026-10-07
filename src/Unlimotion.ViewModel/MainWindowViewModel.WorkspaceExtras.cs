@@ -128,7 +128,7 @@ public partial class MainWindowViewModel
             if (source?.ToString() != nextStepScope) throw new InvalidOperationException(L10n.Get("FeedTaskSourceMismatch"));
             var target = new TaskStorageFeedTaskCreationTarget(() => taskRepository, Feed.TaskSourceIdentityProvider);
             var created = await target.CreateOrGetAsync(new FeedTaskDraft("step-" + nextStepOperationId,
-                nextStepOperationId!, NextStepTitle.Trim(), string.Empty, false, nextStepAreaIds,
+                nextStepOperationId!, NextStepTitle.Trim(), string.Empty, nextStepAreaIds,
                 NextStepParents?.Parents.Select(parent => parent.Id).ToArray(), source));
             IsNextStepOpen = false;
             await TryOpenTaskByIdAsync(created.TaskId, WorkspaceOpenDisposition.NewTab);

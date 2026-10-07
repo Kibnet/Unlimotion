@@ -11,7 +11,6 @@ public sealed record FeedTaskDraft(
     string OperationId,
     string Title,
     string Description,
-    bool IsGoal,
     IReadOnlyList<string> AreaIds,
     IReadOnlyList<string>? ParentTaskIds = null,
     FeedTaskSourceIdentity? TaskSourceIdentity = null);
@@ -78,7 +77,6 @@ public sealed record FeedTaskConversionRecoveryDescriptor(
     string? SourceOutputHash,
     string Title,
     string Description,
-    bool IsGoal,
     IReadOnlyList<string> AreaIds,
     string? ReviewSessionId = null,
     IReadOnlyList<BlockLocator>? InputLocators = null,
@@ -340,7 +338,6 @@ public sealed record FeedTaskConversionRequest(
     string ExpectedSourceRevision,
     MarkdownBlockSelection Selection,
     IReadOnlyList<string> AreaIds,
-    bool IsGoal = false,
     string? ReviewSessionId = null,
     IReadOnlyList<string>? ParentTaskIds = null,
     FeedTaskSourceIdentity? TaskSourceIdentity = null);
@@ -375,7 +372,7 @@ public sealed partial class FeedTaskConversionService(
         try
         {
             owned = await taskTarget.FindOwnedAsync(new FeedTaskDraft(operation.TaskId, operation.OperationId,
-                descriptor.Title, descriptor.Description, descriptor.IsGoal, descriptor.AreaIds,
+                descriptor.Title, descriptor.Description, descriptor.AreaIds,
                 operation.ParentTaskIds, confirmedSource), cancellationToken).ConfigureAwait(false);
         }
         catch (InvalidDataException error)
@@ -494,7 +491,6 @@ public sealed partial class FeedTaskConversionService(
                     null,
                     title,
                     description,
-                    request.IsGoal,
                     request.AreaIds.ToArray(),
                     request.ReviewSessionId,
                     inputLocators),
@@ -513,7 +509,6 @@ public sealed partial class FeedTaskConversionService(
                     null,
                     title,
                     description,
-                    request.IsGoal,
                     request.AreaIds.ToArray(),
                     request.ReviewSessionId,
                     inputLocators)
@@ -534,7 +529,7 @@ public sealed partial class FeedTaskConversionService(
 
         RequireSource(operation.TaskSourceIdentity);
         var created = await taskTarget.CreateOrGetAsync(
-                new FeedTaskDraft(taskId, request.OperationId, title, description, request.IsGoal, request.AreaIds,
+                new FeedTaskDraft(taskId, request.OperationId, title, description, request.AreaIds,
                     operation.ParentTaskIds, operation.TaskSourceIdentity),
                 cancellationToken)
             .ConfigureAwait(false);
@@ -674,7 +669,6 @@ public sealed partial class FeedTaskConversionService(
                 operation.ExpectedSourceRevision,
                 descriptor.Selection,
                 descriptor.AreaIds,
-                descriptor.IsGoal,
                 descriptor.ReviewSessionId,
                 operation.ParentTaskIds,
                 operation.TaskSourceIdentity),
@@ -825,7 +819,6 @@ public sealed partial class FeedTaskConversionService(
             || !string.Equals(descriptor.SelectionPayloadHash, selectionPayloadHash, StringComparison.Ordinal)
             || !string.Equals(descriptor.Title, title, StringComparison.Ordinal)
             || !string.Equals(descriptor.Description, description, StringComparison.Ordinal)
-            || descriptor.IsGoal != request.IsGoal
             || !descriptor.AreaIds.SequenceEqual(request.AreaIds, StringComparer.Ordinal)
             || !string.Equals(descriptor.ReviewSessionId, request.ReviewSessionId, StringComparison.Ordinal)
             || !FeedOperationLocatorFactory.SequenceEqual(descriptor.InputLocators, inputLocators))

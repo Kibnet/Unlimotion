@@ -158,7 +158,6 @@ public class TaskStatusTransitionTests
             ContainsTasks = [left.Id, right.Id],
             BlocksTasks = [externalBlocked.Id],
             BlockedByTasks = [externalBlocker.Id],
-            IsGoal = true,
             AreaIds = ["work", "personal"]
         };
 
@@ -191,7 +190,6 @@ public class TaskStatusTransitionTests
             await Assert.That(cloneRoot.UnlockedDateTime).IsNull();
             await Assert.That(cloneRoot.CompletedDateTime).IsNull();
             await Assert.That(cloneRoot.ArchiveDateTime).IsNull();
-            await Assert.That(cloneRoot.IsGoal).IsTrue();
             await Assert.That(cloneRoot.AreaIds).IsEquivalentTo(source.AreaIds);
 
             await Assert.That(cloneLeft.Status).IsEqualTo(DomainTaskStatus.NotReady);
