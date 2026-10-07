@@ -25,6 +25,98 @@ public sealed class TaskItemViewModelStatusCommandTests
     [Test]
     [Arguments(false)]
     [Arguments(true)]
+    public async Task AcceptedReload_ThenEditorFlushAndOptionalSeal_PreserveLateEditsWithoutDeadlock(bool seal)
+    {
+        using var storage = new ScriptedTaskStorage();
+        var task = CreateTask("reload-flush-order", DomainTaskStatus.Prepared);
+        storage.Seed(task);
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        storage.ReloadHandler = async _ =>
+        { entered.TrySetResult(); await release.Task; return TaskReloadResult.Loaded(storage.Snapshot(task.Id)); };
+        using var vm = new TaskItemViewModel(task, storage, () => true);
+        var reload = vm.ReloadTaskAsync();
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        vm.Title = "typed while accepted Reload waited";
+        await Assert.That(vm.HasPendingEditableChanges).IsTrue();
+        var flush = vm.FlushPendingEditorChangesAsync();
+        var sealing = seal ? vm.SealPendingSaves() : Task.CompletedTask;
+        try
+        {
+            await Assert.That(flush.IsCompleted).IsFalse();
+            release.TrySetResult();
+            await reload.WaitAsync(TimeSpan.FromSeconds(5));
+            await flush.WaitAsync(TimeSpan.FromSeconds(5));
+            await sealing.WaitAsync(TimeSpan.FromSeconds(5));
+            await Assert.That(storage.Snapshot(task.Id).Title).IsEqualTo("typed while accepted Reload waited");
+        }
+        finally { release.TrySetResult(); }
+    }
+
+    [Test]
+    public async Task ActiveEditorFlush_RejectsNewReloadUntilWriteCompletes()
+    {
+        using var storage = new ScriptedTaskStorage();
+        var task = CreateTask("flush-reload-order", DomainTaskStatus.Prepared);
+        storage.Seed(task);
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        storage.UpdateHandler = async _ => { entered.TrySetResult(); await release.Task; };
+        using var vm = new TaskItemViewModel(task, storage, () => true);
+        vm.Title = "flush must finish first";
+        await Assert.That(vm.HasPendingEditableChanges).IsTrue();
+        var flush = vm.FlushPendingEditorChangesAsync();
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        try
+        {
+            await Assert.That(vm.CanReloadTask).IsFalse();
+            var rejected = await vm.ReloadTaskAsync().WaitAsync(TimeSpan.FromSeconds(5));
+            await Assert.That(rejected.Outcome).IsEqualTo(TaskReloadOutcome.Failed);
+            release.TrySetResult();
+            await flush.WaitAsync(TimeSpan.FromSeconds(5));
+            await Assert.That(vm.CanReloadTask).IsTrue();
+            await Assert.That(storage.Snapshot(task.Id).Title).IsEqualTo("flush must finish first");
+        }
+        finally { release.TrySetResult(); }
+    }
+
+    [Test]
+    [Arguments("missing")]
+    [Arguments("disposed")]
+    [Arguments("readback")]
+    public async Task EditorFlush_RechecksSafetyAfterWaitingForPersistenceGate(string invalidation)
+    {
+        using var storage = new ScriptedTaskStorage();
+        var task = CreateTask("guard-after-gate", DomainTaskStatus.Prepared);
+        storage.Seed(task);
+        using var vm = new TaskItemViewModel(task, storage, () => true);
+        var gate = (SemaphoreSlim)typeof(TaskItemViewModel).GetField("_editorPersistenceGate",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(vm)!;
+        await gate.WaitAsync();
+        Task? flush = null;
+        try
+        {
+            vm.Title = "local draft must not resurrect storage";
+            flush = vm.FlushPendingEditorChangesAsync();
+            await Assert.That(flush.IsCompleted).IsFalse();
+            switch (invalidation)
+            {
+                case "missing": storage.RemoveWithoutNotification(task.Id); vm.MarkMissingFromStorage(); break;
+                case "disposed": vm.Dispose(); break;
+                case "readback": typeof(TaskItemViewModel).GetField("_requiresStatusReadBack",
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(vm, true); break;
+            }
+        }
+        finally { gate.Release(); }
+        await Assert.That(async () => await flush!.WaitAsync(TimeSpan.FromSeconds(5))).Throws<InvalidOperationException>();
+        await Assert.That(storage.UpdateCount).IsEqualTo(0);
+        await Assert.That(vm.Title).IsEqualTo("local draft must not resurrect storage");
+        if (invalidation == "missing") await Assert.That(storage.Contains(task.Id)).IsFalse();
+    }
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
     public async Task TaskNotFoundDuringStatusCommand_BlocksDirtyEditorDrainAndLifecycleSave(bool sealDuringCommand)
     {
         using var storage = new ScriptedTaskStorage();

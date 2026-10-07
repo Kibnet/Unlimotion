@@ -259,7 +259,11 @@ public sealed class WorkspaceNavigationViewModel : ReactiveObject
         if (!Contains(pane)) throw new ArgumentException("The pane does not belong to this workspace.", nameof(pane));
         ActivePane = pane;
     }
-    public void InvalidatePendingNavigation() => Interlocked.Increment(ref scopeRevision);
+    public void InvalidatePendingNavigation()
+    {
+        Interlocked.Increment(ref scopeRevision);
+        this.RaisePropertyChanged(nameof(ScopeRevision));
+    }
     public void Reset(WorkspaceLocation root)
     {
         using var notifications = this.DelayChangeNotifications();

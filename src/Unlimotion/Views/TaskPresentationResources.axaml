@@ -693,6 +693,7 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <StyleInclude Source="/Views/TaskHistoryStyles.axaml"/>
     </UserControl.Styles>
     <UserControl.DataTemplates>
         <DataTemplate DataType="viewModel:TaskStatusOption">

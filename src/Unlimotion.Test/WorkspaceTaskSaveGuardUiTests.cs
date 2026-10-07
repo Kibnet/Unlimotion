@@ -16,6 +16,7 @@ using Avalonia.VisualTree;
 using DynamicData;
 using Newtonsoft.Json;
 using Unlimotion.Domain;
+using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
 using Unlimotion.ViewModel.Workspace;
 using Unlimotion.Views;
@@ -377,6 +378,11 @@ public class WorkspaceTaskSaveGuardUiTests
                 transition = RunTransition();
                 await delayedB.UpdateEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
                 await AssertPersistedTitleAsync(Path.Combine(fixture.DefaultTasksFolderPath, taskA.Id), firstA);
+                if (transition.IsCompleted)
+                {
+                    var outcome = transition.IsCompletedSuccessfully ? transition.Result.ToString() : transition.Exception?.ToString() ?? transition.Status.ToString();
+                    throw new InvalidOperationException($"Early transition: move={moveTab}, outcome={outcome}, scope={scope}/{owner.WorkspaceNavigation.ScopeRevision}, A identity={ReferenceEquals(owner.ResolveTaskById(taskA.Id), taskA)}, B identity={ReferenceEquals(owner.ResolveTaskById(taskB.Id), taskB)}, pending A={taskA.HasPendingEditorPersistence}, B={taskB.HasPendingEditorPersistence}, B barrier released={delayedB.ReleaseUpdate.Task.IsCompleted}, toast={((NotificationManagerWrapperMock)owner.ManagerWrapper).LastErrorMessage}");
+                }
                 await Assert.That(transition.IsCompleted).IsFalse();
                 faultA.FailUpdates = true;
                 editorA.Focus();
@@ -436,6 +442,7 @@ public class WorkspaceTaskSaveGuardUiTests
     {
         public ITaskStorage Target { get; set; } = null!;
         public bool FailUpdates { get; set; }
+        public bool FailReloads { get; set; }
         public int FailedUpdateCount { get; private set; }
         public bool DelayNextUpdate { get; set; }
         public TaskCompletionSource<bool> UpdateEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -443,6 +450,8 @@ public class WorkspaceTaskSaveGuardUiTests
         protected override object? Invoke(MethodInfo? method, object?[]? arguments)
         {
             if (method is null) throw new InvalidOperationException("Missing storage method.");
+            if (method.Name == nameof(ITaskStorage.ReloadTaskAsync) && FailReloads)
+                return Task.FromException<TaskReloadResult>(new IOException("Injected task reload failure"));
             if (method.Name == nameof(ITaskStorage.Update) && FailUpdates)
             {
                 FailedUpdateCount++;
@@ -469,7 +478,7 @@ public class WorkspaceTaskSaveGuardUiTests
         }
     }
 
-    private static TaskItemViewModel ReplaceTaskBeforeOpening(
+    internal static TaskItemViewModel ReplaceTaskBeforeOpening(
         MainWindowViewModel owner, string id, ITaskStorage proxy, out TaskItemViewModel original)
     {
         original = owner.ResolveTaskById(id)!;
@@ -486,7 +495,7 @@ public class WorkspaceTaskSaveGuardUiTests
         return replacement;
     }
 
-    private static void RestoreOriginalTask(
+    internal static void RestoreOriginalTask(
         MainWindowViewModelFixture fixture, TaskItemViewModel? original, TaskItemViewModel? replacement)
     {
         if (original is not null) fixture.MainWindowViewModelTest.taskRepository!.Tasks.AddOrUpdate(original);
