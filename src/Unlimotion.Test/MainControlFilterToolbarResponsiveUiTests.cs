@@ -218,10 +218,11 @@ public class MainControlFilterToolbarResponsiveUiTests
     [Arguments(true)]
     public async Task Toolbar_EmojiFilters_AllToggle_WithReentrantSourceUpdate_KeepsCollectionConsistent(bool exclude)
     {
-        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(EmojiTitleTestAppBuilder));
         await session.DispatchAsync(async () =>
         {
-            var fixture = new MainWindowViewModelFixture();
+            ApplyApplicationFontResources(AppearanceSettings.DefaultFontSize);
+            var fixture = CreateControlledEmojiFixture();
             Window? window = null;
             INotifyCollectionChanged? collection = null;
             NotifyCollectionChangedEventHandler? onChanged = null;
@@ -230,11 +231,15 @@ public class MainControlFilterToolbarResponsiveUiTests
             try
             {
                 var vm = fixture.MainWindowViewModelTest;
+                var probe = new RootNotificationProbe();
+                vm.RootCollectionFactory = () => probe;
+                vm.RootDeliveryTrace = probe.TraceBatch;
                 await vm.Connect();
                 await SealControlledSourceSaves(vm);
                 vm.AllTasksMode = true;
                 vm.DetailsAreOpen = false;
                 await PrepareEmojiFilterData(vm);
+                var controlledSources = ControlledEmojiTitles.Select(row => TestHelpers.GetTask(vm, row.TaskId)).ToArray();
                 var sourceTask = TestHelpers.GetTask(vm, MainWindowViewModelFixture.RootTask6Id);
                 collection = vm.CurrentAllTasksItems;
                 onChanged = (_, change) =>
@@ -255,15 +260,37 @@ public class MainControlFilterToolbarResponsiveUiTests
                 SelectTab(view, 0);
                 var controls = FindVisibleToolbarEmojiFilterControls(FindVisibleFilterToolbar(view));
                 var control = exclude ? controls.ExcludeControl : controls.IncludeControl;
-                await ClickControlAsync(window, GetEmojiFilterInput(control));
+                // Establish the actual input target after layout, independent of pointer
+                // state left by earlier sessions in the full suite.
+                RenderEmojiToggleWindow(window, view);
+                await Assert.That(GetEmojiFilterInput(control).Focus()).IsTrue();
+                PressKey(window, Key.Enter, PhysicalKey.Enter);
+                await Assert.That(await TestHelpers.WaitUntilAsync(() =>
+                {
+                    RenderEmojiToggleWindow(window, view);
+                    var popupList = GetEmojiFilterList(control);
+                    return IsEmojiDropDownOpen(control) && popupList.IsVisible &&
+                        popupList.Bounds.Width > 0 && popupList.Bounds.Height > 0;
+                }, TimeSpan.FromSeconds(2))).IsTrue();
                 var list = GetEmojiFilterList(control);
                 var all = GetEmojiFilterListItems(list)[0];
                 list.SelectedItem = all;
-                list.Focus();
-                RunLayoutJobs();
+                RenderEmojiToggleWindow(window, view);
                 SaveEmojiDiagnosticFrame(window, $"{exclude}-before");
+                await Assert.That(list.Focus()).IsTrue();
+                await Assert.That(ReferenceEquals(list.SelectedItem, all)).IsTrue();
                 var filtersAtToggle = (exclude ? vm.EmojiExcludeFilters : vm.EmojiFilters).ToArray();
-                TestExecutionTrace.Write("emoji-state", "before-toggle", "observed", details: new { all.ShowTasks, filters = filtersAtToggle.Select(filter => new { filter.Emoji, filter.ShowTasks }).ToArray() });
+                await AssertControlledEmojiSourceAsync(vm, controlledSources, changed: false);
+                await Assert.That(filtersAtToggle.Select(filter => filter.Emoji).SequenceEqual(
+                    new[] { "", "🚀", "🧰", "🧪", "📚", "❌", "🔧", "✅" })).IsTrue();
+                TestExecutionTrace.Write("emoji-state", "before-toggle", "observed", details: new
+                {
+                    all.ShowTasks,
+                    popupOpen = IsEmojiDropDownOpen(control),
+                    list.IsFocused,
+                    listBounds = list.Bounds.ToString(),
+                    filters = filtersAtToggle.Select(filter => new { filter.Emoji, filter.ShowTasks }).ToArray()
+                });
                 armed = true;
                 PressKey(window, Key.Space, PhysicalKey.Space);
                 RunLayoutJobs();
@@ -273,17 +300,51 @@ public class MainControlFilterToolbarResponsiveUiTests
                 // The user-visible contract applies to every surviving filter, not the retired object.
                 await Assert.That((exclude ? vm.EmojiExcludeFilters : vm.EmojiFilters).All(filter => filter.ShowTasks)).IsTrue();
                 await Assert.That((exclude ? vm.EmojiExcludeFilters : vm.EmojiFilters).Any(filter => filter.Emoji == "❌")).IsFalse();
+                await AssertControlledEmojiSourceAsync(vm, controlledSources, changed: true);
+                await Assert.That((exclude ? vm.EmojiExcludeFilters : vm.EmojiFilters)
+                    .Select(filter => filter.Emoji).SequenceEqual(
+                        new[] { "", "🚀", "🧰", "🧪", "📚", "🔧", "✅" })).IsTrue();
+                RenderEmojiToggleWindow(window, view);
                 SaveEmojiDiagnosticFrame(window, $"{exclude}-after");
                 await Assert.That(IsEmojiDropDownOpen(control)).IsTrue();
                 await Assert.That(vm.CurrentAllTasksItems.Select(item => item.TaskItem.Id).Distinct().Count())
                     .IsEqualTo(vm.CurrentAllTasksItems.Count);
                 await Assert.That(ReferenceEquals(list.SelectedItem, all)).IsTrue();
+                var tree = view.FindControl<TreeView>("AllTasksTree")!;
+                await Assert.That(tree.Items.Count).IsEqualTo(vm.CurrentAllTasksItems.Count);
+                TestExecutionTrace.Write("emoji-reference", "after-toggle", "observed", details: new
+                {
+                    exclude,
+                    ids = vm.CurrentAllTasksItems.Select(item => item.TaskItem.Id).ToArray(),
+                    sources = vm.EmojiFilters.Select(filter => new { filter.Emoji, filter.ShowTasks, id = filter.Source?.Id }).ToArray()
+                });
+                if (!exclude)
+                {
+                    await Assert.That(vm.CurrentAllTasksItems.Any(item => item.TaskItem.Id == MainWindowViewModelFixture.RootTask2Id)).IsTrue();
+                    await Assert.That(vm.CurrentAllTasksItems.Select(item => item.TaskItem.Id).OrderBy(id => id)
+                        .SequenceEqual(ControlledEmojiTitles.Where(row => row.TaskId != MainWindowViewModelFixture.RootTask6Id)
+                            .Select(row => row.TaskId).OrderBy(id => id))).IsTrue();
+                    await Assert.That(tree.ContainerFromIndex(0)).IsNotNull();
+                }
+                else
+                {
+                    await Assert.That(vm.CurrentAllTasksItems.Any(item =>
+                        ControlledEmojiTitles.Take(6).Any(row => row.TaskId == item.TaskItem.Id))).IsFalse();
+                }
+                for (var index = 0; index < vm.CurrentAllTasksItems.Count; ++index)
+                {
+                    if (tree.ContainerFromIndex(index) is TreeViewItem container)
+                        await Assert.That(ReferenceEquals(container.DataContext, vm.CurrentAllTasksItems[index])).IsTrue();
+                }
                 PressKey(window, Key.Space, PhysicalKey.Space);
                 RunLayoutJobs();
                 await Assert.That((exclude ? vm.EmojiExcludeFilters : vm.EmojiFilters).All(filter => !filter.ShowTasks)).IsTrue();
+                await AssertControlledEmojiSourceAsync(vm, controlledSources, changed: true);
                 PressKey(window, Key.Escape, PhysicalKey.Escape);
                 RunLayoutJobs();
                 await Assert.That(IsEmojiDropDownOpen(control)).IsFalse();
+                probe.RecordQuiescentSnapshot(vm.CurrentAllTasksItems);
+                await probe.AssertUiDeliveryAsync();
             }
             finally
             {
@@ -385,6 +446,30 @@ public class MainControlFilterToolbarResponsiveUiTests
         }, CancellationToken.None);
     }
 
+    internal static MainWindowViewModelFixture CreateControlledEmojiFixture() => new(path =>
+        new UnifiedTaskStorage(new global::Unlimotion.TaskTree.TaskTreeManager(new FileStorage(path, watcher: false))));
+
+    private static async Task AssertControlledEmojiSourceAsync(
+        MainWindowViewModel vm, TaskItemViewModel[] originals, bool changed)
+    {
+        var current = ControlledEmojiTitles.Select(row => TestHelpers.GetTask(vm, row.TaskId)).ToArray();
+        TestExecutionTrace.Write("emoji-data", changed ? "after-controlled-update" : "before-controlled-update",
+            "observed", details: current.Select((task, index) => new
+            {
+                task.Id, task.Title, task.Emoji,
+                identity = System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(task),
+                sameIdentity = ReferenceEquals(task, originals[index])
+            }).ToArray());
+        for (var index = 0; index < current.Length; ++index)
+        {
+            var expected = ControlledEmojiTitles[index];
+            var regrouped = changed && expected.TaskId == MainWindowViewModelFixture.RootTask6Id;
+            await Assert.That(ReferenceEquals(current[index], originals[index])).IsTrue();
+            await Assert.That(current[index].Title).IsEqualTo(regrouped ? "🧪 Controlled source update" : expected.Title);
+            await Assert.That(current[index].Emoji).IsEqualTo(regrouped ? "🧪" : expected.Emoji);
+        }
+    }
+
     private static async Task SealControlledSourceSaves(MainWindowViewModel vm)
     {
         // These controlled scenarios own the upstream delivery schedule, not disk persistence.
@@ -392,6 +477,21 @@ public class MainControlFilterToolbarResponsiveUiTests
         // emoji grouping and bound UI collections remain live; integration BDD cases
         // continue to exercise the normal persistence lifecycle without this seam.
         await Task.WhenAll(vm.taskRepository!.Tasks.Items.Select(item => item.SealPendingSaves()));
+    }
+
+    private static void RenderEmojiToggleWindow(Window window, MainControl view)
+    {
+        var size = new Size(390, 760);
+        window.Measure(size);
+        window.Arrange(new Rect(size));
+        view.Measure(size);
+        view.Arrange(new Rect(size));
+        for (var index = 0; index < 10; ++index)
+        {
+            Dispatcher.UIThread.RunJobs();
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+        }
+        Dispatcher.UIThread.RunJobs();
     }
 
     private static void SaveEmojiDiagnosticFrame(Window window, string state)
@@ -1551,32 +1651,32 @@ public class MainControlFilterToolbarResponsiveUiTests
         }
     }
 
-    private static async Task PrepareEmojiFilterData(MainWindowViewModel vm)
+    internal static async Task PrepareEmojiFilterData(MainWindowViewModel vm)
     {
-        var titlesById = new (string TaskId, string Title)[]
-        {
-            (MainWindowViewModelFixture.RootTask2Id, "\ud83d\ude80 Alpha launch target"),
-            (MainWindowViewModelFixture.RootTask3Id, "\ud83e\uddf0 Beta tools target"),
-            (MainWindowViewModelFixture.RootTask4Id, "\ud83e\uddea Delta assay target"),
-            (MainWindowViewModelFixture.RootTask5Id, "\ud83d\udcda Epsilon library target"),
-            (MainWindowViewModelFixture.RootTask6Id, "\u274C Gamma blocked target"),
-            (MainWindowViewModelFixture.RootTask7Id, "\u2705 Zeta done target"),
-            (MainWindowViewModelFixture.SubTask41Id, "\ud83d\udd27 Nested repair target")
-        };
-
-        foreach (var (taskId, title) in titlesById)
+        foreach (var (taskId, title, _) in ControlledEmojiTitles)
         {
             TestHelpers.GetTask(vm, taskId).Title = title;
         }
 
         var filtersReady = WaitFor(() =>
-            vm.EmojiFilters.Count(static filter => !string.IsNullOrWhiteSpace(filter.Emoji)) >= titlesById.Length &&
-            vm.EmojiExcludeFilters.Count(static filter => !string.IsNullOrWhiteSpace(filter.Emoji)) >= titlesById.Length &&
+            vm.EmojiFilters.Count(static filter => !string.IsNullOrWhiteSpace(filter.Emoji)) >= ControlledEmojiTitles.Length &&
+            vm.EmojiExcludeFilters.Count(static filter => !string.IsNullOrWhiteSpace(filter.Emoji)) >= ControlledEmojiTitles.Length &&
             vm.EmojiFilters.Any(static filter => filter.SearchText.Contains("library", StringComparison.OrdinalIgnoreCase)) &&
             vm.EmojiFilters.Any(static filter => filter.SearchText.Contains("launch", StringComparison.OrdinalIgnoreCase)));
 
         await Assert.That(filtersReady).IsTrue();
     }
+
+    private static readonly (string TaskId, string Title, string Emoji)[] ControlledEmojiTitles =
+    [
+        (MainWindowViewModelFixture.RootTask2Id, "🚀 Alpha launch target", "🚀"),
+        (MainWindowViewModelFixture.RootTask3Id, "🧰 Beta tools target", "🧰"),
+        (MainWindowViewModelFixture.RootTask4Id, "🧪 Delta assay target", "🧪"),
+        (MainWindowViewModelFixture.RootTask5Id, "📚 Epsilon library target", "📚"),
+        (MainWindowViewModelFixture.RootTask6Id, "❌ Gamma blocked target", "❌"),
+        (MainWindowViewModelFixture.RootTask7Id, "✅ Zeta done target", "✅"),
+        (MainWindowViewModelFixture.SubTask41Id, "🔧 Nested repair target", "🔧")
+    ];
 
     private static TextBox GetEmojiFilterInput(EmojiFilterMultiSelectSearchBox control)
     {

@@ -16,6 +16,32 @@
 
 ## 1. Overview / Цель
 
+### Уточнение EXEC 2026-10-06: совместимость emoji-проекции
+
+На baseline `cd29e734` переносится ограниченный product/test delta `208531a2`
+поверх `main dce4e196`: UI-owner/FIFO доставка корневой проекции и ожидание
+canonical nested wrapper после очистки поиска. Это исправление принятого
+контракта независимости документов, не новый recovery/history scope.
+Исходная ситуация: список A открыт рядом с активной карточкой B; очистка
+поиска A не должна выбирать задачу B или менять её маршрут и историю.
+
+Обязательные проверки: начальная проекция готова после `await Connect`;
+worker/UI batches сохраняют порядок и не дают вложенных уведомлений;
+управляемый тест задерживает worker stage и проверяет root→nested selection;
+для реальных самостоятельных панелей проверяются target A и неизменные
+route/history/active tab/scroll B. Pending restore отменяется при input,
+detach, новом restore и изменении scope. Legacy MainControl остаётся совместим.
+
+Non-goals: AreaIds/null/clone, CLI preview, recovery/history, push/merge/install.
+Валидация исходного emoji-кандидата не является валидацией этой адаптации.
+Перед переносом сохранён и проверен ZIP baseline вне managed worktree:
+`C:/Users/Kibnet/Documents/Codex/Unlimotion-Integration-Snapshots/workspace-before-emoji-cd29e734-20261006.zip`.
+Rollback: снять только новый локальный diff, не откатывать принятый workspace.
+Журнал: 2026-10-06 пользователь «Делай что надо» поручил продолжить перенос;
+ранее exact-approved scope независимых панелей сохраняется. Post-SPEC review:
+необходима адаптация владельца selection вместо копирования whole VM;
+новых user-owned продуктовых решений для этого исправления нет.
+
 Пользователь должен собирать рабочий экран из независимых документов: например, «Выполняется» слева, «Разблокированные» справа, отдельные карточки задач и заметки в верхнеуровневых вкладках. От того, откуда открыт объект, не должны зависеть его компоновка и команды открытия.
 
 Outcome contract:
@@ -524,6 +550,17 @@ Physical touch выявил реальный AC6 gap: прежний UX24 про
 Получена точная фраза «Спеку подтверждаю»; EXEC разрешён. Отдельно разрешены три рабочих агента. Подтверждение не разрешает commit/push/PR/release.
 
 ## 20. Журнал действий агента
+
+### EXEC-уточнение 2026-10-06: перенос emoji208 на cd29
+
+- Scope/evidence: просмотрены ограниченный diff VM, TaskListDocumentView, импортированные affinity tests и AllToggle fixture. Whole-file replacement, AreaIds/recovery/history и delivery отсутствуют. Исходное требование изоляции A/B сохранено.
+- Contract: Restore использует выбор AllTasks-документа A, а не глобальную задачу B; predicate требует одновременно Kind=Tasks и AllTasks. FIFO/UI-owner сохраняет initial bind после await Connect. Отложенные selection retries и late batch защищены input/detach/restore version и ScopeRevision.
+- Adversarial: закрыт MEDIUM evidence-gap — отменяемые случаи теперь оставляют callbacks pending и проверяют отсутствие выделения до и после late worker. Добавлены detach и новый RestoreViewState. Self-review исправил ошибочную классификацию карточки/заметки по fallback TaskListKind.
+- Роли: workflow/UX — B route, active tab, histories и nonzero viewport неизменны; tester — exact phase assertions, реальные TreeViewItem selection/visibility и Skia frame; architect — scoped selection, disposal/FIFO, без замены VM; delivery — clean baseline архивирован, push/install/native отсутствуют.
+- Review: отдельный reviewer emoji_workspace_review выполнил только чтение; повтор после исправления без новых findings. Его sandbox danger-full-access, поэтому техническая read-only изоляция не подтверждена; это procedural review и явный fallback, не sandbox-гарантия.
+- Evidence: `chat-artifacts/emoji-workspace/` и `chat-artifacts/emoji-workspace-*.log`. Промежуточные affinity 15/15 и 17/17; усиленные пять A/B cancellation cases 5/5. AllToggle 2/2, legacy TreeSearch 1/1, scoped filter/history 2/2. AppAutomation 1.9 rendered UX27 1/1; обычная Desktop Debug сборка 0 errors/0 warnings. Окончательный exact-source affinity run после Kind guard: 19/19, 0 failed/skipped, TRX `2026-10-06_19_35_20.3153110` (UTC). Source SHA256 VM `2B52AF24434E41A8A048470D3FEA83B54B5B36912402445EA080F3E1400781BB`, tests `15CCBFB8BAF10F69C0D5E9D36DD8AD307EEDA5509F15DD3D78044E2A404ED79F`.
+- Visual: открыт актуальный Skia PNG `review-fixed/workspace-selection-a-card-b.png`: восстановленный nested child выделен слева, активная B справа остаётся на собственном viewport. Новый video/native run не выполнялся: exact late-worker порядок управляется scheduler barriers в Headless, поэтому next-best evidence — фазовые UI assertions плюс rendered PNG. Старое 079 видео не представляет этот diff; полная native/full suite не заявляется.
+- Depth/stop: нет unrelated diff; исходный ScopeCommit failure после rebase не объявлен закрытым этим переносом. Runtime результатов исходного emoji main-кандидата недостаточно для workspace, поэтому выполнены отдельные локальные проверки. Post-EXEC PASS ограниченного переноса: новое поведение соответствует исходной изоляции A/B; MEDIUM evidence-gap исправлен, Fix and re-review по затронутой поверхности завершён. Не является новой приёмкой всей фичи или PASS полного/native suite. Адресные процессы завершены, слот освобождён; следующий шаг — показ локального кандидата пользователю, без commit/push.
 
 | Фаза / событие | Решение и основание | Evidence / остаток | Следующее действие | Решение человека | Артефакты |
 | --- | --- | --- | --- | --- | --- |

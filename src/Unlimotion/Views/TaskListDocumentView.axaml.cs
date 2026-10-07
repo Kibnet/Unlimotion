@@ -123,6 +123,8 @@ public partial class TaskListDocumentView : TaskPresentationControl
     private void CancelPendingRestore()
     {
         _restoreVersion++;
+        if (Kind == TaskListKind.AllTasks && Document is not null)
+            Document.Owner.CancelAllTasksSelectionRestore();
         if (_pendingAutoScrollRestore is { } pending) RestoreAutoScroll(pending.Version);
     }
 
