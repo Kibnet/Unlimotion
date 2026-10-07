@@ -2,9 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Reflection;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using System.Xml;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Unlimotion.Cli;
@@ -24,6 +26,7 @@ public sealed class TaskApplicationPreviewReplayTests
         var edited = CreateTask("edited", DomainTaskStatus.InProgress);
         edited.Description = "Before\nwith exact whitespace ";
         edited.PlannedDuration = TimeSpan.FromHours(1);
+        edited.AreaIds = ["area-b", "area-a", "area-b"];
         edited.CompletionCriteria =
         [
             new() { Id = "keep/~", Text = "Old criterion", IsSatisfied = true },
@@ -86,6 +89,16 @@ public sealed class TaskApplicationPreviewReplayTests
         // A missing global normalization must be observable even when all explicit operations are intact.
         var incomplete = Replay(before, preview.Changes.Where(c => c.TaskId != unrelated.Id), plan);
         await Assert.That(JToken.DeepEquals(incomplete, expected)).IsFalse();
+
+        await Assert.That(string.Join(",", ((JArray)expected[edited.Id]!["details"]!["areaIds"]!).Values<string>()))
+            .IsEqualTo("area-b,area-a,area-b");
+        var created = preview.Changes.Single(c => c.TaskId == "new-child" && c.Path == "/");
+        var missingAreas = (JObject)Parse(created.After);
+        ((JObject)missingAreas["details"]!).Remove("areaIds");
+        using var omitted = JsonDocument.Parse(missingAreas.ToString(Formatting.None));
+        var lostClassification = Replay(before, preview.Changes.Select(c => c == created
+            ? c with { After = omitted.RootElement.Clone() } : c), plan);
+        await Assert.That(JToken.DeepEquals(lostClassification, expected)).IsFalse();
     }
 
     private static JObject Replay(JObject before, IEnumerable<TaskApplicationPreviewChange> changes, TaskApplicationPlan plan)
@@ -169,24 +182,86 @@ public sealed class TaskApplicationPreviewReplayTests
     private static JObject ProjectGraph(IReadOnlyDictionary<string, TaskItem> graph,
         IReadOnlyDictionary<string, TaskItem> originals, DateTimeOffset evaluatedAt, bool normalizeGenerated)
     {
-        // The public snapshot DTO is a different shape. Reuse only endpoint formatting, including
-        // the contract's generated-time placeholders; the change interpreter above is independent.
-        var project = typeof(TaskApplicationPreview).GetMethod("Project", BindingFlags.NonPublic | BindingFlags.Static)!;
-        var availability = typeof(TaskApplicationPreview).GetMethod("Availability", BindingFlags.NonPublic | BindingFlags.Static)!;
+        // This oracle owns the published projection field list. Never call the production
+        // formatter: a field omitted by that formatter must still fail whole-graph replay.
         var rules = new TaskAvailabilityService(graph.Values, evaluatedAt);
         var result = new JObject();
         foreach (var (id, task) in graph)
         {
             originals.TryGetValue(id, out var original);
-            var node = (JObject)project.Invoke(null, [task, original, normalizeGenerated])!;
-            node["availability"] = (JObject)availability.Invoke(null, [rules.Analyze(task)])!;
-            result[id] = node;
+            result[id] = ProjectTask(task, original, normalizeGenerated, rules.Analyze(task));
         }
-        // Compare public JSON values on both sides of the invariant. The private formatter can
-        // retain JValue(string-null) in nullable reason/detail fields; JSON writes those as null,
-        // and the machine diff's JsonElement has already crossed that serialization boundary.
-        // Round-trip every endpoint without date inference, preserving all fields and values.
+        // Compare public JSON values without Newtonsoft date inference.
         return (JObject)Parse(result.ToString(Formatting.None));
+    }
+
+    private static JObject ProjectTask(TaskItem task, TaskItem? original, bool generated, TaskAvailabilityAnalysis analysis)
+    {
+        Require(AgentExecutionDescriptionRenderer.TryRemove(task.Description, out var userText, out _), "Invalid description fixture.");
+        var details = new JObject
+        {
+            ["id"] = task.Id, ["userId"] = task.UserId, ["title"] = task.Title,
+            ["descriptionUserText"] = task.Description == null ? null : userText,
+            ["status"] = task.Status.ToString(), ["isCanBeCompleted"] = task.IsCanBeCompleted,
+            ["createdDateTime"] = generated && original == null ? Clock("applicationClock") : Date(task.CreatedDateTime),
+            ["updatedDateTime"] = GeneratedDate(task.UpdatedDateTime, original?.UpdatedDateTime, generated, original == null, "nextUpdated"),
+            ["unlockedDateTime"] = GeneratedDate(task.UnlockedDateTime, original?.UnlockedDateTime, generated, original == null, "applicationClock"),
+            ["plannedBeginDateTime"] = Date(task.PlannedBeginDateTime), ["plannedEndDateTime"] = Date(task.PlannedEndDateTime),
+            ["plannedDuration"] = task.PlannedDuration is { } duration ? XmlConvert.ToString(duration) : null,
+            ["importance"] = task.Importance, ["wanted"] = task.Wanted, ["version"] = task.Version,
+            ["areaIds"] = new JArray(task.AreaIds ?? []),
+            ["repeater"] = task.Repeater == null ? JValue.CreateNull() : JToken.FromObject(task.Repeater),
+            ["unknownFieldsHash"] = UnknownFieldsHash(task)
+        };
+        var availability = new JObject
+        {
+            ["isCanBeCompleted"] = analysis.IsCanBeCompleted, ["canStart"] = analysis.CanStart,
+            ["canComplete"] = analysis.CanComplete, ["completionCriteriaSatisfied"] = analysis.CompletionCriteriaSatisfied,
+            ["plannedBeginIsFuture"] = analysis.PlannedBeginIsFuture,
+            ["reasons"] = new JArray(analysis.Reasons.OrderBy(r => r.Kind).ThenBy(r => r.SubjectId, StringComparer.Ordinal)
+                .ThenBy(r => r.SourceTaskId, StringComparer.Ordinal).ThenBy(r => r.CriterionId, StringComparer.Ordinal)
+                .Select(r => new JObject
+                {
+                    ["kind"] = r.Kind.ToString(), ["subjectId"] = r.SubjectId, ["subjectTitle"] = r.SubjectTitle,
+                    ["subjectStatus"] = r.SubjectStatus?.ToString(), ["sourceTaskId"] = r.SourceTaskId,
+                    ["sourceTaskTitle"] = r.SourceTaskTitle, ["criterionId"] = r.CriterionId, ["details"] = r.Details
+                }))
+        };
+        return new JObject
+        {
+            ["details"] = details, ["availability"] = availability,
+            ["history"] = new JArray(task.StatusHistory.Select((entry, index) => new JObject
+            {
+                ["status"] = entry.Status.ToString(), ["author"] = entry.Author,
+                ["changedAt"] = generated && index >= (original?.StatusHistory.Count ?? 0) ? Clock("applicationClock") : Date(entry.ChangedAt)
+            })),
+            ["criteria"] = new JObject(task.CompletionCriteria.OrderBy(c => c.Id, StringComparer.Ordinal)
+                .Select(c => new JProperty(c.Id, new JObject { ["id"] = c.Id, ["text"] = c.Text, ["isSatisfied"] = c.IsSatisfied }))),
+            ["storedRelations"] = new JObject
+            {
+                ["contains"] = new JArray(task.ContainsTasks.Order(StringComparer.Ordinal)),
+                ["parents"] = new JArray(task.ParentTasks.Order(StringComparer.Ordinal)),
+                ["blocks"] = new JArray(task.BlocksTasks.Order(StringComparer.Ordinal)),
+                ["blockedBy"] = new JArray(task.BlockedByTasks.Order(StringComparer.Ordinal))
+            }
+        };
+    }
+
+    private static JToken Date(DateTimeOffset? value) => value.HasValue ? new JValue(value.Value.ToString("O")) : JValue.CreateNull();
+    private static JObject Clock(string rule) => new() { ["generatedAtApply"] = true, ["rule"] = rule };
+    private static JToken GeneratedDate(DateTimeOffset? value, DateTimeOffset? old, bool normalize, bool created, string rule) =>
+        normalize && value.HasValue && (created || !old.HasValue || !value.Value.EqualsExact(old.Value)) ? Clock(rule) : Date(value);
+    private static string UnknownFieldsHash(TaskItem task)
+    {
+        static string Canonical(JToken value) => value switch
+        {
+            JObject obj => "{" + string.Join(",", obj.Properties().OrderBy(p => p.Name, StringComparer.Ordinal)
+                .Select(p => System.Text.Json.JsonSerializer.Serialize(p.Name) + ":" + Canonical(p.Value))) + "}",
+            JArray array => "[" + string.Join(",", array.Select(Canonical)) + "]",
+            _ => value.ToString(Formatting.None)
+        };
+        var fields = task.ExtensionData == null ? new JObject() : JObject.FromObject(task.ExtensionData);
+        return "sha256:" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Canonical(fields)))).ToLowerInvariant();
     }
 
     private static JToken Parse(JsonElement value) => Parse(value.GetRawText());

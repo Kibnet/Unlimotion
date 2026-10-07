@@ -246,7 +246,10 @@ public sealed class TaskApplicationPreviewTests
         await Assert.That(result.Success).IsTrue();
         var preview = TaskApplicationPreview.Create(result.Plan!, request, RequestHash, SourceKey);
         var create = preview.Changes.Single(change => change.TaskId == "new" && change.Path == "/");
+        await Assert.That(preview.Contracts.Projection).IsEqualTo(2);
         await Assert.That(create.Before.ValueKind).IsEqualTo(JsonValueKind.Null);
+        await Assert.That(create.After.GetProperty("details").GetProperty("areaIds").GetArrayLength()).IsEqualTo(0);
+        await Assert.That(create.After.GetProperty("details").EnumerateObject().Any(p => p.Name.Equals("isGoal", StringComparison.OrdinalIgnoreCase))).IsFalse();
         await Assert.That(create.After.GetProperty("details").GetProperty("title").GetString()).IsEqualTo("Final");
         await Assert.That(create.After.GetProperty("details").GetProperty("createdDateTime").GetProperty("generatedAtApply").GetBoolean()).IsTrue();
         TaskApplicationPreview.ValidateWitness(Witness(request, result, preview), request.ApplicationId, RequestHash, SourceKey);
@@ -254,12 +257,108 @@ public sealed class TaskApplicationPreviewTests
         await Assert.That(applied.Success).IsTrue();
     }
 
-    private static async Task AssertInvalid(string json, string applicationId)
+    [Test]
+    public async Task AreaProjection_PreservesOrderDuplicatesAndNormalizesNull_WithoutChangingPlanOrSource()
+    {
+        using var source = new Source();
+        var task = Task("areas"); task.AreaIds = ["area-b", "area-a", "area-b"];
+        await source.Save(task);
+        var request = Request([task], Title(task.Id, "Reviewed title"));
+        var result = await source.Service.PreviewPlanAsync(request);
+        await Assert.That(result.Success).IsTrue();
+        var plan = result.Plan!;
+        var bytes = source.Bytes();
+        var titleOnly = TaskApplicationPreview.Create(plan, request, RequestHash, SourceKey);
+        await Assert.That(titleOnly.Changes.Any(c => c.Path == "/details/areaIds")).IsFalse();
+
+        // Area assignment is not a CLI operation. Controlled staging endpoints exercise
+        // projection and hashing without adding such an operation or mutating the real plan.
+        foreach (var values in new System.Collections.Generic.List<string>?[] { ["area-a", "area-b", "area-a"], null })
+        {
+            var staged = TaskItemSnapshot.Clone(plan.After[task.Id]);
+            staged.AreaIds = values!;
+            var after = plan.After.ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
+            after[task.Id] = staged;
+            var controlled = plan with { After = after, AfterExplicit = after };
+            var preview = TaskApplicationPreview.Create(controlled, request, RequestHash, SourceKey);
+            var change = preview.Changes.Single(c => c.Path == "/details/areaIds");
+            await Assert.That(change.Before.GetRawText()).IsEqualTo("[\"area-b\",\"area-a\",\"area-b\"]");
+            await Assert.That(change.After.GetRawText()).IsEqualTo(values == null ? "[]" : "[\"area-a\",\"area-b\",\"area-a\"]");
+            await Assert.That(preview.Guard.EffectHash).IsNotEqualTo(titleOnly.Guard.EffectHash);
+            await Assert.That(TaskApplicationPreview.RenderText(preview)).Contains("/details/areaIds");
+            TaskApplicationPreview.ValidateWitness(Witness(request, result, preview), request.ApplicationId, RequestHash, SourceKey);
+            await Assert.That(ReferenceEquals(staged.AreaIds, values)).IsTrue();
+        }
+        await Assert.That(string.Join(",", plan.After[task.Id].AreaIds)).IsEqualTo("area-b,area-a,area-b");
+        await Assert.That(string.Join(",", plan.Before[task.Id].AreaIds)).IsEqualTo("area-b,area-a,area-b");
+        await Assert.That(source.Bytes()).IsEquivalentTo(bytes);
+    }
+
+    [Test]
+    public async Task Witness_RejectsRehashedAreaShapesRetiredFieldsAndOldProjection()
+    {
+        using var source = new Source();
+        var request = Request([], new TaskApplicationOperation
+            { OperationId = "create", Kind = TaskApplicationOperationKind.CreateTask, NewTaskId = "new", Title = "Final" });
+        var result = await source.Service.PreviewPlanAsync(request);
+        await Assert.That(result.Success).IsTrue();
+        var preview = TaskApplicationPreview.Create(result.Plan!, request, RequestHash, SourceKey);
+        var valid = JObject.Parse(Witness(request, result, preview));
+        foreach (var value in new JToken?[] { null, JValue.CreateNull(), new JValue("area-a"), new JArray("area-a", 1), new JArray(JValue.CreateNull()) })
+        {
+            var invalid = (JObject)valid.DeepClone();
+            var details = RootDetails(invalid);
+            if (value == null) details.Remove("areaIds"); else details["areaIds"] = value.DeepClone();
+            await AssertInvalid(Rehash(invalid), request.ApplicationId, value == null ? "include areaIds" : "array of strings");
+        }
+        foreach (var key in new[] { "isGoal", "IsGoal", "ISGOAL", "iSgOaL" })
+        {
+            var invalid = (JObject)valid.DeepClone(); RootDetails(invalid)[key] = false;
+            await AssertInvalid(Rehash(invalid), request.ApplicationId, "retired goal field");
+            invalid = (JObject)valid.DeepClone();
+            ((JArray)invalid["preview"]!["changes"]!).Add(new JObject
+            {
+                ["taskId"] = "new", ["path"] = "/DETAILS/" + key + "/child", ["origin"] = "derived",
+                ["before"] = false, ["after"] = true, ["operationIds"] = new JArray(), ["reasonTaskIds"] = new JArray()
+            });
+            await AssertInvalid(Rehash(invalid), request.ApplicationId, "retired goal field");
+        }
+        var old = (JObject)valid.DeepClone(); old["preview"]!["contracts"]!["projection"] = 1;
+        await AssertInvalid(Rehash(old), request.ApplicationId, "preview contract");
+        foreach (var side in new[] { "before", "after" })
+        foreach (var shape in new JToken[] { JValue.CreateNull(), new JValue("area-a"), new JArray("area-a", 1), new JArray(JValue.CreateNull()) })
+        {
+            var invalid = (JObject)valid.DeepClone();
+            var areaChange = new JObject
+            {
+                ["taskId"] = "new", ["path"] = "/details/areaIds", ["origin"] = "derived",
+                ["before"] = new JArray(), ["after"] = new JArray("area-a"),
+                ["operationIds"] = new JArray(), ["reasonTaskIds"] = new JArray()
+            };
+            areaChange[side] = shape.DeepClone(); ((JArray)invalid["preview"]!["changes"]!).Add(areaChange);
+            await AssertInvalid(Rehash(invalid), request.ApplicationId, "array of strings");
+        }
+        var nested = (JObject)valid.DeepClone(); RootDetails(nested)["Custom"] = new JObject { ["IsGoal"] = true };
+        TaskApplicationPreview.ValidateWitness(Rehash(nested), request.ApplicationId, RequestHash, SourceKey);
+    }
+
+    private static JObject RootDetails(JObject witness) => (JObject)((JArray)witness["preview"]!["changes"]!)
+        .Single(c => (string?)c["path"] == "/")["after"]!["details"]!;
+    private static string Rehash(JObject witness)
+    {
+        var payload = JsonSerializer.Deserialize<TaskApplicationPreviewPayload>(witness["preview"]!.ToString(), Json)!;
+        witness["preview"]!["guard"]!["effectHash"] = TaskApplicationPreview.ComputeEffectHash(payload);
+        return witness.ToString();
+    }
+
+    private static async Task AssertInvalid(string json, string applicationId, string? expectedMessage = null)
     {
         string? kind = null;
+        string? message = null;
         try { TaskApplicationPreview.ValidateWitness(json, applicationId, RequestHash, SourceKey); }
-        catch (CliException ex) { kind = ex.Kind; }
+        catch (CliException ex) { kind = ex.Kind; message = ex.Message; }
         await Assert.That(kind).IsEqualTo("previewInvalid");
+        if (expectedMessage != null) await Assert.That(message).Contains(expectedMessage);
     }
     private static string Witness(TaskApplicationRequest request, TaskApplicationResult result, TaskApplicationPreviewPayload preview) =>
         JsonSerializer.Serialize(ApplicationCommandOutput.From(request.ApplicationId, RequestHash, result, false) with { Preview = preview }, Json);
