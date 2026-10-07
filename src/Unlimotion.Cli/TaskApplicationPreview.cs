@@ -36,7 +36,7 @@ public sealed record TaskApplicationPreviewPayload
     public string SourceKey { get; init; } = "";
     public DateTimeOffset EvaluatedAt { get; init; }
     public bool Complete { get; init; } = true;
-    public TaskApplicationPreviewContracts Contracts { get; init; } = new(1, 1, 1, TimeZoneInfo.Local.Id);
+    public TaskApplicationPreviewContracts Contracts { get; init; } = new(1, 2, 1, TimeZoneInfo.Local.Id);
     public IReadOnlyList<TaskApplicationPreviewChange> Changes { get; init; } = [];
     public IReadOnlyList<string> AffectedTaskIds { get; init; } = [];
     public IReadOnlyList<string> StoredChangedTaskIds { get; init; } = [];
@@ -266,7 +266,7 @@ public static class TaskApplicationPreview
     private static void ValidatePayload(TaskApplicationPreviewPayload payload, string requestHash, string sourceKey)
     {
         if (payload.PreviewVersion != 1 || !payload.Complete || payload.RequestHash != requestHash || payload.SourceKey != sourceKey ||
-            payload.Contracts != new TaskApplicationPreviewContracts(1, 1, 1, TimeZoneInfo.Local.Id) ||
+            payload.Contracts != new TaskApplicationPreviewContracts(1, 2, 1, TimeZoneInfo.Local.Id) ||
             payload.Guard.Version != 1 || !IsHash(payload.Guard.SourceManifestHash) || !IsHash(payload.Guard.EffectHash) ||
             !IsHash(payload.RequestHash) || !IsHash(payload.SourceKey) || payload.EvaluatedAt == default || payload.ProtectedExecution.Changed)
             throw Invalid("Unsupported, incomplete, or mismatched preview contract.");
@@ -279,6 +279,7 @@ public static class TaskApplicationPreview
                 change.Before.ValueKind == JsonValueKind.Undefined || change.After.ValueKind == JsonValueKind.Undefined)
                 throw Invalid("Duplicate or invalid preview change.");
             ValidateIds(change.OperationIds); ValidateIds(change.ReasonTaskIds);
+            ValidateAreaProjection(change);
             ValidatePlaceholders(change.Before, change.Path, after: false);
             ValidatePlaceholders(change.After, change.Path, after: true);
         }
@@ -293,6 +294,43 @@ public static class TaskApplicationPreview
             payload.Etags.Any(item => item.BeforeEtag != null && !IsHash(item.BeforeEtag) || !IsHash(item.PredictedAfterEtag)) ||
             payload.ProtectedExecution.Invariants.Any(item => !IsHash(item.ExecutionHash) || !IsHash(item.DescriptionSegmentHash)))
             throw Invalid("Invalid preview ETags or protected execution invariants.");
+    }
+
+    private static void ValidateAreaProjection(TaskApplicationPreviewChange change)
+    {
+        var segments = change.Path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length >= 2 && segments[0].Equals("details", StringComparison.OrdinalIgnoreCase) &&
+            segments[1].Equals("isGoal", StringComparison.OrdinalIgnoreCase))
+            throw Invalid("The retired goal field is not part of preview projection 2.");
+
+        if (change.Path == "/details/areaIds")
+        {
+            ValidateAreaIds(change.Before);
+            ValidateAreaIds(change.After);
+        }
+        else if (change.Path == "/")
+        {
+            if (change.Before.ValueKind != JsonValueKind.Null) ValidateRootDetails(change.Before);
+            ValidateRootDetails(change.After);
+        }
+    }
+
+    private static void ValidateRootDetails(JsonElement projection)
+    {
+        if (projection.ValueKind != JsonValueKind.Object ||
+            !projection.TryGetProperty("details", out var details) || details.ValueKind != JsonValueKind.Object)
+            throw Invalid("A task projection must include its details object.");
+        if (details.EnumerateObject().Any(property => property.Name.Equals("isGoal", StringComparison.OrdinalIgnoreCase)))
+            throw Invalid("The retired goal field is not part of preview projection 2.");
+        if (!details.TryGetProperty("areaIds", out var areaIds))
+            throw Invalid("A task projection must include areaIds.");
+        ValidateAreaIds(areaIds);
+    }
+
+    private static void ValidateAreaIds(JsonElement areaIds)
+    {
+        if (areaIds.ValueKind != JsonValueKind.Array || areaIds.EnumerateArray().Any(item => item.ValueKind != JsonValueKind.String))
+            throw Invalid("Projected areaIds must be an array of strings.");
     }
 
     private static void ValidatePlaceholders(JsonElement element, string path, bool after)
@@ -326,6 +364,7 @@ public static class TaskApplicationPreview
             ["unlockedDateTime"] = Date(task.UnlockedDateTime), ["plannedBeginDateTime"] = Date(task.PlannedBeginDateTime),
             ["plannedEndDateTime"] = Date(task.PlannedEndDateTime), ["plannedDuration"] = task.PlannedDuration.HasValue ? XmlConvert.ToString(task.PlannedDuration.Value) : null,
             ["importance"] = task.Importance, ["wanted"] = task.Wanted, ["version"] = task.Version,
+            ["areaIds"] = new JArray(task.AreaIds ?? []),
             ["repeater"] = task.Repeater == null ? JValue.CreateNull() : JToken.FromObject(task.Repeater),
             ["unknownFieldsHash"] = Hash(task.ExtensionData == null ? new JObject() : JObject.FromObject(task.ExtensionData))
         };

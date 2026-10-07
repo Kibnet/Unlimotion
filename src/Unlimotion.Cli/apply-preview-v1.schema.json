@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://unlimotion.org/schemas/apply-preview-v1.schema.json",
   "title": "Unlimotion complete application preview witness v1",
-  "description": "Maximum UTF-8 response size: 32 MiB. Generated timestamp objects are allowed only in documented generated after-value timestamp positions and must use applicationClock or nextUpdated. The CLI additionally recomputes semantic effectHash, validates duplicate change keys, protected invariants and request/source bindings. This artifact is not a signature or authorization.",
+  "description": "Envelope v1, projection 2. Task details include areaIds; the retired top-level goal field is not part of the semantic projection. Maximum UTF-8 response size: 32 MiB. Generated timestamp objects are allowed only in documented generated after-value timestamp positions and must use applicationClock or nextUpdated. The CLI additionally recomputes semantic effectHash, validates duplicate change keys, protected invariants and request/source bindings. This artifact is not a signature or authorization.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -107,7 +107,7 @@
               "const": 1
             },
             "projection": {
-              "const": 1
+              "const": 2
             },
             "availability": {
               "const": 1
@@ -200,6 +200,33 @@
               "origin",
               "operationIds",
               "reasonTaskIds"
+            ],
+            "allOf": [
+              {
+                "properties": {
+                  "path": {
+                    "not": { "pattern": "^/+[Dd][Ee][Tt][Aa][Ii][Ll][Ss]/+[Ii][Ss][Gg][Oo][Aa][Ll](/|$)" }
+                  }
+                }
+              },
+              {
+                "if": { "properties": { "path": { "const": "/details/areaIds" } }, "required": ["path"] },
+                "then": {
+                  "properties": {
+                    "before": { "$ref": "#/$defs/areaIds" },
+                    "after": { "$ref": "#/$defs/areaIds" }
+                  }
+                }
+              },
+              {
+                "if": { "properties": { "path": { "const": "/" } }, "required": ["path"] },
+                "then": {
+                  "properties": {
+                    "before": { "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/taskProjection" }] },
+                    "after": { "$ref": "#/$defs/taskProjection" }
+                  }
+                }
+              }
             ]
           }
         },
@@ -335,6 +362,21 @@
         "protectedExecution",
         "guard"
       ]
+    }
+  },
+  "$defs": {
+    "areaIds": { "type": "array", "items": { "type": "string" } },
+    "taskProjection": {
+      "type": "object",
+      "properties": {
+        "details": {
+          "type": "object",
+          "properties": { "areaIds": { "$ref": "#/$defs/areaIds" } },
+          "required": ["areaIds"],
+          "propertyNames": { "not": { "pattern": "^[Ii][Ss][Gg][Oo][Aa][Ll]$" } }
+        }
+      },
+      "required": ["details"]
     }
   },
   "required": [

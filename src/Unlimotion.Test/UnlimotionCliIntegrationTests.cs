@@ -2044,6 +2044,219 @@ public sealed partial class UnlimotionCliIntegrationTests
         return new CliRunResult(process.ExitCode, await stdout, await stderr);
     }
 
+    [Test]
+    [Arguments("[]", "", false, false)]
+    [Arguments("[]", "IsGoal", true, false)]
+    [Arguments("[]", "isGoal", false, true)]
+    [Arguments("[]", "ISGOAL", true, true)]
+    [Arguments("null", "IsGoal", true, false)]
+    [Arguments("null", "iSgOaL", false, true)]
+    [Arguments("[\"area-a\"]", "", false, false)]
+    [Arguments("[\"area-a\"]", "IsGoal", true, false)]
+    [Arguments("[\"area-a\"]", "isGoal", false, false)]
+    [Arguments("[\"area-a\"]", "ISGOAL", true, false)]
+    [Arguments("[\"area-a\"]", "", false, true)]
+    [Arguments("[\"area-a\"]", "IsGoal", true, true)]
+    [Arguments("[\"area-a\"]", "isGoal", false, true)]
+    [Arguments("[\"area-a\"]", "ISGOAL", true, true)]
+    public async Task AreaIds_ComposedRetry_SeparatesClassificationReceiptAndRetiredMetadata(
+        string areas, string legacyKey, bool legacyValue, bool matchingReceipt)
+    {
+        using var tasks = TempTaskDirectory.Create();
+        using var request = TempRequestFile.Create();
+        using var witness = TempRequestFile.Create();
+        await File.WriteAllTextAsync(request.Path, AreaCreateRequest(composed: true));
+        var preview = await RunCli("apply", "--tasks", tasks.DirectoryPath, "--request", request.Path,
+            "--dry-run", "--diff", "full", "--format", "json");
+        await Assert.That(preview.ExitCode).IsEqualTo(0).Because(preview.StdOut + preview.StdErr);
+        await File.WriteAllTextAsync(witness.Path, preview.StdOut);
+        var initial = await RunCli("apply", "--tasks", tasks.DirectoryPath, "--request", request.Path, "--format", "json");
+        await Assert.That(initial.ExitCode).IsEqualTo(0).Because(initial.StdOut + initial.StdErr);
+        var receipts = Path.Combine(tasks.DirectoryPath, ".unlimotion.applies", "v1");
+        if (!matchingReceipt) File.Delete(Directory.GetFiles(receipts, "*.json").Single());
+        await File.WriteAllTextAsync(Path.Combine(receipts, "unrelated.json"), "{\"applicationId\":\"unrelated\",\"marker\":\"keep\"}");
+        var taskPath = Path.Combine(tasks.DirectoryPath, "created");
+        var raw = JObject.Parse(await File.ReadAllTextAsync(taskPath));
+        raw["AreaIds"] = JToken.Parse(areas);
+        if (legacyKey.Length > 0) raw[legacyKey] = legacyValue;
+        await File.WriteAllTextAsync(taskPath, raw.ToString());
+        File.SetLastWriteTimeUtc(taskPath, new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+        var before = FixtureFiles(tasks.DirectoryPath);
+        var bytes = await File.ReadAllBytesAsync(taskPath);
+        var time = File.GetLastWriteTimeUtc(taskPath);
+        var classified = areas != "[]" && areas != "null";
+
+        var inspection = await RunCli("apply", "inspect", "--tasks", tasks.DirectoryPath, "--request", request.Path, "--format", "json");
+        await Assert.That(inspection.ExitCode).IsEqualTo(0).Because(inspection.StdOut + inspection.StdErr);
+        var state = ParseJson(inspection.StdOut);
+        await Assert.That(state.GetProperty("receiptState").GetString()).IsEqualTo(matchingReceipt ? "matching" : "missing");
+        await Assert.That(state.GetProperty("postconditionsMatch").GetString()).IsEqualTo(classified ? "partial" : "all");
+        await Assert.That(state.GetProperty("assessment").GetString())
+            .IsEqualTo(matchingReceipt ? "receiptMatched" : classified ? "needsReconciliation" : "desiredStatePresent");
+        await Assert.That(FixtureFiles(tasks.DirectoryPath)).IsEquivalentTo(before);
+
+        // A valid original witness is intentionally stale. Reconciliation or the matching
+        // receipt must decide the repeat before a fresh guard is evaluated.
+        var repeat = await RunCli("apply", "--tasks", tasks.DirectoryPath, "--request", request.Path,
+            "--expect-preview", witness.Path, "--format", "json");
+        if (classified && !matchingReceipt)
+        {
+            await Assert.That(repeat.ExitCode).IsEqualTo(1).Because(repeat.StdOut + repeat.StdErr);
+            await AssertJsonError(repeat.StdOut, "reconciliationRequired");
+            await Assert.That(FixtureFiles(tasks.DirectoryPath)).IsEquivalentTo(before);
+        }
+        else
+        {
+            await Assert.That(repeat.ExitCode).IsEqualTo(0).Because(repeat.StdOut + repeat.StdErr);
+            var output = ParseJson(repeat.StdOut);
+            await Assert.That(output.GetProperty("mode").GetString()).IsEqualTo("alreadyApplied");
+            await Assert.That(output.GetProperty("didMutate").GetBoolean()).IsFalse();
+            await Assert.That(output.GetProperty("receiptWritten").GetBoolean()).IsEqualTo(!matchingReceipt);
+            if (matchingReceipt) await Assert.That(FixtureFiles(tasks.DirectoryPath)).IsEquivalentTo(before);
+            else
+            {
+                await AssertRestoredReceiptOnly(tasks.DirectoryPath, before, request.Path);
+            }
+        }
+        await Assert.That((await File.ReadAllBytesAsync(taskPath)).SequenceEqual(bytes)).IsTrue();
+        await Assert.That(File.GetLastWriteTimeUtc(taskPath)).IsEqualTo(time);
+    }
+
+    [Test]
+    public async Task AreaIds_CreateOnlyWithMissingReceipt_ReportsConflictWithoutRecreatingTask()
+    {
+        using var tasks = TempTaskDirectory.Create();
+        using var request = TempRequestFile.Create();
+        await File.WriteAllTextAsync(request.Path, AreaCreateRequest(composed: false));
+        var initial = await RunCli("apply", "--tasks", tasks.DirectoryPath, "--request", request.Path, "--format", "json");
+        await Assert.That(initial.ExitCode).IsEqualTo(0).Because(initial.StdOut + initial.StdErr);
+        File.Delete(Directory.GetFiles(Path.Combine(tasks.DirectoryPath, ".unlimotion.applies", "v1"), "*.json").Single());
+        var path = Path.Combine(tasks.DirectoryPath, "created");
+        var raw = JObject.Parse(await File.ReadAllTextAsync(path)); raw["AreaIds"] = new JArray("area-a"); raw["IsGoal"] = true;
+        await File.WriteAllTextAsync(path, raw.ToString());
+        var before = FixtureFiles(tasks.DirectoryPath);
+        var inspect = await RunCli("apply", "inspect", "--tasks", tasks.DirectoryPath, "--request", request.Path, "--format", "json");
+        await Assert.That(inspect.ExitCode).IsEqualTo(0).Because(inspect.StdOut + inspect.StdErr);
+        await Assert.That(ParseJson(inspect.StdOut).GetProperty("postconditionsMatch").GetString()).IsEqualTo("none");
+        await Assert.That(ParseJson(inspect.StdOut).GetProperty("assessment").GetString()).IsEqualTo("needsReconciliation");
+        var repeat = await RunCli("apply", "--tasks", tasks.DirectoryPath, "--request", request.Path, "--format", "json");
+        await Assert.That(repeat.ExitCode).IsEqualTo(1).Because(repeat.StdOut + repeat.StdErr);
+        await AssertJsonError(repeat.StdOut, "idempotencyConflict");
+        await Assert.That(FixtureFiles(tasks.DirectoryPath)).IsEquivalentTo(before);
+    }
+
+    [Test]
+    public async Task AreaIds_WitnessValidation_PrecedesMatchingReceiptShortcut()
+    {
+        using var tasks = TempTaskDirectory.Create();
+        using var request = TempRequestFile.Create();
+        using var witness = TempRequestFile.Create();
+        await File.WriteAllTextAsync(request.Path, AreaCreateRequest(composed: true));
+        var preview = await RunCli("apply", "--tasks", tasks.DirectoryPath, "--request", request.Path,
+            "--dry-run", "--diff", "full", "--format", "json");
+        await Assert.That(preview.ExitCode).IsEqualTo(0).Because(preview.StdOut + preview.StdErr);
+        var applied = await RunCli("apply", "--tasks", tasks.DirectoryPath, "--request", request.Path, "--format", "json");
+        await Assert.That(applied.ExitCode).IsEqualTo(0).Because(applied.StdOut + applied.StdErr);
+        var path = Path.Combine(tasks.DirectoryPath, "created");
+        var raw = JObject.Parse(await File.ReadAllTextAsync(path)); raw["AreaIds"] = new JArray("area-a");
+        await File.WriteAllTextAsync(path, raw.ToString());
+        var before = FixtureFiles(tasks.DirectoryPath);
+        foreach (var variant in new[] { "projection1", "areaNull", "areaMixed", "missingArea", "IsGoal", "ISGOAL" })
+        {
+            var invalid = JObject.Parse(preview.StdOut);
+            var details = (JObject)((JArray)invalid["preview"]!["changes"]!).Single(c => (string?)c["path"] == "/")["after"]!["details"]!;
+            if (variant == "projection1") invalid["preview"]!["contracts"]!["projection"] = 1;
+            else if (variant == "areaNull") details["areaIds"] = JValue.CreateNull();
+            else if (variant == "areaMixed") details["areaIds"] = new JArray("area-a", 1);
+            else if (variant == "missingArea") details.Remove("areaIds");
+            else details[variant] = false;
+            var payload = System.Text.Json.JsonSerializer.Deserialize<global::Unlimotion.Cli.TaskApplicationPreviewPayload>(
+                invalid["preview"]!.ToString(), new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+            invalid["preview"]!["guard"]!["effectHash"] = global::Unlimotion.Cli.TaskApplicationPreview.ComputeEffectHash(payload);
+            await File.WriteAllTextAsync(witness.Path, invalid.ToString());
+            var repeat = await RunCli("apply", "--tasks", tasks.DirectoryPath, "--request", request.Path,
+                "--expect-preview", witness.Path, "--format", "json");
+            await Assert.That(repeat.ExitCode).IsEqualTo(1).Because(repeat.StdOut + repeat.StdErr);
+            await AssertJsonError(repeat.StdOut, "previewInvalid");
+            await Assert.That(FixtureFiles(tasks.DirectoryPath)).IsEquivalentTo(before);
+        }
+    }
+
+    [Test]
+    [Arguments("IsGoal", true, false)]
+    [Arguments("isGoal", false, false)]
+    [Arguments("ISGOAL", true, true)]
+    [Arguments("iSgOaL", false, true)]
+    public async Task AreaIds_CreateOnlyDefaultsAndRetiredKey_RetryLeavesTaskUntouched(string key, bool value, bool matchingReceipt)
+    {
+        using var tasks = TempTaskDirectory.Create();
+        using var request = TempRequestFile.Create();
+        await File.WriteAllTextAsync(request.Path, AreaCreateRequest(composed: false));
+        var initial = await RunCli("apply", "--tasks", tasks.DirectoryPath, "--request", request.Path, "--format", "json");
+        await Assert.That(initial.ExitCode).IsEqualTo(0).Because(initial.StdOut + initial.StdErr);
+        var receipts = Path.Combine(tasks.DirectoryPath, ".unlimotion.applies", "v1");
+        if (!matchingReceipt) File.Delete(Directory.GetFiles(receipts, "*.json").Single());
+        await File.WriteAllTextAsync(Path.Combine(receipts, "unrelated.json"), "{\"applicationId\":\"unrelated\",\"marker\":\"keep\"}");
+        var path = Path.Combine(tasks.DirectoryPath, "created");
+        var raw = JObject.Parse(await File.ReadAllTextAsync(path)); raw[key] = value; raw["AreaIds"] = new JArray();
+        await File.WriteAllTextAsync(path, raw.ToString());
+        File.SetLastWriteTimeUtc(path, new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+        var taskBytes = await File.ReadAllBytesAsync(path); var time = File.GetLastWriteTimeUtc(path);
+        var before = FixtureFiles(tasks.DirectoryPath);
+        var inspect = await RunCli("apply", "inspect", "--tasks", tasks.DirectoryPath, "--request", request.Path, "--format", "json");
+        await Assert.That(inspect.ExitCode).IsEqualTo(0).Because(inspect.StdOut + inspect.StdErr);
+        var state = ParseJson(inspect.StdOut);
+        await Assert.That(state.GetProperty("postconditionsMatch").GetString()).IsEqualTo("all");
+        await Assert.That(state.GetProperty("assessment").GetString()).IsEqualTo(matchingReceipt ? "receiptMatched" : "desiredStatePresent");
+        await Assert.That(FixtureFiles(tasks.DirectoryPath)).IsEquivalentTo(before);
+        var repeat = await RunCli("apply", "--tasks", tasks.DirectoryPath, "--request", request.Path, "--format", "json");
+        await Assert.That(repeat.ExitCode).IsEqualTo(0).Because(repeat.StdOut + repeat.StdErr);
+        var output = ParseJson(repeat.StdOut);
+        await Assert.That(output.GetProperty("mode").GetString()).IsEqualTo("alreadyApplied");
+        await Assert.That(output.GetProperty("didMutate").GetBoolean()).IsFalse();
+        await Assert.That(output.GetProperty("receiptWritten").GetBoolean()).IsEqualTo(!matchingReceipt);
+        await Assert.That((await File.ReadAllBytesAsync(path)).SequenceEqual(taskBytes)).IsTrue();
+        await Assert.That(File.GetLastWriteTimeUtc(path)).IsEqualTo(time);
+        if (matchingReceipt) await Assert.That(FixtureFiles(tasks.DirectoryPath)).IsEquivalentTo(before);
+        else
+        {
+            await AssertRestoredReceiptOnly(tasks.DirectoryPath, before, request.Path);
+        }
+    }
+
+    private static string AreaCreateRequest(bool composed) => """
+        {"schemaVersion":1,"applicationId":"APPLICATION_ID","proposalRefs":[{"id":"P-areaids","revision":1}],
+        "author":"spec-agent","reason":"Isolated area classification fixture","preconditions":[],"operations":[
+        {"operationId":"create","kind":"createTask","newTaskId":"created","title":"Before"}
+        """.Replace("APPLICATION_ID", composed ? "areaids-spec" : "areaids-create-only", StringComparison.Ordinal)
+        + (composed ? ",{\"operationId\":\"rename\",\"kind\":\"setField\",\"taskId\":\"created\",\"field\":\"title\",\"value\":\"After\"}" : "") + "]}";
+
+    private static string[] FixtureFiles(string directory)
+    {
+        if (File.Exists(Path.Combine(directory, ".unlimotion.lock")))
+            throw new InvalidDataException("A completed fixture operation left its transient directory lock behind.");
+        return Directory.GetFiles(directory, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal)
+            .Select(p => Path.GetRelativePath(directory, p) + ":" + File.GetLastWriteTimeUtc(p).Ticks + ":" + Convert.ToHexString(File.ReadAllBytes(p))).ToArray();
+    }
+
+    private static async Task AssertRestoredReceiptOnly(string directory, string[] before, string requestPath)
+    {
+        var requestText = await File.ReadAllTextAsync(requestPath);
+        var applicationId = ParseJson(requestText).GetProperty("applicationId").GetString()!;
+        static string Hash(string text) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text))).ToLowerInvariant();
+        var relativeReceipt = Path.Combine(".unlimotion.applies", "v1", Hash(applicationId) + ".json");
+        var receiptPath = Path.Combine(directory, relativeReceipt);
+        await Assert.That(File.Exists(receiptPath)).IsTrue();
+        var after = FixtureFiles(directory);
+        await Assert.That(after.Length).IsEqualTo(before.Length + 1);
+        await Assert.That(after.Where(entry => !entry.StartsWith(relativeReceipt + ":", StringComparison.Ordinal)).ToArray()).IsEquivalentTo(before);
+        var receipt = JObject.Parse(await File.ReadAllTextAsync(receiptPath));
+        await Assert.That((string?)receipt["ApplicationId"]).IsEqualTo(applicationId);
+        await Assert.That((string?)receipt["RequestHash"]).IsEqualTo("sha256:" + Hash(requestText));
+        await Assert.That(((JArray)receipt["OperationIds"]!).Values<string>().ToArray())
+            .IsEquivalentTo(ParseJson(requestText).GetProperty("operations").EnumerateArray().Select(op => op.GetProperty("operationId").GetString()).ToArray());
+    }
+
     private static JsonElement ParseJson(string output)
     {
         using var document = JsonDocument.Parse(output);
