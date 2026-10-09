@@ -1,4 +1,5 @@
 using System.Xml;
+using System.Globalization;
 using Unlimotion.Domain;
 using DomainTaskStatus = Unlimotion.Domain.TaskStatus;
 
@@ -511,6 +512,14 @@ public sealed class TaskApplicationCommandService
 
                 task.Description = rendered;
                 return null;
+            case "importance":
+                if (!TryParseImportance(operation.Value, out var importance))
+                {
+                    return Failed(TaskApplicationErrorKind.InvalidArguments,
+                        "Importance must be a canonical decimal Int32 string (-2147483648..2147483647).", operation, task.Id);
+                }
+                task.Importance = importance;
+                return null;
             case "plannedDuration":
                 if (!TryParseDuration(operation.Value, out var duration))
                 {
@@ -764,6 +773,7 @@ public sealed class TaskApplicationCommandService
         var title = create.Title?.Trim();
         var description = create.DescriptionUserText ?? string.Empty;
         var duration = create.PlannedDuration;
+        var importance = 0;
         var begin = create.PlannedBeginDateTime;
         var end = create.PlannedEndDateTime;
         var status = DomainTaskStatus.Prepared;
@@ -784,6 +794,7 @@ public sealed class TaskApplicationCommandService
                     {
                         case "title": title = operation.Value?.Trim(); break;
                         case "descriptionUserText": description = operation.Value ?? string.Empty; break;
+                        case "importance": if (TryParseImportance(operation.Value, out var parsedImportance)) importance = parsedImportance; break;
                         case "plannedDuration": if (TryParseDuration(operation.Value, out var parsedDuration)) duration = parsedDuration; break;
                         case "plannedBeginDateTime": if (TryParseDate(operation.Value, out var parsedBegin)) begin = parsedBegin; break;
                         case "plannedEndDateTime": if (TryParseDate(operation.Value, out var parsedEnd)) end = parsedEnd; break;
@@ -839,7 +850,7 @@ public sealed class TaskApplicationCommandService
             task.BlockedByTasks.ToHashSet(StringComparer.Ordinal).SetEquals(blockedBy) &&
             task.CompletionCriteria.Count == criteria.Count && task.CompletionCriteria.All(item =>
                 criteria.TryGetValue(item.Id, out var expected) && item.Text == expected.Text && item.IsSatisfied == expected.IsSatisfied) &&
-            task.Importance == 0 && !task.Wanted && task.Version == 1 &&
+            task.Importance == importance && !task.Wanted && task.Version == 1 &&
             task.UserId == TaskItem.NormalizeAuthor(author) && task.AgentExecution == null &&
             task.Repeater == null &&
             (task.ExtensionData == null || task.ExtensionData.Count == 0) &&
@@ -857,6 +868,7 @@ public sealed class TaskApplicationCommandService
                 "title" => string.Equals(task.Title, operation.Value?.Trim(), StringComparison.Ordinal),
                 "descriptionUserText" => AgentExecutionDescriptionRenderer.TryRemove(task.Description, out var userText, out _) &&
                                          string.Equals(userText, operation.Value, StringComparison.Ordinal),
+                "importance" => TryParseImportance(operation.Value, out var importance) && task.Importance == importance,
                 "plannedDuration" => TryParseDuration(operation.Value, out var duration) && task.PlannedDuration == duration,
                 "plannedBeginDateTime" => TryParseDate(operation.Value, out var begin) && task.PlannedBeginDateTime == begin,
                 "plannedEndDateTime" => TryParseDate(operation.Value, out var end) && task.PlannedEndDateTime == end,
@@ -914,6 +926,14 @@ public sealed class TaskApplicationCommandService
         if (!string.IsNullOrWhiteSpace(operation.ToTaskId)) yield return operation.ToTaskId;
         if (operation.ParentIds != null)
             foreach (var parentId in operation.ParentIds.Where(static id => !string.IsNullOrWhiteSpace(id))) yield return parentId;
+    }
+
+    private static bool TryParseImportance(string? text, out int value)
+    {
+        value = default;
+        return text is { Length: >= 1 and <= 11 } &&
+               int.TryParse(text, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out value) &&
+               string.Equals(text, value.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal);
     }
 
     private static bool TryParseDuration(string? text, out TimeSpan value)

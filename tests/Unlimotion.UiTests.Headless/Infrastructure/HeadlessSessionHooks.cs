@@ -35,8 +35,9 @@ public static class HeadlessSessionHooks
     [BeforeEvery(Test)]
     public static async Task SetupRecoverySession(TestContext context)
     {
-        if (!IsRecoveryTest(context)) return;
-        // Only this multi-step asynchronous flow needs a persistent dispatcher. Keep
+        if (!NeedsPersistentDispatcher(context)) return;
+        // These multi-step asynchronous flows retain windows and watchers between
+        // dispatches and need a persistent dispatcher. Keep
         // the normal PerTest isolation for all other flows and own the persistent root.
         try
         {
@@ -65,12 +66,13 @@ public static class HeadlessSessionHooks
     [AfterEvery(Test)]
     public static async Task CleanupRecoverySession(TestContext context)
     {
-        if (IsRecoveryTest(context) && _recoveryScope is not null) await RestoreDefaultSession();
+        if (NeedsPersistentDispatcher(context) && _recoveryScope is not null) await RestoreDefaultSession();
     }
 
-    private static bool IsRecoveryTest(TestContext context) =>
-        context.Metadata.TestName == Tests.MainWindowHeadlessTests.StatusRecoveryTestName &&
-        context.Metadata.TestDetails.Class.ClassType == typeof(Tests.MainWindowHeadlessTests);
+    private static bool NeedsPersistentDispatcher(TestContext context) =>
+        context.Metadata.TestDetails.Class.ClassType == typeof(Tests.CliLiveRefreshHeadlessTests) ||
+        (context.Metadata.TestName == Tests.MainWindowHeadlessTests.StatusRecoveryTestName &&
+         context.Metadata.TestDetails.Class.ClassType == typeof(Tests.MainWindowHeadlessTests));
 
     private sealed class RecoveryHeadlessEntryPoint
     {

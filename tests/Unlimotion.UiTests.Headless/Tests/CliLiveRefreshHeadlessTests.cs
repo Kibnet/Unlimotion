@@ -39,7 +39,7 @@ public sealed class CliLiveRefreshHeadlessTests
             ?? throw new InvalidOperationException("CLI live-refresh view model was not captured.");
         var storage = viewModel.taskRepository as UnifiedTaskStorage
             ?? throw new InvalidOperationException("CLI live-refresh scenario did not use UnifiedTaskStorage.");
-        BindHeadlessSynchronizationContext(storage);
+        await BindHeadlessSynchronizationContextAsync(storage);
         var fileStorage = storage.TaskTreeManager.Storage as FileStorage
             ?? throw new InvalidOperationException("CLI live-refresh scenario did not use FileStorage.");
         var persistedReader = CreateExternalStorage(fileStorage.Path);
@@ -120,7 +120,7 @@ public sealed class CliLiveRefreshHeadlessTests
             ?? throw new InvalidOperationException("Apply live-refresh view model was not captured.");
         var storage = viewModel.taskRepository as UnifiedTaskStorage
             ?? throw new InvalidOperationException("Apply live-refresh scenario did not use UnifiedTaskStorage.");
-        BindHeadlessSynchronizationContext(storage);
+        await BindHeadlessSynchronizationContextAsync(storage);
         var fileStorage = storage.TaskTreeManager.Storage as FileStorage
             ?? throw new InvalidOperationException("Apply live-refresh scenario did not use FileStorage.");
         var page = new MainWindowPage(new HeadlessControlResolver(session.MainWindow));
@@ -179,7 +179,7 @@ public sealed class CliLiveRefreshHeadlessTests
             ?? throw new InvalidOperationException("External graph view model was not captured.");
         var storage = viewModel.taskRepository as UnifiedTaskStorage
             ?? throw new InvalidOperationException("External graph scenario did not use UnifiedTaskStorage.");
-        BindHeadlessSynchronizationContext(storage);
+        await BindHeadlessSynchronizationContextAsync(storage);
         var fileStorage = storage.TaskTreeManager.Storage as FileStorage
             ?? throw new InvalidOperationException("External graph scenario did not use FileStorage.");
         var writer = CreateExternalStorage(fileStorage.Path);
@@ -259,7 +259,7 @@ public sealed class CliLiveRefreshHeadlessTests
             ?? throw new InvalidOperationException("Alias refresh view model was not captured.");
         var storage = viewModel.taskRepository as UnifiedTaskStorage
             ?? throw new InvalidOperationException("Alias refresh scenario did not use UnifiedTaskStorage.");
-        BindHeadlessSynchronizationContext(storage);
+        await BindHeadlessSynchronizationContextAsync(storage);
         var fileStorage = storage.TaskTreeManager.Storage as FileStorage
             ?? throw new InvalidOperationException("Alias refresh scenario did not use FileStorage.");
         var page = new MainWindowPage(new HeadlessControlResolver(session.MainWindow));
@@ -335,7 +335,7 @@ public sealed class CliLiveRefreshHeadlessTests
         var deadline = DateTimeOffset.UtcNow + RefreshTimeout;
         while (DateTimeOffset.UtcNow < deadline)
         {
-            if (HeadlessRuntime.Dispatch(() =>
+            if (await DispatchUiAsync(() =>
                 {
                     Dispatcher.UIThread.RunJobs();
                     return condition();
@@ -352,17 +352,58 @@ public sealed class CliLiveRefreshHeadlessTests
             (diagnostic?.Invoke() ?? string.Empty));
     }
 
-    private static void BindHeadlessSynchronizationContext(UnifiedTaskStorage storage)
+    private static async Task BindHeadlessSynchronizationContextAsync(UnifiedTaskStorage storage)
     {
-        var previous = SynchronizationContext.Current;
-        try
+        await DispatchUiAsync(() =>
         {
-            SynchronizationContext.SetSynchronizationContext(new HeadlessSynchronizationContext());
-            storage.BindToCurrentSynchronizationContext();
-        }
-        finally
+            var previous = SynchronizationContext.Current;
+            try
+            {
+                SynchronizationContext.SetSynchronizationContext(
+                    new AvaloniaSynchronizationContext(Dispatcher.UIThread, DispatcherPriority.Normal));
+                storage.BindToCurrentSynchronizationContext();
+            }
+            finally
+            {
+                SynchronizationContext.SetSynchronizationContext(previous);
+            }
+            return true;
+        });
+        await Assert.That(Dispatcher.UIThread.CheckAccess()).IsFalse()
+            .Because("The test caller must resume outside the worker before synchronous page resolution.");
+    }
+
+    private static Task<T> DispatchUiAsync<T>(Func<T> action)
+    {
+        var session = HeadlessRuntime.Session;
+        var worker = typeof(Avalonia.Headless.HeadlessUnitTestSession)
+            .GetField("_dispatchTask", BindingFlags.Instance | BindingFlags.NonPublic)
+            ?.GetValue(session) as Task
+            ?? throw new NotSupportedException("Pinned Headless worker task is unavailable.");
+        var completion = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _ = PublishAsync();
+        return completion.Task;
+
+        async Task PublishAsync()
         {
-            SynchronizationContext.SetSynchronizationContext(previous);
+            try
+            {
+                using var cancellation = new CancellationTokenSource(RefreshTimeout);
+                var dispatched = session.Dispatch(action, cancellation.Token);
+                await Task.WhenAny(dispatched, worker).WaitAsync(RefreshTimeout);
+                // Setup can fault the worker before its callback completes. Preserve
+                // that fault; publish asynchronously so callers cannot self-dispatch.
+                if (worker.IsCompleted)
+                {
+                    await worker;
+                    throw new InvalidOperationException("Headless worker stopped during UI dispatch.");
+                }
+                completion.TrySetResult(await dispatched);
+            }
+            catch (Exception exception)
+            {
+                completion.TrySetException(exception);
+            }
         }
     }
 
@@ -496,9 +537,4 @@ public sealed class CliLiveRefreshHeadlessTests
         };
     }
 
-    private sealed class HeadlessSynchronizationContext : SynchronizationContext
-    {
-        public override void Post(SendOrPostCallback callback, object? state) =>
-            HeadlessRuntime.Dispatch(() => callback(state));
-    }
 }

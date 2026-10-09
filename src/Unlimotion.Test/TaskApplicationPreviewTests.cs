@@ -254,6 +254,30 @@ public sealed class TaskApplicationPreviewTests
         await Assert.That(applied.Success).IsTrue();
     }
 
+    [Test]
+    public async Task ImportancePreview_IsNumericCompleteAndDoesNotWriteBeforeGuardedApply()
+    {
+        using var source = new Source();
+        var task = Task("task"); task.Importance = 9; await source.Save(task);
+        var request = Request([task], new TaskApplicationOperation
+        {
+            OperationId = "importance", Kind = TaskApplicationOperationKind.SetField, TaskId = task.Id, Field = "importance", Value = "42"
+        });
+        var bytes = source.Bytes();
+        var result = await source.Service.PreviewPlanAsync(request);
+        await Assert.That(result.Success).IsTrue().Because(result.Error?.Message ?? "Importance preview must succeed.");
+        var preview = TaskApplicationPreview.Create(result.Plan!, request, RequestHash, SourceKey);
+        var delta = preview.Changes.Single(change => change.Path == "/details/importance");
+        await Assert.That(delta.Before.GetInt32()).IsEqualTo(9);
+        await Assert.That(delta.After.GetInt32()).IsEqualTo(42);
+        await Assert.That(delta.OperationIds.Contains("importance")).IsTrue();
+        await Assert.That(source.Bytes()).IsEquivalentTo(bytes);
+        var witness = TaskApplicationPreview.ValidateWitness(Witness(request, result, preview), request.ApplicationId, RequestHash, SourceKey);
+        var applied = await source.Service.TryApplyAsync(request, plan => TaskApplicationPreview.CheckGuard(witness, plan, request, RequestHash, SourceKey));
+        await Assert.That(applied.Success).IsTrue();
+        await Assert.That((await source.Storage.Load(task.Id, forced: true))!.Importance).IsEqualTo(42);
+    }
+
     private static async Task AssertInvalid(string json, string applicationId)
     {
         string? kind = null;

@@ -25,7 +25,23 @@
     "id": { "type": "string", "minLength": 1 },
     "status": { "enum": ["NotReady", "Prepared", "InProgress", "Completed", "Archived"] },
     "base": { "type": "object", "required": ["operationId", "kind"], "properties": { "operationId": { "$ref": "#/$defs/id" } } },
-    "setField": { "type": "object", "additionalProperties": false, "required": ["operationId", "kind", "taskId", "field", "value"], "properties": { "operationId": { "$ref": "#/$defs/id" }, "kind": { "const": "setField" }, "taskId": { "$ref": "#/$defs/id" }, "field": { "enum": ["title", "descriptionUserText", "plannedDuration", "plannedBeginDateTime", "plannedEndDateTime"] }, "value": { "type": "string" } } },
+    "setField": {
+      "type": "object", "additionalProperties": false,
+      "required": ["operationId", "kind", "taskId", "field", "value"],
+      "properties": {
+        "operationId": { "$ref": "#/$defs/id" }, "kind": { "const": "setField" },
+        "taskId": { "$ref": "#/$defs/id" },
+        "field": { "enum": ["title", "descriptionUserText", "importance", "plannedDuration", "plannedBeginDateTime", "plannedEndDateTime"] },
+        "value": { "type": "string" }
+      },
+      "allOf": [{
+        "if": { "properties": { "field": { "const": "importance" } } },
+        "then": { "properties": { "value": {
+          "pattern": "^(0|-?[1-9][0-9]*)$", "not": { "pattern": "[^0-9-]" }, "maxLength": 11,
+          "description": "Canonical decimal Int32 string. Runtime also enforces -2147483648..2147483647. Reset with value 0."
+        } } }
+      }]
+    },
     "clearField": { "type": "object", "additionalProperties": false, "required": ["operationId", "kind", "taskId", "field"], "properties": { "operationId": { "$ref": "#/$defs/id" }, "kind": { "const": "clearField" }, "taskId": { "$ref": "#/$defs/id" }, "field": { "enum": ["descriptionUserText", "plannedDuration", "plannedBeginDateTime", "plannedEndDateTime"] } } },
     "criterion": { "type": "object", "required": ["operationId", "taskId", "criterionId"], "properties": { "operationId": { "$ref": "#/$defs/id" }, "taskId": { "$ref": "#/$defs/id" }, "criterionId": { "$ref": "#/$defs/id" }, "text": { "type": "string", "minLength": 1 }, "isSatisfied": { "type": "boolean" } } },
     "addCriterion": { "allOf": [ { "$ref": "#/$defs/criterion" }, { "type": "object", "required": ["kind", "text"], "properties": { "kind": { "const": "addCriterion" } } } ] },
