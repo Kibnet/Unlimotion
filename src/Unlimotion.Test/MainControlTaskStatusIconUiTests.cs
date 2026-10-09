@@ -192,7 +192,7 @@ public class MainControlTaskStatusIconUiTests
                 var details = WaitForAutomationControl<Expander>(view, "CurrentTaskOperationDetails");
                 await Assert.That(details.Header).IsEqualTo(language == "ru" ? "Подробности" : "Details");
                 details.IsExpanded = true;
-                Dispatcher.UIThread.RunJobs();
+                await WaitForTaskOperationErrorLayoutAsync(window, error);
                 var detailsHeader = details.GetVisualDescendants().OfType<Avalonia.Controls.Primitives.ToggleButton>()
                     .Single(button => button.Name == "PART_HeaderSite");
                 var history = WaitForAutomationControl<Expander>(view, "StatusHistoryExpander");
@@ -261,6 +261,30 @@ public class MainControlTaskStatusIconUiTests
         public static Avalonia.AppBuilder BuildAvaloniaApp() => Avalonia.AppBuilder.Configure<App>()
             .UseSkia()
             .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false });
+    }
+
+    private static async Task WaitForTaskOperationErrorLayoutAsync(Window window, TextBlock error)
+    {
+        var elapsed = System.Diagnostics.Stopwatch.StartNew();
+        while (elapsed.Elapsed < TimeSpan.FromSeconds(5))
+        {
+            Dispatcher.UIThread.RunJobs();
+            window.UpdateLayout();
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            Dispatcher.UIThread.RunJobs();
+            if (window.IsArrangeValid && error.IsMeasureValid && error.IsArrangeValid && error.Bounds.Width > 0)
+                return;
+
+            await Task.Delay(16);
+        }
+
+        var ancestors = string.Join("; ", error.GetVisualAncestors().OfType<Control>().Select(control =>
+            $"{control.GetType().Name}/{AutomationProperties.GetAutomationId(control)}: " +
+            $"bounds={control.Bounds}, visible={control.IsEffectivelyVisible}, " +
+            $"measure={control.IsMeasureValid}, arrange={control.IsArrangeValid}"));
+        throw new TimeoutException($"Task operation error layout did not become ready. " +
+            $"Window={window.Bounds}, error={error.Bounds}, measure={error.IsMeasureValid}, " +
+            $"arrange={error.IsArrangeValid}. Ancestors: {ancestors}");
     }
 
     [Test]

@@ -105,6 +105,7 @@ internal static class TaskCardLayoutUiContract
         {
             var (view, createdWindow) = await CreateArrangedMainControlAsync(fixture, 1400, 900);
             window = createdWindow;
+            await WaitForControlsLayoutAsync(window, view, DesktopAutomationIds);
 
             foreach (var automationId in DesktopAutomationIds)
             {
@@ -130,6 +131,8 @@ internal static class TaskCardLayoutUiContract
         {
             var (view, createdWindow) = await CreateArrangedMainControlAsync(fixture, width, 844);
             window = createdWindow;
+            await WaitForControlsLayoutAsync(window, view,
+                [.. NarrowAutomationIds, "CurrentTaskDetailsScrollViewer"]);
 
             var scrollViewer = FindControlByAutomationId<ScrollViewer>(view, "CurrentTaskDetailsScrollViewer");
             foreach (var automationId in NarrowAutomationIds)
@@ -323,6 +326,39 @@ internal static class TaskCardLayoutUiContract
                        automationId,
                        StringComparison.Ordinal))
                ?? throw new InvalidOperationException($"Control with AutomationId '{automationId}' was not found.");
+    }
+
+    private static async Task WaitForControlsLayoutAsync(Window window, MainControl view, string[] automationIds)
+    {
+        var elapsed = System.Diagnostics.Stopwatch.StartNew();
+        while (elapsed.Elapsed < TimeSpan.FromSeconds(5))
+        {
+            Dispatcher.UIThread.RunJobs();
+            window.UpdateLayout();
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            Dispatcher.UIThread.RunJobs();
+            if (window.IsArrangeValid && automationIds.All(id =>
+                view.GetVisualDescendants().OfType<Control>().Any(control =>
+                    AutomationProperties.GetAutomationId(control) == id && control.IsVisible &&
+                    control.IsMeasureValid && control.IsArrangeValid &&
+                    control.Bounds.Width > 0 && control.Bounds.Height > 0)))
+                return;
+
+            await Task.Delay(16);
+        }
+
+        var diagnostics = string.Join("; ", automationIds.Select(id =>
+        {
+            var control = view.GetVisualDescendants().OfType<Control>()
+                .FirstOrDefault(candidate => AutomationProperties.GetAutomationId(candidate) == id);
+            if (control is null) return $"{id}: missing";
+            var ancestors = string.Join(", ", control.GetVisualAncestors().OfType<Control>().Select(parent =>
+                $"{parent.GetType().Name}: bounds={parent.Bounds}, visible={parent.IsEffectivelyVisible}, " +
+                $"measure={parent.IsMeasureValid}, arrange={parent.IsArrangeValid}"));
+            return $"{id}: bounds={control.Bounds}, visible={control.IsVisible}, " +
+                   $"measure={control.IsMeasureValid}, arrange={control.IsArrangeValid}; ancestors=[{ancestors}]";
+        }));
+        throw new TimeoutException($"Task card layout did not become ready. Window={window.Bounds}. {diagnostics}");
     }
 
     private static void AssertVisibleAndArranged(Control control, string automationId)
