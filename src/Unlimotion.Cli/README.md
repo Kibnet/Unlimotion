@@ -159,7 +159,7 @@ Delta сравнивает конечные состояния двух совм
 
 Точное сравнение дат относится к загруженным `original/staged` снимкам. Существующее файловое хранилище при чтении нормализует offset в часовой пояс хоста; сохранение исходного текстового offset файла при последующей записи этим правилом не гарантируется.
 
-`apply schema --format json` отдаёт JSON Schema request v1 из установленного пакета. `apply example set-field|add-relation|create-task --format json` печатает полноценные шаблоны; все `example-*` ID и ETag замените реальными значениями перед preview. Схема проверяет синтаксис; графовые правила, ETag, статусные ограничения и защищённые маркеры описаны в `help apply` и проверяются `--dry-run`.
+`apply schema --format json` отдаёт JSON Schema request v1 из установленного пакета. `apply example set-field|set-importance|add-relation|create-task --format json` печатает полноценные шаблоны; все `example-*` ID и ETag замените реальными значениями перед preview. Схема проверяет синтаксис; графовые правила, ETag, статусные ограничения и защищённые маркеры описаны в `help apply` и проверяются `--dry-run`.
 
 Для создания с заранее выбранным ID используйте шаблон `create-task`, задайте уникальные `applicationId`, `newTaskId`, ссылку `proposalRefs` на согласованное поручение и точный `--tasks`:
 
@@ -172,6 +172,41 @@ unlimotion-cli task --tasks $tasksPath --id $newTaskId --include details,relatio
 ```
 
 Отправляйте запись только после успешного preview с тем же файлом запроса. При потере ответа или `outcomeUnknown` сначала выполните `apply inspect --request request.json --tasks $tasksPath --format json`, затем read-back затронутых ID. `receiptMatched` подтверждает receipt для точного `applicationId + requestHash`, но текущее состояние может уже отличаться. `desiredStatePresent` без receipt подтверждает только наблюдаемое конечное состояние, а не историю применения. `readyForPreview` означает, что исходные preconditions совпали и обычный preview проходит. `needsReconciliation` требует ручной сверки; не повторяйте запись автоматически. Хешируется декодированный текст JSON, включая пробелы и переносы, так что не форматируйте исходный request между отправкой и inspection. В новом observation-контракте `inspect` и оба вида dry-run при pending journal возвращают `recoveryRequired`, без replay. Обычный разрешённый write path сохраняет существующее recovery предыдущей транзакции; это отдельное событие от записи нового запроса.
+
+### Изменение важности
+
+Для записи `importance` используйте существующий `setField`. В request `value` — строка, в сохранённой задаче и preview важность — число:
+
+```json
+{"operationId":"set-importance","kind":"setField","taskId":"task-id","field":"importance","value":"42"}
+```
+
+Допустим канонический десятичный `Int32`: `0`, положительное число без ведущих нулей или отрицательное число с `-`, в пределах `-2147483648..2147483647`. Пробелы, `+42`, `042`, `-0`, дроби, экспонента, `null` и JSON-число вместо строки отклоняются. Диапазон persisted поля отличается от ограничений числового UI-контрола. Для сброса передайте строку `"0"`; `clearField importance` не поддерживается. Схема проверяет форму строки, runtime также проверяет диапазон.
+
+Пример для PowerShell 7; `$cliExe`, `$tasksPath` и `$taskId` получены через обычные discovery-команды:
+
+```powershell
+$task = & $cliExe task --tasks $tasksPath --id $taskId --include details --format json | ConvertFrom-Json
+$request = & $cliExe apply example set-importance --format json | ConvertFrom-Json
+$request.applicationId = 'importance-' + [Guid]::NewGuid().ToString('N')
+$request.author = 'agent-name'
+$request.reason = 'Согласованное изменение важности'
+$request.proposalRefs[0].id = 'P-approved-priority-change'
+$request.proposalRefs[0].revision = 1
+$request.preconditions[0].taskId = $taskId
+$request.preconditions[0].etag = $task.etag
+$request.operations[0].taskId = $taskId
+$request.operations[0].value = '42'
+$request | ConvertTo-Json -Depth 20 | Set-Content request.json -Encoding utf8NoBOM
+& $cliExe apply --tasks $tasksPath --request request.json --dry-run --diff full --format json > preview.json
+# Проверить success=true, complete=true и числовое изменение /details/importance.
+& $cliExe apply --tasks $tasksPath --request request.json --expect-preview preview.json --format json
+& $cliExe task --tasks $tasksPath --id $taskId --include details --format json
+```
+
+Замените author, reason и proposalRefs на согласованное поручение. При создании с выбранным `newTaskId` добавьте после `createTask` операцию `setField importance` с тем же ID: full preview и проверка применения учитывают конечную важность новой задачи. Две записи одного поля одной задачи в одном request по-прежнему дают `conflictingOperations`.
+
+При повторе используйте прежние request и applicationId. Matching receipt подтверждает прошлое применение; для текущего значения выполните `apply inspect` и read-back. Без receipt совпавшая конечная важность участвует в обычной reconciliation и не требует повторной записи задачи. Если установленная `apply schema` не перечисляет importance, эта версия CLI setter не поддерживает.
 
 ### Полный before → after и guard согласованного пакета
 

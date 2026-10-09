@@ -30,6 +30,26 @@ namespace Unlimotion.Test;
 public class TaskImportanceVisualUiTests
 {
     [Test]
+    public async Task Importance_CliApplyShowsSavedValueAfterFreshLoad()
+    {
+        if (await ImportanceRenderedProcess.RunIfNeededAsync(nameof(Importance_CliApplyShowsSavedValueAfterFreshLoad))) return;
+        var persistedTask = await UnlimotionCliIntegrationTests.CreateCliImportanceTaskForUi();
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(ImportanceRenderedAppBuilder));
+        await session.DispatchAsync(async () =>
+        {
+            await using var fixture = new ImportanceCardFixture(persistedTask);
+            await fixture.OpenAsync(1400, 12, false);
+            await fixture.SettleSnapshotAsync();
+            await Assert.That(fixture.Task.Importance).IsEqualTo(42);
+            await Assert.That(fixture.Input.Value).IsEqualTo(42m);
+            await Assert.That(fixture.TextBox.Text).IsEqualTo("42");
+            var directory = ImportanceImageComparison.CreateArtifactDirectory("cli-importance-fresh-load");
+            using var frame = fixture.CaptureComponent(directory);
+            Console.WriteLine($"CLI importance fresh-load screenshot: {Path.Combine(directory, "card.png")}");
+        }, CancellationToken.None);
+    }
+
+    [Test]
     public async Task Importance_All24States_MatchReviewedComponentBaselines()
     {
         if (await ImportanceRenderedProcess.RunIfNeededAsync(nameof(Importance_All24States_MatchReviewedComponentBaselines))) return;

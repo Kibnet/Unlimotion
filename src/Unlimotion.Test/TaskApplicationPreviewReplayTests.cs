@@ -24,6 +24,7 @@ public sealed class TaskApplicationPreviewReplayTests
         var edited = CreateTask("edited", DomainTaskStatus.InProgress);
         edited.Description = "Before\nwith exact whitespace ";
         edited.PlannedDuration = TimeSpan.FromHours(1);
+        edited.Importance = 9;
         edited.CompletionCriteria =
         [
             new() { Id = "keep/~", Text = "Old criterion", IsSatisfied = true },
@@ -53,6 +54,7 @@ public sealed class TaskApplicationPreviewReplayTests
             Operations =
             [
                 new() { OperationId = "title", Kind = TaskApplicationOperationKind.SetField, TaskId = edited.Id, Field = "title", Value = "Final title" },
+                new() { OperationId = "importance", Kind = TaskApplicationOperationKind.SetField, TaskId = edited.Id, Field = "importance", Value = "42" },
                 new() { OperationId = "description", Kind = TaskApplicationOperationKind.SetField, TaskId = edited.Id, Field = "descriptionUserText", Value = "After\nexact text " },
                 new() { OperationId = "duration", Kind = TaskApplicationOperationKind.ClearField, TaskId = edited.Id, Field = "plannedDuration" },
                 new() { OperationId = "replace", Kind = TaskApplicationOperationKind.ReplaceCriterion, TaskId = edited.Id, CriterionId = "keep/~", Text = "Revised criterion" },
@@ -63,7 +65,8 @@ public sealed class TaskApplicationPreviewReplayTests
                 new() { OperationId = "block", Kind = TaskApplicationOperationKind.AddRelation, Relation = "blocks", FromTaskId = blocker.Id, ToTaskId = edited.Id },
                 new() { OperationId = "status", Kind = TaskApplicationOperationKind.SetStatus, TaskId = parent.Id, Status = DomainTaskStatus.NotReady },
                 new() { OperationId = "create", Kind = TaskApplicationOperationKind.CreateTask, NewTaskId = "new-child", Title = "Intermediate", ParentIds = [edited.Id], Criteria = [new("created/~", "Created criterion", false)] },
-                new() { OperationId = "new-title", Kind = TaskApplicationOperationKind.SetField, TaskId = "new-child", Field = "title", Value = "Created final title" }
+                new() { OperationId = "new-title", Kind = TaskApplicationOperationKind.SetField, TaskId = "new-child", Field = "title", Value = "Created final title" },
+                new() { OperationId = "new-importance", Kind = TaskApplicationOperationKind.SetField, TaskId = "new-child", Field = "importance", Value = "17" }
             ]
         };
         var result = await new TaskApplicationCommandService(source.Storage, Etag).PreviewPlanAsync(request);
@@ -80,12 +83,17 @@ public sealed class TaskApplicationPreviewReplayTests
 
         var before = ProjectGraph(plan.Before, plan.Before, plan.EvaluatedAt, normalizeGenerated: false);
         var expected = ProjectGraph(plan.After, plan.Before, plan.EvaluatedAt, normalizeGenerated: true);
+        await Assert.That((int?)expected[edited.Id]!["details"]!["importance"]).IsEqualTo(42);
+        await Assert.That((int?)expected["new-child"]!["details"]!["importance"]).IsEqualTo(17);
         var replayed = Replay(before, preview.Changes, plan);
         Require(JToken.DeepEquals(replayed, expected), $"Replayed public projection differs.\nExpected: {expected}\nActual: {replayed}");
 
         // A missing global normalization must be observable even when all explicit operations are intact.
         var incomplete = Replay(before, preview.Changes.Where(c => c.TaskId != unrelated.Id), plan);
         await Assert.That(JToken.DeepEquals(incomplete, expected)).IsFalse();
+        var omittedImportance = Replay(before, preview.Changes.Where(c => c.Path != "/details/importance"), plan);
+        await Assert.That((int?)omittedImportance[edited.Id]!["details"]!["importance"]).IsEqualTo(9);
+        await Assert.That(JToken.DeepEquals(omittedImportance, expected)).IsFalse();
     }
 
     private static JObject Replay(JObject before, IEnumerable<TaskApplicationPreviewChange> changes, TaskApplicationPlan plan)
@@ -179,6 +187,9 @@ public sealed class TaskApplicationPreviewReplayTests
         {
             originals.TryGetValue(id, out var original);
             var node = (JObject)project.Invoke(null, [task, original, normalizeGenerated])!;
+            // This expected field is independent of production Project so an omitted or stale
+            // importance projection cannot make the diff and both oracle endpoints agree.
+            node["details"]!["importance"] = task.Importance;
             node["availability"] = (JObject)availability.Invoke(null, [rules.Analyze(task)])!;
             result[id] = node;
         }
