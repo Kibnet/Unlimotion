@@ -7,7 +7,7 @@
 - Central stack: routing-matrix; creator-vibe-lens (полный skill не нужен); model-behavior-baseline; tool-execution-baseline; collaboration-baseline; quest-governance; quest-mode; testing-baseline; spec-linter; spec-rubric; review-loops. Локальный AGENTS.override.md сохраняется.
 - Поверхность: Codex desktop, Windows/PowerShell, фактический model ID в окружении не раскрыт; оценка model behavior неприменима, меняется .NET CLI.
 - Рабочая SPEC: этот файл в существующем checkout. После approval реализация в отдельной ветке от проверенного main; подготовленный PR #318 остаётся отдельной задачей.
-- Проверенный main: dce4e1961b3f29e33a2e439730cd09cac885a872. Текущая локальная установка: 1.32.1-local.20261007.dce4e196.
+- Исходный snapshot 07.10.2026: проверенный main dce4e1961b3f29e33a2e439730cd09cac885a872; тогдашняя локальная установка 1.32.1-local.20261007.dce4e196. Последующие implementation/install/rebase статусы зафиксированы в датированных Post-EXEC и журнале §20.
 - Instruction source/template: C:/Users/Kibnet/.codex/agents/AGENTS.md и templates/specs/_template.md.
 - Связанный исторический документ: specs/2026-10-04-cli-night-agent-context-and-preview.md, §2/§6: importance write был явно исключён из MVP. Эта SPEC расширяет именно этот outcome; прошлые approval не принимаются за её approval.
 
@@ -21,7 +21,7 @@ Outcome contract:
 - Output: код, тесты, schema/help/README/example и проверенный локальный CLI для агентов. Source PASS, full validation и installed smoke учитываются отдельно.
 - Stop: invalid/stale/guard failure не вызывает новых task writes; новые shared prerequisites не копируются из чужого dirty checkout; обязательные gates не заменяются targeted PASS.
 
-## 2. Текущее состояние (AS-IS)
+## 2. Текущее состояние (AS-IS) — исходный snapshot 07.10.2026
 - `TaskItem.Importance` — persisted `int`, default 0. Domain не объявляет диапазон 0..100. UI NumericUpDown имеет свои границы, они не определяют storage-контракт.
 - `TaskApplicationCommandService.SetField` принимает title, descriptionUserText, plannedDuration, plannedBeginDateTime, plannedEndDateTime; importance отвергает default branch.
 - `TaskApplicationOperation.Value` и CLI `ApplicationOperationInput.Value` — string. Request schema v1 также требует string.
