@@ -2,6 +2,8 @@
 
 Исторический отчёт исходного feature. Дополнение о настройках и enabled-only видимости проверяется отдельно: [отчёт 11.10.2026](settings-2026-10-11.md).
 
+Перенос на свежий main и PR delivery отражены отдельно: [доставка 11.10.2026](delivery-2026-10-11.md). Числа ниже относятся к исходной базе.
+
 **Post-EXEC: NEEDS-FIX.** Реализация и её проверки выполнены локально; обязательный AC8 не принят из-за одного failure полного main-набора. Точно такой же phone-layout failure воспроизведён на чистом baseline. Это подтверждает существующий intermittent дефект, но не снимает обязательный green gate.
 
 Ветка feat/git-dirty-status-indicator; worktree C:/Users/Kibnet/.codex/worktrees/git-dirty-indicator/Unlimotion; база e987023dc93daba6753440eec813edcbaa468da9. Approved SPEC: specs/2026-10-09-git-dirty-status-indicator.md; исходный SHA256 595A13D85742FD8C719DC6BA5E463DCE7A49369EFDAF361208A6ACE759236533 повторно совпал в основном checkout. Primary содержит только исходную untracked SPEC, feature-код там не менялся. Commit/push/PR/merge/install/release/live task-space writes не выполнялись.
