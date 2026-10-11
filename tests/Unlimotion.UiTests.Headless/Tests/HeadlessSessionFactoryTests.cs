@@ -68,6 +68,73 @@ public sealed class HeadlessSessionFactoryTests
     }
 
     [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task InitializationFault_FailsPendingAndFutureDispatch_AndPreservesWorkerError(bool cancellationError)
+    {
+        FailingEntryPoint.Reset(cancellationError
+            ? new OperationCanceledException("Initializer cancellation negative control.")
+            : new InvalidOperationException("Initialization fault negative control."));
+        var session = HeadlessSessionFactory.StartNew(typeof(FailingEntryPoint));
+        var worker = Get<Task>(session, "_dispatchTask");
+        var cancellation = Get<CancellationTokenSource>(session, "_cancellationTokenSource");
+        var queue = Get<BlockingCollection<(Action, ExecutionContext?)>>(session, "_queue");
+        try
+        {
+            var first = session.Dispatch(() => true, default);
+            await FailingEntryPoint.Entered.Task.WaitAsync(Timeout);
+            var second = session.Dispatch(() => false, default);
+            FailingEntryPoint.Release.Set();
+            Exception? observed = null;
+            try { await first.WaitAsync(Timeout); }
+            catch (Exception exception) { observed = exception; }
+            await Assert.That(observed).IsSameReferenceAs(FailingEntryPoint.Sentinel);
+            observed = null;
+            try { await second.WaitAsync(Timeout); }
+            catch (Exception exception) { observed = exception; }
+            await Assert.That(observed).IsSameReferenceAs(FailingEntryPoint.Sentinel);
+            try { await worker.WaitAsync(Timeout); }
+            catch (Exception) { }
+            await Assert.That(worker.IsFaulted).IsTrue();
+            await Assert.That(() => session.Dispatch(() => true, default)).Throws<ObjectDisposedException>();
+            observed = null;
+            try { await session.DisposeAsync().AsTask().WaitAsync(Timeout); }
+            catch (Exception exception) { observed = exception; }
+            await Assert.That(observed).IsSameReferenceAs(FailingEntryPoint.Sentinel);
+        }
+        finally
+        {
+            FailingEntryPoint.Release.Set();
+            await cancellation.CancelAsync();
+            try { await worker.WaitAsync(Timeout); }
+            catch (Exception) when (worker.IsFaulted) { }
+            cancellation.Dispose();
+            queue.Dispose();
+        }
+    }
+
+    private sealed class FailingEntryPoint
+    {
+        internal static Exception Sentinel = null!;
+        internal static TaskCompletionSource Entered = null!;
+        internal static ManualResetEventSlim Release = null!;
+        internal static void Reset(Exception exception)
+        {
+            Release?.Dispose();
+            Sentinel = exception;
+            Entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            Release = new();
+        }
+        public static AppBuilder BuildAvaloniaApp() => AppBuilder.Configure<Application>()
+            .UseHeadless(new AvaloniaHeadlessPlatformOptions()).AfterSetup(_ =>
+            {
+                Entered.SetResult();
+                if (!Release.Wait(Timeout)) throw new TimeoutException("Initializer was not released.");
+                throw Sentinel;
+            });
+    }
+
+    [Test]
     public async Task Dispose_PropagatesWorkerNullReference_InsteadOfSuppressingIt()
     {
         var session = HeadlessSessionFactory.StartNew(typeof(Application));

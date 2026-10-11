@@ -656,4 +656,25 @@ ID: {1}</value></data>
   <data name="TaskHistoryFieldWanted" xml:space="preserve"><value>Wanted</value></data>  <data name="TaskHistoryMergeFirstParent" xml:space="preserve"><value>Merge commit: changes are compared with the first parent.</value></data>
   <data name="TaskDeepLinkTaskNotFound" xml:space="preserve"><value>Task {0} was not found in the active task space.</value></data>
   <data name="TaskDeepLinkOpenFailed" xml:space="preserve"><value>Could not open the task link: {0}</value></data>
+  <data name="GitIndicatorNotApplicable" xml:space="preserve"><value>Git does not apply</value></data>
+  <data name="GitIndicatorAttention" xml:space="preserve"><value>Git: attention required</value></data>
+  <data name="GitIndicatorSyncing" xml:space="preserve"><value>Git: synchronizing</value></data>
+  <data name="GitIndicatorUnknown" xml:space="preserve"><value>Git state is unknown</value></data>
+  <data name="GitIndicatorDirty" xml:space="preserve"><value>Git: uncommitted changes</value></data>
+  <data name="GitIndicatorIdle" xml:space="preserve"><value>Git: no uncommitted changes</value></data>
+  <data name="GitIndicatorFiles" xml:space="preserve"><value>Files: {0}</value></data>
+  <data name="GitIndicatorCommits" xml:space="preserve"><value>Commits ahead: {0} / behind: {1}</value></data>
+  <data name="GitIndicatorConflicts" xml:space="preserve"><value>Conflicts: {0}</value></data>
+  <data name="GitIndicatorObserved" xml:space="preserve"><value>Checked: {0}</value></data>
+  <data name="GitIndicatorYes" xml:space="preserve"><value>yes</value></data>
+  <data name="GitIndicatorNo" xml:space="preserve"><value>no</value></data>
+  <data name="GitIndicatorStale" xml:space="preserve"><value>Data is stale / refresh pending</value></data>
+  <data name="GitIndicatorReadError" xml:space="preserve"><value>Git refresh is unavailable</value></data>
+  <data name="GitIndicatorOperationError" xml:space="preserve"><value>The last Git operation failed</value></data>
+  <data name="GitIndicatorPreviousError" xml:space="preserve"><value>A previous Git operation failed</value></data>
+  <data name="GitIndicatorLocalRefs" xml:space="preserve"><value>Commit counts use local refs; no fetch</value></data>
+  <data name="GitIndicatorSettings" xml:space="preserve"><value>Open Git settings</value></data>
+  <data name="GitIndicatorDisabled" xml:space="preserve"><value>Git synchronization is disabled</value></data>
+  <data name="GitIndicatorServer" xml:space="preserve"><value>Git synchronization does not apply to a server space</value></data>
+  <data name="GitIndicatorSettingsLoading" xml:space="preserve"><value>Space settings are loading</value></data>
 </root>

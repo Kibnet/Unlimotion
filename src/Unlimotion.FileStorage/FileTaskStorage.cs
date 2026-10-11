@@ -10,7 +10,7 @@ using Unlimotion.TaskTree;
 
 namespace Unlimotion.Storage;
 
-public partial class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, ITaskGraphWriteLock, ITaskGraphWriteScopeStorage, ITaskReloadReader, ITaskGraphObservationStorage, ITaskGraphObservedWriteGuardStorage
+public partial class FileTaskStorage : IStorage, IStorageMutationObservation, ITaskGraphDiagnosticStorage, ITaskGraphWriteLock, ITaskGraphWriteScopeStorage, ITaskReloadReader, ITaskGraphObservationStorage, ITaskGraphObservedWriteGuardStorage
 {
     internal static readonly StringComparer FilePathComparer = OperatingSystem.IsWindows()
         ? StringComparer.OrdinalIgnoreCase
@@ -611,6 +611,18 @@ public partial class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, IT
 
     protected void RaiseUpdating(TaskStorageUpdateEventArgs e) => Updating?.Invoke(this, e);
 
+    public event EventHandler? StorageBytesMayHaveChanged;
+
+    private void NotifyStorageBytesMayHaveChanged()
+    {
+        if (StorageBytesMayHaveChanged == null) return;
+        foreach (EventHandler subscriber in StorageBytesMayHaveChanged.GetInvocationList())
+        {
+            try { subscriber(this, EventArgs.Empty); }
+            catch (Exception) { /* An observation hint cannot change a storage outcome. */ }
+        }
+    }
+
     private async Task<TaskItem> SaveCore(TaskItem taskItem)
     {
         EnsureActiveLiveGraphGenerationCurrent();
@@ -694,7 +706,8 @@ public partial class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, IT
         }
         finally
         {
-            OnWriteFinished(item.Id, filePath);
+            try { OnWriteFinished(item.Id, filePath); }
+            finally { NotifyStorageBytesMayHaveChanged(); }
         }
     }
 
@@ -757,18 +770,22 @@ public partial class FileTaskStorage : IStorage, ITaskGraphDiagnosticStorage, IT
         _activeWriteScope.Value?.Record(itemId);
         var filePath = ResolveTaskFilePath(itemId);
         _activeWriteScope.Value?.PrepareRemove(itemId, filePath);
-        OnBeforeRemove(itemId, filePath);
-        _tasks.TryRemove(itemId, out _);
-        _taskFilePaths.TryRemove(itemId, out _);
-
-        if (File.Exists(filePath))
+        try
         {
-            File.Delete(filePath);
+            OnBeforeRemove(itemId, filePath);
+            _tasks.TryRemove(itemId, out _);
+            _taskFilePaths.TryRemove(itemId, out _);
+
+            if (File.Exists(filePath))
+            {
+                File.Delete(filePath);
+            }
+
+            PublishLiveFileChange(filePath, task: null, error: null);
+
+            return Task.FromResult(true);
         }
-
-        PublishLiveFileChange(filePath, task: null, error: null);
-
-        return Task.FromResult(true);
+        finally { NotifyStorageBytesMayHaveChanged(); }
     }
 
     private TaskItem? DeserializeTask(string fullPath)

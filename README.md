@@ -1,4 +1,4 @@
-﻿# Unlimotion
+# Unlimotion
 
 <p align="center">
   <img src="assets/branding/readme-logo-512.png" alt="Unlimotion logo" width="256" height="256">
@@ -279,6 +279,8 @@ Local use does not require a server: tasks are individual JSON files in the acti
 A regular installed desktop build keeps settings in `Documents/Unlimotion/Settings.json` in your user profile; `--config=<path>` can override this location. Debug runs from source use `Settings.json` in the working directory. Before moving data, check the actual task path in Settings: it is a separate directory and is not necessarily next to the settings file.
 
 Configure Git separately for each space. In **Backup**, enter the repository and authentication details, connect it and verify manual synchronization. Automatic backup must be enabled in Settings. For SSH, select or generate a key; **SSH Key Storage Path** specifies the directory for keys and a dedicated `known_hosts` file. The app provides a conflict-resolution interface for synchronization conflicts.
+
+The compact Git indicator in the upper right appears for file spaces with synchronization enabled. It shows uncommitted files separately from commits and synchronization. Click it for details; the same information is available in the Git backup section of Settings. Disabled synchronization is explicitly shown in Settings, and the indicator is hidden. Unavailable or stale observations retain the last known dirty evidence and explicitly show uncertainty. Observation reads local state only and never triggers fetch or synchronization. Git does not apply to server spaces.
 
 Removing a space from Settings does not delete its JSON files or remote repository. Deleting a task itself is a separate, permanent operation.
 

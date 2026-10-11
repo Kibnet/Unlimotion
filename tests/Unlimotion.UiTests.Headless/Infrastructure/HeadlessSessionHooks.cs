@@ -18,7 +18,8 @@ public static class HeadlessSessionHooks
     [Before(TestSession)]
     public static void SetupSession()
     {
-        if (Environment.GetEnvironmentVariable("UNLIMOTION_DEEP_LINK_HEADLESS_CHILD") == "1")
+        if (Environment.GetEnvironmentVariable("UNLIMOTION_DEEP_LINK_HEADLESS_CHILD") == "1" ||
+            Environment.GetEnvironmentVariable("UNLIMOTION_GIT_INDICATOR_HEADLESS_CHILD") == "1")
         {
             // One rendered scenario per fresh process. Do not switch the drawing
             // backend or session underneath the existing semantic test suite.
@@ -71,6 +72,7 @@ public static class HeadlessSessionHooks
 
     private static bool NeedsPersistentDispatcher(TestContext context) =>
         context.Metadata.TestDetails.Class.ClassType == typeof(Tests.CliLiveRefreshHeadlessTests) ||
+        context.Metadata.TestDetails.Class.ClassType == typeof(Tests.SettingsRemoteTypeHeadlessTests) ||
         (context.Metadata.TestName == Tests.MainWindowHeadlessTests.StatusRecoveryTestName &&
          context.Metadata.TestDetails.Class.ClassType == typeof(Tests.MainWindowHeadlessTests));
 

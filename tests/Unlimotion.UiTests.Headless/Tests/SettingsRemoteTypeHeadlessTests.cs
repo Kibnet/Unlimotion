@@ -148,12 +148,16 @@ public sealed class SettingsRemoteTypeHeadlessTests
             static control => control is not null,
             timeout: TimeSpan.FromSeconds(10),
             timeoutMessage: "Refresh Git metadata button did not become available.")!;
-        _vm!.Settings.TaskStoragePath = string.Empty;
-        _vm.Settings.GitRemoteName = null;
-        _vm.Settings.GitRemoteUrl = string.Empty;
-        await Assert.That(_vm.Settings.RefreshGitMetadataCommand?.CanExecute(null)).IsTrue();
+        var canRefresh = HeadlessRuntime.Dispatch(() =>
+        {
+            _vm!.Settings.TaskStoragePath = string.Empty;
+            _vm.Settings.GitRemoteName = null;
+            _vm.Settings.GitRemoteUrl = string.Empty;
+            return _vm.Settings.RefreshGitMetadataCommand?.CanExecute(null);
+        });
+        await Assert.That(canRefresh).IsTrue();
 
-        _vm.Settings.RefreshGitMetadataCommand!.Execute(null);
+        HeadlessRuntime.Dispatch(() => _vm!.Settings.RefreshGitMetadataCommand!.Execute(null));
 
         var selectedRemote = WaitUntil(
             () => new RemoteMetadataWaitState(_vm?.Settings.GitRemoteName, _vm?.Settings.GitRemoteUrl),
