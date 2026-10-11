@@ -48,15 +48,41 @@ internal static class HeadlessSessionFactory
 
             while (!cancellation.IsCancellationRequested)
             {
+                Action? currentAction = null;
                 try
                 {
                     var (action, context) = queue.Take(cancellation.Token);
+                    currentAction = action;
                     if (context is null) action();
                     else ExecutionContext.Run(context, state => ((Action)state!)(), action);
                 }
-                catch (OperationCanceledException) { }
+                catch (OperationCanceledException) when (currentAction is null && cancellation.IsCancellationRequested) { }
+                catch (Exception exception)
+                {
+                    // Framework initialization/disposal can throw outside Dispatch's
+                    // TCS catch. Preserve the worker fault, but release its orphaned
+                    // callers and reject further dispatch into this terminal session.
+                    var cleanupErrors = new List<Exception>();
+                    void Cleanup(Action cleanup)
+                    {
+                        try { cleanup(); }
+                        catch (Exception secondary) { cleanupErrors.Add(secondary); }
+                    }
+                    Cleanup(cancellation.Cancel);
+                    Cleanup(queue.CompleteAdding);
+                    Cleanup(() => FailFrameworkDispatch(currentAction, exception));
+                    Cleanup(() =>
+                    {
+                        while (queue.TryTake(out var pending))
+                            Cleanup(() => FailFrameworkDispatch(pending.Item1, exception));
+                    });
+                    if (cleanupErrors.Count > 0)
+                        exception.Data["HeadlessWorkerCleanupErrors"] = new AggregateException(cleanupErrors);
+                    throw;
+                }
             }
-        }, CancellationToken.None, TaskCreationOptions.DenyChildAttach);
+        }, CancellationToken.None, TaskCreationOptions.DenyChildAttach |
+            TaskCreationOptions.RunContinuationsAsynchronously);
         worker.Start(TaskScheduler.Default);
         try { return ready.Task.GetAwaiter().GetResult(); }
         catch
@@ -68,5 +94,22 @@ internal static class HeadlessSessionFactory
             queue.Dispose();
             throw;
         }
+    }
+
+    private static void FailFrameworkDispatch(Action? action, Exception exception)
+    {
+        // Pinned Avalonia 12.0.4 DispatchCore closure. Arbitrary actions (including
+        // the worker-fault negative control) are not framework requests.
+        var closure = action?.Target;
+        if (closure?.GetType().DeclaringType != typeof(HeadlessUnitTestSession)) return;
+        if (!closure.GetType().Name.StartsWith("<>c__DisplayClass12_0`", StringComparison.Ordinal) ||
+            action!.Method.Name != "<DispatchCore>b__0")
+            throw new NotSupportedException("Pinned Headless DispatchCore closure is unavailable.");
+        var completion = closure.GetType().GetField("tcs",
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(closure)
+            ?? throw new NotSupportedException("Pinned Headless dispatch completion is unavailable.");
+        var fail = completion.GetType().GetMethod("TrySetException", [typeof(Exception)])
+            ?? throw new NotSupportedException("Pinned Headless dispatch failure API is unavailable.");
+        fail.Invoke(completion, [exception]);
     }
 }
