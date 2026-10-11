@@ -3253,7 +3253,10 @@ public class MainControlTaskCardLayoutUiTests
         {
             throw new InvalidOperationException(
                 $"{control.GetType().Name}:{AutomationProperties.GetAutomationId(control)} is not fully contained " +
-                $"in the phone-width details pane: left={leftEdge:F1}; right={rightEdge:F1}; viewport={viewportWidth:F1}.");
+                $"in the phone-width details pane: left={leftEdge:F1}; right={rightEdge:F1}; viewport={viewportWidth:F1}. " +
+                string.Join(" | ", control.GetVisualAncestors().OfType<Control>().Prepend(control).Select(item =>
+                    $"{item.GetType().Name}:{AutomationProperties.GetAutomationId(item)} bounds={item.Bounds} desired={item.DesiredSize} width={item.Width} margin={item.Margin} left={GetLeftEdge(relativeTo, item):F1}" +
+                    (item is ScrollViewer viewer ? $" offset={viewer.Offset} viewport={viewer.Viewport} extent={viewer.Extent}" : string.Empty))));
         }
     }
 
