@@ -24,7 +24,7 @@ using L10n = Unlimotion.ViewModel.Localization.Localization;
 
 namespace Unlimotion.Services;
 
-public class BackupViaGitService : IRemoteBackupService, ITaskSpaceBackupOperationScope
+public class BackupViaGitService : IRemoteBackupService, ITaskSpaceBackupOperationScope, IBackupOperationDiagnostics
 {
     private const string DefaultSshKeyFileName = "id_ed25519_unlimotion";
     private const string KnownHostsFileName = "known_hosts_unlimotion";
@@ -58,6 +58,9 @@ public class BackupViaGitService : IRemoteBackupService, ITaskSpaceBackupOperati
     };
 
     private static readonly object LockObject = new();
+    internal static object GitLock => LockObject;
+    private readonly AsyncLocal<DiagnosticScope?> _diagnosticScope = new();
+    public event Action<BackupOperationDiagnostic>? OperationDiagnostic;
 
     private readonly IConfiguration _configuration;
     private readonly INotificationManagerWrapper? _notificationManager;
@@ -353,7 +356,9 @@ public class BackupViaGitService : IRemoteBackupService, ITaskSpaceBackupOperati
         }
     }
 
-    public void ResolveConflict(string path, BackupConflictResolution resolution)
+    public void ResolveConflict(string path, BackupConflictResolution resolution) => RunDiagnostic(() => ResolveConflictCore(path, resolution));
+
+    private void ResolveConflictCore(string path, BackupConflictResolution resolution)
     {
         lock (LockObject)
         {
@@ -381,7 +386,9 @@ public class BackupViaGitService : IRemoteBackupService, ITaskSpaceBackupOperati
         }
     }
 
-    public void ResolveConflictFields(string path, IReadOnlyList<BackupConflictFieldSelection> fieldSelections)
+    public void ResolveConflictFields(string path, IReadOnlyList<BackupConflictFieldSelection> fieldSelections) => RunDiagnostic(() => ResolveConflictFieldsCore(path, fieldSelections));
+
+    private void ResolveConflictFieldsCore(string path, IReadOnlyList<BackupConflictFieldSelection> fieldSelections)
     {
         lock (LockObject)
         {
@@ -416,7 +423,9 @@ public class BackupViaGitService : IRemoteBackupService, ITaskSpaceBackupOperati
         }
     }
 
-    public void CommitResolvedConflicts(string message)
+    public void CommitResolvedConflicts(string message) => RunDiagnostic(() => CommitResolvedConflictsCore(message));
+
+    private void CommitResolvedConflictsCore(string message)
     {
         lock (LockObject)
         {
@@ -617,7 +626,9 @@ public class BackupViaGitService : IRemoteBackupService, ITaskSpaceBackupOperati
             remoteUrl);
     }
 
-    public void ConnectRepository(bool allowMergeWithNonEmptyRemote)
+    public void ConnectRepository(bool allowMergeWithNonEmptyRemote) => RunDiagnostic(() => ConnectRepositoryCore(allowMergeWithNonEmptyRemote));
+
+    private void ConnectRepositoryCore(bool allowMergeWithNonEmptyRemote)
     {
         lock (LockObject)
         {
@@ -651,7 +662,9 @@ public class BackupViaGitService : IRemoteBackupService, ITaskSpaceBackupOperati
         }
     }
 
-    public void CloneOrUpdateRepo()
+    public void CloneOrUpdateRepo() => RunDiagnostic(() => CloneOrUpdateRepoCore());
+
+    private void CloneOrUpdateRepoCore()
     {
         try
         {
@@ -663,7 +676,9 @@ public class BackupViaGitService : IRemoteBackupService, ITaskSpaceBackupOperati
         }
     }
 
-    public void Push(string msg)
+    public void Push(string msg) => RunDiagnostic(() => PushCore(msg));
+
+    private void PushCore(string msg)
     {
         lock (LockObject)
         {
@@ -671,6 +686,7 @@ public class BackupViaGitService : IRemoteBackupService, ITaskSpaceBackupOperati
             var path = GetRepositoryPath(settings.repositoryPath);
             if (!Repository.IsValid(path))
             {
+                MarkDiagnostic(BackupOperationResult.SkippedUnknown, "RepositoryMissing");
                 return;
             }
 
@@ -738,7 +754,9 @@ public class BackupViaGitService : IRemoteBackupService, ITaskSpaceBackupOperati
         }
     }
 
-    public void Pull()
+    public void Pull() => RunDiagnostic(() => PullCore());
+
+    private void PullCore()
     {
         lock (LockObject)
         {
@@ -746,7 +764,9 @@ public class BackupViaGitService : IRemoteBackupService, ITaskSpaceBackupOperati
         }
     }
 
-    public void PullExistingRepository()
+    public void PullExistingRepository() => RunDiagnostic(() => PullExistingRepositoryCore());
+
+    private void PullExistingRepositoryCore()
     {
         lock (LockObject)
         {
@@ -754,6 +774,7 @@ public class BackupViaGitService : IRemoteBackupService, ITaskSpaceBackupOperati
             var path = GetRepositoryPath(settings.repositoryPath);
             if (!Repository.IsValid(path))
             {
+                MarkDiagnostic(BackupOperationResult.SkippedUnknown, "RepositoryMissing");
                 return;
             }
 
@@ -761,6 +782,7 @@ public class BackupViaGitService : IRemoteBackupService, ITaskSpaceBackupOperati
             {
                 if (!repo.Network.Remotes.Any())
                 {
+                    MarkDiagnostic(BackupOperationResult.SkippedUnknown, "RemoteMissing");
                     return;
                 }
 
@@ -778,6 +800,7 @@ public class BackupViaGitService : IRemoteBackupService, ITaskSpaceBackupOperati
         var path = GetRepositoryPath(settings.repositoryPath);
         if (!Repository.IsValid(path))
         {
+            MarkDiagnostic(BackupOperationResult.SkippedUnknown, "RepositoryMissing");
             return;
         }
 
@@ -2871,8 +2894,78 @@ public class BackupViaGitService : IRemoteBackupService, ITaskSpaceBackupOperati
         return null;
     }
 
+    private void RunDiagnostic(Action operation)
+    {
+        var settings = GetSettings();
+        var sourceId = _taskSpaceOperation.Value?.SourceId ?? _activeSourceIdProvider?.Invoke() ?? "";
+        var path = GitObservationRequest.CanonicalPath(GetRepositoryPath(settings.repositoryPath));
+        var scope = _diagnosticScope.Value;
+        var outermost = scope == null;
+        if (scope != null && (scope.SourceId != sourceId || !GitObservationRequest.PathComparer.Equals(scope.Path, path)))
+            throw new InvalidOperationException("Nested Git diagnostics belong to a different task space.");
+        if (outermost)
+        {
+            var runtime = _storageFactory?.SourceManager.ActiveSource;
+            scope = new DiagnosticScope(sourceId, path, _taskSpaceOperation.Value?.Context.OperationId ?? Guid.NewGuid(),
+                runtime?.Descriptor.Id == sourceId ? runtime : null);
+            _diagnosticScope.Value = scope;
+            PublishDiagnostic(new(sourceId, path, scope.OperationId, Started: true, SourceVersion: scope.SourceVersion));
+        }
+        try { operation(); }
+        catch (OperationCanceledException)
+        {
+            MarkDiagnostic(BackupOperationResult.Cancelled, "Cancelled");
+            throw;
+        }
+        catch (Exception)
+        {
+            MarkDiagnostic(BackupOperationResult.Failed, "GitOperationFailed");
+            throw;
+        }
+        finally
+        {
+            if (outermost)
+            {
+                _diagnosticScope.Value = null;
+                PublishDiagnostic(new(sourceId, path, scope!.OperationId, Started: false, scope.Result, scope.ErrorCode, scope.SourceVersion));
+            }
+        }
+    }
+
+    private void MarkDiagnostic(BackupOperationResult result, string code)
+    {
+        var scope = _diagnosticScope.Value;
+        if (scope == null || scope.Result == BackupOperationResult.Failed) return;
+        if (result == BackupOperationResult.Failed || scope.Result == BackupOperationResult.Success)
+        {
+            scope.Result = result;
+            scope.ErrorCode = code;
+        }
+    }
+
+    private void PublishDiagnostic(BackupOperationDiagnostic diagnostic)
+    {
+        if (OperationDiagnostic == null) return;
+        foreach (Action<BackupOperationDiagnostic> subscriber in OperationDiagnostic.GetInvocationList())
+        {
+            try { subscriber(diagnostic); }
+            catch (Exception) { /* Diagnostics cannot change the Git operation outcome. */ }
+        }
+    }
+
+    private sealed class DiagnosticScope(string sourceId, string path, Guid operationId, object? sourceVersion)
+    {
+        public string SourceId { get; } = sourceId;
+        public string Path { get; } = path;
+        public Guid OperationId { get; } = operationId;
+        public object? SourceVersion { get; } = sourceVersion;
+        public BackupOperationResult Result { get; set; } = BackupOperationResult.Success;
+        public string? ErrorCode { get; set; }
+    }
+
     private void ShowUiError(string message, Exception? ex = null)
     {
+        MarkDiagnostic(BackupOperationResult.Failed, "GitOperationFailed");
         if (ex == null)
         {
             Debug.WriteLine($"Git error: {message} at {DateTime.Now}");

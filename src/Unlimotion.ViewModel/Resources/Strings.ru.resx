@@ -656,4 +656,25 @@ ID: {1}</value></data>
   <data name="TaskHistoryFieldWanted" xml:space="preserve"><value>Хочу</value></data>  <data name="TaskHistoryMergeFirstParent" xml:space="preserve"><value>Merge-коммит: изменения сопоставлены с первым родителем.</value></data>
   <data name="TaskDeepLinkTaskNotFound" xml:space="preserve"><value>Задача {0} не найдена в активном пространстве задач.</value></data>
   <data name="TaskDeepLinkOpenFailed" xml:space="preserve"><value>Не удалось открыть ссылку на задачу: {0}</value></data>
+  <data name="GitIndicatorNotApplicable" xml:space="preserve"><value>Git не применяется</value></data>
+  <data name="GitIndicatorAttention" xml:space="preserve"><value>Git: требуется внимание</value></data>
+  <data name="GitIndicatorSyncing" xml:space="preserve"><value>Git: синхронизация</value></data>
+  <data name="GitIndicatorUnknown" xml:space="preserve"><value>Состояние Git неизвестно</value></data>
+  <data name="GitIndicatorDirty" xml:space="preserve"><value>Git: есть незакоммиченные изменения</value></data>
+  <data name="GitIndicatorIdle" xml:space="preserve"><value>Git: нет незакоммиченных изменений</value></data>
+  <data name="GitIndicatorFiles" xml:space="preserve"><value>Файлов: {0}</value></data>
+  <data name="GitIndicatorCommits" xml:space="preserve"><value>Commits впереди: {0} / позади: {1}</value></data>
+  <data name="GitIndicatorConflicts" xml:space="preserve"><value>Конфликтов: {0}</value></data>
+  <data name="GitIndicatorObserved" xml:space="preserve"><value>Проверено: {0}</value></data>
+  <data name="GitIndicatorYes" xml:space="preserve"><value>есть</value></data>
+  <data name="GitIndicatorNo" xml:space="preserve"><value>нет</value></data>
+  <data name="GitIndicatorStale" xml:space="preserve"><value>Данные устарели / ожидается обновление</value></data>
+  <data name="GitIndicatorReadError" xml:space="preserve"><value>Обновление Git недоступно</value></data>
+  <data name="GitIndicatorOperationError" xml:space="preserve"><value>Последняя операция Git завершилась ошибкой</value></data>
+  <data name="GitIndicatorPreviousError" xml:space="preserve"><value>Предыдущая операция Git завершилась ошибкой</value></data>
+  <data name="GitIndicatorLocalRefs" xml:space="preserve"><value>Счётчики commits по локальным refs; без fetch</value></data>
+  <data name="GitIndicatorSettings" xml:space="preserve"><value>Открыть настройки Git</value></data>
+  <data name="GitIndicatorDisabled" xml:space="preserve"><value>Git-синхронизация отключена</value></data>
+  <data name="GitIndicatorServer" xml:space="preserve"><value>Git-синхронизация не применяется к серверному пространству</value></data>
+  <data name="GitIndicatorSettingsLoading" xml:space="preserve"><value>Загружаются настройки пространства</value></data>
 </root>

@@ -9,7 +9,7 @@ using Unlimotion.ViewModel;
 
 namespace Unlimotion.Services;
 
-public sealed class TaskSourceManager : ITaskSourceManager
+public sealed class TaskSourceManager : ITaskSourceManager, ITaskSourceActivationObservation
 {
     private readonly IConfiguration _configuration;
     private readonly ITaskStorageBuilder _storageBuilder;

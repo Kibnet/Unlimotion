@@ -36,6 +36,15 @@ namespace Unlimotion.ViewModel
     public class MainWindowViewModel : DisposableList
     {
         public bool IsInitialized { get; private set; }
+        public GitStatusViewModel GitStatus { get; private set; } = new();
+
+        public void ConfigureGitStatus(GitStatusViewModel status)
+        {
+            GitStatus.Dispose();
+            GitStatus = status;
+            Settings.GitStatus = status;
+            status.AddToDispose(this);
+        }
         private DisposableList connectionDisposableList = new DisposableListRealization();
         internal Func<ObservableCollectionExtended<TaskWrapperViewModel>>? RootCollectionFactory { get; set; }
         internal IScheduler? EmojiSearchRefreshScheduler { get; set; }
@@ -83,6 +92,7 @@ namespace Unlimotion.ViewModel
             GraphViewModel? graph = null,
             string? taskTreeExpansionStatePath = null)
         {
+            GitStatus.AddToDispose(this);
             Title = appNameService?.GetAppName() ?? "";
             connectionDisposableList.AddToDispose(this);
             ManagerWrapper = managerWrapper;
@@ -90,6 +100,7 @@ namespace Unlimotion.ViewModel
             _getTaskStorage = getTaskStorage;
             _taskTreeExpansionStatePath = taskTreeExpansionStatePath;
             Settings = settings ?? new SettingsViewModel(_configuration);
+            Settings.GitStatus = GitStatus;
             Graph = graph ?? new GraphViewModel();
             CurrentAllTasksItems = EmptyTaskWrappers;
             UnlockedItems = EmptyTaskWrappers;

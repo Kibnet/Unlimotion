@@ -98,7 +98,8 @@ public static class UnlimotionAppLaunchHost
         string? currentTaskId = null,
         string? theme = null,
         Action<string>? prepareConfiguration = null,
-        INotificationManagerWrapper? notificationManagerOverride = null)
+        INotificationManagerWrapper? notificationManagerOverride = null,
+        Func<IConfiguration, ITaskStorageFactory>? createStorageFactory = null)
     {
         var launchData = UnlimotionAutomationLaunchData.Create(scenario, language, currentTaskId, theme);
         var previousDefaultIsExpanded = TaskWrapperViewModel.DefaultIsExpanded;
@@ -117,7 +118,7 @@ public static class UnlimotionAppLaunchHost
                         TaskWrapperViewModel.DefaultIsExpanded = true;
                     }
 
-                    vm = CreateHeadlessViewModel(launchData, lifetime, notificationManagerOverride);
+                    vm = CreateHeadlessViewModel(launchData, lifetime, notificationManagerOverride, createStorageFactory);
                     await vm.Connect();
 
                     if (!IsTaskSpaceRecoveryScenario(scenario))
@@ -149,6 +150,7 @@ public static class UnlimotionAppLaunchHost
                     Height = 800,
                     DataContext = vm ?? throw new InvalidOperationException("Headless ViewModel was not initialized.")
                 };
+                lifetime.InitializeWindow();
                 window.Opened += (_, __) => ApplyAutomationTreeExpansion(vm, launchData);
                 return window;
             },
@@ -232,7 +234,8 @@ public static class UnlimotionAppLaunchHost
     private static MainWindowViewModel CreateHeadlessViewModel(
         UnlimotionAutomationLaunchData launchData,
         HeadlessSessionLifetime lifetime,
-        INotificationManagerWrapper? notificationManagerOverride = null)
+        INotificationManagerWrapper? notificationManagerOverride = null,
+        Func<IConfiguration, ITaskStorageFactory>? createStorageFactory = null)
     {
         EnsureReactiveUiInitialized();
 
@@ -240,10 +243,10 @@ public static class UnlimotionAppLaunchHost
             WritableJsonConfigurationFabric.Create(launchData.ConfigPath, reloadOnChange: false));
         var mapper = AppModelMapping.ConfigureMapping();
         var notificationManager = notificationManagerOverride ?? new AutomationNotificationManager();
-        TaskStorageFactory storageFactory;
+        ITaskStorageFactory storageFactory;
         try
         {
-            storageFactory = new TaskStorageFactory(
+            storageFactory = createStorageFactory?.Invoke(configuration) ?? new TaskStorageFactory(
                 configuration,
                 mapper,
                 notificationManager,
@@ -271,7 +274,8 @@ public static class UnlimotionAppLaunchHost
 
         lifetime.RegisterStorage(storageFactory.CreateConfiguredStorage());
 
-        var backupService = new BackupViaGitService(configuration, notificationManager, storageFactory);
+        var backupService = new BackupViaGitService(configuration, notificationManager, storageFactory,
+            activeSourceIdProvider: () => storageFactory.SourceManager.ActiveSource?.Descriptor.Id);
         var settingsViewModel = new SettingsViewModel(configuration, backupService);
         settingsViewModel.RefreshGitMetadataCommand = ReactiveCommand.Create(settingsViewModel.ReloadGitMetadata);
         SettingsRemoteConnectionTypeCommands.Configure(settingsViewModel, backupService, notificationManager);
@@ -284,6 +288,21 @@ public static class UnlimotionAppLaunchHost
                 settingsViewModel,
                 new GraphViewModel(),
                 TaskTreeExpansionStateStore.GetDefaultPath(launchData.ConfigPath)));
+
+        Action<Action> deliverGitStatus = action =>
+        {
+            if (Dispatcher.UIThread.CheckAccess()) action();
+            else Dispatcher.UIThread.Post(action);
+        };
+        vm.ConfigureGitStatus(new GitStatusViewModel(new GitWorktreeObserver(), deliverGitStatus, backupService));
+        var configuredStatus = vm.GitStatus;
+        // PerTest Headless resets its dispatcher after BeforeLaunch. Bind on the window worker.
+        lifetime.RegisterWindowInitialization(() =>
+        {
+            if (ReferenceEquals(vm.GitStatus, configuredStatus))
+                new GitStatusSourceBinding(storageFactory.SourceManager, configuredStatus, deliverGitStatus, settings: settingsViewModel, owner: vm)
+                    .AddToDispose(vm);
+        });
 
         var activeSource = storageFactory.SourceManager.ActiveSource;
         if (activeSource != null)
@@ -312,6 +331,7 @@ public static class UnlimotionAppLaunchHost
         IConfiguration configuration,
         HeadlessSessionLifetime lifetime)
     {
+        lifetime.RegisterActiveStorage(() => sourceManager.ActiveStorage);
         var runner = lifetime.RegisterOperationRunner(new TaskSpaceOperationRunner());
         var activeConfiguration = new ActiveTaskSpaceConfiguration(configuration, sourceManager, runner);
         var queue = new TaskSpaceSettingsPersistenceQueue(activeConfiguration, runner);
@@ -641,10 +661,16 @@ public static class UnlimotionAppLaunchHost
         private readonly bool _previousDefaultIsExpanded;
         private IConfigurationRoot? _configuration;
         private ITaskStorage? _storage;
+        private Func<ITaskStorage?>? _activeStorage;
         private MainWindowViewModel? _viewModel;
         private TaskSpaceOperationRunner? _operationRunner;
         private UnlimotionAutomationLaunchData? _launchData;
         private int _disposed;
+        private Action? _windowInitialization;
+
+        public void RegisterWindowInitialization(Action action) => _windowInitialization = action;
+
+        public void InitializeWindow() => Interlocked.Exchange(ref _windowInitialization, null)?.Invoke();
 
         public HeadlessSessionLifetime(
             UnlimotionAutomationLaunchData launchData,
@@ -665,6 +691,8 @@ public static class UnlimotionAppLaunchHost
             _storage = storage;
             return storage;
         }
+
+        public void RegisterActiveStorage(Func<ITaskStorage?> activeStorage) => _activeStorage = activeStorage;
 
         public MainWindowViewModel RegisterViewModel(MainWindowViewModel viewModel)
         {
@@ -687,10 +715,15 @@ public static class UnlimotionAppLaunchHost
 
             var failures = new List<Exception>();
 
+            // The source manager owns retired/candidate runtimes, including rollback.
+            // Capture its actual final runtime before disposing VM subscriptions.
+            var storage = _activeStorage == null ? _storage : _activeStorage();
+            _activeStorage = null;
+
             CaptureDispose(failures, _viewModel);
             _viewModel = null;
 
-            CaptureDispose(failures, _storage);
+            CaptureDispose(failures, storage);
             _storage = null;
 
             CaptureDispose(failures, _operationRunner);

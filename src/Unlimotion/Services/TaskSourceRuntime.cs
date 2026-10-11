@@ -64,6 +64,11 @@ public interface ITaskStorageBuilder
     TaskStorageBuildResult Build(TaskStorageBuildRequest request);
 }
 
+public interface ITaskSourceActivationObservation
+{
+    event EventHandler? ActiveSourceChanged;
+}
+
 public interface ITaskSourceManager
 {
     IReadOnlyList<TaskSourceRuntime> Sources { get; }

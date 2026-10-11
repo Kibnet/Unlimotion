@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
@@ -64,6 +65,10 @@ namespace Unlimotion.Views
         private const double MainTabsOverflowButtonSpacing = 6d;
         private const string NarrowFilterToolbarClass = "NarrowFilterToolbar";
         private const string CompactTaskDetailsClass = "TaskDetailsCompact";
+        private GitStatusViewModel? _boundGitStatus;
+        private MainWindowViewModel? _gitStatusOwner;
+        private bool _transferringGitStatus;
+        private readonly List<Visual> _gitStatusVisibilityAncestors = [];
         private IDisposable? _titleFocusSubscription;
         private IDisposable? _taskHistoryTaskSubscription;
         private IDisposable? _taskHistoryItemSubscription;
@@ -178,6 +183,9 @@ namespace Unlimotion.Views
         {
             base.OnPropertyChanged(change);
 
+            if (change.Property == IsVisibleProperty)
+                UpdateGitStatusVisibility(this.IsAttachedToVisualTree());
+
             if (change.Property == BoundsProperty)
             {
                 QueueMainTabsOverflowUpdate();
@@ -198,8 +206,45 @@ namespace Unlimotion.Views
             ClearActiveInlineTitleEditor();
         }
 
+        private void GitStatusIndicator_OnClick(object? sender, RoutedEventArgs e)
+        {
+            if (sender is Button button) button.Flyout?.ShowAt(button);
+        }
+
+        private void GitStatusDetails_OnClosed(object? sender, EventArgs e)
+        {
+            var indicator = this.FindControl<Button>("GitStatusIndicator");
+            if (_transferringGitStatus || _boundGitStatus?.IsIndicatorVisible != true)
+            {
+                if (indicator?.IsFocused == true) TopLevel.GetTopLevel(this)?.FocusManager?.Focus(null);
+                return;
+            }
+            if (!_transferringGitStatus && _boundGitStatus?.IsIndicatorVisible == true && indicator?.IsVisible == true &&
+                this.IsAttachedToVisualTree()) indicator.Focus();
+        }
+
+        private void GitStatusStateChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (_boundGitStatus?.IsIndicatorVisible != true)
+            {
+                this.FindControl<Button>("GitStatusIndicator")?.Flyout?.Hide();
+                if (this.FindControl<Button>("GitStatusIndicator")?.IsFocused == true)
+                    TopLevel.GetTopLevel(this)?.FocusManager?.Focus(null);
+            }
+        }
+
+        private void GitStatusSettings_OnClick(object? sender, RoutedEventArgs e)
+        {
+            this.FindControl<Button>("GitStatusIndicator")?.Flyout?.Hide();
+            var settingsTab = this.GetVisualDescendants().OfType<TabItem>()
+                .FirstOrDefault(tab => AutomationProperties.GetAutomationId(tab) == "SettingsTabItem");
+            if (settingsTab != null) settingsTab.IsSelected = true;
+        }
+
         private void MainControl_OnAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
         {
+            ObserveGitStatusVisibility();
+            UpdateGitStatusVisibility(true);
             AttachHotkeyHelpTopLevelHandler();
             Dispatcher.UIThread.Post(AttachHotkeyHelpTopLevelHandler, DispatcherPriority.Loaded);
             ObserveMainTabsLayout();
@@ -214,6 +259,8 @@ namespace Unlimotion.Views
 
         private void MainControl_OnDetachedFromVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
         {
+            StopObservingGitStatusVisibility();
+            UpdateGitStatusVisibility(false);
             DetachHotkeyHelpTopLevelHandler();
             HideHotkeyHelp();
 
@@ -1289,8 +1336,69 @@ namespace Unlimotion.Views
             return false;
         }
 
+        private void ObserveGitStatusVisibility()
+        {
+            StopObservingGitStatusVisibility();
+            foreach (var parent in this.GetVisualAncestors())
+            {
+                _gitStatusVisibilityAncestors.Add(parent);
+                parent.PropertyChanged += GitStatusAncestor_OnPropertyChanged;
+            }
+        }
+
+        private void StopObservingGitStatusVisibility()
+        {
+            foreach (var parent in _gitStatusVisibilityAncestors)
+                parent.PropertyChanged -= GitStatusAncestor_OnPropertyChanged;
+            _gitStatusVisibilityAncestors.Clear();
+        }
+
+        private void GitStatusAncestor_OnPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs change)
+        {
+            if (change.Property == IsVisibleProperty || change.Property == Window.WindowStateProperty)
+                UpdateGitStatusVisibility(this.IsAttachedToVisualTree());
+        }
+
+        private void UpdateGitStatusVisibility(bool attached)
+        {
+            var owner = attached ? DataContext as MainWindowViewModel : null;
+            if (!ReferenceEquals(owner, _gitStatusOwner))
+            {
+                if (_gitStatusOwner != null) ((INotifyPropertyChanged)_gitStatusOwner).PropertyChanged -= GitStatusOwnerChanged;
+                _gitStatusOwner = owner;
+                if (_gitStatusOwner != null) ((INotifyPropertyChanged)_gitStatusOwner).PropertyChanged += GitStatusOwnerChanged;
+            }
+            var current = owner?.GitStatus;
+            if (!ReferenceEquals(current, _boundGitStatus))
+            {
+                _transferringGitStatus = true;
+                try { this.FindControl<Button>("GitStatusIndicator")?.Flyout?.Hide(); }
+                finally
+                {
+                    if (this.FindControl<Button>("GitStatusIndicator")?.IsFocused == true)
+                        TopLevel.GetTopLevel(this)?.FocusManager?.Focus(null);
+                    _transferringGitStatus = false;
+                }
+                if (_boundGitStatus != null) _boundGitStatus.PropertyChanged -= GitStatusStateChanged;
+                _boundGitStatus?.SetVisible(false);
+                _boundGitStatus = current;
+                if (_boundGitStatus != null) _boundGitStatus.PropertyChanged += GitStatusStateChanged;
+                GitStatusStateChanged(this, new PropertyChangedEventArgs(null));
+            }
+            _boundGitStatus?.SetVisible(attached && IsVisible &&
+                _gitStatusVisibilityAncestors.All(parent => parent.IsVisible &&
+                    (parent is not Window window || window.WindowState != WindowState.Minimized)));
+        }
+
+        private void GitStatusOwnerChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName is null or nameof(MainWindowViewModel.GitStatus))
+                UpdateGitStatusVisibility(this.IsAttachedToVisualTree());
+        }
+
         private void MainWindow_DataContextChanged(object? sender, EventArgs e)
         {
+            UpdateGitStatusVisibility(this.IsAttachedToVisualTree());
             CloseTaskHistoryDetails();
             _titleFocusSubscription?.Dispose();
             _titleFocusSubscription = null;

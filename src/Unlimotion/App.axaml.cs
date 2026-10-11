@@ -87,6 +87,7 @@ public class App : Application
     private string? _configPath;
     private IScheduler? _scheduler;
     private MainWindowViewModel? _mainWindowViewModel;
+    private GitStatusSourceBinding? _gitStatusSourceBinding;
     private EventHandler? _cultureChangedHandler;
     private SettingsViewModel? _startupUpdateSettings;
     private bool _startupUpdateCheckPending;
@@ -204,6 +205,25 @@ public class App : Application
                 () => RunOnUiThreadAsync(_mainWindowViewModel.ClearTaskSpaceSurface),
                 PauseTaskSpaceSchedulerAsync,
                 ApplyActiveTaskSpaceSchedulerAsync);
+        }
+
+        if (_storageFactory != null)
+        {
+            Action<Action> deliverGitStatus = action =>
+            {
+                if (Dispatcher.UIThread.CheckAccess()) action();
+                else Dispatcher.UIThread.Post(action);
+            };
+            var gitStatus = new GitStatusViewModel(new GitWorktreeObserver(), deliverGitStatus,
+                _backupService as IBackupOperationDiagnostics);
+            _mainWindowViewModel.ConfigureGitStatus(gitStatus);
+            _gitStatusSourceBinding = new GitStatusSourceBinding(_storageFactory.SourceManager, gitStatus, deliverGitStatus,
+                () =>
+                {
+                    var git = _configuration!.Get<GitSettings>("Git");
+                    return (git.RemoteName, git.Branch);
+                }, settingsViewModel, _mainWindowViewModel);
+            _gitStatusSourceBinding.AddToDispose(_mainWindowViewModel);
         }
 
         // Set up commands on SettingsViewModel
@@ -1692,6 +1712,8 @@ public class App : Application
         {
             desktop.Exit += (_, _) =>
             {
+                _gitStatusSourceBinding?.Dispose();
+                _mainWindowViewModel?.GitStatus.Dispose();
                 _taskDeepLinkCoordinator?.Dispose();
                 _platformTaskDeepLinkActivationSource?.Dispose();
             };

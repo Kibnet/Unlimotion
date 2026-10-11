@@ -391,6 +391,13 @@
                               Content="{DynamicResource BackupAuto}"
                               AutomationProperties.AutomationId="BackupAutoCheckBox" />
 
+                    <Border Margin="0,12,0,0" Padding="12" Classes="SettingsSection"
+                            AutomationProperties.AutomationId="GitSyncInformationPanel">
+                        <TextBlock Text="{Binding GitStatus.SettingsInformation}" TextWrapping="Wrap"
+                                   AutomationProperties.Name="{Binding GitStatus.SettingsInformation}"
+                                   AutomationProperties.AutomationId="GitSyncInformationText" />
+                    </Border>
+
                     <StackPanel IsVisible="{Binding GitBackupEnabled}" Margin="0,12,0,0">
                         <TextBlock Classes="SectionHint" Text="{Binding GitBackupOnboardingHint}" />
 

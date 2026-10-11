@@ -72,6 +72,23 @@ public class SettingsViewModel
     private BackupConflictFile? _selectedBackupConflict;
     private TaskSpaceOptionViewModel? _selectedTaskSpace;
     private TaskSpaceOptionViewModel? _headerTaskSpace;
+    private Func<GitSettingsProjection?>? _gitProjectionProvider;
+
+    public GitStatusViewModel? GitStatus { get; set; }
+    public GitSettingsProjection? GitProjection { get; private set; }
+
+    public void ConfigureGitProjection(Func<GitSettingsProjection?> provider)
+    {
+        _gitProjectionProvider = provider;
+        ReloadActiveTaskSpaceSettings();
+    }
+
+    public void ClearGitProjection(Func<GitSettingsProjection?> provider)
+    {
+        if (!ReferenceEquals(_gitProjectionProvider, provider)) return;
+        _gitProjectionProvider = null;
+        GitProjection = null;
+    }
 
     public SettingsViewModel(
         IConfiguration configuration,
@@ -254,6 +271,8 @@ public class SettingsViewModel
 
     public void ReloadActiveTaskSpaceSettings()
     {
+        var projection = _gitProjectionProvider?.Invoke();
+        GitProjection = null;
         var storage = _configuration.Get<TaskStorageSettings>("TaskStorage") ?? new TaskStorageSettings();
         TaskStoragePath = storage.Path;
         TaskStorageURL = storage.URL;
@@ -281,6 +300,8 @@ public class SettingsViewModel
         ReloadGitMetadata();
         RefreshStorageSelectionState();
         RefreshStorageStatusText();
+        if (projection != null && projection == _gitProjectionProvider?.Invoke())
+            GitProjection = projection;
     }
 
     public void UseDeferredTaskSpaceSettingsPersistence() =>
