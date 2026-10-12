@@ -20,6 +20,10 @@ CI38257636361 дляfc1f5ac9: Main step success, Headless step cancelled. Check-
 
 Post-SPEC: PASS, независимый review migration_spec_review; findings отсутствуют. Root fallback: исходная ошибка именноjobbudget, Mainsuccess не приравнивается к wholePASS, условия обоих suites остаются. Reviewer проверил Main TRX: 1537/1537, failed/skipped0; stage26m12s, headShafc1f5ac9, checkout PR merge ref26b2f081. Это не wholejob PASS. Reviewer работал только чтением, но техническая read-only sandbox isolation отсутствует.
 
-Post-EXEC: не выполнен.
+Post-EXEC: PASS после независимого review migration_spec_review, новых findings нет. Implementation commit34f010738f56e832e16656f0d4fae6b4d53b2ecd, workflow scalar30→45, root parsed YAML/structural equality и exact text diff PASS; reviewer подтвердил сохранение остальных bytes/contracts. AC1/AC2 закрыты без изменения исходного cancelled outcome.
+
+AC3: GitHub Tests38262889735 job SUCCESS. Собственные root TRX (без child aggregate): Main1537/1537, Headless66/66, failed/notExecuted0, stage exitCode0 и invocation IDs совпадают. Оба clean invocations: headSha34f01073, checkout PR merge refdf576f90bc1661e5791b7777ed43382e33aebfbb, tree совпадает. Debug; Main25m39.903s, Headless3m44.846s, reporting/uploads completed. AndroidPkg38262889747/CodeQL38262889739 SUCCESS. Evidence сохранён вне Git в D:/CodexArtifacts/android-task-loading-20261012/ci-34f01073-main и ci-34f01073-headless; root summary JSON сверены reviewer. Reviewer только читал, technical read-only sandbox isolation отсутствует.
+
+Whole e74 остаётся NEEDS-FIX: физическая Android5/1/5 acceptance не выполнена; текущий телефон подключён40013, proximityfalse, но keyguardshowingtrue/оба дисплея выключены. Этот PASS закрывает только CI budget, не основной startup outcome или merge. Эта запись документирует проверенный implementation34f01073; её последующий documentation commit не выдаётся за новый exact-head CI.
 
 SPEC автоматически подтверждена после PASS по прямому поручению пользователя. Это не разрешение merge/complete основной задачи безAndroid acceptance.
