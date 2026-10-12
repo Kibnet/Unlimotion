@@ -677,4 +677,10 @@ ID: {1}</value></data>
   <data name="GitIndicatorDisabled" xml:space="preserve"><value>Git synchronization is disabled</value></data>
   <data name="GitIndicatorServer" xml:space="preserve"><value>Git synchronization does not apply to a server space</value></data>
   <data name="GitIndicatorSettingsLoading" xml:space="preserve"><value>Space settings are loading</value></data>
+  <data name="CopyEmojiFiltersFromTab" xml:space="preserve"><value>Take emoji from tab…</value></data>
+  <data name="EmojiFiltersCopied" xml:space="preserve"><value>Emoji taken from “{0}”</value></data>
+  <data name="EmojiFiltersUnrestricted" xml:space="preserve"><value>No emoji restrictions</value></data>
+  <data name="EmojiFiltersNone" xml:space="preserve"><value>none</value></data>
+  <data name="EmojiFiltersSourcePreview" xml:space="preserve"><value>Show: {0} · Exclude: {1}</value></data>
+  <data name="UndoEmojiFilterCopy" xml:space="preserve"><value>Undo</value></data>
 </root>

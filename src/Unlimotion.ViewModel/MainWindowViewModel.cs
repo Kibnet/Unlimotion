@@ -95,6 +95,24 @@ namespace Unlimotion.ViewModel
             GitStatus.AddToDispose(this);
             Title = appNameService?.GetAppName() ?? "";
             connectionDisposableList.AddToDispose(this);
+            foreach (var state in OtherTabEmojiStates()) state.AddToDispose(this);
+            var emojiStates = OtherTabEmojiStates().ToArray();
+            var titleKeys = new[] { "AllTasks", "LastCreated", "LastUpdated", "Unlocked", "InProgress", "Completed", "Archived", "LastOpened", "Roadmap" };
+            var copyPanels = new List<EmojiFilterCopyPanel>
+            {
+                new(titleKeys[0], () => EmojiFilters, () => EmojiExcludeFilters)
+            };
+            for (var index = 0; index < emojiStates.Length; index++)
+            {
+                var state = emojiStates[index];
+                copyPanels.Add(new EmojiFilterCopyPanel(titleKeys[index + 1], () => state.IncludeFilters, () => state.ExcludeFilters));
+            }
+            EmojiFilterCopyPanels = copyPanels.AsReadOnly();
+            foreach (var panel in copyPanels)
+            {
+                panel.Sources = copyPanels.Where(source => source != panel).ToArray();
+                panel.AddToDispose(this);
+            }
             ManagerWrapper = managerWrapper;
             _configuration = configuration;
             _getTaskStorage = getTaskStorage;
@@ -732,6 +750,7 @@ namespace Unlimotion.ViewModel
 
         public void ClearTaskSpaceSurface()
         {
+            foreach (var panel in EmojiFilterCopyPanels) panel.Detach();
             IsInitialized = false;
             ResetTaskSpaceSelection();
             DetailsAreOpen = false;
@@ -741,6 +760,9 @@ namespace Unlimotion.ViewModel
             connectionDisposableList.Dispose();
             connectionDisposableList.Disposables.Clear();
             taskRepository = null;
+            foreach (var state in OtherTabEmojiStates()) state.Clear();
+            AllEmojiFilter.ShowTasks = false;
+            AllEmojiExcludeFilter.ShowTasks = false;
         }
 
         private void ResetTaskSpaceSelection()
@@ -767,8 +789,12 @@ namespace Unlimotion.ViewModel
             try
             {
                 IsInitialized = false;
+                foreach (var panel in EmojiFilterCopyPanels) panel.Detach();
                 connectionDisposableList.Dispose();
                 connectionDisposableList.Disposables.Clear();
+                foreach (var state in OtherTabEmojiStates()) state.Clear();
+                AllEmojiFilter.ShowTasks = false;
+                AllEmojiExcludeFilter.ShowTasks = false;
                 _isCompletedTabInitialized = false;
                 _isArchivedTabInitialized = false;
                 _isInProgressTabInitialized = false;
@@ -862,15 +888,17 @@ namespace Unlimotion.ViewModel
                     filter.Title = first.Title;
                     filter.Emoji = first.Emoji;
                     filter.SortText = first.TitleWithoutEmoji.Trim();
+                    ObserveEmojiMetadata(m.Cache, filter);
                     return filter;
                 })
+                .AutoRefreshOnObservable(filter => filter.WhenAnyValue(item => item.SortText))
                 .SortBy(f => f.SortText)
                 .Bind(out _emojiFilters)
                 .Subscribe()
                 .AddToDispose(connectionDisposableList);
 
             EmojiFilters = _emojiFilters;
-            Graph.EmojiFilters = _emojiFilters;
+            Graph.EmojiFilters = RoadmapEmoji.IncludeFilters;
 
             taskRepository.Tasks
                 .Connect()
@@ -890,15 +918,46 @@ namespace Unlimotion.ViewModel
                     filter.Title = first.Title;
                     filter.Emoji = first.Emoji;
                     filter.SortText = first.TitleWithoutEmoji.Trim();
+                    ObserveEmojiMetadata(m.Cache, filter);
                     return filter;
                 })
+                .AutoRefreshOnObservable(filter => filter.WhenAnyValue(item => item.SortText))
                 .SortBy(f => f.SortText)
                 .Bind(out _emojiExcludeFilters)
                 .Subscribe()
                 .AddToDispose(connectionDisposableList);
 
             EmojiExcludeFilters = _emojiExcludeFilters;
-            Graph.EmojiExcludeFilters = _emojiExcludeFilters;
+            Graph.EmojiExcludeFilters = RoadmapEmoji.ExcludeFilters;
+
+            _emojiFilters.ToObservableChangeSet()
+                .AutoRefreshOnObservable(filter => filter.WhenAnyValue(item => item.Title, item => item.SortText, item => item.Source, item => item.CatalogRevision))
+                .ToCollection()
+                .Subscribe(catalog => { foreach (var state in OtherTabEmojiStates()) state.UpdateInclude(catalog); })
+                .AddToDispose(connectionDisposableList);
+            _emojiExcludeFilters.ToObservableChangeSet()
+                .AutoRefreshOnObservable(filter => filter.WhenAnyValue(item => item.Title, item => item.SortText, item => item.Source, item => item.CatalogRevision))
+                .ToCollection()
+                .Subscribe(catalog => { foreach (var state in OtherTabEmojiStates()) state.UpdateExclude(catalog); })
+                .AddToDispose(connectionDisposableList);
+
+            var unlockedEmoji = UnlockedEmoji.CreatePredicate(false);
+            foreach (var panel in EmojiFilterCopyPanels) panel.Attach();
+            var unlockedEmojiExclude = UnlockedEmoji.CreatePredicate(true);
+            var inProgressEmoji = InProgressEmoji.CreatePredicate(false);
+            var inProgressEmojiExclude = InProgressEmoji.CreatePredicate(true);
+            var completedEmoji = CompletedEmoji.CreatePredicate(false);
+            var completedEmojiExclude = CompletedEmoji.CreatePredicate(true);
+            var archivedEmoji = ArchivedEmoji.CreatePredicate(false);
+            var archivedEmojiExclude = ArchivedEmoji.CreatePredicate(true);
+            var lastCreatedEmoji = LastCreatedEmoji.CreatePredicate(false);
+            var lastCreatedEmojiExclude = LastCreatedEmoji.CreatePredicate(true);
+            var lastUpdatedEmoji = LastUpdatedEmoji.CreatePredicate(false);
+            var lastUpdatedEmojiExclude = LastUpdatedEmoji.CreatePredicate(true);
+            var lastOpenedEmoji = LastOpenedEmoji.CreatePredicate(false);
+            var lastOpenedEmojiExclude = LastOpenedEmoji.CreatePredicate(true);
+            var roadmapEmoji = RoadmapEmoji.CreatePredicate(false);
+            var roadmapEmojiExclude = RoadmapEmoji.CreatePredicate(true);
 
             var wantedFilter = this.WhenAnyValue(m => m.ShowWanted)
                 .Select(filter =>
@@ -942,32 +1001,6 @@ namespace Unlimotion.ViewModel
                         }
 
                         return true;
-                    }
-
-                    return (Func<TaskItemViewModel, bool>)Predicate;
-                });
-
-            var emojiFilter = _emojiFilters.ToObservableChangeSet()
-                .AutoRefreshOnObservable(filter => filter.WhenAnyValue(e => e.ShowTasks))
-                .ToCollection()
-                .Select(filter =>
-                {
-                    bool Predicate(TaskItemViewModel task)
-                    {
-                        if (filter.All(e => !e.ShowTasks))
-                        {
-                            return true;
-                        }
-
-                        foreach (var item in filter.Where(e => e.ShowTasks))
-                        {
-                            if (string.IsNullOrEmpty(item?.Emoji)) continue;
-
-                            if (task.GetAllEmoji.Contains(item.Emoji) || (task.Title ?? "").Contains(item.Emoji))
-                                return true;
-                        }
-
-                        return false;
                     }
 
                     return (Func<TaskItemViewModel, bool>)Predicate;
@@ -1157,8 +1190,8 @@ namespace Unlimotion.ViewModel
                     return (Func<TaskItemViewModel, bool>)Predicate;
                 });
 
-            var roadmapRootFilter = _emojiFilters.ToObservableChangeSet()
-                .AutoRefreshOnObservable(filter => filter.WhenAnyValue(e => e.ShowTasks))
+            var roadmapRootFilter = RoadmapEmoji.IncludeFilters.ToObservableChangeSet()
+                .AutoRefreshOnObservable(filter => filter.WhenAnyValue(e => e.ShowTasks, e => e.CatalogRevision))
                 .ToCollection()
                 .Select(filter =>
                 {
@@ -1267,8 +1300,8 @@ namespace Unlimotion.ViewModel
                     .Filter(unlockedStatusFilter)
                     .Filter(unlockedTimeFilter)
                     .Filter(durationFilter)
-                    .Filter(emojiFilter)
-                    .Filter(emojiExcludeFilter)
+                    .Filter(unlockedEmoji)
+                    .Filter(unlockedEmojiExclude)
                     .Filter(wantedFilter)
                     .Filter(searchTopFilter)
                     .Transform(item =>
@@ -1334,8 +1367,8 @@ namespace Unlimotion.ViewModel
                         x => x.GetAllEmoji))
                     .Filter(m => m.Status == DomainTaskStatus.InProgress)
                     .Filter(inProgressStatusFilter)
-                    .Filter(emojiFilter)
-                    .Filter(emojiExcludeFilter)
+                    .Filter(inProgressEmoji)
+                    .Filter(inProgressEmojiExclude)
                     .Filter(searchTopFilter)
                     .Transform(item =>
                     {
@@ -1426,8 +1459,8 @@ namespace Unlimotion.ViewModel
                     .Filter(m => m.Status == DomainTaskStatus.Completed)
                     .Filter(completedStatusFilter)
                     .Filter(completedDateFilter)
-                    .Filter(emojiFilter)
-                    .Filter(emojiExcludeFilter)
+                    .Filter(completedEmoji)
+                    .Filter(completedEmojiExclude)
                     .Filter(searchTopFilter)
                     .Transform(item =>
                     {
@@ -1467,8 +1500,8 @@ namespace Unlimotion.ViewModel
                     .Filter(m => m.Status == DomainTaskStatus.Archived)
                     .Filter(archivedStatusFilter)
                     .Filter(archiveDateFilter)
-                    .Filter(emojiFilter)
-                    .Filter(emojiExcludeFilter)
+                    .Filter(archivedEmoji)
+                    .Filter(archivedEmojiExclude)
                     .Filter(searchTopFilter)
                     .Transform(item =>
                     {
@@ -1507,8 +1540,8 @@ namespace Unlimotion.ViewModel
                         x => x.GetAllEmoji))
                     .Filter(lastCreatedStatusFilter)
                     .Filter(lastCreatedDateFilter)
-                    .Filter(emojiFilter)
-                    .Filter(emojiExcludeFilter)
+                    .Filter(lastCreatedEmoji)
+                    .Filter(lastCreatedEmojiExclude)
                     .Filter(searchTopFilter)
                     .Transform(item =>
                     {
@@ -1548,8 +1581,8 @@ namespace Unlimotion.ViewModel
                         x => x.GetAllEmoji))
                     .Filter(lastUpdatedStatusFilter)
                     .Filter(lastUpdatedDateFilter)
-                    .Filter(emojiFilter)
-                    .Filter(emojiExcludeFilter)
+                    .Filter(lastUpdatedEmoji)
+                    .Filter(lastUpdatedEmojiExclude)
                     .Filter(searchTopFilter)
                     .Transform(item =>
                     {
@@ -1580,10 +1613,10 @@ namespace Unlimotion.ViewModel
                 _isRoadmapTabInitialized = true;
                 taskRepository.Tasks
                     .Connect()
-                    .AutoRefreshOnObservable(m => m.WhenAnyValue(x => x.Status))
+                    .AutoRefreshOnObservable(m => m.WhenAnyValue(x => x.Status, x => x.Title, x => x.GetAllEmoji))
                     .Filter(roadmapStatusFilter)
-                    .Filter(emojiFilter)
-                    .Filter(emojiExcludeFilter)
+                    .Filter(roadmapEmoji)
+                    .Filter(roadmapEmojiExclude)
                     .Filter(wantedFilter)
                     .Transform(item =>
                     {
@@ -1592,7 +1625,7 @@ namespace Unlimotion.ViewModel
                             ChildSelector = m => m.ContainsTasks.ToObservableChangeSet(),
                             RemoveAction = RemoveTask,
                             GetBreadScrumbs = BredScrumbsAlgorithms.FirstTaskParent,
-                            Filter = new() { roadmapStatusFilter, emojiExcludeFilter },
+                            Filter = new() { roadmapStatusFilter, roadmapEmojiExclude },
                         };
                         var wrapper = new TaskWrapperViewModel(null, item, actions);
                         return wrapper;
@@ -1609,8 +1642,9 @@ namespace Unlimotion.ViewModel
                         m => m.Status,
                         m => m.UnlockedDateTime, (c, s, u) => c.Value && s.Value != DomainTaskStatus.Archived))
                     .Filter(roadmapStatusFilter)
+                    .AutoRefreshOnObservable(m => m.WhenAnyValue(x => x.Title, x => x.GetAllEmoji))
                     .Filter(roadmapRootFilter)
-                    .Filter(emojiExcludeFilter)
+                    .Filter(roadmapEmojiExclude)
                     .Transform(item =>
                     {
                         var actions = new TaskWrapperActions
@@ -1619,7 +1653,7 @@ namespace Unlimotion.ViewModel
                             RemoveAction = RemoveTask,
                             GetBreadScrumbs = BredScrumbsAlgorithms.WrapperParent,
                             SortComparer = sortObservable,
-                            Filter = new() { roadmapStatusFilter, emojiExcludeFilter },
+                            Filter = new() { roadmapStatusFilter, roadmapEmojiExclude },
                         };
                         var wrapper = new TaskWrapperViewModel(null, item, actions);
                         return wrapper;
@@ -1697,6 +1731,7 @@ namespace Unlimotion.ViewModel
                 _isLastOpenedTabInitialized = true;
                 LastOpenedSource
                     .Connect()
+                    .AutoRefreshOnObservable(w => w.TaskItem.WhenAnyValue(x => x.Title, x => x.GetAllEmoji))
                     .AutoRefreshOnObservable(w => w.TaskItem.WhenAnyValue(
                         x => x.Status,
                         x => x.CompletedDateTime,
@@ -1704,6 +1739,8 @@ namespace Unlimotion.ViewModel
                     .Filter(lastOpenedStatusFilter.Select(predicate => new Func<TaskWrapperViewModel, bool>(
                         wrapper => predicate(wrapper.TaskItem))))
                     .Filter(lastOpenedSearchFilter)
+                    .Filter(lastOpenedEmoji.Select(predicate => new Func<TaskWrapperViewModel, bool>(wrapper => predicate(wrapper.TaskItem))))
+                    .Filter(lastOpenedEmojiExclude.Select(predicate => new Func<TaskWrapperViewModel, bool>(wrapper => predicate(wrapper.TaskItem))))
                     .Reverse()
                     .Bind(out _lastOpenedItems)
                     .Subscribe()
@@ -1970,6 +2007,8 @@ namespace Unlimotion.ViewModel
 
         public void ResetCurrentTabFilters()
         {
+            EmojiFilterCopyPanels[AllTasksMode ? 0 : LastCreatedMode ? 1 : LastUpdatedMode ? 2 : UnlockedMode ? 3 :
+                InProgressMode ? 4 : CompletedMode ? 5 : ArchivedMode ? 6 : LastOpenedMode ? 7 : 8].ForgetUndo();
             if (AllTasksMode)
             {
                 ResetAllTasksTabFilters();
@@ -2018,7 +2057,7 @@ namespace Unlimotion.ViewModel
         private void ResetLastCreatedTabFilters()
         {
             ResetSearchFilter();
-            ResetEmojiFilters();
+            LastCreatedEmoji.Reset();
             ResetCompletionVisibilityFilters(LastCreatedStatusFilterSettingsSection, LastCreatedStatusFilters);
             ResetDateFilter(LastCreatedDateFilter);
         }
@@ -2026,7 +2065,7 @@ namespace Unlimotion.ViewModel
         private void ResetLastUpdatedTabFilters()
         {
             ResetSearchFilter();
-            ResetEmojiFilters();
+            LastUpdatedEmoji.Reset();
             ResetCompletionVisibilityFilters(LastUpdatedStatusFilterSettingsSection, LastUpdatedStatusFilters);
             ResetDateFilter(LastUpdatedDateFilter);
         }
@@ -2034,7 +2073,7 @@ namespace Unlimotion.ViewModel
         private void ResetUnlockedTabFilters()
         {
             ResetSearchFilter();
-            ResetEmojiFilters();
+            UnlockedEmoji.Reset();
             ResetCompletionVisibilityFilters(UnlockedStatusFilterSettingsSection, UnlockedStatusFilters);
             ShowWanted = _defaultShowWanted;
             ResetToggleFilters(UnlockedTimeFilters);
@@ -2044,7 +2083,7 @@ namespace Unlimotion.ViewModel
         private void ResetInProgressTabFilters()
         {
             ResetSearchFilter();
-            ResetEmojiFilters();
+            InProgressEmoji.Reset();
             ResetCompletionVisibilityFilters(
                 InProgressStatusFilterSettingsSection,
                 InProgressStatusFilters,
@@ -2054,7 +2093,7 @@ namespace Unlimotion.ViewModel
         private void ResetCompletedTabFilters()
         {
             ResetSearchFilter();
-            ResetEmojiFilters();
+            CompletedEmoji.Reset();
             ResetCompletionVisibilityFilters(
                 CompletedStatusFilterSettingsSection,
                 CompletedStatusFilters,
@@ -2065,7 +2104,7 @@ namespace Unlimotion.ViewModel
         private void ResetArchivedTabFilters()
         {
             ResetSearchFilter();
-            ResetEmojiFilters();
+            ArchivedEmoji.Reset();
             ResetCompletionVisibilityFilters(
                 ArchivedStatusFilterSettingsSection,
                 ArchivedStatusFilters,
@@ -2076,7 +2115,7 @@ namespace Unlimotion.ViewModel
         private void ResetLastOpenedTabFilters()
         {
             ResetSearchFilter();
-            ResetEmojiFilters();
+            LastOpenedEmoji.Reset();
             ResetCompletionVisibilityFilters(LastOpenedStatusFilterSettingsSection, LastOpenedStatusFilters);
         }
 
@@ -2085,7 +2124,7 @@ namespace Unlimotion.ViewModel
             var onlyUnlocked = Graph.OnlyUnlocked;
 
             ResetSearchFilter();
-            ResetEmojiFilters();
+            RoadmapEmoji.Reset();
 
             if (onlyUnlocked)
             {
@@ -2108,6 +2147,38 @@ namespace Unlimotion.ViewModel
         {
             ResetToggleFilters(EmojiFilters);
             ResetToggleFilters(EmojiExcludeFilters);
+        }
+
+        private IEnumerable<TaskTabEmojiFilterState> OtherTabEmojiStates()
+        {
+            yield return LastCreatedEmoji;
+            yield return LastUpdatedEmoji;
+            yield return UnlockedEmoji;
+            yield return InProgressEmoji;
+            yield return CompletedEmoji;
+            yield return ArchivedEmoji;
+            yield return LastOpenedEmoji;
+            yield return RoadmapEmoji;
+        }
+
+        private void ObserveEmojiMetadata(IObservableCache<TaskItemViewModel, string> group, EmojiFilter filter)
+        {
+            // A title/parent update or replacement of the group's first task does not
+            // necessarily change its emoji key. Keep every tab's catalog metadata live.
+            group.Connect()
+                .AutoRefreshOnObservable(task => task.Parents.ToObservableChangeSet())
+                .AutoRefreshOnObservable(task => task.WhenAnyValue(item => item.Title, item => item.GetAllEmoji))
+                .ToCollection()
+                .Subscribe(tasks =>
+                {
+                    var source = tasks.FirstOrDefault();
+                    if (source == null) return;
+                    filter.Source = source;
+                    filter.Title = source.Title;
+                    filter.SortText = source.TitleWithoutEmoji.Trim();
+                    filter.CatalogRevision++;
+                })
+                .AddToDispose(connectionDisposableList);
         }
 
         private void ResetCompletionVisibilityFilters(
@@ -3160,8 +3231,17 @@ namespace Unlimotion.ViewModel
 
         public SettingsViewModel Settings { get; set; }
         public GraphViewModel Graph { get; set; }
+        public IReadOnlyList<EmojiFilterCopyPanel> EmojiFilterCopyPanels { get; }
 
         private ReadOnlyObservableCollection<EmojiFilter> _emojiFilters = EmptyEmojiFilters;
+        public TaskTabEmojiFilterState LastCreatedEmoji { get; } = new();
+        public TaskTabEmojiFilterState LastUpdatedEmoji { get; } = new();
+        public TaskTabEmojiFilterState UnlockedEmoji { get; } = new();
+        public TaskTabEmojiFilterState InProgressEmoji { get; } = new();
+        public TaskTabEmojiFilterState CompletedEmoji { get; } = new();
+        public TaskTabEmojiFilterState ArchivedEmoji { get; } = new();
+        public TaskTabEmojiFilterState LastOpenedEmoji { get; } = new();
+        public TaskTabEmojiFilterState RoadmapEmoji { get; } = new();
         public ReadOnlyObservableCollection<EmojiFilter> EmojiFilters { get; set; } = EmptyEmojiFilters;
 
         public EmojiFilter AllEmojiFilter { get; } = new() { Emoji = "", Title = "All", ShowTasks = false, SortText = "\u0000" };
@@ -3225,6 +3305,7 @@ namespace Unlimotion.ViewModel
 
         public string SearchText => $"{Emoji} {DisplayTitle} {Title} {SortText}".Trim();
         public TaskItemViewModel Source { get; set; } = null!;
+        public int CatalogRevision { get; set; }
 
         // Runtime-only presentation state used by the emoji filter tree. Selection
         // remains keyed by Emoji; these properties never enter task JSON.

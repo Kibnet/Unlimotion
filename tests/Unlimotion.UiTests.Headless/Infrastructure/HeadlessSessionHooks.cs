@@ -19,7 +19,8 @@ public static class HeadlessSessionHooks
     public static void SetupSession()
     {
         if (Environment.GetEnvironmentVariable("UNLIMOTION_DEEP_LINK_HEADLESS_CHILD") == "1" ||
-            Environment.GetEnvironmentVariable("UNLIMOTION_GIT_INDICATOR_HEADLESS_CHILD") == "1")
+            Environment.GetEnvironmentVariable("UNLIMOTION_GIT_INDICATOR_HEADLESS_CHILD") == "1" ||
+            Environment.GetEnvironmentVariable("UNLIMOTION_EMOJI_HEADLESS_CHILD") == "1")
         {
             // One rendered scenario per fresh process. Do not switch the drawing
             // backend or session underneath the existing semantic test suite.

@@ -1009,6 +1009,7 @@
                                                                     <ComboBox ItemsSource="{Binding StatusFilters}" MinWidth="220" Margin="0,0,8,6" AutomationProperties.AutomationId="AllTasksStatusFilterComboBox"/>
                                                                 </WrapPanel>
                                                             </StackPanel>
+                                                            <views:EmojiFilterCopyControl DataContext="{Binding EmojiFilterCopyPanels[0]}"/>
                                                             <Button Classes="FilterPanelResetButton"
                                                                     ToolTip.Tip="{DynamicResource ResetFilters}"
                                                                     AutomationProperties.Name="{DynamicResource ResetFilters}"
@@ -1051,7 +1052,7 @@
                         <Grid RowDefinitions="Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="Auto,*">
                                 <WrapPanel Grid.Column="0" Classes="FilterToolbarItems">
-                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiFilters}"
+                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding LastCreatedEmoji.IncludeFilters}"
                                                                            Watermark="{DynamicResource EmojiFilterSearchWatermark}"
                                                                            NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
                                                                            SummaryWidth="{x:Static views:EmojiFilterMultiSelectSearchBox.DefaultSummaryWidth}"
@@ -1061,7 +1062,7 @@
                                                                            DropDownAutomationId="IncludeEmojiFilterDropDown"
                                                                            ListAutomationId="IncludeEmojiFilterList"
                                                                            NoMatchesAutomationId="IncludeEmojiFilterNoMatches"/>
-                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiExcludeFilters}"
+                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding LastCreatedEmoji.ExcludeFilters}"
                                                                            Watermark="{DynamicResource EmojiExcludeFilterSearchWatermark}"
                                                                            NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
                                                                            IsExclude="True"
@@ -1111,6 +1112,7 @@
                                                                 <ComboBox ItemsSource="{Binding LastCreatedStatusFilters}" MinWidth="220" Margin="0,0,8,6" AutomationProperties.AutomationId="LastCreatedStatusFilterComboBox"/>
                                                             </WrapPanel>
                                                         </StackPanel>
+                                                        <views:EmojiFilterCopyControl DataContext="{Binding EmojiFilterCopyPanels[1]}"/>
                                                         <Button Classes="FilterPanelResetButton"
                                                                 ToolTip.Tip="{DynamicResource ResetFilters}"
                                                                 AutomationProperties.Name="{DynamicResource ResetFilters}"
@@ -1175,7 +1177,7 @@
                         <Grid RowDefinitions="Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="Auto,*">
                                 <WrapPanel Grid.Column="0" Classes="FilterToolbarItems">
-                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiFilters}"
+                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding LastUpdatedEmoji.IncludeFilters}"
                                                                            Watermark="{DynamicResource EmojiFilterSearchWatermark}"
                                                                            NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
                                                                            SummaryWidth="{x:Static views:EmojiFilterMultiSelectSearchBox.DefaultSummaryWidth}"
@@ -1185,7 +1187,7 @@
                                                                            DropDownAutomationId="IncludeEmojiFilterDropDown"
                                                                            ListAutomationId="IncludeEmojiFilterList"
                                                                            NoMatchesAutomationId="IncludeEmojiFilterNoMatches"/>
-                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiExcludeFilters}"
+                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding LastUpdatedEmoji.ExcludeFilters}"
                                                                            Watermark="{DynamicResource EmojiExcludeFilterSearchWatermark}"
                                                                            NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
                                                                            IsExclude="True"
@@ -1235,6 +1237,7 @@
                                                                 <ComboBox ItemsSource="{Binding LastUpdatedStatusFilters}" MinWidth="220" Margin="0,0,8,6" AutomationProperties.AutomationId="LastUpdatedStatusFilterComboBox"/>
                                                             </WrapPanel>
                                                         </StackPanel>
+                                                        <views:EmojiFilterCopyControl DataContext="{Binding EmojiFilterCopyPanels[2]}"/>
                                                         <Button Classes="FilterPanelResetButton"
                                                                 ToolTip.Tip="{DynamicResource ResetFilters}"
                                                                 AutomationProperties.Name="{DynamicResource ResetFilters}"
@@ -1299,7 +1302,7 @@
                         <Grid RowDefinitions="Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="Auto,*">
                                 <WrapPanel Grid.Column="0" Classes="FilterToolbarItems">
-                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiFilters}"
+                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding UnlockedEmoji.IncludeFilters}"
                                                                            Watermark="{DynamicResource EmojiFilterSearchWatermark}"
                                                                            NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
                                                                            SummaryWidth="{x:Static views:EmojiFilterMultiSelectSearchBox.DefaultSummaryWidth}"
@@ -1309,7 +1312,7 @@
                                                                            DropDownAutomationId="IncludeEmojiFilterDropDown"
                                                                            ListAutomationId="IncludeEmojiFilterList"
                                                                            NoMatchesAutomationId="IncludeEmojiFilterNoMatches"/>
-                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiExcludeFilters}"
+                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding UnlockedEmoji.ExcludeFilters}"
                                                                            Watermark="{DynamicResource EmojiExcludeFilterSearchWatermark}"
                                                                            NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
                                                                            IsExclude="True"
@@ -1352,6 +1355,7 @@
                                                                 <ComboBox ItemsSource="{Binding DurationFilters}" Margin="0,0,8,6" />
                                                             </WrapPanel>
                                                         </StackPanel>
+                                                        <views:EmojiFilterCopyControl DataContext="{Binding EmojiFilterCopyPanels[3]}"/>
                                                         <Button Classes="FilterPanelResetButton"
                                                                 ToolTip.Tip="{DynamicResource ResetFilters}"
                                                                 AutomationProperties.Name="{DynamicResource ResetFilters}"
@@ -1415,7 +1419,7 @@
                         <Grid RowDefinitions="Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="Auto,*">
                                 <WrapPanel Grid.Column="0" Classes="FilterToolbarItems">
-                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiFilters}"
+                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding InProgressEmoji.IncludeFilters}"
                                                                            Watermark="{DynamicResource EmojiFilterSearchWatermark}"
                                                                            NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
                                                                            SummaryWidth="{x:Static views:EmojiFilterMultiSelectSearchBox.DefaultSummaryWidth}"
@@ -1425,7 +1429,7 @@
                                                                            DropDownAutomationId="IncludeEmojiFilterDropDown"
                                                                            ListAutomationId="IncludeEmojiFilterList"
                                                                            NoMatchesAutomationId="IncludeEmojiFilterNoMatches"/>
-                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiExcludeFilters}"
+                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding InProgressEmoji.ExcludeFilters}"
                                                                            Watermark="{DynamicResource EmojiExcludeFilterSearchWatermark}"
                                                                            NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
                                                                            IsExclude="True"
@@ -1456,6 +1460,7 @@
                                                                     <ComboBox ItemsSource="{Binding InProgressStatusFilters}" MinWidth="220" Margin="0,0,8,6" AutomationProperties.AutomationId="InProgressStatusFilterComboBox"/>
                                                                 </WrapPanel>
                                                             </StackPanel>
+                                                            <views:EmojiFilterCopyControl DataContext="{Binding EmojiFilterCopyPanels[4]}"/>
                                                             <Button Classes="FilterPanelResetButton"
                                                                     ToolTip.Tip="{DynamicResource ResetFilters}"
                                                                     AutomationProperties.Name="{DynamicResource ResetFilters}"
@@ -1527,7 +1532,7 @@
                         <Grid RowDefinitions="Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="Auto,*">
                                 <WrapPanel Grid.Column="0" Classes="FilterToolbarItems">
-                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiFilters}"
+                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding CompletedEmoji.IncludeFilters}"
                                                                            Watermark="{DynamicResource EmojiFilterSearchWatermark}"
                                                                            NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
                                                                            SummaryWidth="{x:Static views:EmojiFilterMultiSelectSearchBox.DefaultSummaryWidth}"
@@ -1537,7 +1542,7 @@
                                                                            DropDownAutomationId="IncludeEmojiFilterDropDown"
                                                                            ListAutomationId="IncludeEmojiFilterList"
                                                                            NoMatchesAutomationId="IncludeEmojiFilterNoMatches"/>
-                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiExcludeFilters}"
+                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding CompletedEmoji.ExcludeFilters}"
                                                                            Watermark="{DynamicResource EmojiExcludeFilterSearchWatermark}"
                                                                            NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
                                                                            IsExclude="True"
@@ -1587,6 +1592,7 @@
                                                                                     DisplayDate="{Binding CompletedDateFilter.To, Converter={converters:DayOrTodayValueConverter}}"/>
                                                             </WrapPanel>
                                                         </StackPanel>
+                                                        <views:EmojiFilterCopyControl DataContext="{Binding EmojiFilterCopyPanels[5]}"/>
                                                         <Button Classes="FilterPanelResetButton"
                                                                 ToolTip.Tip="{DynamicResource ResetFilters}"
                                                                 AutomationProperties.Name="{DynamicResource ResetFilters}"
@@ -1652,7 +1658,7 @@
                         <Grid RowDefinitions="Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="Auto,*">
                                 <WrapPanel Grid.Column="0" Classes="FilterToolbarItems">
-                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiFilters}"
+                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding ArchivedEmoji.IncludeFilters}"
                                                                            Watermark="{DynamicResource EmojiFilterSearchWatermark}"
                                                                            NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
                                                                            SummaryWidth="{x:Static views:EmojiFilterMultiSelectSearchBox.DefaultSummaryWidth}"
@@ -1662,7 +1668,7 @@
                                                                            DropDownAutomationId="IncludeEmojiFilterDropDown"
                                                                            ListAutomationId="IncludeEmojiFilterList"
                                                                            NoMatchesAutomationId="IncludeEmojiFilterNoMatches"/>
-                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding EmojiExcludeFilters}"
+                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding ArchivedEmoji.ExcludeFilters}"
                                                                            Watermark="{DynamicResource EmojiExcludeFilterSearchWatermark}"
                                                                            NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
                                                                            IsExclude="True"
@@ -1712,6 +1718,7 @@
                                                                                     DisplayDate="{Binding ArchivedDateFilter.To, Converter={converters:DayOrTodayValueConverter}}"/>
                                                             </WrapPanel>
                                                         </StackPanel>
+                                                        <views:EmojiFilterCopyControl DataContext="{Binding EmojiFilterCopyPanels[6]}"/>
                                                         <Button Classes="FilterPanelResetButton"
                                                                 ToolTip.Tip="{DynamicResource ResetFilters}"
                                                                 AutomationProperties.Name="{DynamicResource ResetFilters}"
@@ -1777,6 +1784,27 @@
                         <Grid RowDefinitions="Auto,*">
                             <Grid Classes="FilterToolbar" ColumnDefinitions="Auto,*">
                                 <WrapPanel Grid.Column="0" Classes="FilterToolbarItems">
+                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding LastOpenedEmoji.IncludeFilters}"
+                                                                           Watermark="{DynamicResource EmojiFilterSearchWatermark}"
+                                                                           NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
+                                                                           SummaryWidth="{x:Static views:EmojiFilterMultiSelectSearchBox.DefaultSummaryWidth}"
+                                                                           SummaryMinWidth="{x:Static views:EmojiFilterMultiSelectSearchBox.DefaultSummaryMinWidth}"
+                                                                           SummaryAutomationId="IncludeEmojiFilterSummaryBox"
+                                                                           SearchAutomationId="IncludeEmojiFilterSearchBox"
+                                                                           DropDownAutomationId="IncludeEmojiFilterDropDown"
+                                                                           ListAutomationId="IncludeEmojiFilterList"
+                                                                           NoMatchesAutomationId="IncludeEmojiFilterNoMatches"/>
+                                    <views:EmojiFilterMultiSelectSearchBox Filters="{Binding LastOpenedEmoji.ExcludeFilters}"
+                                                                           Watermark="{DynamicResource EmojiExcludeFilterSearchWatermark}"
+                                                                           NoMatchesText="{DynamicResource EmojiFilterNoMatches}"
+                                                                           IsExclude="True"
+                                                                           SummaryWidth="{x:Static views:EmojiFilterMultiSelectSearchBox.DefaultSummaryWidth}"
+                                                                           SummaryMinWidth="{x:Static views:EmojiFilterMultiSelectSearchBox.DefaultSummaryMinWidth}"
+                                                                           SummaryAutomationId="ExcludeEmojiFilterSummaryBox"
+                                                                           SearchAutomationId="ExcludeEmojiFilterSearchBox"
+                                                                           DropDownAutomationId="ExcludeEmojiFilterDropDown"
+                                                                           ListAutomationId="ExcludeEmojiFilterList"
+                                                                           NoMatchesAutomationId="ExcludeEmojiFilterNoMatches"/>
                                     <DropDownButton Classes="FilterToolbarFiltersButton"
                                                     ToolTip.Tip="{DynamicResource Filters}"
                                                     AutomationProperties.Name="{DynamicResource Filters}"
@@ -1797,6 +1825,7 @@
                                                                 <ComboBox ItemsSource="{Binding LastOpenedStatusFilters}" MinWidth="220" Margin="0,0,8,6" AutomationProperties.AutomationId="LastOpenedStatusFilterComboBox"/>
                                                             </WrapPanel>
                                                         </StackPanel>
+                                                        <views:EmojiFilterCopyControl DataContext="{Binding EmojiFilterCopyPanels[7]}"/>
                                                         <Button Classes="FilterPanelResetButton"
                                                                 ToolTip.Tip="{DynamicResource ResetFilters}"
                                                                 AutomationProperties.Name="{DynamicResource ResetFilters}"

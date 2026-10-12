@@ -26,6 +26,37 @@ public sealed class CliLiveRefreshHeadlessTests
     private static readonly TimeSpan RefreshTimeout = TimeSpan.FromSeconds(15);
 
     [Test]
+    public async Task AvaloniaSynchronizationContext_PostFromUiThread_IsDeferredAndReturns()
+    {
+        using var session = DesktopAppSession.Launch(UnlimotionAppLaunchHost.CreateHeadlessLaunchOptions());
+        var invoked = false;
+        var invokedOnUiThread = false;
+        var returnedBeforeCallback = false;
+        var context = HeadlessRuntime.Dispatch(() => new AvaloniaSynchronizationContext(Dispatcher.UIThread, DispatcherPriority.Normal));
+        HeadlessRuntime.Dispatch(() =>
+        {
+            context.Post(_ =>
+            {
+                invokedOnUiThread = Dispatcher.UIThread.CheckAccess();
+                invoked = true;
+            }, null);
+            returnedBeforeCallback = !invoked;
+        });
+        await Assert.That(returnedBeforeCallback).IsTrue();
+        await WaitForUiAsync(() => invoked);
+        await Assert.That(invokedOnUiThread).IsTrue();
+        invoked = false;
+        invokedOnUiThread = false;
+        await Task.Run(() => context.Post(_ =>
+        {
+            invokedOnUiThread = Dispatcher.UIThread.CheckAccess();
+            invoked = true;
+        }, null));
+        await WaitForUiAsync(() => invoked);
+        await Assert.That(invokedOnUiThread).IsTrue();
+    }
+
+    [Test]
     public async Task CliChanges_RefreshOpenDesktopProjection()
     {
         MainWindowViewModel? capturedViewModel = null;

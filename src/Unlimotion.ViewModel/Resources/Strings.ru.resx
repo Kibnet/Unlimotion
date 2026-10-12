@@ -677,4 +677,10 @@ ID: {1}</value></data>
   <data name="GitIndicatorDisabled" xml:space="preserve"><value>Git-синхронизация отключена</value></data>
   <data name="GitIndicatorServer" xml:space="preserve"><value>Git-синхронизация не применяется к серверному пространству</value></data>
   <data name="GitIndicatorSettingsLoading" xml:space="preserve"><value>Загружаются настройки пространства</value></data>
+  <data name="CopyEmojiFiltersFromTab" xml:space="preserve"><value>Взять эмодзи из вкладки…</value></data>
+  <data name="EmojiFiltersCopied" xml:space="preserve"><value>Эмодзи взяты из «{0}»</value></data>
+  <data name="EmojiFiltersUnrestricted" xml:space="preserve"><value>Без ограничений по эмодзи</value></data>
+  <data name="EmojiFiltersNone" xml:space="preserve"><value>нет</value></data>
+  <data name="EmojiFiltersSourcePreview" xml:space="preserve"><value>Показывать: {0} · Исключать: {1}</value></data>
+  <data name="UndoEmojiFilterCopy" xml:space="preserve"><value>Отменить</value></data>
 </root>
