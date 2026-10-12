@@ -521,7 +521,7 @@ public class MainControlFilterToolbarResponsiveUiTests
         (4, "InProgressResetFiltersButton", "InProgressFiltersButton", "InProgressFilterPanel", false, true),
         (5, "CompletedResetFiltersButton", "CompletedFiltersButton", "CompletedFilterPanel", false, true),
         (6, "ArchivedResetFiltersButton", "ArchivedFiltersButton", "ArchivedFilterPanel", false, true),
-        (7, "LastOpenedResetFiltersButton", "LastOpenedFiltersButton", "LastOpenedFilterPanel", false, false)
+        (7, "LastOpenedResetFiltersButton", "LastOpenedFiltersButton", "LastOpenedFilterPanel", false, true)
     ];
 
     [Test]

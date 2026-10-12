@@ -272,6 +272,7 @@
                                                 <CheckBox Content="{DynamicResource GraphOnlyUnlocked}" IsChecked="{Binding OnlyUnlocked}" Margin="0,0,12,6" />
                                             </WrapPanel>
                                         </StackPanel>
+                                        <views:EmojiFilterCopyControl DataContext="{Binding MainWindowViewModel.EmojiFilterCopyPanels[8]}"/>
                                         <Button Classes="FilterPanelResetButton"
                                                 ToolTip.Tip="{DynamicResource ResetFilters}"
                                                 AutomationProperties.Name="{DynamicResource ResetFilters}"
