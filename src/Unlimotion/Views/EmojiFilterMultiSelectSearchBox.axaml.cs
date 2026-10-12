@@ -525,6 +525,13 @@ public partial class EmojiFilterMultiSelectSearchBox : UserControl
 
     private void Filter_OnPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(EmojiFilter.CatalogRevision) ||
+            e.PropertyName == nameof(EmojiFilter.Source))
+        {
+            RefreshFilterItems();
+            return;
+        }
+
         if (string.IsNullOrEmpty(e.PropertyName) ||
             e.PropertyName == nameof(EmojiFilter.Title) ||
             e.PropertyName == nameof(EmojiFilter.Emoji) ||

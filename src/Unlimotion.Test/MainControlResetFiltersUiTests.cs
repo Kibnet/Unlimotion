@@ -486,8 +486,10 @@ public class MainControlResetFiltersUiTests
                     forcedVisibleStatus: null);
                 await Assert.That(vm.ShowWanted).IsTrue();
                 await Assert.That(vm.Graph.OnlyUnlocked).IsTrue();
-                await AssertToggleFiltersReset(vm.EmojiFilters);
-                await AssertToggleFiltersReset(vm.EmojiExcludeFilters);
+                await AssertToggleFiltersReset(vm.LastCreatedEmoji.IncludeFilters);
+                await AssertToggleFiltersReset(vm.LastCreatedEmoji.ExcludeFilters);
+                await AssertFirstFilterActive(vm.EmojiFilters);
+                await AssertFirstFilterActive(vm.EmojiExcludeFilters);
                 await AssertDateFilterDefault(vm.LastCreatedDateFilter);
                 await AssertCustomDateFilter(vm.CompletedDateFilter);
                 await AssertCustomDateFilter(vm.ArchivedDateFilter);
@@ -551,8 +553,10 @@ public class MainControlResetFiltersUiTests
                     forcedVisibleStatus: null);
                 await Assert.That(vm.ShowWanted).IsTrue();
                 await Assert.That(vm.Graph.OnlyUnlocked).IsFalse();
-                await AssertToggleFiltersReset(vm.EmojiFilters);
-                await AssertToggleFiltersReset(vm.EmojiExcludeFilters);
+                await AssertToggleFiltersReset(vm.RoadmapEmoji.IncludeFilters);
+                await AssertToggleFiltersReset(vm.RoadmapEmoji.ExcludeFilters);
+                await AssertFirstFilterActive(vm.EmojiFilters);
+                await AssertFirstFilterActive(vm.EmojiExcludeFilters);
                 await AssertFirstFilterActive(vm.UnlockedTimeFilters);
                 await AssertFirstFilterActive(vm.DurationFilters);
                 await AssertCustomDateFilter(vm.CompletedDateFilter);
@@ -607,8 +611,10 @@ public class MainControlResetFiltersUiTests
                 await Assert.That(vm.ShowArchived).IsTrue();
                 await Assert.That(vm.ShowWanted).IsNull();
                 await Assert.That(vm.Graph.OnlyUnlocked).IsFalse();
-                await AssertToggleFiltersReset(vm.EmojiFilters);
-                await AssertToggleFiltersReset(vm.EmojiExcludeFilters);
+                await AssertToggleFiltersReset(vm.RoadmapEmoji.IncludeFilters);
+                await AssertToggleFiltersReset(vm.RoadmapEmoji.ExcludeFilters);
+                await AssertFirstFilterActive(vm.EmojiFilters);
+                await AssertFirstFilterActive(vm.EmojiExcludeFilters);
                 await AssertFirstFilterActive(vm.UnlockedTimeFilters);
                 await AssertFirstFilterActive(vm.DurationFilters);
                 await AssertCustomDateFilter(vm.CompletedDateFilter);
@@ -635,6 +641,10 @@ public class MainControlResetFiltersUiTests
 
         SetFirstFilter(vm.EmojiFilters);
         SetFirstFilter(vm.EmojiExcludeFilters);
+        SetFirstFilter(vm.LastCreatedEmoji.IncludeFilters);
+        SetFirstFilter(vm.LastCreatedEmoji.ExcludeFilters);
+        SetFirstFilter(vm.RoadmapEmoji.IncludeFilters);
+        SetFirstFilter(vm.RoadmapEmoji.ExcludeFilters);
         SetFirstFilter(vm.UnlockedTimeFilters);
         SetFirstFilter(vm.DurationFilters);
 

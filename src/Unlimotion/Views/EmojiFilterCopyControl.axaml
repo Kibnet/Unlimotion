@@ -1,0 +1,55 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Unlimotion.Views.EmojiFilterCopyControl"
+             x:CompileBindings="False">
+    <UserControl.Styles>
+        <Style Selector="Button.EmojiFilterCopySource">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+        <Style Selector="Button.EmojiFilterCopySource:pointerover">
+            <Setter Property="Background" Value="#20808080"/>
+        </Style>
+    </UserControl.Styles>
+    <StackPanel Spacing="6" MinWidth="0">
+        <DropDownButton x:Name="CopySourceButton" HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left" Padding="8,6"
+                        Content="{DynamicResource CopyEmojiFiltersFromTab}"
+                        IsEnabled="{Binding CanCopy}"
+                        AutomationProperties.Name="{DynamicResource CopyEmojiFiltersFromTab}"
+                        AutomationProperties.AutomationId="EmojiFilterCopyButton">
+            <DropDownButton.Flyout>
+                <Flyout Placement="BottomEdgeAlignedLeft">
+                    <ScrollViewer MaxHeight="300" HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl ItemsSource="{Binding Sources}" Width="280">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Button Classes="EmojiFilterCopySource" Click="Source_OnClick" HorizontalAlignment="Stretch"
+                                            HorizontalContentAlignment="Stretch" Padding="8,7"
+                                            AutomationProperties.AutomationId="{Binding TitleKey, StringFormat=EmojiFilterCopySource{0}}"
+                                            AutomationProperties.Name="{Binding Title}"
+                                            IsEnabled="{Binding CanCopy}"
+                                            AutomationProperties.HelpText="{Binding FullPreview}"
+                                            ToolTip.Tip="{Binding FullPreview}">
+                                        <StackPanel Spacing="3">
+                                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold"/>
+                                            <TextBlock Text="{Binding Preview}" FontSize="12" Opacity="0.7"
+                                                       TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Flyout>
+            </DropDownButton.Flyout>
+        </DropDownButton>
+        <StackPanel Spacing="4" IsVisible="{Binding CanUndo}" AutomationProperties.AutomationId="EmojiFilterCopyFeedback">
+            <TextBlock Text="{Binding Feedback}" TextWrapping="Wrap" FontSize="12"/>
+            <Button Click="Undo_OnClick" HorizontalAlignment="Left" Padding="8,4"
+                    Content="{DynamicResource UndoEmojiFilterCopy}"
+                    AutomationProperties.Name="{DynamicResource UndoEmojiFilterCopy}"
+                    AutomationProperties.AutomationId="EmojiFilterCopyUndoButton"/>
+        </StackPanel>
+    </StackPanel>
+</UserControl>
