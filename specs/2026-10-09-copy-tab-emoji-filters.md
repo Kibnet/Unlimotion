@@ -3,7 +3,7 @@
 ## Контекст
 
 - Владелец: основной агент, работа без делегирования.
-- Фаза: EXEC; отдельное расширение к утверждённой [изоляции фильтров](2026-10-07-task-tab-emoji-filter-isolation.md). Её реализация находится в незакоммиченном состоянии; завершение её обязательных проверок остаётся необходимым.
+- Фаза: EXEC; отдельное расширение к утверждённой [изоляции фильтров](2026-10-07-task-tab-emoji-filter-isolation.md). На момент подготовки этой SPEC её реализация находилась в незакоммиченном состоянии; прежние gates сохранены. Реализация проверена 2026-10-09, отдельная поставка ветки описана в журнале 2026-10-12.
 - Рабочий репозиторий: `C:\Users\Kibnet\.codex\worktrees\emoji-tab-filters\Unlimotion`, ветка `feat/task-tab-emoji-filters`, inspected HEAD `e987023dc93daba6753440eec813edcbaa468da9`. Исходный большой ворктри не изменяется.
 - Поручение: «придумаем как нам заполнять значения фильтров из других вкладок, чтобы это было очевидно и удобно без громоздких конструкций»; после предложения пользователь ответил «Да сделай».
 - Профиль: delivery-task / .NET desktop-client / UI-automation-testing, context testing-dotnet. Central stack: routing-matrix, creator-vibe-lens, model-behavior-baseline, tool-execution-baseline, collaboration-baseline, quest-governance/mode, testing-baseline, spec-linter/rubric, review-loops; локальный UI testing override.
@@ -126,13 +126,23 @@ Targeted Copy 16/16 и Isolation 12/12 на окончательном rendered 
 
 ## Approval
 
-Получено **«Спеку подтверждаю»**, 2026-10-09. Фаза EXEC: разрешены реализация и проверки этой SPEC. Commit/push/PR/merge не поручены.
+Получено **«Спеку подтверждаю»**, 2026-10-09: разрешены реализация и проверки этой SPEC, без Git delivery. Отдельным поручением 2026-10-12 разрешены commit/rebase/push/PR; merge и release не поручены.
 
 ## Журнал действий агента
 
 ### Поставка ветки, 2026-10-12
 
 Поручено «Отребейзь на мейн и оформи ветку», отдельно подтверждено «Также push и PR». Разрешены локальные коммиты, rebase на fetched `origin/main`, публикация этой feature-ветки и PR в `Kibnet/Unlimotion`; merge/release не поручены. До переноса HEAD `e987023d`, fetched main `fa1bfc03` (11 новых коммитов). Старые 1427/1427 core и 58/58 Headless — evidence до rebase, не текущая проверка нового base. План: сохранить исходный diff коммитами, сверить пересечения с новыми main Headless fixes, сохранить новые Git/settings flows, повторить ordinary Desktop build и полные core/Headless suites. Артефакты остаются ignored; screenshots/video fallback в описании PR помечаются local-only. Main в основном checkout и другие worktrees не изменять.
+
+Rebase завершён на `fa1bfc03043f58fc9d6d626c1dedb27767bd0103`, повторный fetch перед сдачей подтвердил тот же main. Range-diff: функциональный patch сохранён, изменился только контекст GitStatus и объединение новых RU/EN ресурсов. При конфликтах Headless сохранены main async binding/worker fault propagation, Git child flag и persistent settings dispatcher; старый custom SynchronizationContext не возвращён. Новый Post regression проверяет используемый AvaloniaSynchronizationContext. Сгенерированные artifacts не входят в diff.
+
+На code-bearing HEAD `d4298e31cd86010bd5390dd8cc1a9f5d77dc0acd` ordinary Desktop build: **0 errors / 4 warnings**, 23.08s; полный Headless **65/65**, 0 failed/skipped, 4m41.0s; полный core **1501/1501**, 0 failed/skipped/aborted, 42m39.1s. TRX counters и per-class results проверены: Copy 16/16, Isolation 12/12, responsive 22/22, reset 10/10, affinity 14/14. Свежие AppAutomation wide sources и narrow feedback PNG просмотрены: `chat-artifacts/task-tab-emoji-filters/delivery-2026-10-12/screenshots/78163e7e72cf4014a3b96f156be6b915/` (local-only). Reports: `core/Kibnet_DESKTOP-AUDO1TJ_2026-10-12_08_06_31.2527816.trx`, `headless/Kibnet_DESKTOP-AUDO1TJ_2026-10-12_07_23_37.3364518.trx` в том же delivery каталоге.
+
+Создан и прикреплён [PR #323](https://github.com/Kibnet/Unlimotion/pull/323), source `feat/task-tab-emoji-filters`, target `main`. Публикация отдельно разрешена; merge не выполняется. Self-review/AC после переноса PASS по локальным full suites и inspected PNG; это не независимое ревью и не native/full-platform acceptance. Статус CI фиксируется в PR, pending не объявляется green.
+
+CI на d4298e31: core step green, Headless 64/65, failed existing `GitIndicator_SaveSyncFailureSwitchKeyboardAndRenderedMatrix`; новый emoji flow green. Run `38219319481`, LibGit2Sharp NotFound при Stage test-fixture repository: `.unlimotion.lock` исчезает между enumeration и добавлением в index, stack `GitStatusIndicatorHeadlessTests.Commit` → line 373. PR остаётся draft. Validation-scope correction: исключить transient storage lock из тестового Git commit, добавить deterministic regression и повторить affected Git/full Headless checks; production Git/storage не менять. Это не новый пользовательский behavior или storage contract, а исправление существующего fixture adapter, необходимого для честной проверки ветки.
+
+Correction завершена: fixture helper добавляет только `/.unlimotion.lock` в собственный `.git/info/exclude`; тест проверяет, что обычный task JSON коммитится, lock не входит в index и его удаление не делает repository dirty. Первый regression run был замаскирован Windows read-only Git-object cleanup error (не ожидаемый RED); cleanup собственных temp files исправлен, второй run воспроизвёл `IndexEntry` вместо null (RED 1/1). После fix Git cases **5/5**, full Headless **66/66**, 0 failed/skipped, 4m27.1s; TRX `headless-fixed/Kibnet_DESKTOP-AUDO1TJ_2026-10-12_08_25_48.9044004.trx`. Product files `src/` после зелёного core 1501/1501 не менялись; повторяется именно затронутый Headless suite, не уменьшается mandatory набор. Fix вынесен в отдельный `test(git)` commit, delivery evidence — в `docs(filters)` commit. Финальный CI rerun/ready status публикуется в PR, а не подменяется локальным PASS; до green PR сохраняет draft. Generated artifacts остаются ignored, main/другие worktrees не изменены.
 
 | Фаза / событие | Решение | Evidence / остаток | Следующий шаг | Фактическое решение человека, если требовалось |
 | --- | --- | --- | --- | --- |
