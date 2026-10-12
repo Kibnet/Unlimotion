@@ -32,6 +32,33 @@ public sealed class GitStatusIndicatorHeadlessTests
     private const string ChildFlag = "UNLIMOTION_GIT_INDICATOR_HEADLESS_CHILD";
 
     [Test]
+    public async Task GitFixtureCommit_DoesNotTrackTransientStorageLock()
+    {
+        var directory = Directory.CreateTempSubdirectory("Unlimotion.GitFixtureCommit-");
+        try
+        {
+            Repository.Init(directory.FullName);
+            File.WriteAllText(Path.Combine(directory.FullName, "task.json"), "{}");
+            var lockPath = Path.Combine(directory.FullName, ".unlimotion.lock");
+            File.WriteAllText(lockPath, "temporary");
+            Commit(directory.FullName);
+            using var repo = new Repository(directory.FullName);
+            await Assert.That(repo.Index[".unlimotion.lock"]).IsNull();
+            await Assert.That(repo.Head.Tip.Tree["task.json"]).IsNotNull();
+            File.Delete(lockPath);
+            await Assert.That(repo.RetrieveStatus().IsDirty).IsFalse();
+        }
+        finally
+        {
+            // LibGit2 writes read-only objects on Windows; cleanup must not mask
+            // the assertion about the index. This is only this test's new temp repo.
+            foreach (var file in directory.EnumerateFiles("*", SearchOption.AllDirectories))
+                file.Attributes &= ~FileAttributes.ReadOnly;
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Test]
     [NotInParallel("DesktopUi")]
     public async Task GitIndicator_SettingsShareInformationAndCheckboxControlsVisibility()
     {
@@ -544,6 +571,15 @@ public sealed class GitStatusIndicatorHeadlessTests
     private static void Commit(string path)
     {
         using var repo = new Repository(path);
+        // Storage deletes this transient file on close, possibly while Stage
+        // enumerates changes. Fixture commits must never include it.
+        const string lockRule = "/.unlimotion.lock";
+        var excludePath = Path.Combine(repo.Info.Path, "info", "exclude");
+        if (!File.Exists(excludePath) || !File.ReadAllLines(excludePath).Contains(lockRule))
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(excludePath)!);
+            File.AppendAllText(excludePath, Environment.NewLine + lockRule + Environment.NewLine);
+        }
         Commands.Stage(repo, "*");
         if (repo.RetrieveStatus().IsDirty)
         {
