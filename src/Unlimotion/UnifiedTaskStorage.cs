@@ -785,7 +785,21 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
             JObject taskJson;
             try
             {
-                rawJson = await File.ReadAllTextAsync(filePath);
+                // The only caller runs the entire migration on Task.Run. Keep modern-file
+                // reads on that worker instead of scheduling one asynchronous read per file.
+                var content = File.ReadAllBytes(filePath);
+                if (HasModernTaskStatusJson(content))
+                {
+                    processed++;
+                    continue;
+                }
+
+                // Decode the same snapshot using the historical BOM/encoding behavior.
+                // Newtonsoft remains authoritative for legacy and non-standard JSON.
+                using var stream = new MemoryStream(content, writable: false);
+                using var reader = new StreamReader(stream, System.Text.Encoding.UTF8,
+                    detectEncodingFromByteOrderMarks: true);
+                rawJson = reader.ReadToEnd();
                 taskJson = JObject.Parse(rawJson);
             }
             catch
@@ -838,6 +852,128 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
             JsonConvert.SerializeObject(report, Formatting.Indented));
 
         return true;
+    }
+
+    private static bool HasModernTaskStatusJson(byte[] content)
+    {
+        var bytes = content.AsSpan();
+        if (bytes.Length >= 3 && bytes[0] == 0xef && bytes[1] == 0xbb && bytes[2] == 0xbf)
+        {
+            bytes = bytes[3..];
+        }
+
+        try
+        {
+            var reader = new System.Text.Json.Utf8JsonReader(bytes, new System.Text.Json.JsonReaderOptions
+            {
+                CommentHandling = System.Text.Json.JsonCommentHandling.Skip,
+                AllowTrailingCommas = true
+            });
+            if (!reader.Read() || reader.TokenType != System.Text.Json.JsonTokenType.StartObject)
+            {
+                return false;
+            }
+
+            var hasStatus = false;
+            var hasHistory = false;
+            string? selectedHistoryName = null;
+            while (reader.Read())
+            {
+                if (reader.TokenType == System.Text.Json.JsonTokenType.EndObject && reader.CurrentDepth == 0)
+                {
+                    // Validate the entire document, including unknown values and its tail.
+                    return !reader.Read() && hasStatus && hasHistory;
+                }
+
+                if (reader.TokenType != System.Text.Json.JsonTokenType.PropertyName || reader.CurrentDepth != 1)
+                {
+                    return false;
+                }
+
+                string propertyName;
+                try
+                {
+                    propertyName = reader.GetString()!;
+                }
+                catch (InvalidOperationException)
+                {
+                    // Newtonsoft accepts some invalid UTF8/surrogate property names.
+                    // A decoding failure cannot justify skipping their legacy migration.
+                    return false;
+                }
+
+                if (string.Equals(propertyName, nameof(TaskItem.IsCompleted), StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(propertyName, nameof(TaskItem.CompletedDateTime), StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(propertyName, nameof(TaskItem.ArchiveDateTime), StringComparison.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
+
+                hasStatus |= string.Equals(propertyName, nameof(TaskItem.Status), StringComparison.OrdinalIgnoreCase);
+                if (!reader.Read())
+                {
+                    return false;
+                }
+
+                if (string.Equals(propertyName, nameof(TaskItem.StatusHistory), StringComparison.OrdinalIgnoreCase) &&
+                    (selectedHistoryName == null || string.Equals(propertyName, selectedHistoryName, StringComparison.Ordinal)))
+                {
+                    // JObject replaces exact duplicate keys, but keeps differently cased
+                    // names; the migration predicate selects the first matching name.
+                    selectedHistoryName = propertyName;
+                    hasHistory = false;
+                    if (reader.TokenType == System.Text.Json.JsonTokenType.StartArray)
+                    {
+                        var peek = reader;
+                        hasHistory = peek.Read() && peek.TokenType != System.Text.Json.JsonTokenType.EndArray;
+                    }
+                }
+
+                if (!ConsumeStatusJsonValue(ref reader))
+                {
+                    return false;
+                }
+            }
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            // Unsupported syntax/encoding or damaged JSON needs the historical parser.
+        }
+
+        return false;
+    }
+
+    private static bool ConsumeStatusJsonValue(ref System.Text.Json.Utf8JsonReader reader)
+    {
+        // Newtonsoft rejects integers longer than 380 characters during materialization.
+        // Syntax-only Skip would accept them, including in unknown nested properties.
+        // Conservatively fall back for any long numeric token, even an allowed float.
+        if (reader.TokenType == System.Text.Json.JsonTokenType.Number && reader.ValueSpan.Length > 380)
+        {
+            return false;
+        }
+
+        if (reader.TokenType is not (System.Text.Json.JsonTokenType.StartObject or System.Text.Json.JsonTokenType.StartArray))
+        {
+            return true;
+        }
+
+        var depth = reader.CurrentDepth;
+        while (reader.Read())
+        {
+            if (reader.TokenType == System.Text.Json.JsonTokenType.Number && reader.ValueSpan.Length > 380)
+            {
+                return false;
+            }
+
+            if (reader.CurrentDepth == depth &&
+                reader.TokenType is System.Text.Json.JsonTokenType.EndObject or System.Text.Json.JsonTokenType.EndArray)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static string? FindGitWorkTreePath(string path)
