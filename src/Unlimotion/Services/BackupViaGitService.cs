@@ -24,7 +24,7 @@ using L10n = Unlimotion.ViewModel.Localization.Localization;
 
 namespace Unlimotion.Services;
 
-public class BackupViaGitService : IRemoteBackupService, ITaskSpaceBackupOperationScope, IBackupOperationDiagnostics
+public class BackupViaGitService : IRemoteBackupService, ISshPublicKeyDirectoryReader, ITaskSpaceBackupOperationScope, IBackupOperationDiagnostics
 {
     private const string DefaultSshKeyFileName = "id_ed25519_unlimotion";
     private const string KnownHostsFileName = "known_hosts_unlimotion";
@@ -255,9 +255,13 @@ public class BackupViaGitService : IRemoteBackupService, ITaskSpaceBackupOperati
         }
     }
 
-    public List<string> GetSshPublicKeys()
+    public List<string> GetSshPublicKeys() => ReadSshPublicKeys(GetSshDirectory(GetSettings().git));
+
+    public List<string> GetSshPublicKeysForDirectory(string? storagePath) =>
+        ReadSshPublicKeys(SshKeyStoragePathResolver.ResolveSshDirectory(storagePath));
+
+    private static List<string> ReadSshPublicKeys(string sshDirectory)
     {
-        var sshDirectory = GetSshDirectory(GetSettings().git);
         if (!Directory.Exists(sshDirectory))
         {
             return new List<string>();

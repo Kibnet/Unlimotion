@@ -10,7 +10,7 @@ internal static class ImportanceRenderedProcess
 {
     private const string ChildFlag = "UNLIMOTION_IMPORTANCE_RENDERED_CHILD";
 
-    public static async Task<bool> RunIfNeededAsync(string testName)
+    public static async Task<bool> RunIfNeededAsync(string testName, string testClass = nameof(TaskImportanceVisualUiTests))
     {
         if (Environment.GetEnvironmentVariable(ChildFlag) == "1") return false;
 
@@ -27,7 +27,7 @@ internal static class ImportanceRenderedProcess
         foreach (var argument in new[]
                  {
                      typeof(TaskImportanceVisualUiTests).Assembly.Location,
-                     "--treenode-filter", $"/*/*/TaskImportanceVisualUiTests/{testName}",
+                     "--treenode-filter", $"/*/*/{testClass}/{testName}",
                      "--maximum-parallel-tests", "1", "--minimum-expected-tests", "1",
                      "--output", "Detailed", "--report-trx", "--results-directory", Path.Combine(directory, "results")
                  }) start.ArgumentList.Add(argument);

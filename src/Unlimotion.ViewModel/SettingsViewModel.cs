@@ -63,6 +63,8 @@ public class SettingsViewModel
     private string? _gitSshPrivateKeyPath;
     private string? _gitSshPublicKeyPath;
     private string? _sshKeyStoragePath;
+    private bool _isTaskSpaceSwitching;
+    private readonly SshDirectoryResetCommand _resetSshKeyStoragePathCommand;
     private bool _copyTaskOutlineAsMarkdown;
     private bool _copyTaskOutlineDescription;
     private bool _persistTaskTreeExpansionState;
@@ -98,6 +100,7 @@ public class SettingsViewModel
         ILocalizationService? localizationService = null)
     {
         _configuration = configuration;
+        _resetSshKeyStoragePathCommand = new SshDirectoryResetCommand(this);
         _taskStorageSettings = configuration.GetSection("TaskStorage");
         _gitSettings = configuration.GetSection("Git");
         _appearanceSettings = configuration.GetSection(AppearanceSettings.SectionName);
@@ -184,6 +187,7 @@ public class SettingsViewModel
     public ICommand? GenerateSshKeyCommand { get; set; }
     public ICommand? RefreshSshKeysCommand { get; set; }
     public ICommand? BrowseSshKeyStoragePathCommand { get; set; }
+    public ICommand ResetSshKeyStoragePathCommand => _resetSshKeyStoragePathCommand;
     public ICommand? RefreshGitMetadataCommand { get; set; }
     public ICommand? SwitchRemoteConnectionTypeCommand { get; set; }
     public ICommand? SwitchRemoteToHttpCommand { get; set; }
@@ -235,7 +239,16 @@ public class SettingsViewModel
 
     public string NewTaskSpaceName { get; set; } = "New space";
 
-    public bool IsTaskSpaceSwitching { get; set; }
+    public bool IsTaskSpaceSwitching
+    {
+        get => _isTaskSpaceSwitching;
+        set
+        {
+            if (_isTaskSpaceSwitching == value) return;
+            _isTaskSpaceSwitching = value;
+            _resetSshKeyStoragePathCommand.NotifyAvailabilityChanged();
+        }
+    }
     public bool IsTaskSpaceRecoveryRequired { get; set; }
     public string TaskSpaceRecoveryMessage { get; set; } = string.Empty;
     public bool CanRemoveTaskSpace { get; private set; }
@@ -390,7 +403,7 @@ public class SettingsViewModel
         }
     }
 
-    [AlsoNotifyFor(nameof(LanguageModeIndex), nameof(SshKeyStorageEffectivePathText))]
+    [AlsoNotifyFor(nameof(LanguageModeIndex), nameof(SshKeyStorageEffectivePathText), nameof(SshKeyStorageDefaultPathText))]
     public int LanguageOptionsVersion { get; private set; }
 
     public int LanguageModeIndex
@@ -804,10 +817,30 @@ public class SettingsViewModel
             _sshKeyStoragePath = value;
             SetTaskSpaceSetting(_gitSettings, nameof(GitSettings.SshKeyStoragePath), value);
             ReloadSshPublicKeys();
+            _resetSshKeyStoragePathCommand.NotifyAvailabilityChanged();
         }
     }
 
     public string EffectiveSshKeyStoragePath => ResolveEffectiveSshKeyStoragePath();
+
+    public string DefaultSshKeyStoragePath => SshKeyStoragePathResolver.GetDefaultSshDirectory();
+
+    public string SshKeyStorageDefaultPathText =>
+        string.Format(CultureInfo.CurrentCulture,
+            _localization.Get("SshKeyStorageDefaultPath"), DefaultSshKeyStoragePath);
+
+    // No subscriptions or external command lifetime. Execute also guards direct callers.
+    private sealed class SshDirectoryResetCommand(SettingsViewModel owner) : ICommand
+    {
+        public event EventHandler? CanExecuteChanged;
+        public bool CanExecute(object? parameter) =>
+            !owner.IsTaskSpaceSwitching && !string.IsNullOrWhiteSpace(owner.SshKeyStoragePath);
+        public void Execute(object? parameter)
+        {
+            if (CanExecute(parameter)) owner.SshKeyStoragePath = string.Empty;
+        }
+        public void NotifyAvailabilityChanged() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
+    }
 
     public string SshKeyStorageEffectivePathText =>
         string.Format(
@@ -953,7 +986,9 @@ public class SettingsViewModel
     {
         try
         {
-            SshPublicKeys = _backupService?.GetSshPublicKeys() ?? new List<string>();
+            SshPublicKeys = _backupService is ISshPublicKeyDirectoryReader directoryReader
+                ? directoryReader.GetSshPublicKeysForDirectory(SshKeyStoragePath)
+                : _backupService?.GetSshPublicKeys() ?? new List<string>();
         }
         catch (Exception ex) when (IsInvalidSshKeyStoragePathException(ex))
         {

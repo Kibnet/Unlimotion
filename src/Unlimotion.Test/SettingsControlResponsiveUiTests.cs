@@ -1096,6 +1096,157 @@ public class SettingsControlResponsiveUiTests
         }, CancellationToken.None);
     }
 
+    [Test]
+    public async Task SettingsControl_ResetSshDirectory_ClickKeyboardGuardAndRenderedState()
+    {
+        if (await ImportanceRenderedProcess.RunIfNeededAsync(
+                nameof(SettingsControl_ResetSshDirectory_ClickKeyboardGuardAndRenderedState),
+                nameof(SettingsControlResponsiveUiTests))) return;
+        var errors = new List<Exception>();
+        foreach (var width in new[] { 360, 720 })
+        foreach (var language in new[] { "ru", "en" })
+        foreach (var dark in new[] { true, false })
+        {
+            try { await VerifySshResetRenderedStateAsync(width, language, dark); }
+            catch (Exception error)
+            {
+                errors.Add(new InvalidOperationException($"SSH reset {width}/{language}/dark={dark}: {error.Message}", error));
+            }
+        }
+        if (errors.Count != 0) throw new AggregateException("SSH reset rendered matrix failed", errors);
+    }
+
+    private static async Task VerifySshResetRenderedStateAsync(int width, string language, bool dark)
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(ImportanceRenderedAppBuilder));
+        await session.DispatchAsync(async () =>
+        {
+            var previousLocalization = Unlimotion.ViewModel.Localization.LocalizationService.Current;
+            var previousTheme = Application.Current!.RequestedThemeVariant;
+            var previousCulture = System.Globalization.CultureInfo.CurrentCulture;
+            var previousUiCulture = System.Globalization.CultureInfo.CurrentUICulture;
+            var previousDefaultCulture = System.Globalization.CultureInfo.DefaultThreadCurrentCulture;
+            var previousDefaultUiCulture = System.Globalization.CultureInfo.DefaultThreadCurrentUICulture;
+            Window? window = null;
+            try
+            {
+                Unlimotion.ViewModel.Localization.LocalizationService.Current =
+                    new Unlimotion.ViewModel.Localization.LocalizationService();
+                Unlimotion.ViewModel.Localization.Localization.SetLanguage(language);
+                foreach (var key in Unlimotion.ViewModel.Localization.LocalizationService.Current
+                    .GetResourceKeys(System.Globalization.CultureInfo.InvariantCulture))
+                    Application.Current!.Resources[key] = Unlimotion.ViewModel.Localization.LocalizationService.Current.Get(key);
+                Application.Current.RequestedThemeVariant = dark
+                    ? Avalonia.Styling.ThemeVariant.Dark : Avalonia.Styling.ThemeVariant.Light;
+                var config = new ConfigurationBuilder().AddInMemoryCollection(
+                    new Dictionary<string, string?> { ["Appearance:Language"] = language }).Build();
+                var settings = new SettingsViewModel(config)
+                {
+                    GitBackupEnabled = true,
+                    GitRemoteUrl = "git@example.test:fixture.git",
+                    SshKeyStoragePath = Path.Combine("fixture", "custom-keys")
+                };
+                var view = new SettingsControl { DataContext = settings };
+                window = CreateWindow(view, width, 900);
+                window.Show();
+                Dispatcher.UIThread.RunJobs();
+                var section = FindControlByAutomationId<Border>(view, "SshKeysSection");
+                var button = FindControlByAutomationId<Button>(view, "ResetSshKeyStoragePathButton");
+                var defaultText = FindControlByAutomationId<TextBlock>(view, "SshKeyStorageDefaultPathTextBlock");
+                var input = FindControlByAutomationId<TextBox>(view, "SshKeyStoragePathTextBox");
+                section.BringIntoView();
+                button.BringIntoView();
+                Dispatcher.UIThread.RunJobs();
+                var scrollState = view.GetVisualDescendants().OfType<ScrollViewer>().First();
+                // BringIntoView can align a wrapped RU row at the very top edge.
+                // Start the normal click scenario with the whole action inside the viewport.
+                var inScroll = button.TranslatePoint(default, scrollState)!.Value;
+                scrollState.Offset = new Vector(scrollState.Offset.X,
+                    Math.Clamp(scrollState.Offset.Y + inScroll.Y - 200, 0,
+                        Math.Max(0, scrollState.Extent.Height - scrollState.Viewport.Height)));
+                Dispatcher.UIThread.RunJobs();
+                Console.WriteLine($"SSH geometry language={language} width={width}: window={window.Bounds}, view={view.Bounds}, button={button.Bounds}, position={button.TranslatePoint(default, window)}, scroll={scrollState.Offset}, viewport={scrollState.Viewport}, extent={scrollState.Extent}");
+                var geometryDirectory = Path.GetFullPath(Path.Combine("artifacts", "reset-ssh", "geometry"));
+                Directory.CreateDirectory(geometryDirectory);
+                File.WriteAllText(Path.Combine(geometryDirectory, $"{language}-{width}-{dark}.json"),
+                    System.Text.Json.JsonSerializer.Serialize(new
+                    {
+                        window = window.Bounds.ToString(), view = view.Bounds.ToString(), button = button.Bounds.ToString(),
+                        position = button.TranslatePoint(default, window)?.ToString(), scroll = scrollState.Offset.ToString(),
+                        viewport = scrollState.Viewport.ToString(), extent = scrollState.Extent.ToString(),
+                        fontSize = Application.Current.Resources["AppFontSize"], visible = window.IsVisible
+                    }));
+                await WaitForConditionAsync(() =>
+                {
+                    var center = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), window);
+                    if (center == null || window.InputHitTest(center.Value) is not Control hit) return false;
+                    return ReferenceEquals(hit, button) || hit.GetVisualAncestors().Contains(button);
+                }, "Rendered SSH reset button is not hit-testable in the settings viewport.");
+                await Assert.That(button.IsEffectivelyVisible).IsTrue();
+                await Assert.That(button.IsEffectivelyEnabled).IsTrue();
+                await Assert.That(defaultText.Text).Contains(settings.DefaultSshKeyStoragePath);
+                await Assert.That(defaultText.Text).Contains(language == "ru" ? "Стандартный:" : "Default:");
+                foreach (var control in new Control[] { button, defaultText, input })
+                {
+                    var point = control.TranslatePoint(default, view)!.Value;
+                    await Assert.That(point.X).IsGreaterThanOrEqualTo(-1);
+                    await Assert.That(point.X + control.Bounds.Width).IsLessThanOrEqualTo(view.Bounds.Width + 1);
+                }
+                var prefix = Path.GetFullPath(Path.Combine("artifacts", "reset-ssh", "screenshots",
+                    $"{language}-{width}-{(dark ? "dark" : "light")}"));
+                Directory.CreateDirectory(Path.GetDirectoryName(prefix)!);
+                using (var frame = window.CaptureRenderedFrame()
+                    ?? throw new InvalidOperationException("No rendered SSH settings frame."))
+                    frame.Save(prefix + "-before-action.png");
+                if (width == 720)
+                {
+                    button.Focus();
+                    window.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, "\r");
+                    window.KeyRelease(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, "\r");
+                    Dispatcher.UIThread.RunJobs();
+                }
+                else
+                {
+                    window.Activate();
+                    button.Focus();
+                    Dispatcher.UIThread.RunJobs();
+                    var pointer = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), window)!.Value;
+                    window.MouseMove(pointer, RawInputModifiers.None);
+                    await ClickControlAsync(window, button);
+                }
+                await Assert.That(settings.SshKeyStoragePath).IsEqualTo(string.Empty);
+                await Assert.That(input.Text).IsEqualTo(string.Empty);
+                await Assert.That(button.IsEffectivelyEnabled).IsFalse();
+                await Assert.That(settings.EffectiveSshKeyStoragePath).IsEqualTo(settings.DefaultSshKeyStoragePath);
+                using (var frame = window.CaptureRenderedFrame()
+                    ?? throw new InvalidOperationException("No rendered SSH reset frame."))
+                    frame.Save(prefix + "-after-action.png");
+                Console.WriteLine("SSH reset screenshots: " + prefix);
+                settings.SshKeyStoragePath = "guarded-custom-keys";
+                settings.IsTaskSpaceSwitching = true;
+                Dispatcher.UIThread.RunJobs();
+                await Assert.That(button.IsEffectivelyEnabled).IsFalse();
+                settings.ResetSshKeyStoragePathCommand.Execute(null);
+                await Assert.That(settings.SshKeyStoragePath).IsEqualTo("guarded-custom-keys");
+                settings.IsTaskSpaceSwitching = false;
+                Dispatcher.UIThread.RunJobs();
+                await Assert.That(button.IsEffectivelyEnabled).IsTrue();
+            }
+            finally
+            {
+                if (window != null) { window.Content = null; window.Close(); }
+                Unlimotion.ViewModel.Localization.LocalizationService.Current = previousLocalization;
+                foreach (var key in previousLocalization.GetResourceKeys(System.Globalization.CultureInfo.InvariantCulture))
+                    Application.Current!.Resources[key] = previousLocalization.Get(key);
+                Application.Current!.RequestedThemeVariant = previousTheme;
+                System.Globalization.CultureInfo.CurrentCulture = previousCulture;
+                System.Globalization.CultureInfo.CurrentUICulture = previousUiCulture;
+                System.Globalization.CultureInfo.DefaultThreadCurrentCulture = previousDefaultCulture;
+                System.Globalization.CultureInfo.DefaultThreadCurrentUICulture = previousDefaultUiCulture;
+            }
+        }, CancellationToken.None);
+    }
+
     private static Window CreateWindow(Control content, double width, double height)
     {
         return new Window

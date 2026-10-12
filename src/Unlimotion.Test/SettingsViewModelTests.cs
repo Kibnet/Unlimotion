@@ -1074,6 +1074,133 @@ public class SettingsViewModelTests : IDisposable
     }
 
     [Test]
+    [Arguments(null)]
+    [Arguments("")]
+    [Arguments("   ")]
+    public async System.Threading.Tasks.Task ResetSshKeyStoragePath_DefaultModesAreDisabledAndNoOp(string? path)
+    {
+        var settings = new SettingsViewModel(CreateConfiguration()) { SshKeyStoragePath = path };
+        await Assert.That(settings.ResetSshKeyStoragePathCommand.CanExecute(null)).IsFalse();
+        settings.ResetSshKeyStoragePathCommand.Execute(null);
+        await Assert.That(settings.SshKeyStoragePath).IsEqualTo(path);
+        await Assert.That(settings.EffectiveSshKeyStoragePath).IsEqualTo(settings.DefaultSshKeyStoragePath);
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task ResetSshKeyStoragePath_PersistsPortableDefaultAndPreservesOtherSettings()
+    {
+        var configuration = CreateConfiguration();
+        var settings = new SettingsViewModel(configuration)
+        {
+            GitRemoteUrl = "git@example.test:fixture.git",
+            GitUserName = "fixture-user",
+            TaskStoragePath = "fixture-tasks",
+            SshKeyStoragePath = Path.Combine("fixture", "keys")
+        };
+        var other = new SettingsViewModel(new ConfigurationBuilder().AddInMemoryCollection().Build())
+        {
+            SshKeyStoragePath = "other-space-keys"
+        };
+        var events = 0;
+        settings.ResetSshKeyStoragePathCommand.CanExecuteChanged += (_, _) => events++;
+        settings.IsTaskSpaceSwitching = true;
+        settings.ResetSshKeyStoragePathCommand.Execute(null);
+        await Assert.That(settings.SshKeyStoragePath).IsEqualTo(Path.Combine("fixture", "keys"));
+        await Assert.That(settings.ResetSshKeyStoragePathCommand.CanExecute(null)).IsFalse();
+        settings.IsTaskSpaceSwitching = false;
+        settings.ResetSshKeyStoragePathCommand.Execute(null);
+        await Assert.That(settings.SshKeyStoragePath).IsEqualTo(string.Empty);
+        await Assert.That(events).IsEqualTo(3);
+        await Assert.That(settings.ResetSshKeyStoragePathCommand.CanExecute(null)).IsFalse();
+        var recreated = new SettingsViewModel(CreateConfiguration());
+        await Assert.That(recreated.SshKeyStoragePath).IsEqualTo(string.Empty);
+        await Assert.That(recreated.EffectiveSshKeyStoragePath).IsEqualTo(recreated.DefaultSshKeyStoragePath);
+        await Assert.That(recreated.GitRemoteUrl).IsEqualTo("git@example.test:fixture.git");
+        await Assert.That(recreated.GitUserName).IsEqualTo("fixture-user");
+        await Assert.That(recreated.TaskStoragePath).IsEqualTo("fixture-tasks");
+        await Assert.That(other.SshKeyStoragePath).IsEqualTo("other-space-keys");
+        // Literal default is still an override and must reset to portable empty.
+        settings.SshKeyStoragePath = settings.DefaultSshKeyStoragePath;
+        await Assert.That(settings.ResetSshKeyStoragePathCommand.CanExecute(null)).IsTrue();
+        settings.ResetSshKeyStoragePathCommand.Execute(null);
+        await Assert.That(settings.SshKeyStoragePath).IsEqualTo(string.Empty);
+    }
+
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async System.Threading.Tasks.Task ResetSshKeyStoragePath_ReloadsKeysAndRetainsExistingSelectionPolicy(bool keyRemains)
+    {
+        var oldKey = keyRemains
+            ? Path.Combine(SshKeyStoragePathResolver.GetDefaultSshDirectory(), "active-fixture.pub")
+            : Path.Combine("fixture", "keys", "active.pub");
+        var backup = new FakeRemoteBackupService { PublicKeys = [oldKey] };
+        var settings = new SettingsViewModel(CreateConfiguration(), backup)
+        {
+            SshKeyStoragePath = Path.Combine("fixture", "keys"),
+            SelectedSshPublicKeyPath = oldKey
+        };
+        backup.PublicKeys = keyRemains ? [oldKey] : [];
+        // All mutating/network/keygen methods on this fake throw: reset must not call them.
+        settings.ResetSshKeyStoragePathCommand.Execute(null);
+        await Assert.That(settings.SshPublicKeys.Count).IsEqualTo(keyRemains ? 1 : 0);
+        await Assert.That(settings.SelectedSshPublicKeyPath).IsEqualTo(keyRemains ? oldKey : null);
+        await Assert.That(settings.GitSshPrivateKeyPath).IsEqualTo(keyRemains ? oldKey[..^4] : null);
+        await Assert.That(backup.PullExistingRepositoryCalls).IsEqualTo(0);
+        await Assert.That(backup.SwitchRemoteConnectionTypeCalls).IsEqualTo(0);
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task LanguageMode_UpdatesSshKeyStorageDefaultPathText()
+    {
+        var localization = new LocalizationService(new FakeSystemCultureProvider("en-US"));
+        var settings = new SettingsViewModel(CreateConfiguration(), localizationService: localization);
+        settings.LanguageMode = "en";
+        await Assert.That(settings.SshKeyStorageDefaultPathText).Contains("Default:");
+        var changed = new List<string?>();
+        ((INotifyPropertyChanged)settings).PropertyChanged += (_, args) => changed.Add(args.PropertyName);
+        settings.LanguageMode = "ru";
+        await Assert.That(settings.SshKeyStorageDefaultPathText).Contains("Стандартный:");
+        await Assert.That(changed).Contains(nameof(SettingsViewModel.SshKeyStorageDefaultPathText));
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task ResetSshKeyStoragePath_DeferredPersistenceReadsDefaultKeysImmediatelyWithoutFileWrites()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "Unlimotion-SshReset-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        var publicKey = Path.Combine(directory, "synthetic.pub");
+        var privateKey = Path.Combine(directory, "synthetic");
+        try
+        {
+            File.WriteAllText(publicKey, "synthetic public fixture");
+            File.WriteAllText(privateKey, "synthetic private fixture, not a secret");
+            var configuration = CreateConfiguration();
+            configuration.GetSection("Git").GetSection(nameof(GitSettings.SshKeyStoragePath)).Set(directory);
+            var backup = new BackupViaGitService(configuration);
+            var settings = new SettingsViewModel(configuration, backup) { SelectedSshPublicKeyPath = publicKey };
+            settings.UseDeferredTaskSpaceSettingsPersistence();
+            settings.ResetSshKeyStoragePathCommand.Execute(null);
+            await Assert.That(settings.SshKeyStoragePath).IsEqualTo(string.Empty);
+            // The configuration deliberately still points to OLD keys, reproducing ordinary app mode.
+            await Assert.That(configuration.GetSection("Git").GetSection(nameof(GitSettings.SshKeyStoragePath)).Get<string>()).IsEqualTo(directory);
+            await Assert.That(backup.GetSshPublicKeys()).Contains(publicKey);
+            await Assert.That(settings.SshPublicKeys).IsEquivalentTo(backup.GetSshPublicKeysForDirectory(string.Empty));
+            await Assert.That(settings.SshPublicKeys).DoesNotContain(publicKey);
+            await Assert.That(settings.SelectedSshPublicKeyPath).IsNull();
+            await Assert.That(settings.GitSshPrivateKeyPath).IsNull();
+            await Assert.That(File.ReadAllText(publicKey)).IsEqualTo("synthetic public fixture");
+            await Assert.That(File.ReadAllText(privateKey)).IsEqualTo("synthetic private fixture, not a secret");
+        }
+        finally
+        {
+            File.Delete(publicKey);
+            File.Delete(privateKey);
+            Directory.Delete(directory);
+        }
+    }
+
+    [Test]
     public async System.Threading.Tasks.Task SshKeyStorageEffectivePathText_UsesConfiguredFullPath()
     {
         IConfigurationRoot configuration = CreateConfiguration();
