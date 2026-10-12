@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Reactive.Linq;
+using System.Security.Cryptography;
 using AppAutomation.Abstractions;
 using AppAutomation.Avalonia.Headless.Session;
 using AppAutomation.Avalonia.Headless.Automation;
@@ -14,6 +16,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using LibGit2Sharp;
 using Microsoft.Extensions.Configuration;
+using Newtonsoft.Json;
 using Unlimotion.Views;
 using TUnit.Assertions;
 using TUnit.Core;
@@ -293,6 +296,12 @@ public sealed class GitStatusIndicatorHeadlessTests
         var directory = Path.GetFullPath(Path.Combine("artifacts", "git-indicator", "rendered", Guid.NewGuid().ToString("N")));
         Directory.CreateDirectory(directory);
         var trace = new List<string>();
+        var evidenceGate = new object();
+        observer.Diagnostic = message =>
+        {
+            lock (evidenceGate)
+                File.AppendAllText(Path.Combine(directory, "observer-trace.txt"), message + Environment.NewLine);
+        };
         var previousLanguage = LocalizationService.Current.LanguageMode;
         try
         {
@@ -307,18 +316,26 @@ public sealed class GitStatusIndicatorHeadlessTests
             var indicator = HeadlessRuntime.Dispatch(() => window.GetVisualDescendants().OfType<Button>()
                 .Single(button => AutomationProperties.GetAutomationId(button) == "GitStatusIndicator"));
             // Ordinary task persistence through the current storage, not an assigned Dirty property.
-            var save = HeadlessRuntime.Dispatch(() =>
+            var task = HeadlessRuntime.Dispatch(() => vm.CurrentTaskItem!);
+            var saved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            using var saveResults = task.SaveItemCommand.Subscribe(_ => saved.TrySetResult());
+            using var saveErrors = task.SaveItemCommand.ThrownExceptions.Subscribe(error => saved.TrySetException(error));
+            var expectedTitle = HeadlessRuntime.Dispatch(() =>
             {
-                var task = vm.CurrentTaskItem!;
                 task.Title += " saved for Git indicator";
-                return vm.taskRepository!.Update(task);
+                return task.Title;
             });
             await UiAssert.TextEqualsAsync(() => HeadlessRuntime.Dispatch(() =>
             {
                 Dispatcher.UIThread.RunJobs();
-                return save.IsCompleted.ToString();
-            }), "True");
-            await save;
+                return saved.Task.IsCompleted.ToString();
+            }), "True", timeout: task.PropertyChangedThrottleTimeSpanDefault + TimeSpan.FromSeconds(5));
+            await saved.Task;
+            var graph = await ((FileStorage)vm.taskRepository!.TaskTreeManager.Storage).ReadGraphAsync();
+            var savedTask = JsonConvert.DeserializeObject<Unlimotion.Domain.TaskItem>(
+                await File.ReadAllTextAsync(graph.FilesByTaskId[task.Id]));
+            await Assert.That(savedTask!.Title).IsEqualTo(expectedTitle);
+            TryLogGitSnapshot("autosave-complete");
             await State(GitIndicatorState.Dirty);
             await UiAssert.TextEqualsAsync(() => HeadlessRuntime.Dispatch(() => { Dispatcher.UIThread.RunJobs(); return vm.GitStatus.IsStale.ToString(); }), "False");
             trace.Add("save -> measured Dirty " + HeadlessRuntime.Dispatch(() => vm.GitStatus.DirtyBadge));
@@ -397,7 +414,9 @@ public sealed class GitStatusIndicatorHeadlessTests
             HeadlessRuntime.Dispatch(() => vm.GitStatus.ApplyDiagnostic(new("A", repositoryPath, retry, true)));
             await State(GitIndicatorState.Syncing);
             observer.Fail = false;
+            TryLogGitSnapshot("before-retry-commit");
             Commit(repositoryPath);
+            TryLogGitSnapshot("after-retry-commit");
             HeadlessRuntime.Dispatch(() => vm.GitStatus.ApplyDiagnostic(new("A", repositoryPath, retry, false, BackupOperationResult.Success)));
             await State(GitIndicatorState.Idle);
             trace.Add("retry success -> new measured Idle");
@@ -413,9 +432,46 @@ public sealed class GitStatusIndicatorHeadlessTests
             trace.Add("A -> B clears sample; late A operation ignored; server NotApplicable");
             await File.WriteAllLinesAsync(Path.Combine(directory, "flow-trace.txt"), trace);
         }
+        catch
+        {
+            TryLogGitSnapshot("failure");
+            throw;
+        }
         finally
         {
+            observer.Diagnostic = null;
             HeadlessRuntime.Dispatch(() => { Localization.SetLanguage(previousLanguage); window.Close(); });
+        }
+        void TryLogGitSnapshot(string phase)
+        {
+            try { LogGitSnapshot(phase); }
+            catch (Exception diagnosticError) { Console.WriteLine("Git fixture diagnostic error: " + diagnosticError); }
+        }
+        void LogGitSnapshot(string phase)
+        {
+            using var repository = new Repository(repositoryPath);
+            var entries = repository.RetrieveStatus().Select(entry =>
+            {
+                var path = Path.Combine(repositoryPath, entry.FilePath);
+                string? hash = null;
+                try
+                {
+                    if (File.Exists(path))
+                    {
+                        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read,
+                            FileShare.ReadWrite | FileShare.Delete);
+                        hash = Convert.ToHexString(SHA256.HashData(stream));
+                    }
+                }
+                catch (IOException error) { hash = error.GetType().Name; }
+                return new { entry.FilePath, state = entry.State.ToString(), worktreeSha256 = hash,
+                    indexSha = repository.Index[entry.FilePath]?.Id.Sha,
+                    lastWriteUtc = File.Exists(path) ? File.GetLastWriteTimeUtc(path) : (DateTime?)null };
+            }).ToArray();
+            File.WriteAllText(Path.Combine(directory, $"git-{phase}.json"), JsonConvert.SerializeObject(new
+            {
+                phase, utc = DateTimeOffset.UtcNow, head = repository.Head.Tip?.Sha, entries
+            }, Formatting.Indented));
         }
         async Task State(GitIndicatorState state)
         {
@@ -426,9 +482,12 @@ public sealed class GitStatusIndicatorHeadlessTests
                     Dispatcher.UIThread.RunJobs();
                     return vm.GitStatus.State.ToString();
                 }), state.ToString());
+                observer.RecordDiagnostic(HeadlessRuntime.Dispatch(() =>
+                    $"{DateTimeOffset.UtcNow:o} UI state={vm.GitStatus.State}; accepted={vm.GitStatus.LastKnown}"));
             }
             catch
             {
+                TryLogGitSnapshot("failed-" + state);
                 Console.WriteLine(HeadlessRuntime.Dispatch(() => vm.GitStatus.Details));
                 Console.WriteLine("Observed: " + HeadlessRuntime.Dispatch(() => vm.GitStatus.LastKnown?.ToString() ?? "none"));
                 throw;
@@ -590,9 +649,24 @@ public sealed class GitStatusIndicatorHeadlessTests
     private sealed class FallibleObserver : IGitWorktreeObserver
     {
         public volatile bool Fail;
-        public Task<GitWorktreeObservation> ObserveAsync(GitObservationRequest request, CancellationToken cancellationToken) =>
-            Fail ? Task.FromResult(new GitWorktreeObservation(request, DateTimeOffset.UtcNow, GitObservationKind.Unknown, ErrorCode: "InjectedReadFailure")) :
-                new GitWorktreeObserver().ObserveAsync(request, cancellationToken);
+        public Action<string>? Diagnostic;
+        private int sequence;
+        public async Task<GitWorktreeObservation> ObserveAsync(GitObservationRequest request, CancellationToken cancellationToken)
+        {
+            var read = Interlocked.Increment(ref sequence);
+            var injectedFailure = Fail;
+            RecordDiagnostic($"{DateTimeOffset.UtcNow:o} read={read} start {request}; injectedFailure={injectedFailure}");
+            var observation = injectedFailure
+                ? new GitWorktreeObservation(request, DateTimeOffset.UtcNow, GitObservationKind.Unknown, ErrorCode: "InjectedReadFailure")
+                : await new GitWorktreeObserver().ObserveAsync(request, cancellationToken);
+            RecordDiagnostic($"{DateTimeOffset.UtcNow:o} read={read} finish {observation}");
+            return observation;
+        }
+        public void RecordDiagnostic(string message)
+        {
+            try { Diagnostic?.Invoke(message); }
+            catch (Exception diagnosticError) { Console.WriteLine("Git observer diagnostic error: " + diagnosticError); }
+        }
     }
 
     internal static async Task<bool> RunRenderedChildIfNeeded(string filter = "/*/*/GitStatusIndicatorHeadlessTests/GitIndicator_SaveSyncFailureSwitchKeyboardAndRenderedMatrix")
