@@ -478,10 +478,24 @@
                                                 Content="{DynamicResource Browse}"
                                                 Command="{Binding BrowseSshKeyStoragePathCommand}" />
                                     </Grid>
+                                    <WrapPanel Classes="ActionButtons" Margin="0,8,0,0">
+                                        <Button Content="{DynamicResource ResetSshKeyStoragePath}"
+                                                Command="{Binding ResetSshKeyStoragePathCommand}"
+                                                ToolTip.Tip="{Binding DefaultSshKeyStoragePath}"
+                                                AutomationProperties.AutomationId="ResetSshKeyStoragePathButton" />
+                                        <TextBlock Classes="SectionHint"
+                                                   Text="{Binding SshKeyStorageDefaultPathText}"
+                                                   ToolTip.Tip="{Binding DefaultSshKeyStoragePath}"
+                                                   TextWrapping="Wrap"
+                                                   AutomationProperties.AutomationId="SshKeyStorageDefaultPathTextBlock" />
+                                    </WrapPanel>
                                     <TextBlock Classes="SectionHint"
                                                Text="{Binding SshKeyStorageEffectivePathText}"
                                                ToolTip.Tip="{Binding EffectiveSshKeyStoragePath}"
                                                AutomationProperties.AutomationId="SshKeyStorageEffectivePathTextBlock" />
+                                    <TextBlock Classes="SectionHint"
+                                               Text="{DynamicResource ResetSshKeyStoragePathHint}"
+                                               TextWrapping="Wrap" />
                                 </StackPanel>
 
                                 <StackPanel Classes="FieldGroup">

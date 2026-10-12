@@ -2,6 +2,12 @@
 
 namespace Unlimotion.ViewModel;
 
+/// <summary>Optional read-only capability for settings not yet persisted to configuration.</summary>
+public interface ISshPublicKeyDirectoryReader
+{
+    List<string> GetSshPublicKeysForDirectory(string? storagePath);
+}
+
 public interface IRemoteBackupService
 {
     public List<string> Remotes();
