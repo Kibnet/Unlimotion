@@ -15,64 +15,6 @@ namespace Unlimotion.Test;
 public class TaskStatusMigrationTests
 {
     [Test]
-    public async Task PreparedModern_UsesSameBufferWithoutReadingPhysicalFile()
-    {
-        var tempDir = CreateTempDirectory(false);
-        try
-        {
-            using var file = new FileStorage(tempDir);
-            var prepare = CreatePreparation(file);
-            var bytes = Encoding.UTF8.GetBytes(ModernTaskJson("task"));
-            var result = await prepare(Path.Combine(tempDir, "does-not-exist"), bytes);
-            await Assert.That(ReferenceEquals(bytes, result)).IsTrue();
-            await Assert.That(Directory.EnumerateFiles(tempDir)).IsEmpty();
-        }
-        finally { TryDeleteDirectory(tempDir); }
-    }
-
-    [Test]
-    [Arguments(false)]
-    [Arguments(true)]
-    public async Task PreparedLegacy_DiscardsProbeAndMigratesOnlyFreshSource(bool freshModern)
-    {
-        var tempDir = CreateTempDirectory(false);
-        try
-        {
-            await WriteLegacyTask(tempDir, "task", "false", DateTimeOffset.UnixEpoch);
-            var path = Path.Combine(tempDir, "task");
-            var probe = await File.ReadAllBytesAsync(path);
-            var fresh = freshModern ? ModernTaskJson("task")
-                : (await File.ReadAllTextAsync(path)).Replace("\"Title\": \"task\"", "\"Title\": \"External before fallback\"");
-            await File.WriteAllTextAsync(path, fresh);
-            using var file = new FileStorage(tempDir);
-            var prepared = await CreatePreparation(file)(path, probe);
-            await Assert.That(ReferenceEquals(prepared, probe)).IsFalse();
-            await Assert.That(Encoding.UTF8.GetString(prepared!)).IsEqualTo(await File.ReadAllTextAsync(path));
-            var backup = Path.Combine(tempDir, "status-model.migration.backup", "task");
-            if (freshModern)
-            {
-                await Assert.That(await File.ReadAllTextAsync(path)).IsEqualTo(fresh);
-                await Assert.That(File.Exists(backup)).IsFalse();
-            }
-            else
-            {
-                await Assert.That(JObject.Parse(await File.ReadAllTextAsync(path))["Title"]!.Value<string>())
-                    .IsEqualTo("External before fallback");
-                await Assert.That(await File.ReadAllTextAsync(backup)).IsEqualTo(fresh);
-            }
-        }
-        finally { TryDeleteDirectory(tempDir); }
-    }
-
-    private static Func<string, byte[], ValueTask<byte[]?>> CreatePreparation(FileStorage file)
-    {
-        var type = typeof(UnifiedTaskStorage).GetNestedType("TaskStatusMigration", BindingFlags.NonPublic)!;
-        var migration = Activator.CreateInstance(type, file)!;
-        return type.GetMethod("PrepareGraphFileAsync")!
-            .CreateDelegate<Func<string, byte[], ValueTask<byte[]?>>>(migration);
-    }
-
-    [Test]
     [Arguments(false)]
     [Arguments(true)]
     public async Task Init_PreservesHiddenNoIdAndMalformedMigrationCounts(bool watcher)

@@ -295,10 +295,7 @@ public partial class FileTaskStorage : IStorage, IStorageMutationObservation, IT
         return await ReadDirectoryCoreAsync();
     }
 
-    private Task<FileTaskStorageDirectoryReadResult> ReadDirectoryCoreAsync() => ReadDirectoryCoreAsync(null);
-
-    private async Task<FileTaskStorageDirectoryReadResult> ReadDirectoryCoreAsync(
-        Func<string, byte[], ValueTask<byte[]?>>? prepareContent)
+    private async Task<FileTaskStorageDirectoryReadResult> ReadDirectoryCoreAsync()
     {
         var tasks = new List<TaskItem>();
         var taskFiles = new Dictionary<string, List<string>>(StringComparer.Ordinal);
@@ -307,20 +304,9 @@ public partial class FileTaskStorage : IStorage, IStorageMutationObservation, IT
 
         foreach (var file in EnumerateTaskFiles())
         {
-            // Preparation may persist a migration. Its exceptions must not become load
-            // diagnostics: only raw reads and typed deserialization are recoverable here.
-            var snapshot = prepareContent == null
-                ? await Task.Run(() => TryDeserializeTaskSnapshot(file, null))
-                : await ReadPreparedTaskSnapshotAsync(file, prepareContent);
-            if (snapshot.Error != null)
-            {
-                loadErrors.Add(new FileTaskStorageLoadError(file, snapshot.Error.Message));
-                continue;
-            }
-
             try
             {
-                var (task, sourceHash, _) = snapshot;
+                var (task, sourceHash) = await Task.Run(() => DeserializeTaskSnapshot(file));
                 if (task == null || string.IsNullOrWhiteSpace(task.Id))
                 {
                     loadErrors.Add(new FileTaskStorageLoadError(file, "File does not contain a task with non-empty Id."));
@@ -391,28 +377,12 @@ public partial class FileTaskStorage : IStorage, IStorageMutationObservation, IT
 
     public async Task EnableLiveGraphAsync()
     {
-        await EnableLiveGraphCoreAsync(null, null);
-    }
-
-    protected Task EnablePreparedLiveGraphAsync(
-        Func<string, byte[], ValueTask<byte[]?>> prepareContent,
-        Func<Task> completePreparation) =>
-        EnableLiveGraphCoreAsync(prepareContent, completePreparation);
-
-    private async Task EnableLiveGraphCoreAsync(
-        Func<string, byte[], ValueTask<byte[]?>>? prepareContent,
-        Func<Task>? completePreparation)
-    {
         await WithDirectoryLockAsync(async () =>
         {
             var invalidationGeneration = Interlocked.Read(ref _liveGraphInvalidationGeneration);
             _tasks.Clear();
             _taskFilePaths.Clear();
-            var result = await ReadDirectoryCoreAsync(prepareContent);
-            if (completePreparation != null)
-            {
-                await completePreparation();
-            }
+            var result = await ReadDirectoryCoreAsync();
             PublishLiveGraph(ToGraphResult(result), result.SourceHashesByFile);
             MarkLiveGraphReloaded(invalidationGeneration);
         });
@@ -833,11 +803,7 @@ public partial class FileTaskStorage : IStorage, IStorageMutationObservation, IT
 
     private (TaskItem? Task, byte[] Hash) DeserializeTaskSnapshot(string fullPath)
     {
-        return DeserializeTaskSnapshot(fullPath, ReadTaskContent(fullPath));
-    }
-
-    private static byte[] ReadTaskContent(string fullPath)
-    {
+        byte[] content;
         using (var stream = new FileStream(
                    fullPath,
                    FileMode.Open,
@@ -846,47 +812,9 @@ public partial class FileTaskStorage : IStorage, IStorageMutationObservation, IT
         using (var buffer = new MemoryStream())
         {
             stream.CopyTo(buffer);
-            return buffer.ToArray();
-        }
-    }
-
-    private (TaskItem? Task, byte[] Hash, Exception? Error) TryDeserializeTaskSnapshot(
-        string fullPath, byte[]? content)
-    {
-        try
-        {
-            var snapshot = content == null
-                ? DeserializeTaskSnapshot(fullPath)
-                : DeserializeTaskSnapshot(fullPath, content);
-            return (snapshot.Task, snapshot.Hash, null);
-        }
-        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
-        {
-            return (null, Array.Empty<byte>(), ex);
-        }
-    }
-
-    private Task<(TaskItem? Task, byte[] Hash, Exception? Error)> ReadPreparedTaskSnapshotAsync(
-        string fullPath, Func<string, byte[], ValueTask<byte[]?>> prepareContent) => Task.Run(async () =>
-    {
-        byte[] content;
-        try
-        {
-            content = ReadTaskContent(fullPath);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return ((TaskItem?)null, Array.Empty<byte>(), (Exception?)ex);
+            content = buffer.ToArray();
         }
 
-        var prepared = await prepareContent(fullPath, content);
-        // A failed fresh legacy read cannot fall back to the earlier probe. Null
-        // requests another authoritative read, retaining ordinary load diagnostics.
-        return TryDeserializeTaskSnapshot(fullPath, prepared);
-    });
-
-    private (TaskItem? Task, byte[] Hash) DeserializeTaskSnapshot(string fullPath, byte[] content)
-    {
         var serializer = JsonSerializer.Create(new JsonSerializerSettings
         {
             ContractResolver = _options.PreserveUnknownJson

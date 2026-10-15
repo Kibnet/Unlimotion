@@ -23,9 +23,9 @@ public class UnifiedTaskStorageMigrationRegressionTests
             var path = Path.Combine(tempDir, "legacy");
             await File.WriteAllTextAsync(path, original);
             var watcher = new RawDatabaseWatcher();
-            var fileStorage = new AfterPreparedFileStorage(tempDir, watcher);
+            var fileStorage = new AfterEnumeratedFileStorage(tempDir, watcher);
             var replacement = "";
-            fileStorage.AfterFirstPreparedFile = () =>
+            fileStorage.AfterFirstEnumeratedFile = () =>
             {
                 var persisted = Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText(path));
                 if (persisted["IsCompleted"] != null) throw new InvalidOperationException("Hook ran before migration persistence.");
@@ -54,16 +54,16 @@ public class UnifiedTaskStorageMigrationRegressionTests
         finally { TryDeleteDirectory(tempDir); }
     }
 
-    private sealed class AfterPreparedFileStorage(string path, IDatabaseWatcher watcher) : FileStorage(path, watcher)
+    private sealed class AfterEnumeratedFileStorage(string path, IDatabaseWatcher watcher) : FileStorage(path, watcher)
     {
-        public Action? AfterFirstPreparedFile;
+        public Action? AfterFirstEnumeratedFile;
 
         protected override IEnumerable<string> EnumerateTaskFiles()
         {
             foreach (var file in base.EnumerateTaskFiles())
             {
                 yield return file;
-                Interlocked.Exchange(ref AfterFirstPreparedFile, null)?.Invoke();
+                Interlocked.Exchange(ref AfterFirstEnumeratedFile, null)?.Invoke();
             }
         }
     }
