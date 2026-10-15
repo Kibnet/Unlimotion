@@ -157,7 +157,9 @@ public class SingleViewStartupUiTests
     }
 
     [Test]
-    public async Task SingleViewStartup_RendersModernAndLegacyTasksWithoutRewritingModernStatus()
+    [Arguments(1)]
+    [Arguments(130)]
+    public async Task SingleViewStartup_RendersModernAndLegacyTasksWithoutRewritingModernStatus(int modernTaskCount)
     {
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(EmojiTitleTestAppBuilder));
         await session.DispatchAsync(async () =>
@@ -172,6 +174,12 @@ public class SingleViewStartupUiTests
             var modernPath = Path.Combine(context.TasksPath, "modern-task");
             var modernBytes = Encoding.UTF8.GetBytes(modernJson);
             await File.WriteAllBytesAsync(modernPath, modernBytes);
+            for (var index = 1; index < modernTaskCount; index++)
+            {
+                var id = $"modern-task-{index:D3}";
+                await File.WriteAllTextAsync(Path.Combine(context.TasksPath, id),
+                    modernJson.Replace("\"Id\":\"modern-task\"", $"\"Id\":\"{id}\""));
+            }
             var vm = context.MainWindowViewModel;
             var screen = GetCurrentApp().CreateSingleViewMainView(vm);
             var window = new Window { Width = 460, Height = 850, Content = screen };
@@ -180,7 +188,7 @@ public class SingleViewStartupUiTests
             {
                 var startup = GetCurrentApp().InitializeStartupViewModelAsync(vm);
                 await Assert.That(WaitFor(() => startup.IsCompleted && vm.IsInitialized &&
-                    vm.CurrentAllTasksItems.Count == 2)).IsTrue();
+                    vm.CurrentAllTasksItems.Count == modernTaskCount + 1)).IsTrue();
                 await startup;
                 vm.AllTasksMode = true;
                 window.UpdateLayout();
@@ -197,17 +205,75 @@ public class SingleViewStartupUiTests
                 await Assert.That(screen.GetVisualDescendants().OfType<Unlimotion.TaskStatusIcon>()
                     .Any(icon => icon.Status == Unlimotion.Domain.TaskStatus.Prepared)).IsTrue();
                 await Assert.That((await File.ReadAllBytesAsync(modernPath)).SequenceEqual(modernBytes)).IsTrue();
+                await Assert.That(vm.taskRepository.Tasks.Count).IsEqualTo(modernTaskCount + 1);
+                for (var index = 1; index < modernTaskCount; index++)
+                {
+                    var id = $"modern-task-{index:D3}";
+                    await Assert.That(await File.ReadAllTextAsync(Path.Combine(context.TasksPath, id)))
+                        .IsEqualTo(modernJson.Replace("\"Id\":\"modern-task\"", $"\"Id\":\"{id}\""));
+                    await Assert.That(vm.taskRepository.Tasks.Lookup(id).Value.Status)
+                        .IsEqualTo(Unlimotion.Domain.TaskStatus.Prepared);
+                }
                 await Assert.That(context.NotificationManager.LastErrorMessage).IsNull();
                 var evidence = Environment.GetEnvironmentVariable("UNLIMOTION_LOADING_MIGRATION_EVIDENCE");
                 if (!string.IsNullOrWhiteSpace(evidence))
                 {
                     Directory.CreateDirectory(evidence);
                     using var frame = window.CaptureRenderedFrame();
-                    if (frame != null) frame.Save(Path.Combine(evidence, "mixed-status-startup.png"));
+                    if (frame != null) frame.Save(Path.Combine(evidence, $"mixed-status-startup-{modernTaskCount}.png"));
                 }
             }
             finally { window.Close(); }
         }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task DirectoryRead_KeepsUiResponsiveWhileTraversalIsPaused()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            using var context = FileStorageStartupContext.CreateWithLegacyTaskOutsideGit();
+            using var reader = new PausedDirectoryReader(context.TasksPath);
+            Task<global::Unlimotion.Storage.FileTaskStorageDirectoryReadResult>? read = null;
+            try
+            {
+                read = reader.ReadDirectoryAsync();
+                await reader.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+                var uiCallback = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                Dispatcher.UIThread.Post(() => uiCallback.TrySetResult(Dispatcher.UIThread.CheckAccess()));
+                await Assert.That(await uiCallback.Task.WaitAsync(TimeSpan.FromSeconds(5))).IsTrue();
+                await Assert.That(reader.EnumeratedOnUi).IsFalse();
+                await Assert.That(read.IsCompleted).IsFalse();
+            }
+            finally
+            {
+                reader.Release.Set();
+                if (read != null)
+                {
+                    var result = await read.WaitAsync(TimeSpan.FromSeconds(5));
+                    await Assert.That(result.Tasks.Single().Id).IsEqualTo("legacy-task");
+                }
+            }
+        }, CancellationToken.None);
+    }
+
+    private sealed class PausedDirectoryReader(string path) : global::Unlimotion.Storage.FileTaskStorage(
+        new global::Unlimotion.Storage.FileTaskStorageOptions { Path = path }), IDisposable
+    {
+        public TaskCompletionSource<bool> Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public ManualResetEventSlim Release { get; } = new();
+        public bool EnumeratedOnUi { get; private set; }
+
+        protected override IEnumerable<string> EnumerateTaskFiles()
+        {
+            EnumeratedOnUi = Dispatcher.UIThread.CheckAccess();
+            Entered.TrySetResult(true);
+            if (!Release.Wait(TimeSpan.FromSeconds(10))) throw new TimeoutException("Reader test gate was not released.");
+            return base.EnumerateTaskFiles();
+        }
+
+        public void Dispose() => Release.Dispose();
     }
 
     [Test]
