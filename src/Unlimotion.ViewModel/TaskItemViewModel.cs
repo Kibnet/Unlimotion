@@ -55,15 +55,7 @@ namespace Unlimotion.ViewModel
 
         private ITaskStorage _taskStorage = null!;
 
-        private ReactiveCommand<Unit, Unit>? saveItemCommand;
-        [DoNotNotify]
-        public ReactiveCommand<Unit, Unit> SaveItemCommand
-        {
-            get => GetOrCreateCommand(ref saveItemCommand, CreateSaveItemCommand);
-            // Replacement commands belong to their caller; previously created owned
-            // commands remain in the deferred lifetime until this view model closes.
-            set { lock (commandInitializationLock) saveItemCommand = value; }
-        }
+        public ReactiveCommand<Unit, Unit> SaveItemCommand = null!;
 
         private readonly ObservableCollectionExtended<TaskItemViewModel> _containsTasksSource = new();
         private readonly ObservableCollectionExtended<TaskItemViewModel> _parentsTasksSource = new();
@@ -103,10 +95,7 @@ namespace Unlimotion.ViewModel
         public string TaskOperationDetails { get; private set; } = string.Empty;
         public bool HasTaskOperationError => !string.IsNullOrEmpty(TaskOperationError);
         public bool HasTaskOperationDetails => !string.IsNullOrEmpty(TaskOperationDetails);
-        private ReactiveCommand<Unit, Unit>? reloadTaskCommand;
-        [DoNotNotify]
-        public ReactiveCommand<Unit, Unit> ReloadTaskCommand =>
-            GetOrCreateCommand(ref reloadTaskCommand, CreateReloadTaskCommand);
+        public ReactiveCommand<Unit, Unit> ReloadTaskCommand { get; private set; } = null!;
         private Task? _sealedPendingSavesTask;
         private bool _isUpdatingFromModel;
         public bool IsHighlighted { get; set; }
@@ -219,6 +208,37 @@ namespace Unlimotion.ViewModel
             _completionCriteriaPropertyChangedSubscription.AddToDispose(this);
             _writeProducerLifetime.AddToDispose(this);
             deferredCommandLifetime.AddToDispose(this);
+            SaveItemCommand = ReactiveCommand.CreateFromTask(async () =>
+            {
+                // ReactiveCommand disposal alone still permits an explicit late
+                // Execute. Final draining after sealing remains allowed until disposal.
+                lock (_pendingSavesLock)
+                {
+                    if (_isDisposed) return;
+                }
+                if (_isMissingFromStorage) return;
+                if (_isReloading)
+                {
+                    lock (_pendingSavesLock) _deferredAutosave = true;
+                    return;
+                }
+                if (_requiresStatusReadBack)
+                    throw new InvalidOperationException(L10n.Get("TaskStatusOutcomeUnknown"));
+                var pendingEditor = CapturePendingEditorState();
+                var revision = pendingEditor?.Revision ?? GetEditableRevision();
+                var snapshot = pendingEditor is { } editor
+                    ? MergeAuthoritativeStateWithPendingLocalFields(Model, editor.Snapshot, editor.Fields)
+                    : TaskItemSnapshot.Clone(Model);
+                await taskStorage.Update(snapshot);
+                MarkEditableRevisionPersisted(revision, pendingEditor?.Fields ?? PendingTaskField.None);
+            });
+            var saveExceptionSubscription = SaveItemCommand.ThrownExceptions
+                .Subscribe(new ObservableExceptionHandler(NotificationManager));
+            ReloadTaskCommand = ReactiveCommand.CreateFromTask(async () => { await ReloadTaskAsync(); },
+                ObserveProperty(nameof(CanReloadTask), static task => task.CanReloadTask));
+            ReloadTaskCommand.AddToDispose(this);
+            ReloadTaskCommand.ThrownExceptions.Subscribe(new ObservableExceptionHandler(NotificationManager)).AddToDispose(this);
+
             NotifyCollectionChangedEventHandler completionCriteriaChangedHandler = (_, __) => OnCompletionCriteriaChanged();
             CompletionCriteria.CollectionChanged += completionCriteriaChangedHandler;
             Disposable.Create(() => CompletionCriteria.CollectionChanged -= completionCriteriaChangedHandler).AddToDispose(this);
@@ -356,46 +376,7 @@ namespace Unlimotion.ViewModel
                 .Subscribe(RegisterRepeaterPropertyChangedSubscription)
                 .AddToDispose(this);
 
-        }
-
-        private ReactiveCommand<Unit, Unit> CreateSaveItemCommand()
-        {
-            var command = ReactiveCommand.CreateFromTask(async () =>
-            {
-                // ReactiveCommand disposal alone does not prevent an explicit late
-                // Execute. Final draining after sealing is still allowed until disposal.
-                lock (_pendingSavesLock)
-                {
-                    if (_isDisposed) return;
-                }
-                if (_isMissingFromStorage) return;
-                if (_isReloading)
-                {
-                    lock (_pendingSavesLock) _deferredAutosave = true;
-                    return;
-                }
-                if (_requiresStatusReadBack)
-                    throw new InvalidOperationException(L10n.Get("TaskStatusOutcomeUnknown"));
-                var pendingEditor = CapturePendingEditorState();
-                var revision = pendingEditor?.Revision ?? GetEditableRevision();
-                var snapshot = pendingEditor is { } editor
-                    ? MergeAuthoritativeStateWithPendingLocalFields(Model, editor.Snapshot, editor.Fields)
-                    : TaskItemSnapshot.Clone(Model);
-                await _taskStorage.Update(snapshot);
-                MarkEditableRevisionPersisted(revision, pendingEditor?.Fields ?? PendingTaskField.None);
-            });
-            deferredCommandLifetime.Add(command.ThrownExceptions
-                .Subscribe(new ObservableExceptionHandler(NotificationManager)));
-            return command;
-        }
-
-        private ReactiveCommand<Unit, Unit> CreateReloadTaskCommand()
-        {
-            var command = ReactiveCommand.CreateFromTask(async () => { await ReloadTaskAsync(); },
-                ObserveProperty(nameof(CanReloadTask), static task => task.CanReloadTask));
-            deferredCommandLifetime.Add(command.ThrownExceptions
-                .Subscribe(new ObservableExceptionHandler(NotificationManager)));
-            return command;
+            new CompositeDisposable(saveExceptionSubscription, SaveItemCommand).AddToDispose(this);
         }
 
         private void RegisterRepeaterPropertyChangedSubscription(RepeaterPatternViewModel? repeater)
