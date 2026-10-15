@@ -335,3 +335,6 @@ Reviewed/autoapproved childSPEC2026-10-15-android-single-read-initialization.md 
 
 
 16Oct01:43: Single-read rollback62ff9a9b finalvalidation independently PASS: Main1556/1556+Headless66/66 atCI38815744332, rawTRX/stageexit0/invocation/checkouttree5f82eb449==headtree; AndroidPkg38815744314/CodeQL38815744307PASS. Local113+rename8/fullHeadless66 PASS. Single-read NO-RETAIN final, no ordinary extension; baseline source restored, usefulgeneric tests retained. Parent5/1/5/Task1 remains open.
+
+
+16Oct01:44 newboundeditem: SPEC2026-10-16-android-projection-observers reviewed/fixed/autoapproved. Existingbaseline traces rule out initialrehydrationalone(~1–2%VM) and show publication13.797s/544.86MB median. QuietWindows synthetic allocations root+emoji~95–96MB source-bound13input snapshots rankmechanism only. Added internal direct per-property Rxhelper and5calls at3mandatoryMainWindow sites, preservinglast-notifiedCombineLatest/initial/error/lifetime. Baseline11goldens then candidate30oracle/lifetime and integrated67targeted/UI PASS;2newreconnectUIcases,36renderedB/Cpairs pixel-identical with inspectedframes. FullpostintegrationHeadless/currentheadCI/nativegates pending; no Androidspeed/retentionclaim. SameTask1branch/worktree, parent5/1/5 open, no nexttask/merge.
