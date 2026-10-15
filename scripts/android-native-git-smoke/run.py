@@ -90,11 +90,16 @@ def validate_report(report, pid, negative):
             assert operation["repository"].startswith(f"/data/user/0/{PACKAGE}/files/native-git-smoke/")
 
 
+def validate_avd_name(value, expected):
+    assert re.fullmatch(re.escape(expected) + r"\s+OK\s*", value), "Unexpected emulator identity"
+
+
 def collect(args):
     output = args.output.resolve()
     fresh(output)
     metadata = dict(schema=1, package=PACKAGE, serial=args.serial, apk=str(args.apk.resolve()),
                     apkSha256=sha(args.apk), startedUtc=dt.datetime.now(dt.timezone.utc).isoformat(),
+                    collectorSha256=sha(Path(__file__)), probeSourceSha256=sha(HERE / "NativeGitSmokeProbe.cs"),
                     collectionComplete=False, visualReview="pending", parentAcceptance=False, trials=[])
     no_window = getattr(sp, "CREATE_NO_WINDOW", 0)
 
@@ -119,7 +124,7 @@ def collect(args):
     assert not re.search(r"debuggable.*(?:0xffffffff|0x1)\b", manifest)
     assert re.search(r"extractNativeLibs.*(?:0xffffffff|0x1)\b", manifest)
     assert args.serial.startswith("emulator-")
-    assert adb("emu", "avd", "name").decode().splitlines() == [args.avd, "OK"]
+    validate_avd_name(adb("emu", "avd", "name").decode(), args.avd)
     assert adb("shell", "getprop", "ro.build.version.sdk").strip() == b"34"
     assert adb("shell", "getprop", "ro.product.cpu.abi").strip() == b"x86_64"
     save()
@@ -139,6 +144,7 @@ def collect(args):
             if negative:
                 adb("shell", "touch", NEGATIVE)
             recorder = sp.Popen([str(args.adb), "-s", args.serial, "shell", "screenrecord", "--time-limit", "25", f"{FILES}/native-git-smoke-{label}.mp4"], stdout=sp.DEVNULL, stderr=sp.PIPE, creationflags=no_window)
+            recorder_exit_proven = False
             try:
                 time.sleep(.5)
                 adb("shell", "am", "start", "-n", activity)
@@ -173,6 +179,7 @@ def collect(args):
                 run_ids.add(report["runId"])
                 recorder.communicate(timeout=35)
                 assert recorder.returncode == 0, "Native recording failed"
+                recorder_exit_proven = True
                 adb("pull", f"{FILES}/native-git-smoke-{label}.mp4", str(trial_dir / "native.mp4"))
                 logs = adb("logcat", "-d", "--pid=" + pid, "-v", "threadtime").decode(errors="replace")
                 (trial_dir / "logcat.txt").write_text(logs, encoding="utf-8")
@@ -182,8 +189,9 @@ def collect(args):
                     assert not re.search(r"Could not load packaged Git dependencies|TypeInitializationException.*NativeMethods|dlopen failed.*lib(?:ssl|crypto)\.so\.3", logs)
                 trial.update(complete=True, reportSha256=sha(trial_dir / "report.json"), videoSha256=sha(trial_dir / "native.mp4"))
             finally:
-                if recorder.poll() is None:
+                if not recorder_exit_proven:
                     metadata["recorderCleanupUncertain"] = True
+                if recorder.poll() is None:
                     recorder.kill()
                     recorder.communicate(timeout=10)
                     raise RuntimeError("Recording interrupted; remote recording cleanup uncertain")

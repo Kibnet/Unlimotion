@@ -1,7 +1,7 @@
 """Negative controls for report admission; these do not prove native Git works."""
 import copy
 import unittest
-from run import PACKAGE, cleanup_owned, validate_report, verify_stopped
+from run import PACKAGE, cleanup_owned, validate_avd_name, validate_report, verify_stopped
 
 
 class ReportAdmissionTests(unittest.TestCase):
@@ -45,6 +45,13 @@ class ReportAdmissionTests(unittest.TestCase):
 
 
 class CleanupAdmissionTests(unittest.TestCase):
+    def test_emulator_identity_accepts_adb_line_endings_but_rejects_other_identity(self):
+        for suffix in ("\nOK\n", "\r\r\nOK\r\r\n"):
+            validate_avd_name("owned_avd" + suffix, "owned_avd")
+        for value in ("other_avd\nOK\n", "owned_avd\nOK\nextra", "owned_avd\nKO\n"):
+            with self.subTest(value=value), self.assertRaises(AssertionError):
+                validate_avd_name(value, "owned_avd")
+
     def test_transport_empty_stdout_cannot_prove_exit(self):
         for response in (b"", b"OWN_APP_RUNNING\n"):
             with self.subTest(response=response), self.assertRaises(AssertionError):
