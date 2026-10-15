@@ -157,14 +157,16 @@ public class SingleViewStartupUiTests
     }
 
     [Test]
-    [Arguments(1)]
-    [Arguments(130)]
-    public async Task SingleViewStartup_RendersModernAndLegacyTasksWithoutRewritingModernStatus(int modernTaskCount)
+    [Arguments(1, false)]
+    [Arguments(130, false)]
+    [Arguments(1, true)]
+    [Arguments(130, true)]
+    public async Task SingleViewStartup_RendersModernAndLegacyTasksWithoutRewritingModernStatus(int modernTaskCount, bool watcher)
     {
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(EmojiTitleTestAppBuilder));
         await session.DispatchAsync(async () =>
         {
-            using var context = FileStorageStartupContext.CreateWithLegacyTaskOutsideGit();
+            using var context = FileStorageStartupContext.CreateWithLegacyTaskOutsideGit(watcher);
             const string modernJson = """
                 {"Id":"modern-task","Title":"Modern task","Status":"Prepared",
                 "StatusHistory":[{"Status":"Prepared","ChangedAt":"2026-01-01T10:00:00Z","Author":"System"}],
@@ -220,7 +222,32 @@ public class SingleViewStartupUiTests
                 {
                     Directory.CreateDirectory(evidence);
                     using var frame = window.CaptureRenderedFrame();
-                    if (frame != null) frame.Save(Path.Combine(evidence, $"mixed-status-startup-{modernTaskCount}.png"));
+                    if (frame != null) frame.Save(Path.Combine(evidence, $"mixed-status-startup-{modernTaskCount}-watcher-{watcher}.png"));
+                }
+
+                if (watcher)
+                {
+                    var card = vm.taskRepository.Tasks.Lookup("modern-task").Value;
+                    vm.CurrentTaskItem = card;
+                    card.Title = "Edited after initial load";
+                    await card.SaveItemCommand.Execute().ToTask();
+                    await card.WaitForPendingSavesAsync();
+                    await Assert.That(WaitFor(() => File.ReadAllText(modernPath).Contains("Edited after initial load"))).IsTrue();
+                    var external = Newtonsoft.Json.Linq.JObject.Parse(await File.ReadAllTextAsync(modernPath));
+                    external["Title"] = "External update after initial load";
+                    await File.WriteAllTextAsync(modernPath, external.ToString());
+                    var reload = await card.ReloadTaskAsync();
+                    await Assert.That(reload.Outcome).IsEqualTo(TaskReloadOutcome.Loaded);
+                    await Assert.That(card.Title).IsEqualTo("External update after initial load");
+                    window.UpdateLayout();
+                    Dispatcher.UIThread.RunJobs();
+                    await Assert.That(WaitFor(() => screen.GetVisualDescendants().OfType<Unlimotion.EmojiTextBlock>()
+                        .Any(text => text.EmojiText == "External update after initial load"))).IsTrue();
+                    if (!string.IsNullOrWhiteSpace(evidence))
+                    {
+                        using var after = window.CaptureRenderedFrame();
+                        after?.Save(Path.Combine(evidence, $"mixed-status-edit-reload-{modernTaskCount}.png"));
+                    }
                 }
             }
             finally { window.Close(); }
@@ -397,7 +424,7 @@ public class SingleViewStartupUiTests
 
         public MainWindowViewModel MainWindowViewModel { get; }
 
-        public static FileStorageStartupContext CreateWithLegacyTaskOutsideGit()
+        public static FileStorageStartupContext CreateWithLegacyTaskOutsideGit(bool watcher = false)
         {
             var rootPath = Path.Combine(
                 Path.GetTempPath(),
@@ -413,7 +440,7 @@ public class SingleViewStartupUiTests
             configuration.GetSection("TaskStorage").GetSection(nameof(TaskStorageSettings.Path)).Set(tasksPath);
 
             var notificationManager = new NotificationManagerWrapperMock();
-            var fileStorage = new FileStorage(tasksPath, watcher: false, notificationManager);
+            var fileStorage = new FileStorage(tasksPath, watcher, notificationManager);
             var taskContext = new TaskItemViewModelContext
             {
                 NotificationManager = notificationManager

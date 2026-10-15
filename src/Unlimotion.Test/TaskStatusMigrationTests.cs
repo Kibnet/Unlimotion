@@ -15,6 +15,124 @@ namespace Unlimotion.Test;
 public class TaskStatusMigrationTests
 {
     [Test]
+    public async Task PreparedModern_UsesSameBufferWithoutReadingPhysicalFile()
+    {
+        var tempDir = CreateTempDirectory(false);
+        try
+        {
+            using var file = new FileStorage(tempDir);
+            var prepare = CreatePreparation(file);
+            var bytes = Encoding.UTF8.GetBytes(ModernTaskJson("task"));
+            var result = await prepare(Path.Combine(tempDir, "does-not-exist"), bytes);
+            await Assert.That(ReferenceEquals(bytes, result)).IsTrue();
+            await Assert.That(Directory.EnumerateFiles(tempDir)).IsEmpty();
+        }
+        finally { TryDeleteDirectory(tempDir); }
+    }
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task PreparedLegacy_DiscardsProbeAndMigratesOnlyFreshSource(bool freshModern)
+    {
+        var tempDir = CreateTempDirectory(false);
+        try
+        {
+            await WriteLegacyTask(tempDir, "task", "false", DateTimeOffset.UnixEpoch);
+            var path = Path.Combine(tempDir, "task");
+            var probe = await File.ReadAllBytesAsync(path);
+            var fresh = freshModern ? ModernTaskJson("task")
+                : (await File.ReadAllTextAsync(path)).Replace("\"Title\": \"task\"", "\"Title\": \"External before fallback\"");
+            await File.WriteAllTextAsync(path, fresh);
+            using var file = new FileStorage(tempDir);
+            var prepared = await CreatePreparation(file)(path, probe);
+            await Assert.That(ReferenceEquals(prepared, probe)).IsFalse();
+            await Assert.That(Encoding.UTF8.GetString(prepared!)).IsEqualTo(await File.ReadAllTextAsync(path));
+            var backup = Path.Combine(tempDir, "status-model.migration.backup", "task");
+            if (freshModern)
+            {
+                await Assert.That(await File.ReadAllTextAsync(path)).IsEqualTo(fresh);
+                await Assert.That(File.Exists(backup)).IsFalse();
+            }
+            else
+            {
+                await Assert.That(JObject.Parse(await File.ReadAllTextAsync(path))["Title"]!.Value<string>())
+                    .IsEqualTo("External before fallback");
+                await Assert.That(await File.ReadAllTextAsync(backup)).IsEqualTo(fresh);
+            }
+        }
+        finally { TryDeleteDirectory(tempDir); }
+    }
+
+    private static Func<string, byte[], ValueTask<byte[]?>> CreatePreparation(FileStorage file)
+    {
+        var type = typeof(UnifiedTaskStorage).GetNestedType("TaskStatusMigration", BindingFlags.NonPublic)!;
+        var migration = Activator.CreateInstance(type, file)!;
+        return type.GetMethod("PrepareGraphFileAsync")!
+            .CreateDelegate<Func<string, byte[], ValueTask<byte[]?>>>(migration);
+    }
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task Init_PreservesHiddenNoIdAndMalformedMigrationCounts(bool watcher)
+    {
+        var tempDir = CreateTempDirectory(false);
+        try
+        {
+            await File.WriteAllTextAsync(Path.Combine(tempDir, "modern"), ModernTaskJson("modern"));
+            await WriteLegacyTask(tempDir, "legacy", "false", DateTimeOffset.UnixEpoch);
+            await WriteLegacyTask(tempDir, ".hidden.json", "false", DateTimeOffset.UnixEpoch);
+            await File.WriteAllTextAsync(Path.Combine(tempDir, "no-id.json"), "{\"Title\":\"No ID\",\"IsCompleted\":false}");
+            await File.WriteAllTextAsync(Path.Combine(tempDir, "empty"), "");
+            await File.WriteAllTextAsync(Path.Combine(tempDir, "broken.json"), "{broken");
+            await File.WriteAllTextAsync(Path.Combine(tempDir, "ignored.txt"), "{\"IsCompleted\":false}");
+            using var file = new FileStorage(tempDir, watcher);
+            using var unified = new UnifiedTaskStorage(new TaskTreeManager(file));
+            await unified.Init();
+            await Assert.That(unified.StatusModelMigrationWasApplied).IsTrue();
+            await Assert.That(unified.Tasks.Count).IsEqualTo(2);
+            var report = JObject.Parse(await File.ReadAllTextAsync(Path.Combine(tempDir, "status-model.migration.report")));
+            await Assert.That(report["TasksProcessed"]!.Value<int>()).IsEqualTo(4);
+            await Assert.That(report["ChangedTasks"]!.Value<int>()).IsEqualTo(3);
+            foreach (var name in new[] { "legacy", ".hidden.json", "no-id.json" })
+            {
+                await Assert.That(File.Exists(Path.Combine(tempDir, "status-model.migration.backup", name))).IsTrue();
+                await Assert.That(JObject.Parse(await File.ReadAllTextAsync(Path.Combine(tempDir, name)))["IsCompleted"]).IsNull();
+            }
+            await Assert.That(await File.ReadAllTextAsync(Path.Combine(tempDir, "broken.json"))).IsEqualTo("{broken");
+            await Assert.That(await File.ReadAllTextAsync(Path.Combine(tempDir, "empty"))).IsEqualTo("");
+            await Assert.That(await File.ReadAllTextAsync(Path.Combine(tempDir, "ignored.txt"))).IsEqualTo("{\"IsCompleted\":false}");
+        }
+        finally { TryDeleteDirectory(tempDir); }
+    }
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task Init_BackupOrReportFailureDoesNotPublishGraphOrMigrationSuccess(bool reportFailure)
+    {
+        var tempDir = CreateTempDirectory(false);
+        try
+        {
+            await WriteLegacyTask(tempDir, "legacy", "false", DateTimeOffset.UnixEpoch);
+            var obstacle = Path.Combine(tempDir, reportFailure ? "status-model.migration.report" : "status-model.migration.backup");
+            if (reportFailure) Directory.CreateDirectory(obstacle);
+            else await File.WriteAllTextAsync(obstacle, "Backup path is a file");
+            using var file = new FileStorage(tempDir, watcher: true);
+            using var unified = new UnifiedTaskStorage(new TaskTreeManager(file));
+            Exception? failure = null;
+            try { await unified.Init(); }
+            catch (Exception ex) { failure = ex; }
+            await Assert.That(failure is IOException or UnauthorizedAccessException).IsTrue();
+            await Assert.That(unified.StatusModelMigrationWasApplied).IsFalse();
+            await Assert.That(unified.Tasks.Count).IsEqualTo(0);
+            await Assert.That(file.LiveGraphRevision).IsEqualTo(0);
+        }
+        finally { TryDeleteDirectory(tempDir); }
+    }
+
+    [Test]
     [Arguments("{\"Status\":\"Prepared\",\"StatusHistory\":[null]}", true)]
     [Arguments("{\"status\":null,\"statusHistory\":[{}]}", true)]
     [Arguments("{\"Status\":0,\"StatusHistory\":[/*ignored*/null,],}", true)]
@@ -43,9 +161,11 @@ public class TaskStatusMigrationTests
     }
 
     [Test]
-    [Arguments(false)]
-    [Arguments(true)]
-    public async Task Init_ModernBomDocumentsRemainUnchanged(bool utf16)
+    [Arguments(false, false)]
+    [Arguments(true, false)]
+    [Arguments(false, true)]
+    [Arguments(true, true)]
+    public async Task Init_ModernBomDocumentsRemainUnchanged(bool utf16, bool watcher)
     {
         var tempDir = CreateTempDirectory(createGitWorkTree: false);
         try
@@ -54,7 +174,7 @@ public class TaskStatusMigrationTests
             var content = encoding.GetPreamble().Concat(encoding.GetBytes(ModernTaskJson("modern"))).ToArray();
             var path = Path.Combine(tempDir, "modern");
             await File.WriteAllBytesAsync(path, content);
-            using var file = new FileStorage(tempDir, watcher: false);
+            using var file = new FileStorage(tempDir, watcher);
             using var storage = new UnifiedTaskStorage(new TaskTreeManager(file));
             await storage.Init();
             await Assert.That(storage.StatusModelMigrationWasApplied).IsFalse();

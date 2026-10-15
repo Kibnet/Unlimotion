@@ -51,6 +51,12 @@ public class FileStorage : global::Unlimotion.Storage.FileTaskStorage, IDisposab
 
     public IDatabaseWatcher? Watcher => _dbWatcher;
 
+    internal Task InitializePreparedLiveGraphAsync(
+        Func<string, byte[], ValueTask<byte[]?>> prepareContent,
+        Func<Task> completePreparation) => EnablePreparedLiveGraphAsync(prepareContent, completePreparation);
+
+    internal static bool IsGraphTaskFile(string filePath) => IsTaskFile(System.IO.Path.GetFileName(filePath));
+
     protected override Task PrepareTaskReloadAsync() => RefreshPendingFileChangesWithinWriteLockAsync();
 
     protected virtual async Task OnUpdatingAsync(TaskStorageUpdateEventArgs e)

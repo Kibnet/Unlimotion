@@ -118,13 +118,23 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
         {
             if (isFileStorage && TaskTreeManager.Storage is FileStorage fileStorage)
             {
-                StatusModelMigrationWasApplied = await MigrateTaskStatusModel(fileStorage);
                 if (fileStorage.Watcher is IRawDatabaseWatcher)
                 {
-                    // Build the typed snapshot once after the raw JSON status migration. The
-                    // following migrations read defensive clones and successful saves update the
-                    // live graph, avoiding two more complete directory deserializations.
-                    await fileStorage.EnableLiveGraphAsync();
+                    var migration = new TaskStatusMigration(fileStorage);
+                    // Hidden task-shaped files belong to the historical migration scan,
+                    // even though they do not participate in the typed graph.
+                    foreach (var filePath in EnumerateTaskFilePaths(fileStorage.Path))
+                    {
+                        if (!FileStorage.IsGraphTaskFile(filePath))
+                            await migration.ReadAndMigrateFileAsync(filePath);
+                    }
+                    await fileStorage.InitializePreparedLiveGraphAsync(
+                        migration.PrepareGraphFileAsync,
+                        async () => StatusModelMigrationWasApplied = await migration.CompleteAsync());
+                }
+                else
+                {
+                    StatusModelMigrationWasApplied = await MigrateTaskStatusModel(fileStorage);
                 }
                 var forceReverseLinksRecheck = ShouldForceReverseLinkRecheck(fileStorage);
                 if (fileStorage.Watcher is IRawDatabaseWatcher)
@@ -773,25 +783,47 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
 
     private static async Task<bool> MigrateTaskStatusModel(FileStorage fileStorage)
     {
-        var migrationTime = DateTimeOffset.UtcNow;
-        var gitWorkTreePath = FindGitWorkTreePath(fileStorage.Path);
-        string? backupPath = null;
-        var changed = 0;
-        var processed = 0;
-
+        var migration = new TaskStatusMigration(fileStorage);
         foreach (var filePath in EnumerateTaskFilePaths(fileStorage.Path))
         {
+            await migration.ReadAndMigrateFileAsync(filePath);
+        }
+        return await migration.CompleteAsync();
+    }
+
+    private sealed class TaskStatusMigration(FileStorage fileStorage)
+    {
+        private readonly DateTimeOffset migrationTime = DateTimeOffset.UtcNow;
+        private readonly string? gitWorkTreePath = FindGitWorkTreePath(fileStorage.Path);
+        private string? backupPath;
+        private int changed;
+        private int processed;
+
+        public ValueTask<byte[]?> PrepareGraphFileAsync(string filePath, byte[] content)
+        {
+            if (HasModernTaskStatusJson(content))
+            {
+                processed++;
+                return ValueTask.FromResult<byte[]?>(content);
+            }
+
+            // Never migrate a retained probe: the legacy writer keeps its own fresh
+            // read. Atomic replacement retains the historical non-CAS race boundary.
+            return new ValueTask<byte[]?>(ReadAndMigrateFileAsync(filePath));
+        }
+
+        public async Task<byte[]?> ReadAndMigrateFileAsync(string filePath)
+        {
+            byte[]? content = null;
             string rawJson;
             JObject taskJson;
             try
             {
-                // The only caller runs the entire migration on Task.Run. Keep modern-file
-                // reads on that worker instead of scheduling one asynchronous read per file.
-                var content = File.ReadAllBytes(filePath);
+                content = File.ReadAllBytes(filePath);
                 if (HasModernTaskStatusJson(content))
                 {
                     processed++;
-                    continue;
+                    return content;
                 }
 
                 // Decode the same snapshot using the historical BOM/encoding behavior.
@@ -804,13 +836,13 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
             }
             catch
             {
-                continue;
+                return content;
             }
 
             processed++;
             if (!TryMigrateTaskStatusJson(taskJson, migrationTime))
             {
-                continue;
+                return content;
             }
 
             if (gitWorkTreePath == null)
@@ -822,36 +854,39 @@ public class UnifiedTaskStorage : ITaskStorage, IDisposable
                     rawJson);
             }
 
-            await fileStorage.WriteOwnedMigrationFileAsync(
-                filePath,
-                JsonConvert.SerializeObject(taskJson, Formatting.Indented));
+            var migratedJson = JsonConvert.SerializeObject(taskJson, Formatting.Indented);
+            await fileStorage.WriteOwnedMigrationFileAsync(filePath, migratedJson);
             changed++;
+            return System.Text.Encoding.UTF8.GetBytes(migratedJson);
         }
 
-        if (changed == 0)
+        public async Task<bool> CompleteAsync()
         {
-            return false;
+            if (changed == 0)
+            {
+                return false;
+            }
+
+            var report = new
+            {
+                Version = StatusModelMigrationVersion,
+                Timestamp = DateTimeOffset.UtcNow,
+                TasksProcessed = processed,
+                ChangedTasks = changed,
+                Message = "Task status model migrated from IsCompleted to Status/StatusHistory",
+                RollbackPath = gitWorkTreePath == null
+                    ? $"Restore original task files from {backupPath}"
+                    : $"Use Git revert/checkout for migrated task files under {fileStorage.Path}",
+                GitWorkTreePath = gitWorkTreePath,
+                BackupPath = backupPath
+            };
+
+            await File.WriteAllTextAsync(
+                Path.Combine(fileStorage.Path, "status-model.migration.report"),
+                JsonConvert.SerializeObject(report, Formatting.Indented));
+
+            return true;
         }
-
-        var report = new
-        {
-            Version = StatusModelMigrationVersion,
-            Timestamp = DateTimeOffset.UtcNow,
-            TasksProcessed = processed,
-            ChangedTasks = changed,
-            Message = "Task status model migrated from IsCompleted to Status/StatusHistory",
-            RollbackPath = gitWorkTreePath == null
-                ? $"Restore original task files from {backupPath}"
-                : $"Use Git revert/checkout for migrated task files under {fileStorage.Path}",
-            GitWorkTreePath = gitWorkTreePath,
-            BackupPath = backupPath
-        };
-
-        await File.WriteAllTextAsync(
-            Path.Combine(fileStorage.Path, "status-model.migration.report"),
-            JsonConvert.SerializeObject(report, Formatting.Indented));
-
-        return true;
     }
 
     private static bool HasModernTaskStatusJson(byte[] content)

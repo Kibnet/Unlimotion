@@ -157,6 +157,9 @@ Linter1–20 individually PASS: 1outcome,2ASIS,3problem,4goals,5non-goals,6respo
 
 Depth/manualchallenge: scope/hiddeninitialization/contracts/edgecases/rollback/docs/objections checked; "Did Git really commit/read?" answered by mandatoryactualnativeproof. Stop decision: SPEC ready, autoapprove; namespace runtime hypothesis stillunproved, A1–A6/currentheadCI/PostEXEC mandatory. ARM64/Fdroidruntime/remoteTLS/parent5/1/5open. Post-EXEC не выполнен.
 
+### Current-head delivery checkpoint15Oct22:47
+HEAD08225864: CI38786383125 Main1547/1547 и Headless66/66, без fail/error/skip; raw rootTRX/stage exit/invocation/checkout tree==head tree проверены root и независимым reviewer. AndroidPkg38786382506 и CodeQL38786382478 PASS. Это закрывает отмеченный ниже pending current-head CI для A5; source продукта идентичен dd1f61c1. Private evidence: DROOT/ci-08225864-38786383125 и ci-08225864-root-audit.json. Parent5/1/5 остаётся открытым, PR draft.
+
 ### Post-EXEC functional checkpoint15Oct21:32
 Advisory functional PASS, reviewer /root/startup_profile_review; behavioral readonly in writablesandbox, no technicalisolation. Actualscope approvedSPEC/productdiff/currentPython/Probe/README/protocolcontrols/source/8PEpackaging/native4ops/negative/ordinaryrawwindows3094/media/CIrootTRX+stages. Independently recomputed23windowbrackets/3094beforeafter, stablefraction1.0 withspacing1939.71ms, decoded8actualplainPE/native12, inspected4contactsheets/7fullPNGs. A1/A2/A3/A4/A6PASS; A5productdd1547+66PASS, nextPythoncommit/currentheadCI pending. Domain/UX/tester/architect/deliveryPASS forfunctionaloutcome. Adversarial/depth: earlysplash/cachedframesnotrootproof, transientcard00notsettled, negativeJSONnotsuccess, scope/contracts/edgecases/docs/unsupportedclaims checked. No findings. Manualchallenge actualcommit/reopenedblob and actualdrawnroot/card satisfied.
 

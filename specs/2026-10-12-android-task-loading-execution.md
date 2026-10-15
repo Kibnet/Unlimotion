@@ -220,6 +220,11 @@ Workflow PASS: ближайшая боль Android сохранена. UX PASS �
 - No-findings justification: устранены перечисленные контрпримеры, решение и output ограничены наблюдением; никакая неизвестная cause/platform permission не спрятана под фиктивный PASS.
 - Stop decision: PASS для готовности этой diagnostic SPEC. Фактическая диагностика не выполнена, no device acceptance. Остаток: технический доступ к Fold6; перед fix-EXEC новая cause-specific SPEC.
 
+### Diagnostic checkpoint15Oct22:47
+Core deadline snapshot завершён с independent C1–C4 PASS; отдельный instrumented APK42F957C0, ownAVD24/API34x64/PID4336. Raw trace: status17.069557s, livegraph27.502451s, migrations1.665969s, DTO0.077082s; cutoff60.002637s застал models.begin открытым13.659s. Позднее VM Init завершился; полного model duration нет. Actual root[93.176668,95.696442]s/card5.394815s, правильный ID/24children, все3094 SHA до/после совпали, 37наблюдений/видео просмотрены; app/live-shell/recorder/QEMU exit доказаны. Private DROOT/android-core-deadline1-native-run1, android-core-deadline1-media-review, android-core-deadline1-acceptance-audit.json. Старый140s Loading failure сохранён; after-reboot recovered video/SHA не заменяет отсутствовавший contemporary after-fixture. Никакого paired gain/5/1/5/Fold6 claim.
+
+Следующий эксперимент: specs/2026-10-15-android-single-read-initialization.md, подготовлен и отправлен на independent SPEC review; product source пока не менялся. Modern status check должен разделить свежий буфер с typed graph; legacy writes сохраняют независимый fresh read. ParentActive/InProgress/PRdraft/no merge/task2/3. Exact082 CI Main1547/Headless66+AndroidPkg/CodeQL PASS, raw audit проверен.
+
 ### Post-EXEC Review
 Не выполнен. AC1–5 не проверены на устройстве. После диагностики проверить actual report/commands/device identity/privacy, original data и соответствие исходному symptom; отсутствие устройства не заменяет обязательный AC.
 

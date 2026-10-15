@@ -4,6 +4,7 @@ using System.IO;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Newtonsoft.Json.Linq;
 using Unlimotion.Domain;
 using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
@@ -12,6 +13,61 @@ namespace Unlimotion.Test;
 
 public class UnifiedTaskStorageMigrationRegressionTests
 {
+    [Test]
+    public async Task Init_ReplaysExternalEditAfterStatusPersistenceBeforeGraphPublication()
+    {
+        var tempDir = CreateTempDirectory();
+        try
+        {
+            const string original = "{\"Id\":\"legacy\",\"Title\":\"Original\",\"Version\":1,\"IsCompleted\":false}";
+            var path = Path.Combine(tempDir, "legacy");
+            await File.WriteAllTextAsync(path, original);
+            var watcher = new RawDatabaseWatcher();
+            var fileStorage = new AfterPreparedFileStorage(tempDir, watcher);
+            var replacement = "";
+            fileStorage.AfterFirstPreparedFile = () =>
+            {
+                var persisted = Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText(path));
+                if (persisted["IsCompleted"] != null) throw new InvalidOperationException("Hook ran before migration persistence.");
+                persisted["Title"] = "External after persistence";
+                persisted["ExternalMarker"] = "Preserve unknown external content";
+                replacement = persisted.ToString();
+                File.WriteAllText(path, replacement);
+                watcher.EmitRaw("legacy", UpdateType.Saved);
+            };
+            using var unified = new UnifiedTaskStorage(new TaskTreeManager(fileStorage));
+
+            await unified.Init();
+
+            await Assert.That(unified.StatusModelMigrationWasApplied).IsTrue();
+            await Assert.That(unified.Tasks.Lookup("legacy").Value.Title).IsEqualTo("External after persistence");
+            await Assert.That((await fileStorage.ReadGraphAsync()).TasksById["legacy"].Title)
+                .IsEqualTo("External after persistence");
+            // The following availability migration may normalize the task JSON;
+            // both external fields must survive that legitimate subsequent write.
+            var final = Newtonsoft.Json.Linq.JObject.Parse(await File.ReadAllTextAsync(path));
+            await Assert.That(final["Title"]!.Value<string>()).IsEqualTo("External after persistence");
+            await Assert.That(final["ExternalMarker"]!.Value<string>()).IsEqualTo("Preserve unknown external content");
+            await Assert.That(await File.ReadAllTextAsync(Path.Combine(tempDir, "status-model.migration.backup", "legacy")))
+                .IsEqualTo(original);
+        }
+        finally { TryDeleteDirectory(tempDir); }
+    }
+
+    private sealed class AfterPreparedFileStorage(string path, IDatabaseWatcher watcher) : FileStorage(path, watcher)
+    {
+        public Action? AfterFirstPreparedFile;
+
+        protected override IEnumerable<string> EnumerateTaskFiles()
+        {
+            foreach (var file in base.EnumerateTaskFiles())
+            {
+                yield return file;
+                Interlocked.Exchange(ref AfterFirstPreparedFile, null)?.Invoke();
+            }
+        }
+    }
+
     [Test]
     public async Task UnifiedTaskStorage_Init_ShouldRepairReverseLinks_WhenMigrationReportAlreadyExists()
     {
