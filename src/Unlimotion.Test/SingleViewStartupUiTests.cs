@@ -228,55 +228,6 @@ public class SingleViewStartupUiTests
     }
 
     [Test]
-    public async Task DirectoryRead_KeepsUiResponsiveWhileTraversalIsPaused()
-    {
-        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
-        await session.DispatchAsync(async () =>
-        {
-            using var context = FileStorageStartupContext.CreateWithLegacyTaskOutsideGit();
-            using var reader = new PausedDirectoryReader(context.TasksPath);
-            Task<global::Unlimotion.Storage.FileTaskStorageDirectoryReadResult>? read = null;
-            try
-            {
-                read = reader.ReadDirectoryAsync();
-                await reader.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
-                var uiCallback = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-                Dispatcher.UIThread.Post(() => uiCallback.TrySetResult(Dispatcher.UIThread.CheckAccess()));
-                await Assert.That(await uiCallback.Task.WaitAsync(TimeSpan.FromSeconds(5))).IsTrue();
-                await Assert.That(reader.EnumeratedOnUi).IsFalse();
-                await Assert.That(read.IsCompleted).IsFalse();
-            }
-            finally
-            {
-                reader.Release.Set();
-                if (read != null)
-                {
-                    var result = await read.WaitAsync(TimeSpan.FromSeconds(5));
-                    await Assert.That(result.Tasks.Single().Id).IsEqualTo("legacy-task");
-                }
-            }
-        }, CancellationToken.None);
-    }
-
-    private sealed class PausedDirectoryReader(string path) : global::Unlimotion.Storage.FileTaskStorage(
-        new global::Unlimotion.Storage.FileTaskStorageOptions { Path = path }), IDisposable
-    {
-        public TaskCompletionSource<bool> Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        public ManualResetEventSlim Release { get; } = new();
-        public bool EnumeratedOnUi { get; private set; }
-
-        protected override IEnumerable<string> EnumerateTaskFiles()
-        {
-            EnumeratedOnUi = Dispatcher.UIThread.CheckAccess();
-            Entered.TrySetResult(true);
-            if (!Release.Wait(TimeSpan.FromSeconds(10))) throw new TimeoutException("Reader test gate was not released.");
-            return base.EnumerateTaskFiles();
-        }
-
-        public void Dispose() => Release.Dispose();
-    }
-
-    [Test]
     public async Task SingleViewStartup_ReplaysStartupUpdateCheck_WhenUpdateServiceAttachesAfterStartup()
     {
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));

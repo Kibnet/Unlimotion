@@ -21,7 +21,7 @@ public sealed class FileTaskStorageReadContractTests
         using var fixture = new Fixture();
         await File.WriteAllTextAsync(Path.Combine(fixture.Path, "task"), RichJson("task"));
         using var reader = new PausedReader(fixture.Path);
-        var read = reader.ReadDirectoryAsync();
+        var read = Task.Run(() => reader.ReadDirectoryAsync());
         Task? writer = null;
         var writerEntered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         try

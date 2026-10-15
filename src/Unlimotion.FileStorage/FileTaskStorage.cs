@@ -295,10 +295,7 @@ public partial class FileTaskStorage : IStorage, IStorageMutationObservation, IT
         return await ReadDirectoryCoreAsync();
     }
 
-    private Task<FileTaskStorageDirectoryReadResult> ReadDirectoryCoreAsync() =>
-        Task.Run(ReadDirectoryCore);
-
-    private FileTaskStorageDirectoryReadResult ReadDirectoryCore()
+    private async Task<FileTaskStorageDirectoryReadResult> ReadDirectoryCoreAsync()
     {
         var tasks = new List<TaskItem>();
         var taskFiles = new Dictionary<string, List<string>>(StringComparer.Ordinal);
@@ -309,7 +306,7 @@ public partial class FileTaskStorage : IStorage, IStorageMutationObservation, IT
         {
             try
             {
-                var (task, sourceHash) = DeserializeTaskSnapshot(file);
+                var (task, sourceHash) = await Task.Run(() => DeserializeTaskSnapshot(file));
                 if (task == null || string.IsNullOrWhiteSpace(task.Id))
                 {
                     loadErrors.Add(new FileTaskStorageLoadError(file, "File does not contain a task with non-empty Id."));
