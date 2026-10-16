@@ -2,10 +2,13 @@ using System;
 using System.ComponentModel;
 using System.Linq;
 using System.Reflection;
+using System.Reactive;
 using System.Reactive.Linq;
 using System.Reactive.Threading.Tasks;
+using System.Threading;
 using System.Threading.Tasks;
 using DynamicData;
+using ReactiveUI;
 using Unlimotion.Domain;
 using Unlimotion.TaskTree;
 using Unlimotion.ViewModel;
@@ -16,6 +19,83 @@ namespace Unlimotion.Test;
 [ParallelLimiter<SharedUiStateParallelLimit>]
 public sealed class TaskItemViewModelStorageUpdateTests
 {
+    [Test]
+    public async Task EditorCommands_ConcurrentFirstAccessSharesCommandsWithoutStartingStorageWork()
+    {
+        using var storage = new TestTaskStorage();
+        using var viewModel = new TaskItemViewModel(CreateTask(), storage, () => true);
+        var commands = await Task.WhenAll(Enumerable.Range(0, 16).Select(_ => Task.Run(() =>
+            (Save: viewModel.SaveItemCommand, Reload: viewModel.ReloadTaskCommand))));
+
+        foreach (var pair in commands)
+        {
+            await Assert.That(pair.Save).IsSameReferenceAs(commands[0].Save);
+            await Assert.That(pair.Reload).IsSameReferenceAs(commands[0].Reload);
+        }
+        await Assert.That(storage.Updates).IsEmpty();
+        await Assert.That(storage.ReloadCalls).IsEqualTo(0);
+
+        await commands[0].Save.Execute().ToTask().WaitAsync(TimeSpan.FromSeconds(5));
+        await commands[0].Reload.Execute().ToTask().WaitAsync(TimeSpan.FromSeconds(5));
+        await Assert.That(storage.Updates.Count).IsEqualTo(1);
+        await Assert.That(storage.ReloadCalls).IsEqualTo(1);
+    }
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task EditorCommands_DisposePreventsLateStorageProducers(bool initializeBeforeDispose)
+    {
+        using var storage = new TestTaskStorage();
+        var viewModel = new TaskItemViewModel(CreateTask(), storage, () => true);
+        ReactiveCommand<Unit, Unit>? save = null, reload = null;
+        if (initializeBeforeDispose)
+        {
+            save = viewModel.SaveItemCommand;
+            reload = viewModel.ReloadTaskCommand;
+        }
+        viewModel.Dispose();
+        save ??= viewModel.SaveItemCommand;
+        reload ??= viewModel.ReloadTaskCommand;
+
+        // A disposed command may complete or reject the subscription. Neither may
+        // enter a real storage producer, including first command access after close.
+        await save.Execute().Materialize().LastAsync().ToTask().WaitAsync(TimeSpan.FromSeconds(5));
+        await reload.Execute().Materialize().LastAsync().ToTask().WaitAsync(TimeSpan.FromSeconds(5));
+        await Assert.That(storage.Updates).IsEmpty();
+        await Assert.That(storage.ReloadCalls).IsEqualTo(0);
+        await Assert.That(PropertyChangedHandlerCount(viewModel)).IsEqualTo(0);
+    }
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task SaveCommand_ReplacementRemainsCallerOwnedWithoutPropertyNotification(bool initializeOwned)
+    {
+        using var storage = new TestTaskStorage();
+        var viewModel = new TaskItemViewModel(CreateTask(), storage, () => true);
+        var owned = initializeOwned ? viewModel.SaveItemCommand : null;
+        var calls = 0;
+        using var borrowed = ReactiveCommand.Create(() => { Interlocked.Increment(ref calls); });
+        var commandNotifications = 0;
+        ((INotifyPropertyChanged)viewModel).PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName == nameof(TaskItemViewModel.SaveItemCommand)) commandNotifications++;
+        };
+        viewModel.SaveItemCommand = borrowed;
+        await Assert.That(viewModel.SaveItemCommand).IsSameReferenceAs(borrowed);
+        await Assert.That(commandNotifications).IsEqualTo(0);
+        viewModel.Dispose();
+
+        await borrowed.Execute().ToTask().WaitAsync(TimeSpan.FromSeconds(5));
+        await Assert.That(calls).IsEqualTo(1);
+        if (owned is not null)
+        {
+            await owned.Execute().Materialize().LastAsync().ToTask().WaitAsync(TimeSpan.FromSeconds(5));
+        }
+        await Assert.That(storage.Updates).IsEmpty();
+    }
+
     [Test]
     public async Task DirectObservation_BroadAndEqualNotificationsDoNotAutosave()
     {
@@ -345,6 +425,7 @@ public sealed class TaskItemViewModelStorageUpdateTests
         public TaskTreeManager TaskTreeManager { get; } = new(new InMemoryStorage());
         public Func<TaskItem, Task>? UpdateHandler { get; set; }
         public System.Collections.Generic.List<TaskItem> Updates { get; } = [];
+        public int ReloadCalls { get; private set; }
         public event EventHandler<EventArgs>? Initiated;
 
         public Task Init()
@@ -358,6 +439,11 @@ public sealed class TaskItemViewModelStorageUpdateTests
         public Task<bool> Delete(TaskItemViewModel change, bool deleteInStorage = true) => throw new NotSupportedException();
         public Task<bool> Delete(TaskItemViewModel change, TaskItemViewModel parent) => throw new NotSupportedException();
         public Task<TaskItemViewModel> Update(TaskItemViewModel change) => Update(change.Model);
+        public Task<TaskReloadResult> ReloadTaskAsync(string taskId)
+        {
+            ReloadCalls++;
+            return Task.FromResult(TaskReloadResult.Loaded(CreateTask(), revision: ReloadCalls));
+        }
 
         public async Task<TaskItemViewModel> Update(TaskItem change)
         {

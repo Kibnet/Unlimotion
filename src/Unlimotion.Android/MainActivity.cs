@@ -2,6 +2,7 @@
 
 using System;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Threading;
 using System.Threading.Tasks;
@@ -51,6 +52,8 @@ public class MainActivity : AvaloniaMainActivity
     private static readonly object AppServicesGate = new();
     private static bool _coreAppServicesConfigured;
     private static string? _configuredDataDir;
+    private static IntPtr _gitCryptoHandle;
+    private static IntPtr _gitSslHandle;
     private string? _dataDir;
     private TaskCompletionSource<string?>? _openTaskFolderCompletion;
     private TaskCompletionSource<bool>? _manageExternalStorageCompletion;
@@ -191,6 +194,7 @@ public class MainActivity : AvaloniaMainActivity
 
             var tasksPath = Path.Combine(dataDir, TasksFolderName);
 
+            EnsureGitNativeDependencies(context);
             EnsureGitSafeDirectory(dataDir, dataDir);
             EnsureGitSslCertBundle(context, dataDir);
 
@@ -221,6 +225,38 @@ public class MainActivity : AvaloniaMainActivity
     }
 
     private string ResolveDataDirectory() => ResolveDataDirectory(this);
+
+    private static void EnsureGitNativeDependencies(Context context)
+    {
+        try
+        {
+            var nativeLibraryDir = context.ApplicationInfo?.NativeLibraryDir;
+            if (string.IsNullOrWhiteSpace(nativeLibraryDir) || !Path.IsPathFullyQualified(nativeLibraryDir))
+            {
+                throw new DllNotFoundException("The app's native library directory is unavailable.");
+            }
+
+            var cryptoPath = Path.Combine(nativeLibraryDir, "libcrypto.so");
+            var sslPath = Path.Combine(nativeLibraryDir, "libssl.so");
+            if (!File.Exists(cryptoPath) || !File.Exists(sslPath))
+            {
+                throw new DllNotFoundException("The app's packaged OpenSSL libraries are unavailable.");
+            }
+
+            // Release installers before API 36 omit .so.3 files. These installed
+            // aliases carry the .so.3 SONAMEs required by libgit2 and libssh2.
+            // Keep both handles for the process lifetime, including Activity recreation.
+            if (_gitCryptoHandle == IntPtr.Zero)
+                _gitCryptoHandle = NativeLibrary.Load(cryptoPath);
+            if (_gitSslHandle == IntPtr.Zero)
+                _gitSslHandle = NativeLibrary.Load(sslPath);
+        }
+        catch (Exception ex)
+        {
+            // Keep local task loading available even if Git cannot initialize.
+            WriteStartupError(new InvalidOperationException("Could not load packaged Git dependencies.", ex));
+        }
+    }
 
     private static string ResolveDataDirectory(Context context)
     {

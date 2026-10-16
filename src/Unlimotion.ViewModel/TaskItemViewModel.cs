@@ -55,7 +55,7 @@ namespace Unlimotion.ViewModel
 
         private ITaskStorage _taskStorage = null!;
 
-        public ReactiveCommand<Unit, Unit> SaveItemCommand = null!;        
+        public ReactiveCommand<Unit, Unit> SaveItemCommand = null!;
 
         private readonly ObservableCollectionExtended<TaskItemViewModel> _containsTasksSource = new();
         private readonly ObservableCollectionExtended<TaskItemViewModel> _parentsTasksSource = new();
@@ -210,6 +210,12 @@ namespace Unlimotion.ViewModel
             deferredCommandLifetime.AddToDispose(this);
             SaveItemCommand = ReactiveCommand.CreateFromTask(async () =>
             {
+                // ReactiveCommand disposal alone still permits an explicit late
+                // Execute. Final draining after sealing remains allowed until disposal.
+                lock (_pendingSavesLock)
+                {
+                    if (_isDisposed) return;
+                }
                 if (_isMissingFromStorage) return;
                 if (_isReloading)
                 {

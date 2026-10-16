@@ -2,6 +2,8 @@
 
 24 PNG просмотрены перед явным сохранением 02.10.2026; числа 0, 9 и 100 читаются, кнопки вертикальны. Просмотрены также полные кадры 360×844 и 1400×900 при шрифте 24.
 
+Повторная сертификация 15.10.2026: Avalonia12.1.1, HEAD369b3724eab31d3a3ed8081fc45e9ee0f216461e, CI38755454915. Все24 actual PNG матрицы имеют тот же SHA256, размеры и точные RGBA-пиксели, что сохранённые эталоны; остальные192 проверяемых значения renderer/font/scale/theme/culture/размеров окна совпали. Просмотрены все24 пары и полные кадры light1400/dark360 при font24/value100. Изменено только поле Avalonia в24JSON на12.1.1.0; PNG и точный comparator сохранены. Исходная среда/дата ниже описывают создание02.10, эта запись — проверку совместимости15.10. Private audit: `D:/CodexArtifacts/android-task-loading-20261012/egl1211-importance-pixel-audit.json`, paired review PNG и скачанные CI artifacts. Advisory review PASS; новый полный CI после metadata update требуется отдельно.
+
 Среда: Windows x64, .NET SDK 10.0.401 (global.json), Avalonia 12.0.3, SkiaSharp 3.119.0, scale 1.0, Fluent Light/Dark, русский язык. App.WithCustomFont сохраняет Roboto и fallback приложения; фактический NumericUpDown использует Fluent composite Inter. Ресурсы шрифта применены методом App.ApplyFontSize; окно MainWindow содержит настоящее MainControl. Метаданные каждого состояния находятся в одноимённом JSON. Состояние без фокуса/caret/hover.
 
 Сравнение точное: размеры и все декодированные RGBA-пиксели. Допусков и масок нет. В другой ОС/renderer/font environment эти эталоны не считаются эквивалентными; изменение зависимостей требует отдельного просмотра. Мismatch сохраняет expected.png, actual.png, diff.png и metadata.json в output/artifacts/task-importance/<run>/<case>.
