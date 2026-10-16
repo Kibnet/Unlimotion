@@ -872,9 +872,7 @@ namespace Unlimotion.ViewModel
 
             taskRepository.Tasks
                 .Connect()
-                .AutoRefreshOnObservable(m => TaskPropertyObservation
-                    .Observe(m, static task => task.Emoji, nameof(TaskItemViewModel.Emoji))
-                    .Select(emoji => emoji == null))
+                .AutoRefreshOnObservable(m => m.WhenAny(m => m.Emoji, c => c.Value == null))
                 .Group(m => m.Emoji)
                 .Transform(m =>
                 {
@@ -904,9 +902,7 @@ namespace Unlimotion.ViewModel
 
             taskRepository.Tasks
                 .Connect()
-                .AutoRefreshOnObservable(m => TaskPropertyObservation
-                    .Observe(m, static task => task.Emoji, nameof(TaskItemViewModel.Emoji))
-                    .Select(emoji => emoji == null))
+                .AutoRefreshOnObservable(m => m.WhenAny(m => m.Emoji, c => c.Value == null))
                 .Group(m => m.Emoji)
                 .Transform(m =>
                 {
@@ -1223,12 +1219,10 @@ namespace Unlimotion.ViewModel
             var rootChanges = taskRepository.Tasks
                 .Connect()
                 .AutoRefreshOnObservable(m => m.Parents.ToObservableChangeSet())
-                .AutoRefreshOnObservable(m => Observable.CombineLatest(
-                    TaskPropertyObservation.Observe(m, static task => task.IsCanBeCompleted, nameof(TaskItemViewModel.IsCanBeCompleted)),
-                    TaskPropertyObservation.Observe(m, static task => task.Status, nameof(TaskItemViewModel.Status)),
-                    TaskPropertyObservation.Observe(m, static task => task.UnlockedDateTime, nameof(TaskItemViewModel.UnlockedDateTime)),
-                    // Date changes are refresh signals even when the final boolean stays equal.
-                    (can, status, unlocked) => can && status != DomainTaskStatus.Archived))
+                .AutoRefreshOnObservable(m => m.WhenAny(
+                    m => m.IsCanBeCompleted,
+                    m => m.Status,
+                    m => m.UnlockedDateTime, (c, s, u) => c.Value && s.Value != DomainTaskStatus.Archived))
                 .Filter(allTasksStatusFilter)
                 .Filter(searchTopFilter)
                 .Filter(emojiRootFilter)

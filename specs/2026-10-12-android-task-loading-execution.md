@@ -338,3 +338,9 @@ Reviewed/autoapproved childSPEC2026-10-15-android-single-read-initialization.md 
 
 
 16Oct01:44 newboundeditem: SPEC2026-10-16-android-projection-observers reviewed/fixed/autoapproved. Existingbaseline traces rule out initialrehydrationalone(~1–2%VM) and show publication13.797s/544.86MB median. QuietWindows synthetic allocations root+emoji~95–96MB source-bound13input snapshots rankmechanism only. Added internal direct per-property Rxhelper and5calls at3mandatoryMainWindow sites, preservinglast-notifiedCombineLatest/initial/error/lifetime. Baseline11goldens then candidate30oracle/lifetime and integrated67targeted/UI PASS;2newreconnectUIcases,36renderedB/Cpairs pixel-identical with inspectedframes. FullpostintegrationHeadless/currentheadCI/nativegates pending; no Androidspeed/retentionclaim. SameTask1branch/worktree, parent5/1/5 open, no nexttask/merge.
+
+
+### 16Oct02:55 projection observers — NO-RETAIN
+Candidate00a3447f correctness/CI1588+66 и actualAPKs passed, но fixed3pairedprofile отвергнут: publicationwall.893486/alloc.915809 иwholeVMwall1.192163 не проходят gates. Independent evidence auditPASS, no4/5/noordinary-stage; механизм откатывается до62ff с сохранением14 baselinecontracts/4WizardUI. Rollback validationpending; parent5/1/5open, task1Active, no merge/next task. Details:2026-10-16-android-projection-observers.md.
+
+16Oct03:09 rollbacklocalPASS: MainWindowexact62ff/helperdeleted; retained14baselinecontracts+37projection/UI=51/51,36renderedPNGbaselinepairs identical/inspected, independenttargeted/UIreviewPASS. Full localHeadless66/66 nofail/skips/cleanupuncertainty. Scopedrollbackcommit/currentheadCI Main1572+Headless66 pending; parent remainsopen. New directeventhook experiment is SPEC-only, with cheap freshallocationadmission versus original and rejectedcomposition before any integration; separate review/approval, no new retainedmechanismclaim.

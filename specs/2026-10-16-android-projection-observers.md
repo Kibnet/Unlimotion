@@ -140,7 +140,7 @@ Before expression observers -> after direct per-property observers/CombineLatest
 Rubric author: goal5,AS-IS5,design5,rollback5,testability5,autonomy5=30/30 readiness only; independent review and actual gates override scores.
 Role-based author review: domain workflow PASS planned (samefilter/status/date/emoji); UX PASS planned (unchangedlayout/storyboard launch->Loading->root->card;A->Bfilter; workerstatus); tester PASS planned (differential negatives/UI/full/native); architect PASS planned (3sites/internal/noAPI drift); delivery PASS planned (ownworktree/draft/newheadCI/freezes/nooriginals). Before independent review these are author assertions, not independent approval.
 Post-SPEC: PENDING independent scope/contract/adversarial/role review; fix/re-review before autoapproval. Evidence inspected by author: actual3sites,acceptedadapter,raw3trace reanalysis,priorF/N6a/N6c/N7/N8 outcomes,probe preparations/result subject finalization,rollbacktests/rawTRX/renderedPNG. Manual challenge: tuple/finalbool distinction can silently stalegroup/date; broad/initial/exception equivalence must be demonstrated, not asserted. Residual realAndroidgain unknown. No independent no-findings claim yet.
-Post-EXEC: не выполнен. A6parent remains open regardless bounded experiment result.
+Post-EXEC: implementation and rejection/rollback checkpoints below; A6parent remains open regardless bounded experiment result.
 
 ### Pre-approval adversarial correction16Oct01:29
 One proposed tuple getter could observe another silently modified field before that field's own INPC and then suppress its later event through tupleDistinct. Replaced with three independent single-property direct streams +CombineLatest, preserving each last-notified value and original selector. Three integration sites contain five actual helper calls. This is smaller behavior contract and reuse of accepted per-property mechanism; no implementation began. Add explicit delayed-own-notification oracle case. Profile provenance proof must distinguish5actualcalls across3sites. Review/re-review pending.
@@ -172,3 +172,27 @@ Independent source/A1review PASS nofindings and integrationreview confirms exact
 
 ### Independent implementation/UI checkpoint16Oct01:46
 Reviewer /root/startup_profile_review confirmed focused code/lifetime/test/UI PASS, no findings: actual5calls/3sites, helper/30exactcontracts, integrated67targeted rawTRX incl Wizard4/reconnect, all36PNGpairs SHA-equal and4fullreconnectframes inspected independently. Scope includes helper/tests/MainWindow/UItest/SPEC; untrackedfiles must be committed. Reviewer no mutations/tests, sandbox writable. Draftcandidatecommit admitted; localfullHeadless/newheadCI/nativepackaging/profile/ordinary/retention remain open. No use of CI62 as candidatevalidation.
+
+
+### Native profile verdict16Oct02:55 — NO-RETAIN / rollback validation pending
+Текущий candidate00a3447f прошёл targeted67/67, полный localHeadless66/66 и exactheadCI38819438902 Main1588/1588+Headless66/66 без skips. RawTRX/stages/invocations/tree независимо сверены: checkout9de5351f/tree272f57ff равен candidate tree. AndroidPkg38819438891 и CodeQL38819438988 PASS. Два свежих profile AOTAPK B62ff/C00 независимо проверены по406/407Gitblobs, exact inverse-byte overlays, actual10decodedPE и12unchangednative; VM обеих ABI содержит правильные B0/C5calls3sites. Все это readiness/correctness, не performance acceptance.
+
+Actual freeze45inputs SHAaaa317d20893f8219067186054773ccd35ea86068695525c260c35532d9ca1f4; AVD27 API34x64/3CPU/actual2560MiB/hostGPU/1080x2400. Два excludedwarmup и fixed3pairs B/C,C/B,B/C на одном QEMU176904, шесть freshPIDs, без подмен/добавлений. Во всех trial3094SHA до/после точны, полные traces и ordinary UI flow в instrumented APK получены. Root просмотрел276PNG observations какcontacts (84warmup+192measured),16полныхroot/cardframes и8native-lastframes. Все8video полностью integritydecoded после доказанного clean ownAVD27exit; не утверждается ручной просмотр каждого видеокадра. PTS не измеряют latency.
+
+| A4 metric | Median paired C/B | Limit | Verdict |
+|---|---:|---:|---|
+| cache.publish wall |0.8934864199|<=0.85|FAIL (-10.65%)|
+| cache.publish allocated |0.9158088094|<=0.90|Hard FAIL (-8.42%)|
+| wholeVM wall |1.1921633319|<=1.05|FAIL (+19.22%)|
+| wholeVM allocated |0.9536978828|<=1.05|PASS (-4.63%)|
+
+Baseline relativeMAD publication4.36%/wholeVM10.95%; и hard allocation failure, и stable timing failures запрещают extension4/5. Ordinary APK этап A5 не строился/не запускался, потому что A4 отклонён. +19.22% относится к этому instrumented cohort, не доказывает ordinary/Fold6 regression; process-wide allocations не устанавливают исключительную причинность. Parent5/1/5 не выполнен.
+
+Independent /root/startup_profile_review повторно разобрал6rawtracesets/174rawwindowbrackets/order/PIDs/QEMU/freeze/sourceproofs/3094hashes/формулыMAD,192measuredPNG SHA и8video/nativeLast bindings: evidence PASS, disposition NO-RETAIN, findings0. Автоматический scoped rollback: MainWindow восстановлен побайтно до62ff, candidate helper удалён. Сохранены14 originalWhenAny characterization cases и4Wizard UI cases (2из них reconnect). Rollback tests/currentheadCI/closure review ещё pending. Ни merge, ни task2/3, ни release/installation не начаты.
+
+### Rollback local validation16Oct03:09 — PASS; new exacthead CI pending
+Actual rawTRX:14 original contracts+7projection+14affinity+2title+1breadcrumb+9startupUI+4Wizard=51/51, failures/skips0 (projection-observer-rollback-audit1.json). All36rollback PNG pixel-equal to frozenbaseline; independent reviewer additionally confirmed byte-equal candidate pairs and inspected4full reconnectinclude/exclude popup/selectedframes. Root inspected36contactobservations+2fullframes (projection-observer-rollback-manual-review1.json). Existing headless screenshot harness provides PNGfallback, not nativevideo; nativefailedcandidate8videos already audited separately.
+
+Full local Headless66/66 failures/skips0, exit0, boundedprocesscomplete/cleanupUncertainfalse, actualrawTRX+state proof projection-observer-rollback-headless-audit1.json. Product MainWindow exact62ff, helperabsent; no other productiondelta from62. Retained14originalcontract cases replace30candidate/oracle cases; useful Wizard4remain. Independent source/targeted/UI rollbackreview PASS, fullraw66 closure being reviewed. Scope/AC/scenarios/objections/disposal/source/payload/manualchallenge inspected; no pending functional finding. Stop localrollbackchecksPASS to scopedcommit/push; exactnewheadCI Main expected1572+Headless66 plus companionworkflows remains mandatory. No parentcompletion/merge/nexttask/release; no Fold6claim.
+
+16Oct03:10 independent reviewer confirmed fullraw66/states and complete localrollbackgate PASS, no findings. Read-only conduct in writable sandbox. Scoped rollbackcommit admitted; exactnewhead CI still pending, parentopen.
