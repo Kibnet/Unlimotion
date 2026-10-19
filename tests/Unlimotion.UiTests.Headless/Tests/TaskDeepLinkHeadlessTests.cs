@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Avalonia.Automation;
 using AppAutomation.Abstractions;
 using AppAutomation.Avalonia.Headless.Automation;
 using AppAutomation.Avalonia.Headless.Session;
@@ -55,6 +56,10 @@ public sealed class TaskDeepLinkHeadlessTests
                     Dispatcher.UIThread.RunJobs();
                 });
                 await UiAssert.TextEqualsAsync(() => page.CurrentTaskTitleTextBox.Text, target.Title);
+                await UiAssert.TextEqualsAsync(() => HeadlessRuntime.Dispatch(() => session.MainWindow
+                    .GetVisualDescendants().OfType<TextBlock>()
+                    .Single(text => text.IsEffectivelyVisible
+                        && AutomationProperties.GetAutomationId(text) == "CurrentTaskIdTextBlock").Text ?? string.Empty), target.Id);
                 await Assert.That(HeadlessRuntime.Dispatch(() => vm.CurrentTaskItem!.Id)).IsEqualTo(target.Id);
                 await Assert.That(HeadlessRuntime.Dispatch(() => vm.DetailsAreOpen)).IsTrue();
                 if (filtered) await Assert.That(HeadlessRuntime.Dispatch(() => vm.Search.SearchText))

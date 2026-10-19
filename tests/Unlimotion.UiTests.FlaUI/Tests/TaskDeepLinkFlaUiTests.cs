@@ -80,6 +80,16 @@ public sealed class TaskDeepLinkFlaUiTests
         if (recording is null) return;
         try
         {
+            // The external recorder compiles its capture helper before starting FFmpeg.
+            // Wait for the video header so the URI transitions cannot finish before capture starts.
+            var videoPath = Path.Combine(evidence, "activation-after.mp4");
+            var captureDeadline = DateTime.UtcNow.AddSeconds(30);
+            while (!File.Exists(videoPath) || new FileInfo(videoPath).Length == 0)
+            {
+                if (recording.HasExited || DateTime.UtcNow >= captureDeadline)
+                    throw new InvalidOperationException("Window recording did not start: " + videoPath);
+                await Task.Delay(100);
+            }
             await Task.Delay(2000);
             await Forward(coldId);
             await WaitForTitle(session, coldTitle);

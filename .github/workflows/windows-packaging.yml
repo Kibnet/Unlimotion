@@ -93,6 +93,31 @@ jobs:
           --packAuthors "${{ env.INSTALLER_PUBLISHER }}" `
           --icon "${{ github.workspace }}\src\Unlimotion.Desktop\Assets\Unlimotion.ico"
 
+    - name: Pack Protocol Acceptance Baseline
+      shell: pwsh
+      run: |
+        vpk pack --packId Unlimotion --packVersion 0.0.1 --packDir "${{ env.WINDOWS_PUBLISH_DIR }}" --outputDir "${{ github.workspace }}\artifacts\protocol-baseline" --channel win --runtime win-x64 --mainExe Unlimotion.Desktop.exe --packTitle Unlimotion --packAuthors "${{ env.INSTALLER_PUBLISHER }}"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+    - name: Validate Installed Task Protocol Before Upload
+      shell: pwsh
+      env:
+        UNLIMOTION_PROTOCOL_INSTALL_ACCEPTANCE: '1'
+        UNLIMOTION_PROTOCOL_BASELINE_DIR: ${{ github.workspace }}\artifacts\protocol-baseline
+        UNLIMOTION_PROTOCOL_CANDIDATE_DIR: ${{ env.VELOPACK_RELEASES_DIR }}
+      run: |
+        New-Item -ItemType Directory -Force -Path "${{ github.workspace }}\artifacts\nuget-local" | Out-Null
+        dotnet run --project tests\Unlimotion.UiTests.FlaUI\Unlimotion.UiTests.FlaUI.csproj -c Release -- --treenode-filter "/*/*/InstalledTaskProtocolFlaUiTests/*" --minimum-expected-tests 1 --report-trx --results-directory="${{ github.workspace }}\artifacts\protocol-results"
+
+    - name: Upload Protocol Acceptance Evidence
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows-installed-protocol
+        path: |
+          artifacts/protocol-results
+          artifacts/deep-links/installed
+
     - name: Upload Velopack Release
       shell: pwsh
       run: |
