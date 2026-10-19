@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Xml.Linq;
@@ -69,6 +70,7 @@ public sealed class InstalledTaskProtocolFlaUiTests
 
             // Cold activation goes through the actual registered URI, not a direct EXE launch.
             Console.WriteLine("PROTOCOL_STAGE cold URI activation");
+            await Assert.That(Process.GetProcessesByName("Unlimotion.Desktop").Length).IsEqualTo(0);
             OpenUri(targetId)?.Dispose();
             using var process = await WaitForInstalledProcess(executable);
             application = Application.Attach(process);
@@ -109,8 +111,7 @@ public sealed class InstalledTaskProtocolFlaUiTests
             {
                 Console.WriteLine("VIDEO_FALLBACK: FFmpeg is absent from the disposable runner PATH; actual-window PNGs and UIA assertions retained.");
             }
-            application.Close();
-            await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(20));
+            await CloseAndWait(application, process.Id);
             application.Dispose();
             application = null;
 
@@ -128,6 +129,19 @@ public sealed class InstalledTaskProtocolFlaUiTests
             await Assert.That(File.Exists(legacy)).IsFalse();
             File.WriteAllText(Path.Combine(evidence, "legacy-registration.json"), JsonSerializer.Serialize(new
                 { executable = legacy, exists = File.Exists(legacy), command = ReadCommand() }));
+            // Publish the deliberately broken fixture before testing its failure.
+            SHChangeNotify(0x08000000, 0, IntPtr.Zero, IntPtr.Zero);
+            var legacyActivationFailed = false;
+            try
+            {
+                using var unexpected = OpenUri(targetId);
+            }
+            catch (System.ComponentModel.Win32Exception error)
+            {
+                legacyActivationFailed = true;
+                File.WriteAllText(Path.Combine(evidence, "legacy-activation-error.txt"), error.ToString());
+            }
+            await Assert.That(legacyActivationFailed).IsTrue();
             await Run(updater, "--silent", "--log", Path.Combine(evidence, "update.log"), "apply", "--norestart", "--package", updatePackage);
             AssertRegistration(executable, evidence, "updated");
             await Assert.That(XDocument.Load(Path.Combine(root, "current", "sq.version"))
@@ -142,8 +156,7 @@ public sealed class InstalledTaskProtocolFlaUiTests
                 ?? throw new InvalidOperationException("URI activation after update did not expose a main window.");
             await WaitForTask(updatedWindow, automation, targetId, targetTitle);
             Capture.Element(updatedWindow).ToFile(Path.Combine(evidence, "updated.png"));
-            application.Close();
-            await updatedProcess.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(20));
+            await CloseAndWait(application, updatedProcess.Id);
             application.Dispose();
             application = null;
 
@@ -153,6 +166,21 @@ public sealed class InstalledTaskProtocolFlaUiTests
             await Assert.That(removed is null).IsTrue();
             Console.WriteLine("Installed protocol evidence: " + evidence);
             Console.WriteLine("BEFORE_VIDEO_FALLBACK: the original missing-launcher defect prevents an app window from opening; legacy-registration.json records the nonexistent launcher. Passing transitions are recorded when FFmpeg is available.");
+        }
+        catch (Exception error)
+        {
+            File.WriteAllText(Path.Combine(evidence, "failure.txt"), error.ToString());
+            if (application is not null)
+            {
+                try
+                {
+                    using var diagnostics = new UIA3Automation();
+                    var failedWindow = application.GetMainWindow(diagnostics, TimeSpan.FromSeconds(2));
+                    if (failedWindow is not null) Capture.Element(failedWindow).ToFile(Path.Combine(evidence, "failure.png"));
+                }
+                catch (Exception captureError) { Console.WriteLine("Failure capture: " + captureError.Message); }
+            }
+            throw;
         }
         finally
         {
@@ -183,6 +211,19 @@ public sealed class InstalledTaskProtocolFlaUiTests
 
     private static Process? OpenUri(string id) => Process.Start(new ProcessStartInfo("unlimotion://task/" + id)
         { UseShellExecute = true });
+
+    [DllImport("shell32.dll", ExactSpelling = true)]
+    private static extern void SHChangeNotify(uint eventId, uint flags, IntPtr item1, IntPtr item2);
+
+    private static async Task CloseAndWait(Application application, int processId)
+    {
+        // FlaUI owns and closes the Process passed to Attach. Observe exit through
+        // an independent handle so Application.Close cannot invalidate the waiter.
+        using var lifetime = Process.GetProcessById(processId);
+        lifetime.EnableRaisingEvents = true;
+        application.Close();
+        await lifetime.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(20));
+    }
 
     private static async Task<Process> WaitForInstalledProcess(string executable)
     {

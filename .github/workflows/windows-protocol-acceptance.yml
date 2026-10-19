@@ -54,6 +54,10 @@ jobs:
           vpk pack --packId Unlimotion --packVersion 0.0.2 --packDir artifacts/protocol-publish --outputDir "$env:UNLIMOTION_PROTOCOL_CANDIDATE_DIR" --channel win --runtime win-x64 --mainExe Unlimotion.Desktop.exe --packTitle Unlimotion --packAuthors Kibnet
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Install window video recorder dependency
+        shell: pwsh
+        run: choco install ffmpeg --yes --no-progress --limit-output
+
       - name: Run actual installed protocol lifecycle
         shell: pwsh
         run: |
