@@ -58,6 +58,7 @@ public sealed class InstalledTaskProtocolFlaUiTests
         var targetId = target["Id"]!.GetValue<string>();
         var targetTitle = target["Title"]!.GetValue<string>();
         Application? application = null;
+        var uninstalled = false;
         try
         {
             Console.WriteLine("PROTOCOL_STAGE install; evidence=" + evidence);
@@ -164,6 +165,7 @@ public sealed class InstalledTaskProtocolFlaUiTests
 
             Console.WriteLine("PROTOCOL_STAGE uninstall");
             await Run(updater, "--silent", "--log", Path.Combine(evidence, "uninstall.log"), "uninstall");
+            uninstalled = true;
             using var removed = Registry.CurrentUser.OpenSubKey(ProtocolKey);
             await Assert.That(removed is null).IsTrue();
             Console.WriteLine("Installed protocol evidence: " + evidence);
@@ -190,7 +192,7 @@ public sealed class InstalledTaskProtocolFlaUiTests
             {
                 application?.Close();
                 application?.Dispose();
-                if (File.Exists(updater)) await Run(updater, "--silent", "uninstall");
+                if (!uninstalled && File.Exists(updater)) await Run(updater, "--silent", "uninstall");
             }
             finally
             {
