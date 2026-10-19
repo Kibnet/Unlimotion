@@ -73,7 +73,9 @@ public sealed class InstalledTaskProtocolFlaUiTests
             await Assert.That(Process.GetProcessesByName("Unlimotion.Desktop").Length).IsEqualTo(0);
             OpenUri(targetId)?.Dispose();
             using var process = await WaitForInstalledProcess(executable);
-            application = Application.Attach(process);
+            // GetMainWindow refreshes and disposes FlaUI's Process instance.
+            // Attach by ID to keep our exit observer independent of that instance.
+            application = Application.Attach(process.Id);
             using var automation = new UIA3Automation();
             var window = application.GetMainWindow(automation, TimeSpan.FromSeconds(60))
                 ?? throw new InvalidOperationException("Installed URI activation did not expose a main window.");
@@ -151,7 +153,7 @@ public sealed class InstalledTaskProtocolFlaUiTests
             Console.WriteLine("PROTOCOL_STAGE URI activation after real update");
             OpenUri(targetId)?.Dispose();
             using var updatedProcess = await WaitForInstalledProcess(executable);
-            application = Application.Attach(updatedProcess);
+            application = Application.Attach(updatedProcess.Id);
             var updatedWindow = application.GetMainWindow(automation, TimeSpan.FromSeconds(60))
                 ?? throw new InvalidOperationException("URI activation after update did not expose a main window.");
             await WaitForTask(updatedWindow, automation, targetId, targetTitle);
@@ -217,8 +219,7 @@ public sealed class InstalledTaskProtocolFlaUiTests
 
     private static async Task CloseAndWait(Application application, int processId)
     {
-        // FlaUI owns and closes the Process passed to Attach. Observe exit through
-        // an independent handle so Application.Close cannot invalidate the waiter.
+        // Keep the exit observer independent of FlaUI's process refresh/disposal.
         using var lifetime = Process.GetProcessById(processId);
         lifetime.EnableRaisingEvents = true;
         application.Close();
