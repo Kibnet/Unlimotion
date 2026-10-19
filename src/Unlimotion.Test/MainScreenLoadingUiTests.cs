@@ -26,6 +26,70 @@ namespace Unlimotion.Test;
 public class MainScreenLoadingUiTests
 {
     [Test]
+    public async Task MainScreen_HideAndShow_PreservesLoadedTaskAndUsableDetails()
+    {
+        // Keep the rendered backend in a fresh process, like the existing visual tests.
+        if (await ImportanceRenderedProcess.RunIfNeededAsync(
+                nameof(MainScreen_HideAndShow_PreservesLoadedTaskAndUsableDetails),
+                nameof(MainScreenLoadingUiTests))) return;
+        // Compatibility coverage; Android EGL recreation is checked by native lifecycle runs.
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(EmojiTitleTestAppBuilder));
+        await session.DispatchAsync(async () =>
+        {
+            using var context = TestMainWindowContext.Create(TimeSpan.Zero);
+            var vm = context.MainWindowViewModel;
+            await vm.Connect();
+            var selected = TestHelpers.SetCurrentTask(vm, "task-1");
+            vm.DetailsAreOpen = true;
+            var repository = vm.taskRepository;
+            var view = new MainScreen { DataContext = vm };
+            var window = CreateWindow(view);
+            try
+            {
+                window.Show();
+                await Assert.That(WaitFor(() =>
+                    FindControlByAutomationId<TextBox>(view, "CurrentTaskTitleTextBox").IsEffectivelyVisible))
+                    .IsTrue();
+                var title = FindControlByAutomationId<TextBox>(view, "CurrentTaskTitleTextBox");
+                var overlay = FindControlByAutomationId<Grid>(view, "TasksLoadingOverlay");
+                await Assert.That(title.Text).IsEqualTo("Loaded task");
+                await Assert.That(overlay.IsVisible).IsFalse();
+                SaveConnectFrame(window, "before-hide");
+
+                for (var iteration = 0; iteration < 3; iteration++)
+                {
+                    window.Hide();
+                    Dispatcher.UIThread.RunJobs();
+                    await Assert.That(window.IsVisible).IsFalse();
+                    window.Show();
+                    Dispatcher.UIThread.RunJobs();
+                    await Assert.That(title.IsEffectivelyVisible).IsTrue();
+                    await Assert.That(title.Text).IsEqualTo("Loaded task");
+                    await Assert.That(overlay.IsVisible).IsFalse();
+                    await Assert.That(vm.CurrentTaskItem).IsSameReferenceAs(selected);
+                    await Assert.That(vm.taskRepository).IsSameReferenceAs(repository);
+                    await Assert.That(vm.CurrentAllTasksItems.Count).IsEqualTo(1);
+                }
+
+                vm.DetailsAreOpen = false;
+                Dispatcher.UIThread.RunJobs();
+                await Assert.That(title.IsEffectivelyVisible).IsFalse();
+                vm.DetailsAreOpen = true;
+                Dispatcher.UIThread.RunJobs();
+                await Assert.That(title.IsEffectivelyVisible).IsTrue();
+                await Assert.That(title.Text).IsEqualTo("Loaded task");
+                await Assert.That(context.Storage.ConnectCallCount).IsEqualTo(1);
+                await Assert.That(context.Storage.GetAllCallCount).IsEqualTo(1);
+                SaveConnectFrame(window, "after-show");
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
     [Arguments(false)]
     [Arguments(true)]
     public async Task SettingsConnectCommand_ShowsOverlayUntilCompletion(bool fail)
@@ -267,6 +331,7 @@ public class MainScreenLoadingUiTests
 
         public MainWindowViewModel MainWindowViewModel { get; }
         public IConfiguration Configuration { get; private init; } = null!;
+        public BlockingInitialLoadStorage Storage { get; private init; } = null!;
 
         public static TestMainWindowContext Create(TimeSpan loadDelay)
         {
@@ -281,7 +346,8 @@ public class MainScreenLoadingUiTests
             {
                 NotificationManager = notificationManager
             };
-            var storage = new UnifiedTaskStorage(new TaskTreeManager(new BlockingInitialLoadStorage(loadDelay)), taskContext);
+            var backingStorage = new BlockingInitialLoadStorage(loadDelay);
+            var storage = new UnifiedTaskStorage(new TaskTreeManager(backingStorage), taskContext);
             var settings = new SettingsViewModel(configuration);
             var mainWindowViewModel = new MainWindowViewModel(
                 new AppNameDefinitionService(),
@@ -295,7 +361,7 @@ public class MainScreenLoadingUiTests
             return new TestMainWindowContext(
                 configPath,
                 mainWindowViewModel,
-                configuration as IDisposable) { Configuration = configuration };
+                configuration as IDisposable) { Configuration = configuration, Storage = backingStorage };
         }
 
         public void Dispose()
@@ -313,6 +379,8 @@ public class MainScreenLoadingUiTests
     {
         private readonly Dictionary<string, TaskItem> _tasks;
         private readonly TimeSpan _loadDelay;
+        public int ConnectCallCount { get; private set; }
+        public int GetAllCallCount { get; private set; }
 
         public BlockingInitialLoadStorage(TimeSpan loadDelay)
         {
@@ -337,6 +405,7 @@ public class MainScreenLoadingUiTests
 
         public Task<bool> Connect()
         {
+            ConnectCallCount++;
             return Task.FromResult(true);
         }
 
@@ -347,6 +416,7 @@ public class MainScreenLoadingUiTests
 
         public async IAsyncEnumerable<TaskItem> GetAll()
         {
+            GetAllCallCount++;
             Thread.Sleep(_loadDelay);
 
             foreach (var task in _tasks.Values)

@@ -6,8 +6,13 @@ using System.Reactive.Threading.Tasks;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Automation;
+using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
+using System.Linq;
+using System.Text;
 using Microsoft.Extensions.Configuration;
 using ReactiveUI;
 using Unlimotion.Domain;
@@ -148,6 +153,104 @@ public class SingleViewStartupUiTests
 
             await Assert.That(createCompleted).IsTrue();
             await Assert.That(vm.CurrentAllTasksItems.Count).IsEqualTo(2);
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    [Arguments(1, false)]
+    [Arguments(130, false)]
+    [Arguments(1, true)]
+    [Arguments(130, true)]
+    public async Task SingleViewStartup_RendersModernAndLegacyTasksWithoutRewritingModernStatus(int modernTaskCount, bool watcher)
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(EmojiTitleTestAppBuilder));
+        await session.DispatchAsync(async () =>
+        {
+            using var context = FileStorageStartupContext.CreateWithLegacyTaskOutsideGit(watcher);
+            const string modernJson = """
+                {"Id":"modern-task","Title":"Modern task","Status":"Prepared",
+                "StatusHistory":[{"Status":"Prepared","ChangedAt":"2026-01-01T10:00:00Z","Author":"System"}],
+                "CreatedDateTime":"2026-01-01T10:00:00Z","UnlockedDateTime":"2026-01-01T10:00:00Z",
+                "IsCanBeCompleted":true,"Version":1,"ContainsTasks":[],"ParentTasks":[],"BlocksTasks":[],"BlockedByTasks":[]}
+                """;
+            var modernPath = Path.Combine(context.TasksPath, "modern-task");
+            var modernBytes = Encoding.UTF8.GetBytes(modernJson);
+            await File.WriteAllBytesAsync(modernPath, modernBytes);
+            for (var index = 1; index < modernTaskCount; index++)
+            {
+                var id = $"modern-task-{index:D3}";
+                await File.WriteAllTextAsync(Path.Combine(context.TasksPath, id),
+                    modernJson.Replace("\"Id\":\"modern-task\"", $"\"Id\":\"{id}\""));
+            }
+            var vm = context.MainWindowViewModel;
+            var screen = GetCurrentApp().CreateSingleViewMainView(vm);
+            var window = new Window { Width = 460, Height = 850, Content = screen };
+            window.Show();
+            try
+            {
+                var startup = GetCurrentApp().InitializeStartupViewModelAsync(vm);
+                await Assert.That(WaitFor(() => startup.IsCompleted && vm.IsInitialized &&
+                    vm.CurrentAllTasksItems.Count == modernTaskCount + 1)).IsTrue();
+                await startup;
+                vm.AllTasksMode = true;
+                window.UpdateLayout();
+                Dispatcher.UIThread.RunJobs();
+                var overlay = screen.GetVisualDescendants().OfType<Grid>().Single(control =>
+                    AutomationProperties.GetAutomationId(control) == "TasksLoadingOverlay");
+                await Assert.That(overlay.IsVisible).IsFalse();
+                await Assert.That(vm.taskRepository!.Tasks.Lookup("modern-task").Value.Status)
+                    .IsEqualTo(Unlimotion.Domain.TaskStatus.Prepared);
+                await Assert.That(vm.taskRepository.Tasks.Lookup("legacy-task").Value.Status)
+                    .IsEqualTo(Unlimotion.Domain.TaskStatus.NotReady);
+                await Assert.That(WaitFor(() => screen.GetVisualDescendants().OfType<Unlimotion.EmojiTextBlock>()
+                    .Any(text => text.EmojiText == "Modern task"))).IsTrue();
+                await Assert.That(screen.GetVisualDescendants().OfType<Unlimotion.TaskStatusIcon>()
+                    .Any(icon => icon.Status == Unlimotion.Domain.TaskStatus.Prepared)).IsTrue();
+                await Assert.That((await File.ReadAllBytesAsync(modernPath)).SequenceEqual(modernBytes)).IsTrue();
+                await Assert.That(vm.taskRepository.Tasks.Count).IsEqualTo(modernTaskCount + 1);
+                for (var index = 1; index < modernTaskCount; index++)
+                {
+                    var id = $"modern-task-{index:D3}";
+                    await Assert.That(await File.ReadAllTextAsync(Path.Combine(context.TasksPath, id)))
+                        .IsEqualTo(modernJson.Replace("\"Id\":\"modern-task\"", $"\"Id\":\"{id}\""));
+                    await Assert.That(vm.taskRepository.Tasks.Lookup(id).Value.Status)
+                        .IsEqualTo(Unlimotion.Domain.TaskStatus.Prepared);
+                }
+                await Assert.That(context.NotificationManager.LastErrorMessage).IsNull();
+                var evidence = Environment.GetEnvironmentVariable("UNLIMOTION_LOADING_MIGRATION_EVIDENCE");
+                if (!string.IsNullOrWhiteSpace(evidence))
+                {
+                    Directory.CreateDirectory(evidence);
+                    using var frame = window.CaptureRenderedFrame();
+                    if (frame != null) frame.Save(Path.Combine(evidence, $"mixed-status-startup-{modernTaskCount}-watcher-{watcher}.png"));
+                }
+
+                if (watcher)
+                {
+                    var card = vm.taskRepository.Tasks.Lookup("modern-task").Value;
+                    vm.CurrentTaskItem = card;
+                    card.Title = "Edited after initial load";
+                    await card.SaveItemCommand.Execute().ToTask();
+                    await card.WaitForPendingSavesAsync();
+                    await Assert.That(WaitFor(() => File.ReadAllText(modernPath).Contains("Edited after initial load"))).IsTrue();
+                    var external = Newtonsoft.Json.Linq.JObject.Parse(await File.ReadAllTextAsync(modernPath));
+                    external["Title"] = "External update after initial load";
+                    await File.WriteAllTextAsync(modernPath, external.ToString());
+                    var reload = await card.ReloadTaskAsync();
+                    await Assert.That(reload.Outcome).IsEqualTo(TaskReloadOutcome.Loaded);
+                    await Assert.That(card.Title).IsEqualTo("External update after initial load");
+                    window.UpdateLayout();
+                    Dispatcher.UIThread.RunJobs();
+                    await Assert.That(WaitFor(() => screen.GetVisualDescendants().OfType<Unlimotion.EmojiTextBlock>()
+                        .Any(text => text.EmojiText == "External update after initial load"))).IsTrue();
+                    if (!string.IsNullOrWhiteSpace(evidence))
+                    {
+                        using var after = window.CaptureRenderedFrame();
+                        after?.Save(Path.Combine(evidence, $"mixed-status-edit-reload-{modernTaskCount}.png"));
+                    }
+                }
+            }
+            finally { window.Close(); }
         }, CancellationToken.None);
     }
 
@@ -321,7 +424,7 @@ public class SingleViewStartupUiTests
 
         public MainWindowViewModel MainWindowViewModel { get; }
 
-        public static FileStorageStartupContext CreateWithLegacyTaskOutsideGit()
+        public static FileStorageStartupContext CreateWithLegacyTaskOutsideGit(bool watcher = false)
         {
             var rootPath = Path.Combine(
                 Path.GetTempPath(),
@@ -337,7 +440,7 @@ public class SingleViewStartupUiTests
             configuration.GetSection("TaskStorage").GetSection(nameof(TaskStorageSettings.Path)).Set(tasksPath);
 
             var notificationManager = new NotificationManagerWrapperMock();
-            var fileStorage = new FileStorage(tasksPath, watcher: false, notificationManager);
+            var fileStorage = new FileStorage(tasksPath, watcher, notificationManager);
             var taskContext = new TaskItemViewModelContext
             {
                 NotificationManager = notificationManager

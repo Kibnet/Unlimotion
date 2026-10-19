@@ -2,6 +2,7 @@ using System;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -14,6 +15,85 @@ namespace Unlimotion.Test;
 [NotInParallel]
 public sealed class FileTaskStorageReadContractTests
 {
+    [Test]
+    public async Task ReadDirectory_HoldsLockUntilSnapshotCompletes()
+    {
+        using var fixture = new Fixture();
+        await File.WriteAllTextAsync(Path.Combine(fixture.Path, "task"), RichJson("task"));
+        using var reader = new PausedReader(fixture.Path);
+        var read = Task.Run(() => reader.ReadDirectoryAsync());
+        Task? writer = null;
+        var writerEntered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        try
+        {
+            await reader.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            var competing = fixture.CreateStorage(preserveUnknown: true);
+            using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            writer = competing.WithDirectoryLockAsync(() =>
+            {
+                writerEntered.TrySetResult(true);
+                return Task.CompletedTask;
+            }, cancellation.Token);
+            // WithDirectoryLockAsync executes synchronously until its contested semaphore wait.
+            // The active reader must still own both process and file locks at this point.
+            await Assert.That(writerEntered.Task.IsCompleted).IsFalse();
+            await Assert.That(writer.IsCompleted).IsFalse();
+            await Assert.That(File.Exists(Path.Combine(fixture.Path, ".unlimotion.lock"))).IsTrue();
+            await Assert.That(CanAcquireLock(fixture.Path)).IsFalse();
+        }
+        finally
+        {
+            reader.Release.Set();
+            await read.WaitAsync(TimeSpan.FromSeconds(5));
+            if (writer != null) await writer.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+        await Assert.That(writerEntered.Task.IsCompletedSuccessfully).IsTrue();
+        await Assert.That(read.Result.Tasks.Single().Id).IsEqualTo("task");
+    }
+
+    [Test]
+    public async Task ReadDirectory_InsideNestedWorkerLockCompletesWithoutReacquiringLock()
+    {
+        using var fixture = new Fixture();
+        await File.WriteAllTextAsync(Path.Combine(fixture.Path, "task"), RichJson("task"));
+        var storage = new FileTaskStorage(new FileTaskStorageOptions
+        {
+            Path = fixture.Path,
+            DirectoryLockTimeout = TimeSpan.FromSeconds(2)
+        });
+        var result = await storage.WithDirectoryLockAsync(() => Task.Run(() =>
+            storage.WithDirectoryLockAsync(() => storage.ReadDirectoryAsync())))
+            .WaitAsync(TimeSpan.FromSeconds(5));
+        await Assert.That(result.Tasks.Single().Id).IsEqualTo("task");
+        await Assert.That(result.LoadErrors).IsEmpty();
+    }
+
+    private static bool CanAcquireLock(string directory)
+    {
+        try
+        {
+            using var stream = new FileStream(Path.Combine(directory, ".unlimotion.lock"),
+                FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+            return true;
+        }
+        catch (IOException) { return false; }
+    }
+
+    private sealed class PausedReader(string path) : FileTaskStorage(new FileTaskStorageOptions { Path = path }), IDisposable
+    {
+        public TaskCompletionSource<bool> Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public ManualResetEventSlim Release { get; } = new();
+
+        protected override System.Collections.Generic.IEnumerable<string> EnumerateTaskFiles()
+        {
+            Entered.TrySetResult(true);
+            if (!Release.Wait(TimeSpan.FromSeconds(10))) throw new TimeoutException("Reader test gate was not released.");
+            return base.EnumerateTaskFiles();
+        }
+
+        public void Dispose() => Release.Dispose();
+    }
+
     [Test]
     public async Task GuardedSave_PreservesHashesForCaseDistinctSourceFiles()
     {

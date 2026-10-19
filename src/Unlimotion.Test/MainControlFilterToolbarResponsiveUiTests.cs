@@ -37,13 +37,15 @@ public class MainControlFilterToolbarResponsiveUiTests
         AssertEmojiTitleInputUpdatesFiltersAsync(exclude, "🧭", "🫶", "title");
 
     [Test]
-    [Arguments(false)]
-    [Arguments(true)]
-    public Task Toolbar_EmojiFilters_ExistingTaskWizardToJellyfish_RemainsSelectable(bool exclude) =>
-        AssertEmojiTitleInputUpdatesFiltersAsync(exclude, "🧙‍♂️", "🪼", "jellyfish");
+    [Arguments(false, false)]
+    [Arguments(true, false)]
+    [Arguments(false, true)]
+    [Arguments(true, true)]
+    public Task Toolbar_EmojiFilters_ExistingTaskWizardToJellyfish_RemainsSelectable(bool exclude, bool reconnect) =>
+        AssertEmojiTitleInputUpdatesFiltersAsync(exclude, "🧙‍♂️", "🪼", reconnect ? "jellyfish-reconnect" : "jellyfish", reconnect);
 
     private static async Task AssertEmojiTitleInputUpdatesFiltersAsync(
-        bool exclude, string originalEmoji, string replacementEmoji, string capturePrefix)
+        bool exclude, string originalEmoji, string replacementEmoji, string capturePrefix, bool reconnect = false)
     {
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(EmojiTitleTestAppBuilder));
         await session.DispatchAsync(async () =>
@@ -68,6 +70,11 @@ public class MainControlFilterToolbarResponsiveUiTests
                     System.IO.File.WriteAllText(path, json.ToString());
                 }
                 await vm.Connect();
+                if (reconnect)
+                {
+                    await SealControlledSourceSaves(vm);
+                    await vm.Connect();
+                }
                 await SealControlledSourceSaves(vm);
                 vm.AllTasksMode = true;
                 vm.DetailsAreOpen = true;

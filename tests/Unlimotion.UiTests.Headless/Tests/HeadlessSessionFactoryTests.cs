@@ -70,7 +70,7 @@ public sealed class HeadlessSessionFactoryTests
     [Test]
     [Arguments(false)]
     [Arguments(true)]
-    public async Task InitializationFault_FailsPendingAndFutureDispatch_AndPreservesWorkerError(bool cancellationError)
+    public async Task InitializationFault_FailsPendingAndFutureDispatch_WithoutTerminatingWorker(bool cancellationError)
     {
         FailingEntryPoint.Reset(cancellationError
             ? new OperationCanceledException("Initializer cancellation negative control.")
@@ -79,6 +79,7 @@ public sealed class HeadlessSessionFactoryTests
         var worker = Get<Task>(session, "_dispatchTask");
         var cancellation = Get<CancellationTokenSource>(session, "_cancellationTokenSource");
         var queue = Get<BlockingCollection<(Action, ExecutionContext?)>>(session, "_queue");
+        var disposed = false;
         try
         {
             var first = session.Dispatch(() => true, default);
@@ -93,21 +94,32 @@ public sealed class HeadlessSessionFactoryTests
             try { await second.WaitAsync(Timeout); }
             catch (Exception exception) { observed = exception; }
             await Assert.That(observed).IsSameReferenceAs(FailingEntryPoint.Sentinel);
-            try { await worker.WaitAsync(Timeout); }
-            catch (Exception) { }
-            await Assert.That(worker.IsFaulted).IsTrue();
-            await Assert.That(() => session.Dispatch(() => true, default)).Throws<ObjectDisposedException>();
+            // Avalonia 12.1.1 reports initialization errors to each caller and keeps
+            // the queue alive. Cancellation during initialization is also a fault,
+            // not session shutdown or cancellation of the caller task.
+            var third = session.Dispatch(() => true, default);
             observed = null;
-            try { await session.DisposeAsync().AsTask().WaitAsync(Timeout); }
+            try { await third.WaitAsync(Timeout); }
             catch (Exception exception) { observed = exception; }
             await Assert.That(observed).IsSameReferenceAs(FailingEntryPoint.Sentinel);
+            await Assert.That(first.IsFaulted && second.IsFaulted && third.IsFaulted).IsTrue();
+            await Assert.That(FailingEntryPoint.InitializationAttemptCount).IsEqualTo(3);
+            await Assert.That(worker.IsCompleted).IsFalse();
+            await session.DisposeAsync().AsTask().WaitAsync(Timeout);
+            disposed = true;
+            await Assert.That(worker.IsCompletedSuccessfully).IsTrue();
+            await Assert.That(() => cancellation.Token).Throws<ObjectDisposedException>();
+            await Assert.That(() => session.Dispatch(() => true, default)).Throws<ObjectDisposedException>();
         }
         finally
         {
             FailingEntryPoint.Release.Set();
-            await cancellation.CancelAsync();
-            try { await worker.WaitAsync(Timeout); }
-            catch (Exception) when (worker.IsFaulted) { }
+            if (!disposed)
+            {
+                await cancellation.CancelAsync();
+                try { await worker.WaitAsync(Timeout); }
+                catch (Exception) when (worker.IsFaulted) { }
+            }
             cancellation.Dispose();
             queue.Dispose();
         }
@@ -118,17 +130,20 @@ public sealed class HeadlessSessionFactoryTests
         internal static Exception Sentinel = null!;
         internal static TaskCompletionSource Entered = null!;
         internal static ManualResetEventSlim Release = null!;
+        internal static int InitializationAttemptCount;
         internal static void Reset(Exception exception)
         {
             Release?.Dispose();
             Sentinel = exception;
             Entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
             Release = new();
+            InitializationAttemptCount = 0;
         }
         public static AppBuilder BuildAvaloniaApp() => AppBuilder.Configure<Application>()
             .UseHeadless(new AvaloniaHeadlessPlatformOptions()).AfterSetup(_ =>
             {
-                Entered.SetResult();
+                Interlocked.Increment(ref InitializationAttemptCount);
+                Entered.TrySetResult();
                 if (!Release.Wait(Timeout)) throw new TimeoutException("Initializer was not released.");
                 throw Sentinel;
             });

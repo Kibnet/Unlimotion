@@ -31,6 +31,116 @@ namespace Unlimotion.Test;
 public class MainControlTaskStatusIconUiTests
 {
     [Test]
+    public async Task TaskCard_FirstEditAutosavesAndFirstReloadReadsTheCard()
+    {
+        if (await ImportanceRenderedProcess.RunIfNeededAsync(
+                nameof(TaskCard_FirstEditAutosavesAndFirstReloadReadsTheCard),
+                nameof(MainControlTaskStatusIconUiTests))) return;
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(StatusRecoveryRenderedAppBuilder));
+        await session.DispatchAsync(async () =>
+        {
+            var previousThrottle = TaskItemViewModel.DefaultThrottleTime;
+            TaskItemViewModel.DefaultThrottleTime = TimeSpan.FromMilliseconds(30);
+            DelayedCardReloadFileStorage storage = null!;
+            MainWindowViewModelFixture? fixture = null;
+            Window? window = null;
+            try
+            {
+                fixture = new MainWindowViewModelFixture(path =>
+                    new UnifiedTaskStorage(new TaskTreeManager(storage = new DelayedCardReloadFileStorage(path))));
+                var vm = fixture.MainWindowViewModelTest;
+                await vm.Connect();
+                var card = TestHelpers.GetTask(vm, MainWindowViewModelFixture.RootTask2Id);
+                vm.CurrentTaskItem = card;
+                vm.DetailsAreOpen = true;
+                vm.SelectCurrentTask();
+                var view = new MainControl { DataContext = vm };
+                window = CreateWindow(view);
+                window.Show();
+                var title = WaitForAutomationControl<TextBox>(view, "CurrentTaskTitleTextBox");
+                await Assert.That(title.Focus()).IsTrue();
+                title.SelectAll();
+                window.KeyTextInput("First edit persisted by autosave");
+                Dispatcher.UIThread.RunJobs();
+                await Assert.That(card.Title).IsEqualTo("First edit persisted by autosave");
+                var path = System.IO.Path.Combine(fixture.DefaultTasksFolderPath, card.Id);
+                TaskItem ReadStored() => Newtonsoft.Json.JsonConvert.DeserializeObject<TaskItem>(System.IO.File.ReadAllText(path))!;
+                await Assert.That(await TestHelpers.WaitUntilAsync(() =>
+                {
+                    Dispatcher.UIThread.RunJobs();
+                    try { return ReadStored().Title == "First edit persisted by autosave"; }
+                    catch (System.IO.IOException) { return false; }
+                    catch (Newtonsoft.Json.JsonReaderException) { return false; }
+                }, TimeSpan.FromSeconds(10))).IsTrue();
+                await card.WaitForPendingSavesAsync();
+                SaveFrame("first-save");
+
+                var external = ReadStored() with { Title = "First Reload read the external change" };
+                await System.IO.File.WriteAllTextAsync(path, Newtonsoft.Json.JsonConvert.SerializeObject(external));
+                storage.BlockRead = true;
+                var reload = OpenTaskReloadMenu(view);
+                await Assert.That(reload.IsEnabled).IsTrue();
+                reload.BringIntoView();
+                await Task.Delay(20);
+                Dispatcher.UIThread.RunJobs();
+                var inputRoot = TopLevel.GetTopLevel(reload) ?? window;
+                inputRoot.UpdateLayout();
+                var point = reload.TranslatePoint(new Point(reload.Bounds.Width / 2, reload.Bounds.Height / 2), inputRoot)
+                    ?? throw new InvalidOperationException("Reload action is not attached to its input surface.");
+                inputRoot.MouseDown(point, MouseButton.Left, RawInputModifiers.None);
+                inputRoot.MouseUp(point, MouseButton.Left, RawInputModifiers.None);
+                await storage.ReadEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+                Dispatcher.UIThread.RunJobs();
+                // Clicking closes the flyout; its detached item no longer reflects
+                // the active command state. Inspect the action in an open menu.
+                await Assert.That(card.CanReloadTask).IsFalse();
+                var busyReload = OpenTaskReloadMenu(view);
+                await Assert.That(await TestHelpers.WaitUntilAsync(() =>
+                {
+                    Dispatcher.UIThread.RunJobs();
+                    return busyReload.IsEffectivelyVisible && !busyReload.IsEnabled;
+                }, TimeSpan.FromSeconds(5))).IsTrue();
+                storage.ReleaseRead.TrySetResult();
+                await Assert.That(await TestHelpers.WaitUntilAsync(() =>
+                {
+                    Dispatcher.UIThread.RunJobs();
+                    return title.Text == external.Title && card.CanReloadTask;
+                }, TimeSpan.FromSeconds(10))).IsTrue();
+                await Assert.That(storage.ReadOnUiThread).IsFalse();
+                await Assert.That(vm.CurrentTaskItem).IsSameReferenceAs(card);
+                await Assert.That(ReadStored().Title).IsEqualTo(external.Title);
+                await Assert.That(card.HasTaskOperationError).IsFalse();
+                ((MenuFlyout)WaitForAutomationControl<DropDownButton>(view, "CurrentTaskActionsMenuButton").Flyout!).Hide();
+                SaveFrame("first-reload");
+
+                void SaveFrame(string name)
+                {
+                    Dispatcher.UIThread.RunJobs();
+                    window.UpdateLayout();
+                    AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                    Dispatcher.UIThread.RunJobs();
+                    var directory = Environment.GetEnvironmentVariable("UNLIMOTION_LAZY_EDITOR_UI_EVIDENCE")
+                        ?? ImportanceImageComparison.CreateArtifactDirectory("lazy-editor-commands");
+                    System.IO.Directory.CreateDirectory(directory);
+                    using var frame = window.CaptureRenderedFrame();
+                    if (frame is null) throw new InvalidOperationException("Rendered editor frame unavailable.");
+                    frame.Save(System.IO.Path.Combine(directory, name + ".png"));
+                }
+            }
+            finally
+            {
+                try
+                {
+                    storage?.ReleaseRead.TrySetResult();
+                    window?.Close();
+                    if (fixture is not null) await fixture.CleanTasksAsync();
+                }
+                finally { TaskItemViewModel.DefaultThrottleTime = previousThrottle; }
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
     public async Task TaskCardStatusRecovery_AuthoritativeReadRunsOffUiThread()
     {
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));

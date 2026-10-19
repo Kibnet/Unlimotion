@@ -7,7 +7,7 @@ namespace Unlimotion.UiTests.Headless.Infrastructure;
 
 internal static class HeadlessSessionFactory
 {
-    // Avalonia.Headless 12.0.4 publishes a session from Task.Run before assigning
+    // Avalonia.Headless 12.1.1 still publishes a session from Task.Run before assigning
     // its worker Task. Keep the pinned factory semantics, but assign a cold Task
     // before starting it, so the framework's DisposeAsync can join the worker.
     internal static HeadlessUnitTestSession StartNew(Type entryPointType,
@@ -59,8 +59,8 @@ internal static class HeadlessSessionFactory
                 catch (OperationCanceledException) when (currentAction is null && cancellation.IsCancellationRequested) { }
                 catch (Exception exception)
                 {
-                    // Framework initialization/disposal can throw outside Dispatch's
-                    // TCS catch. Preserve the worker fault, but release its orphaned
+                    // Infrastructure actions can throw outside Dispatch's TCS catch.
+                    // Preserve actual worker faults, but release their orphaned
                     // callers and reject further dispatch into this terminal session.
                     var cleanupErrors = new List<Exception>();
                     void Cleanup(Action cleanup)
@@ -98,7 +98,7 @@ internal static class HeadlessSessionFactory
 
     private static void FailFrameworkDispatch(Action? action, Exception exception)
     {
-        // Pinned Avalonia 12.0.4 DispatchCore closure. Arbitrary actions (including
+        // Pinned Avalonia 12.1.1 DispatchCore closure. Arbitrary actions (including
         // the worker-fault negative control) are not framework requests.
         var closure = action?.Target;
         if (closure?.GetType().DeclaringType != typeof(HeadlessUnitTestSession)) return;
