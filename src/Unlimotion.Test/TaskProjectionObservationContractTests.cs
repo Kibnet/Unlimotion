@@ -8,7 +8,6 @@ using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using ReactiveUI;
-using Unlimotion.ViewModel;
 using DomainTaskStatus = Unlimotion.Domain.TaskStatus;
 
 namespace Unlimotion.Test;
@@ -17,13 +16,11 @@ namespace Unlimotion.Test;
 public class TaskProjectionObservationContractTests
 {
     [Test]
-    [Arguments(false)]
-    [Arguments(true)]
-    public async Task Emoji_NonNullChangesStillRefreshTheSameBooleanResult(bool direct)
+    public async Task Emoji_NonNullChangesStillRefreshTheSameBooleanResult()
     {
         var source = new Probe();
         var values = new List<bool>();
-        using var subscription = Emoji(source, direct).Subscribe(values.Add);
+        using var subscription = OriginalEmoji(source).Subscribe(values.Add);
         source.Emoji = "B"; source.Raise(nameof(Probe.Emoji));
         source.Emoji = null; source.Raise(nameof(Probe.Emoji));
         source.Emoji = ""; source.Raise(nameof(Probe.Emoji));
@@ -33,13 +30,11 @@ public class TaskProjectionObservationContractTests
     }
 
     [Test]
-    [Arguments(false)]
-    [Arguments(true)]
-    public async Task Root_DateAndStatusChangesRefreshEvenWhenFinalBooleanMatches(bool direct)
+    public async Task Root_DateAndStatusChangesRefreshEvenWhenFinalBooleanMatches()
     {
         var source = new Probe();
         var values = new List<bool>();
-        using var subscription = Root(source, direct).Subscribe(values.Add);
+        using var subscription = OriginalRoot(source).Subscribe(values.Add);
         source.UnlockedDateTime = DateTimeOffset.UnixEpoch; source.Raise(nameof(Probe.UnlockedDateTime));
         source.Status = DomainTaskStatus.Archived; source.Raise(nameof(Probe.Status));
         source.IsCanBeCompleted = false; source.Raise(nameof(Probe.IsCanBeCompleted));
@@ -52,13 +47,11 @@ public class TaskProjectionObservationContractTests
     }
 
     [Test]
-    [Arguments(false)]
-    [Arguments(true)]
-    public async Task Root_SilentOtherFieldWaitsForItsOwnNotification(bool direct)
+    public async Task Root_SilentOtherFieldWaitsForItsOwnNotification()
     {
         var source = new Probe();
         var values = new List<bool>();
-        using var subscription = Root(source, direct).Subscribe(values.Add);
+        using var subscription = OriginalRoot(source).Subscribe(values.Add);
         source.Status = DomainTaskStatus.Archived;
         source.UnlockedDateTime = DateTimeOffset.UnixEpoch;
         source.Raise(nameof(Probe.UnlockedDateTime));
@@ -68,15 +61,13 @@ public class TaskProjectionObservationContractTests
     }
 
     [Test]
-    [Arguments(null, false)]
-    [Arguments(null, true)]
-    [Arguments("", false)]
-    [Arguments("", true)]
-    public async Task Root_BroadNotificationRecomputesChangedProperties(string? propertyName, bool direct)
+    [Arguments((string?)null)]
+    [Arguments("")]
+    public async Task Root_BroadNotificationRecomputesChangedProperties(string? propertyName)
     {
         var source = new Probe();
         var values = new List<bool>();
-        using var subscription = Root(source, direct).Subscribe(values.Add);
+        using var subscription = OriginalRoot(source).Subscribe(values.Add);
         source.Status = DomainTaskStatus.Archived;
         source.IsCanBeCompleted = false;
         source.Raise(propertyName);
@@ -85,13 +76,11 @@ public class TaskProjectionObservationContractTests
     }
 
     [Test]
-    [Arguments(false)]
-    [Arguments(true)]
-    public async Task Root_ReentrantMutationKeepsSynchronousDelivery(bool direct)
+    public async Task Root_ReentrantMutationKeepsSynchronousDelivery()
     {
         var source = new Probe();
         var values = new List<bool>();
-        using var subscription = Root(source, direct).Subscribe(value =>
+        using var subscription = OriginalRoot(source).Subscribe(value =>
         {
             values.Add(value);
             if (values.Count != 1) return;
@@ -102,13 +91,11 @@ public class TaskProjectionObservationContractTests
     }
 
     [Test]
-    [Arguments(false)]
-    [Arguments(true)]
-    public async Task Emoji_InitialDeliveryPrecedesEventAttachment(bool direct)
+    public async Task Emoji_InitialDeliveryPrecedesEventAttachment()
     {
         var source = new Probe();
         var values = new List<bool>();
-        using var subscription = Emoji(source, direct).Subscribe(value =>
+        using var subscription = OriginalEmoji(source).Subscribe(value =>
         {
             values.Add(value);
             if (values.Count != 1) return;
@@ -119,30 +106,26 @@ public class TaskProjectionObservationContractTests
     }
 
     [Test]
-    [Arguments(false)]
-    [Arguments(true)]
-    public async Task Dispose_DetachesAndNewSubscriptionReadsCurrentValue(bool direct)
+    public async Task Dispose_DetachesAndNewSubscriptionReadsCurrentValue()
     {
         var source = new Probe();
         var oldValues = new List<bool>();
-        var subscription = Emoji(source, direct).Subscribe(oldValues.Add);
+        var subscription = OriginalEmoji(source).Subscribe(oldValues.Add);
         subscription.Dispose();
         source.Emoji = null; source.Raise(nameof(Probe.Emoji));
         var newValues = new List<bool>();
-        using (Emoji(source, direct).Subscribe(newValues.Add)) { }
+        using (OriginalEmoji(source).Subscribe(newValues.Add)) { }
         await Assert.That(oldValues.SequenceEqual(new[] { false })).IsTrue();
         await Assert.That(newValues.SequenceEqual(new[] { true })).IsTrue();
         await Assert.That(source.HandlerCount).IsEqualTo(0);
     }
 
     [Test]
-    [Arguments(false)]
-    [Arguments(true)]
-    public async Task WorkerNotification_IsDeliveredOnTheEmitterThread(bool direct)
+    public async Task WorkerNotification_IsDeliveredOnTheEmitterThread()
     {
         var source = new Probe();
         var threads = new List<int>();
-        using var subscription = Emoji(source, direct).Subscribe(_ => threads.Add(Environment.CurrentManagedThreadId));
+        using var subscription = OriginalEmoji(source).Subscribe(_ => threads.Add(Environment.CurrentManagedThreadId));
         var emitter = await Task.Run(() =>
         {
             source.Emoji = "B"; source.Raise(nameof(Probe.Emoji));
@@ -153,11 +136,9 @@ public class TaskProjectionObservationContractTests
     }
 
     [Test]
-    [Arguments(false, false)]
-    [Arguments(false, true)]
-    [Arguments(true, false)]
-    [Arguments(true, true)]
-    public async Task GetterFailure_IsObservableAndDoesNotKeepHandlers(bool afterInitial, bool direct)
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task GetterFailure_IsObservableAndDoesNotKeepHandlers(bool afterInitial)
     {
         var source = new Probe { ThrowOnRead = !afterInitial };
         var trace = new List<string>();
@@ -167,9 +148,9 @@ public class TaskProjectionObservationContractTests
         {
             try
             {
-                subscription = Emoji(source, direct).Subscribe(value => trace.Add("value:" + value), ex =>
+                subscription = OriginalEmoji(source).Subscribe(value => trace.Add("value:" + value), ex =>
                 {
-                    // Reflection is part of the old expression observer, not the typed getter.
+                    // The expression observer wraps getter failures through reflection.
                     var cause = ex is TargetInvocationException { InnerException: { } inner } ? inner : ex;
                     trace.Add("error:" + cause.GetType().Name + ":" + cause.Message);
                 });
@@ -192,61 +173,15 @@ public class TaskProjectionObservationContractTests
         finally { subscription?.Dispose(); }
     }
 
-    private static IObservable<bool> Emoji(Probe source, bool direct) => direct
-        ? TaskPropertySignals.Observe(source, nameof(Probe.Emoji), static task => task.Emoji)
-            .Select(emoji => emoji == null)
-        : OriginalEmoji(source);
-
-    private static IObservable<bool> Root(Probe source, bool direct) => direct
-        ? Observable.CombineLatest(
-            TaskPropertySignals.Observe(source, nameof(Probe.IsCanBeCompleted), static task => task.IsCanBeCompleted),
-            TaskPropertySignals.Observe(source, nameof(Probe.Status), static task => task.Status),
-            TaskPropertySignals.Observe(source, nameof(Probe.UnlockedDateTime), static task => task.UnlockedDateTime),
-            (can, status, unlocked) => can && status != DomainTaskStatus.Archived)
-        : OriginalRoot(source);
-
     [Test]
-    [Arguments(false)]
-    [Arguments(true)]
-    public async Task ScriptedTrace_MatchesTheExactOriginalBooleanObservable(bool root)
-    {
-        List<bool> Capture(bool direct)
-        {
-            var source = new Probe();
-            var values = new List<bool>();
-            using var subscription = (root ? Root(source, direct) : Emoji(source, direct)).Subscribe(values.Add);
-            source.Emoji = "B"; source.Raise(nameof(Probe.Emoji));
-            source.Emoji = "C"; source.Raise(nameof(Probe.Emoji));
-            source.Status = DomainTaskStatus.Archived;
-            source.UnlockedDateTime = DateTimeOffset.UnixEpoch;
-            source.Raise(nameof(Probe.UnlockedDateTime));
-            source.Raise(nameof(Probe.Status));
-            source.IsCanBeCompleted = false; source.Raise(nameof(Probe.IsCanBeCompleted));
-            source.Emoji = null; source.Raise(null);
-            source.Status = DomainTaskStatus.Prepared;
-            source.IsCanBeCompleted = true;
-            source.Emoji = "D"; source.Raise("");
-            source.Raise("");
-            source.Raise("Unrelated");
-            return values;
-        }
-
-        var original = Capture(false);
-        var direct = Capture(true);
-        await Assert.That(direct.SequenceEqual(original)).IsTrue();
-    }
-
-    [Test]
-    [Arguments(false)]
-    [Arguments(true)]
-    public async Task ReentrantDispose_StopsLaterEvents(bool direct)
+    public async Task ReentrantDispose_StopsLaterEvents()
     {
         var source = new Probe();
         var values = new List<bool>();
         IDisposable? subscription = null;
         try
         {
-            subscription = Emoji(source, direct).Subscribe(value =>
+            subscription = OriginalEmoji(source).Subscribe(value =>
             {
                 values.Add(value);
                 if (values.Count == 2) subscription!.Dispose();
@@ -260,15 +195,13 @@ public class TaskProjectionObservationContractTests
     }
 
     [Test]
-    [Arguments(false)]
-    [Arguments(true)]
-    public async Task ConcurrentDispose_DoesNotWaitForAnAlreadyEnteredConsumer(bool direct)
+    public async Task ConcurrentDispose_DoesNotWaitForAnAlreadyEnteredConsumer()
     {
         var source = new Probe();
         using var entered = new ManualResetEventSlim();
         using var release = new ManualResetEventSlim();
         var calls = 0;
-        var subscription = Emoji(source, direct).Subscribe(_ =>
+        var subscription = OriginalEmoji(source).Subscribe(_ =>
         {
             if (Interlocked.Increment(ref calls) != 2) return;
             entered.Set();
@@ -295,15 +228,13 @@ public class TaskProjectionObservationContractTests
     }
 
     [Test]
-    [Arguments(false)]
-    [Arguments(true)]
-    public async Task ConsumerFailure_PropagatesAndAutomaticallyDetaches(bool direct)
+    public async Task ConsumerFailure_PropagatesAndAutomaticallyDetaches()
     {
         var source = new Probe();
         var calls = 0;
         var errors = 0;
         var failure = new InvalidOperationException("consumer fault");
-        using var subscription = Emoji(source, direct).Subscribe(_ =>
+        using var subscription = OriginalEmoji(source).Subscribe(_ =>
         {
             if (++calls == 2) throw failure;
         }, _ => errors++);
@@ -313,41 +244,6 @@ public class TaskProjectionObservationContractTests
         await Assert.That(ReferenceEquals(caught, failure)).IsTrue();
         await Assert.That(errors).IsEqualTo(0);
         await Assert.That(source.HandlerCount).IsEqualTo(0);
-    }
-
-    [Test]
-    [Arguments(false)]
-    [Arguments(true)]
-    public async Task InitialConsumerFailure_PropagatesWithoutAttachingHandler(bool direct)
-    {
-        var source = new Probe();
-        var failure = new InvalidOperationException("initial consumer fault");
-        Exception? caught = null;
-        var errors = 0;
-        IDisposable? subscription = null;
-        try
-        {
-            try { subscription = Emoji(source, direct).Subscribe(_ => throw failure, _ => errors++); }
-            catch (Exception error) { caught = error; }
-            await Assert.That(ReferenceEquals(caught, failure)).IsTrue();
-            await Assert.That(errors).IsEqualTo(0);
-            await Assert.That(source.HandlerCount).IsEqualTo(0);
-        }
-        finally { subscription?.Dispose(); }
-    }
-
-    [Test]
-    public async Task UnsupportedRuntimeSource_FailsThroughOnErrorBeforeReadingGetter()
-    {
-        var reads = 0;
-        var values = 0;
-        var errors = new List<Exception>();
-        using var subscription = TaskPropertySignals.Observe(new object(), "Value", _ => ++reads)
-            .Subscribe(_ => values++, errors.Add);
-        await Assert.That(reads).IsEqualTo(0);
-        await Assert.That(values).IsEqualTo(0);
-        await Assert.That(errors.Count).IsEqualTo(1);
-        await Assert.That(errors.Single() is ArgumentException { ParamName: "source" }).IsTrue();
     }
 
     private static IObservable<bool> OriginalEmoji(Probe source) =>

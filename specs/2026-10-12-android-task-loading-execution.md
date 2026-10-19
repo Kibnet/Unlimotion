@@ -1,5 +1,11 @@
 # Диагностика загрузки и поиска Unlimotion на Samsung Z Fold 6
 
+## Checkpoint19Oct — возврат к исходному loading/lifecycle сценарию
+
+Direct-INPC experiment560: UNVALIDATED/INCONCLUSIVE, no-retain без доказательства регрессии; AndroidA4/A5 не пройдены, measured comparisons не получены. Scoped rollback product/tests exact43 выполнен,51targeted/UI+localHeadless66 прошли; final review/newheadCI pending. Подробности/сохранённые raw evidence/LOW visual determinism — specs/2026-10-16-android-direct-projection-events.md§21. Task1 остаётся InProgress/Active, PR325draft, main/следующие задачи/релиз не затронуты.
+
+Отдельный baseline diagnostic19Oct с полными traces/drop0/3094SHA: Init26.821с, initialgraph12.800с, models5.721с, publication6.927с. Он не заменяет failed140с warmup и не является сравнением. По текущему исходному коду OnResume не вызывает Connect/Init, а InitializeStartupViewModelAsync пропускает initialized repository; существующий UI test SingleViewStartup_DoesNotReloadInitializedTaskStorage это проверяет. Новый cache для живого PID не обоснован. Следующая работа — сверить имеющиеся10resume/foreground5/background3incomplete traces, более точное время native action+ready при доказуемом общем clock, затем выбирать bounded fix/cache architecture. Cold5s/resume1s/freshness5s не закрыты; Task2 state-preservation не начинается до принятия/merge Task1.
+
 ## 0. Метаданные
 - Владелец: Павел. Подготовка диагностического скоупа, форма Expanded, масштаб medium: два связанных симптома производительности, Android lifecycle, Git и неизвестная причина. Эта SPEC определяет read-only диагностику; изменение поведения приложения в неё не входит. По applicability quest-governance read-only анализ не требует exact approval; gate относится к будущей реализации.
 - Профили: performance-optimization; dotnet-desktop-client для общего Avalonia клиента. ui-automation-testing и локальный AGENTS.override.md определяют обязательные проверки будущего исправления; сейчас UI/код не меняются.
