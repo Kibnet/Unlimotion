@@ -125,14 +125,42 @@ foreach ($project in $Projects) {
     foreach ($group in @($tests | Group-Object { $_.executionId } | Where-Object Count -gt 1)) {
         foreach ($test in $group.Group) { $test.identityStatus = 'ambiguous' }
     }
+    # PowerShell string -eq uses invariant, case-insensitive comparison. Preserve
+    # that contract, duplicate starts and phase order without rescanning every trace.
+    $comparison = [StringComparer]::InvariantCultureIgnoreCase
+    $startsByClass = [Collections.Generic.Dictionary[string,object]]::new($comparison)
+    $phasesByContext = [Collections.Generic.Dictionary[string,object]]::new($comparison)
+    foreach ($entry in $traceEntries) {
+        if ($entry.kind -eq 'test-lifecycle' -and $entry.outcome -eq 'started' -and
+            $null -ne $entry.details.className -and $null -ne $entry.testName) {
+            $classKey = [string]$entry.details.className
+            $nameKey = [string]$entry.testName
+            if (!$startsByClass.ContainsKey($classKey)) {
+                $startsByClass[$classKey] = [Collections.Generic.Dictionary[string,object]]::new($comparison)
+            }
+            $names = $startsByClass[$classKey]
+            if (!$names.ContainsKey($nameKey)) { $names[$nameKey] = [Collections.Generic.List[object]]::new() }
+            $names[$nameKey].Add($entry)
+        }
+        if ($entry.kind -eq 'phase' -and $null -ne $entry.testExecutionId) {
+            $contextKey = [string]$entry.testExecutionId
+            if (!$phasesByContext.ContainsKey($contextKey)) {
+                $phasesByContext[$contextKey] = [Collections.Generic.List[object]]::new()
+            }
+            $phasesByContext[$contextKey].Add([ordered]@{name=$entry.name; durationMs=$entry.durationMs; outcome=$entry.outcome})
+        }
+    }
     foreach ($test in $tests) {
         # TUnit context IDs differ from TRX executionId. Join only a unique, complete
         # class/display identity via the lifecycle record; never guess a collision.
-        $starts = @($traceEntries | Where-Object {$_.kind -eq 'test-lifecycle' -and $_.outcome -eq 'started' -and $_.details.className -eq $test.className -and $_.testName -eq $test.displayName})
-        if ($test.identityStatus -eq 'complete' -and $starts.Count -eq 1 -and $starts[0].testExecutionId) {
+        $starts = $null
+        if ($startsByClass.ContainsKey($test.className) -and $startsByClass[$test.className].ContainsKey($test.displayName)) {
+            $starts = $startsByClass[$test.className][$test.displayName]
+        }
+        if ($test.identityStatus -eq 'complete' -and $null -ne $starts -and $starts.Count -eq 1 -and $starts[0].testExecutionId) {
             $contextId = $starts[0].testExecutionId
             $test['diagnosticTestExecutionId'] = $contextId
-            $test.phases = @($traceEntries | Where-Object {$_.kind -eq 'phase' -and $_.testExecutionId -eq $contextId} | ForEach-Object {[ordered]@{name=$_.name; durationMs=$_.durationMs; outcome=$_.outcome}})
+            $test.phases = if ($phasesByContext.ContainsKey($contextId)) { ,$phasesByContext[$contextId].ToArray() } else { ,@() }
             $test.phasesMissingReason = if ($test.phases.Count) {$null} else {'This test has no explicit phase instrumentation'}
         }
     }
