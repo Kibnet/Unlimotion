@@ -2936,6 +2936,14 @@ public class MainControlTaskCardLayoutUiTests
 
     private static void AssertDesktopPlanningGroupsStayCompactRow(Control root)
     {
+        // Widths can change during the preceding awaited assertions. Re-measure the
+        // actual panel extent before taking this synchronous geometry snapshot.
+        var planningPanel = root.GetVisualDescendants().OfType<WrapPanel>()
+            .Single(panel => panel.Classes.Contains("TaskPlanningGroups"));
+        planningPanel.InvalidateMeasure();
+        planningPanel.Measure(planningPanel.Bounds.Size);
+        planningPanel.Arrange(planningPanel.Bounds);
+
         var planningControls = PlanningControlAutomationIds
             .Select(automationId => FindControlByAutomationId<Control>(root, automationId))
             .ToArray();
@@ -3365,7 +3373,13 @@ public class MainControlTaskCardLayoutUiTests
                $"root={root.Bounds}; " +
                $"split={splitView?.Bounds}; open={splitView?.IsPaneOpen}; pane={paneLength}; " +
                $"scroll={scrollViewer?.Bounds}; " +
-               $"panel={panel?.Bounds}; compact={isCompact}.";
+               $"panel={panel?.Bounds}; compact={isCompact}. " +
+               "Planning: " + string.Join("; ", root.GetVisualDescendants().OfType<StackPanel>()
+                   .Where(control => control.Classes.Contains("TaskPlanningGroup"))
+                   .Select(control => $"width={control.Width}; bounds={control.Bounds}; desired={control.DesiredSize}; margin={control.Margin}; valid={control.IsMeasureValid}/{control.IsArrangeValid}; host={control.GetVisualParent()?.Bounds}")) +
+               "; hosts=" + string.Join("; ", root.GetVisualDescendants().OfType<WrapPanel>()
+                   .Where(control => control.Classes.Contains("TaskPlanningGroups"))
+                   .Select(control => $"orientation={control.Orientation}; item={control.ItemWidth}/{control.ItemHeight}; spacing={control.ItemSpacing}/{control.LineSpacing}; bounds={control.Bounds}"));
     }
 
     private sealed class FakeSystemCultureProvider : ILocalizationSystemCultureProvider
