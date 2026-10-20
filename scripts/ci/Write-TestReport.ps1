@@ -168,6 +168,26 @@ foreach ($project in $Projects) {
     $passed = @($tests | Where-Object { $_.outcome -eq 'Passed' }).Count
     $failed = @($tests | Where-Object { $_.outcome -eq 'Failed' }).Count
     $testCompleted = $stages.ContainsKey('test') -and $stages.test.finishedUtc -and $invocation -and ![string]::IsNullOrWhiteSpace([string]$invocation.invocationId) -and $stages.test.invocationId -eq $invocation.invocationId
+    if ($stages.ContainsKey('test') -and $stages.test.executionSchemaVersion) {
+        try {
+            $execution=$stages.test
+            if ($execution.executionSchemaVersion -ne 1 -or $execution.inventoryComplete -ne $true -or @($execution.invocations).Count -eq 0) {throw 'Incomplete execution inventory'}
+            $seenInvocations=[Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+            $allowed=[IO.Path]::GetFullPath($inputDirectory)+[IO.Path]::DirectorySeparatorChar
+            foreach ($child in $execution.invocations) {
+                if (!$child.invocationId -or !$seenInvocations.Add($child.invocationId)) {throw 'Duplicate or missing invocation identity'}
+                $childRoot=[IO.Path]::GetFullPath((Join-Path $inputDirectory $child.directory))
+                if (!$childRoot.StartsWith($allowed,[StringComparison]::OrdinalIgnoreCase)) {throw 'Invocation path escapes project results'}
+                $childStage=Get-Content -Raw -LiteralPath (Join-Path $childRoot 'stage-test.json') | ConvertFrom-Json
+                $childManifest=Get-Content -Raw -LiteralPath (Join-Path $childRoot 'invocation-test.json') | ConvertFrom-Json
+                if ($childStage.invocationId -ne $child.invocationId -or $childManifest.invocationId -ne $child.invocationId -or
+                    $childStage.project -ne $project -or $childManifest.project -ne $project -or !$childStage.finishedUtc -or
+                    !(Test-InvocationArguments $childManifest.arguments) -or $null -eq $child.exitCode -or $childStage.exitCode -ne $child.exitCode -or
+                    $child.error -or $childStage.error) {throw 'Incomplete or contradictory child invocation'}
+                if ($execution.exitCode -eq 0 -and $childStage.exitCode -ne 0) {throw 'Successful aggregate hides a failed invocation'}
+            }
+        } catch {$testCompleted=$false; $errors.Add("${project}: invalid execution metadata: $($_.Exception.Message)")}
+    }
     if ($tests.Count -gt 0) { $status = if ($testCompleted) {if ($failed) {'test-failure'} elseif ($passed) {'passed'} else {'zero-discovery'}} else {'incomplete'} }
     foreach ($stage in @('restore','build','test')) {
         if ($stages.ContainsKey($stage) -and $stages[$stage].exitCode -ne 0) {

@@ -9,16 +9,17 @@ using TUnit.Core;
 
 namespace Unlimotion.Test;
 
-internal static class TaskTabEmojiFilterRenderedProcess
+internal static class RenderedTestProcess
 {
-    private const string ChildFlag = "UNLIMOTION_TAB_EMOJI_RENDERED_CHILD";
+    private const string ChildFlag = "UNLIMOTION_RENDERED_TEST_CHILD";
 
-    public static async Task<bool> RunIfNeededAsync()
+    public static async Task<bool> RunIfNeededAsync(TimeSpan? timeout = null)
     {
-        if (Environment.GetEnvironmentVariable(ChildFlag) == "1") return false;
-        var context = TestContext.Current ?? throw new InvalidOperationException("No current emoji UI test.");
+        if (Environment.GetEnvironmentVariable(ChildFlag) == "1" ||
+            Environment.GetEnvironmentVariable("UNLIMOTION_TAB_EMOJI_RENDERED_CHILD") == "1") return false;
+        var context = TestContext.Current ?? throw new InvalidOperationException("No current rendered UI test.");
         var root = Environment.GetEnvironmentVariable("UNLIMOTION_TEST_TRACE_DIRECTORY")
-            ?? Path.Combine(AppContext.BaseDirectory, "artifacts", "tab-emoji");
+            ?? Path.Combine(AppContext.BaseDirectory, "artifacts", "rendered-ui");
         var directory = Path.Combine(root, "rendered-" + Guid.NewGuid().ToString("N"));
         var results = Path.Combine(directory, "results");
         Directory.CreateDirectory(directory);
@@ -34,7 +35,7 @@ internal static class TaskTabEmojiFilterRenderedProcess
         };
         foreach (var argument in new[]
         {
-            typeof(TaskTabEmojiFilterCopyUiTests).Assembly.Location,
+            typeof(RenderedTestProcess).Assembly.Location,
             "--filter-uid", context.Metadata.TestDetails.Identity.TestId,
             "--maximum-parallel-tests", "1", "--minimum-expected-tests", "1",
             "--output", "Detailed", "--report-trx", "--results-directory", results
@@ -44,27 +45,29 @@ internal static class TaskTabEmojiFilterRenderedProcess
         using var process = Process.Start(start) ?? throw new InvalidOperationException("Cannot start rendered emoji test.");
         var output = process.StandardOutput.ReadToEndAsync();
         var errors = process.StandardError.ReadToEndAsync();
-        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));
-        try { await process.WaitForExitAsync(timeout.Token); }
+        using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(context.Execution.CancellationToken);
+        if (timeout.HasValue) lifetime.CancelAfter(timeout.Value);
+        try { await process.WaitForExitAsync(lifetime.Token); }
         catch (OperationCanceledException)
         {
             if (!process.HasExited) process.Kill(entireProcessTree: true);
             await process.WaitForExitAsync();
             await SaveLogsAsync();
-            throw new TimeoutException($"Rendered emoji test timed out: {context.Metadata.DisplayName}. Logs: {directory}");
+            context.Execution.CancellationToken.ThrowIfCancellationRequested();
+            throw new TimeoutException($"Rendered UI test timed out: {context.Metadata.DisplayName}. Logs: {directory}");
         }
         await SaveLogsAsync();
         if (process.ExitCode != 0)
         {
             Console.WriteLine(await output);
             Console.Error.WriteLine(await errors);
-            throw new InvalidOperationException($"Rendered emoji test failed: {context.Metadata.DisplayName}, exit={process.ExitCode}. Logs: {directory}");
+            throw new InvalidOperationException($"Rendered UI test failed: {context.Metadata.DisplayName}, exit={process.ExitCode}. Logs: {directory}");
         }
         var report = XDocument.Load(Directory.GetFiles(results, "*.trx").Single());
         var counters = report.Descendants().Single(element => element.Name.LocalName == "Counters");
         if ((string?)counters.Attribute("total") != "1" || (string?)counters.Attribute("passed") != "1")
-            throw new InvalidOperationException($"Expected exactly one passed rendered emoji case. Logs: {directory}");
-        Console.WriteLine($"Rendered emoji case passed: {context.Metadata.DisplayName}. Logs/TRX/PNG: {directory}");
+            throw new InvalidOperationException($"Expected exactly one passed rendered UI case. Logs: {directory}");
+        Console.WriteLine($"Rendered UI case passed: {context.Metadata.DisplayName}. Logs/TRX/PNG: {directory}");
         return true;
 
         async Task SaveLogsAsync()

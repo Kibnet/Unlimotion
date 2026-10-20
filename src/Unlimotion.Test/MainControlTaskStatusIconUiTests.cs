@@ -158,8 +158,10 @@ public class MainControlTaskStatusIconUiTests
     [Arguments("ru", "Dark", 760)]
     [Arguments("en", "Light", 760)]
     [Arguments("en", "Dark", 760)]
+    [Unlimotion.Testing.FreshTestProcess]
     public async Task TaskCardStatusRecovery_ErrorAndReloadRemainVisible(string language, string theme, int width)
     {
+        if (await RenderedTestProcess.RunIfNeededAsync()) return;
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(StatusRecoveryRenderedAppBuilder));
         await session.DispatchAsync(async () =>
         {

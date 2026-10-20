@@ -252,16 +252,19 @@ public class MainControlTaskCardLayoutUiTests
     }
 
     [Test]
+    [Unlimotion.Testing.FreshTestProcess]
     public Task CurrentTaskCard_ParentEmojiTrail_TitleInputUpdatesChildrenAndGrandchildrenBeforeSave() =>
         AssertTitleInputUpdatesDescendantsAsync("🧭", "🫶", string.Empty);
 
     [Test]
+    [Unlimotion.Testing.FreshTestProcess]
     public Task CurrentTaskCard_ExistingTaskWizardToJellyfish_UpdatesChildrenAndGrandchildrenBeforeSave() =>
         AssertTitleInputUpdatesDescendantsAsync("🧙‍♂️", "🪼", "jellyfish-");
 
     private static async Task AssertTitleInputUpdatesDescendantsAsync(
         string originalEmoji, string replacementEmoji, string capturePrefix)
     {
+        if (await RenderedTestProcess.RunIfNeededAsync()) return;
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(EmojiTitleTestAppBuilder));
         await session.DispatchAsync(async () =>
         {
@@ -1370,8 +1373,10 @@ public class MainControlTaskCardLayoutUiTests
     }
 
     [Test]
+    [Unlimotion.Testing.FreshTestProcess]
     public async Task CurrentTaskCard_TaskHistory_AdaptsAtThreeWidthsInBothThemes()
     {
+        if (await RenderedTestProcess.RunIfNeededAsync()) return;
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(RenderedTaskHistoryAppBuilder));
         await session.DispatchAsync(async () =>
         {
@@ -1472,8 +1477,10 @@ public class MainControlTaskCardLayoutUiTests
     }
 
     [Test]
+    [Unlimotion.Testing.FreshTestProcess]
     public async Task CurrentTaskCard_TaskHistory_InlineDetailsPreserveContextAndClose()
     {
+        if (await RenderedTestProcess.RunIfNeededAsync()) return;
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(RenderedTaskHistoryAppBuilder));
         await session.DispatchAsync(async () =>
         {
@@ -1571,8 +1578,10 @@ public class MainControlTaskCardLayoutUiTests
     }
 
     [Test]
+    [Unlimotion.Testing.FreshTestProcess]
     public async Task CurrentTaskCard_TaskHistory_StaysDockedWhileTaskAndHistoryScroll()
     {
+        if (await RenderedTestProcess.RunIfNeededAsync()) return;
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(RenderedTaskHistoryAppBuilder));
         await session.DispatchAsync(async () =>
         {
@@ -1668,8 +1677,10 @@ public class MainControlTaskCardLayoutUiTests
     }
 
     [Test]
+    [Unlimotion.Testing.FreshTestProcess]
     public async Task CurrentTaskCard_TaskHistory_HeaderAndContentHaveCleanChrome()
     {
+        if (await RenderedTestProcess.RunIfNeededAsync()) return;
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(RenderedTaskHistoryAppBuilder));
         await session.DispatchAsync(async () =>
         {

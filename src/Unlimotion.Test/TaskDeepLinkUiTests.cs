@@ -14,6 +14,7 @@ using Unlimotion.Views;
 namespace Unlimotion.Test;
 
 [NotInParallel]
+[Unlimotion.Testing.FreshTestProcess]
 public class TaskDeepLinkUiTests
 {
     [Test]
@@ -22,6 +23,7 @@ public class TaskDeepLinkUiTests
     [Arguments("ru", true)]
     public async Task ColdAndWarmActivation_ShowMainCard_PreserveFiltersAndMissingTask(string language, bool filtered)
     {
+        if (await RenderedTestProcess.RunIfNeededAsync()) return;
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(ImportanceRenderedAppBuilder));
         await session.DispatchAsync(async () =>
         {

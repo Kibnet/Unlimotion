@@ -31,12 +31,14 @@ namespace Unlimotion.Test;
 public class MainControlFilterToolbarResponsiveUiTests
 {
     [Test]
+    [Unlimotion.Testing.FreshTestProcess]
     [Arguments(false)]
     [Arguments(true)]
     public Task Toolbar_EmojiFilters_TitleInputCreatesNewFilterAndPreservesOtherSelections(bool exclude) =>
         AssertEmojiTitleInputUpdatesFiltersAsync(exclude, "🧭", "🫶", "title");
 
     [Test]
+    [Unlimotion.Testing.FreshTestProcess]
     [Arguments(false)]
     [Arguments(true)]
     public Task Toolbar_EmojiFilters_ExistingTaskWizardToJellyfish_RemainsSelectable(bool exclude) =>
@@ -45,6 +47,7 @@ public class MainControlFilterToolbarResponsiveUiTests
     private static async Task AssertEmojiTitleInputUpdatesFiltersAsync(
         bool exclude, string originalEmoji, string replacementEmoji, string capturePrefix)
     {
+        if (await RenderedTestProcess.RunIfNeededAsync()) return;
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(EmojiTitleTestAppBuilder));
         await session.DispatchAsync(async () =>
         {
@@ -214,10 +217,12 @@ public class MainControlFilterToolbarResponsiveUiTests
     }
 
     [Test]
+    [Unlimotion.Testing.FreshTestProcess]
     [Arguments(false)]
     [Arguments(true)]
     public async Task Toolbar_EmojiFilters_AllToggle_WithReentrantSourceUpdate_KeepsCollectionConsistent(bool exclude)
     {
+        if (await RenderedTestProcess.RunIfNeededAsync()) return;
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(EmojiTitleTestAppBuilder));
         await session.DispatchAsync(async () =>
         {

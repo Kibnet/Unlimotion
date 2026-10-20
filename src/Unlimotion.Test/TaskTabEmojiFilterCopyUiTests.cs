@@ -208,7 +208,7 @@ public class TaskTabEmojiFilterCopyUiTests
 
     private static async Task Run(int index, Func<MainWindowViewModel, MainControl, Window, Task> action)
     {
-        if (await TaskTabEmojiFilterRenderedProcess.RunIfNeededAsync()) return;
+        if (await RenderedTestProcess.RunIfNeededAsync(TimeSpan.FromMinutes(3))) return;
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(EmojiTitleTestAppBuilder));
         await session.DispatchAsync(async () =>
         {
