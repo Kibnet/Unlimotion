@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -10,6 +11,27 @@ namespace Unlimotion.Test;
 public static class HeadlessSessionExtensions
 {
     private const string HeadlessDisposeStackFrame = "Avalonia.Headless.HeadlessUnitTestSession.DisposeAsync";
+    private static readonly FieldInfo SessionWorkerField = typeof(HeadlessUnitTestSession)
+        .GetField("_dispatchTask", BindingFlags.Instance | BindingFlags.NonPublic)
+        ?? throw new NotSupportedException("Avalonia Headless worker task is unavailable.");
+
+    internal static async Task<TResult> MonitorWorkerFailureAsync<TResult>(
+        this HeadlessUnitTestSession session, Task<TResult> dispatch)
+    {
+        var worker = SessionWorkerField.GetValue(session) as Task;
+        if (worker is not null && !dispatch.IsCompleted)
+        {
+            await Task.WhenAny(dispatch, worker).ConfigureAwait(false);
+            if (!dispatch.IsCompleted)
+            {
+                // Avalonia 12 can fault while resetting its application, before
+                // completing Dispatch's promise. Surface that fault instead of hanging.
+                await worker.ConfigureAwait(false);
+                throw new InvalidOperationException("Headless worker exited before completing Dispatch.");
+            }
+        }
+        return await dispatch.ConfigureAwait(false);
+    }
 
     public static Task DispatchAsync(
         this HeadlessUnitTestSession session,
@@ -22,7 +44,7 @@ public static class HeadlessSessionExtensions
 
         async Task DispatchAndThrowAsync()
         {
-            await session.Dispatch<bool>(async () =>
+            var dispatch = session.Dispatch<bool>(async () =>
             {
                 using var resourceTrace = TestExecutionTrace.Resource("AvaloniaDispatcher");
                 try
@@ -36,6 +58,7 @@ public static class HeadlessSessionExtensions
 
                 return true;
             }, cancellationToken);
+            await session.MonitorWorkerFailureAsync(dispatch);
 
             if (exception != null)
             {
@@ -88,7 +111,7 @@ public sealed class SafeHeadlessUnitTestSession : IAsyncDisposable
         Func<Task<TResult>> action,
         CancellationToken cancellationToken)
     {
-        return _session.Dispatch(action, cancellationToken);
+        return _session.MonitorWorkerFailureAsync(_session.Dispatch(action, cancellationToken));
     }
 
     public Task Dispatch(Func<Task> action, CancellationToken cancellationToken)
