@@ -2951,9 +2951,7 @@ public class MainControlTaskCardLayoutUiTests
         // actual panel extent before taking this synchronous geometry snapshot.
         var planningPanel = root.GetVisualDescendants().OfType<WrapPanel>()
             .Single(panel => panel.Classes.Contains("TaskPlanningGroups"));
-        planningPanel.InvalidateMeasure();
-        planningPanel.Measure(planningPanel.Bounds.Size);
-        planningPanel.Arrange(planningPanel.Bounds);
+        CompletePlanningPanelLayout(planningPanel);
 
         var planningControls = PlanningControlAutomationIds
             .Select(automationId => FindControlByAutomationId<Control>(root, automationId))
@@ -3264,6 +3262,13 @@ public class MainControlTaskCardLayoutUiTests
 
     private static void AssertHorizontallyContained(Visual relativeTo, Control control)
     {
+        // Responsive group widths/margins can invalidate the WrapPanel while an
+        // awaited assertion yields. Complete its real layout before reading edges,
+        // just as for the desktop planning-row snapshot.
+        var planningPanel = control.GetVisualAncestors().OfType<WrapPanel>()
+            .FirstOrDefault(panel => panel.Classes.Contains("TaskPlanningGroups"));
+        if (planningPanel is not null) CompletePlanningPanelLayout(planningPanel);
+
         var leftEdge = GetLeftEdge(relativeTo, control);
         var rightEdge = GetRightEdge(relativeTo, control);
         var viewportWidth = ((Control)relativeTo).Bounds.Width;
@@ -3277,6 +3282,13 @@ public class MainControlTaskCardLayoutUiTests
                     $"{item.GetType().Name}:{AutomationProperties.GetAutomationId(item)} bounds={item.Bounds} desired={item.DesiredSize} width={item.Width} margin={item.Margin} left={GetLeftEdge(relativeTo, item):F1}" +
                     (item is ScrollViewer viewer ? $" offset={viewer.Offset} viewport={viewer.Viewport} extent={viewer.Extent}" : string.Empty))));
         }
+    }
+
+    private static void CompletePlanningPanelLayout(WrapPanel planningPanel)
+    {
+        planningPanel.InvalidateMeasure();
+        planningPanel.Measure(planningPanel.Bounds.Size);
+        planningPanel.Arrange(planningPanel.Bounds);
     }
 
     private static bool IsTemplatePartInsideInputControl(Control control)
