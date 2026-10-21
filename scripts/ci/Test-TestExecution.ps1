@@ -28,11 +28,13 @@ if($LASTEXITCODE){throw "Stub build failed: $root/build.log"}
 $hostOutput=Join-Path $project 'output'; $stub=Join-Path $hostOutput 'Stub.exe'
 $entry=Join-Path $PSScriptRoot 'Invoke-TestExecution.ps1'
 $reporter=Join-Path $PSScriptRoot 'Write-TestReport.ps1'
+$previousImportanceRoot=$env:UNLIMOTION_IMPORTANCE_ARTIFACTS_DIRECTORY
 try {
     foreach($fault in @('none','failure','failure-zero-exit','missing','duplicate','skip','discovery','timeout','trx-missing','trx-wrong','trx-duplicate')) {
         $result=Join-Path $root "пути с пробелами/$fault"
         $env:TEST_EXECUTION_STUB_FAULT=$fault
         $env:TEST_EXECUTION_STUB_LOG=Join-Path $root "timeline-$fault"
+        $env:UNLIMOTION_IMPORTANCE_ARTIFACTS_DIRECTORY=Join-Path $root "importance-$fault"
         $timeout=if($fault -eq 'timeout'){1}else{30}
         & pwsh -NoProfile -File $entry -ResultsRoot $result -DotnetCommand $stub -MainOutput $hostOutput -HeadlessOutput $hostOutput -InvocationTimeoutSeconds $timeout > (Join-Path $root "$fault.log") 2>&1
         $code=$LASTEXITCODE
@@ -58,11 +60,33 @@ try {
             Require ($LASTEXITCODE -ne 0 -and (Get-FileHash (Join-Path $result 'main/invocation-test.json')).Hash -eq $before) 'Rerun replaced prior evidence'
             & pwsh -NoProfile -File $reporter -ResultsRoot $result -OutputRoot (Join-Path $root 'report-success') *> $null
             Require ($LASTEXITCODE -eq 0) 'Reporter rejected complete execution'
+            $reported=@(Get-Content (Join-Path $root 'report-success/main/tests.json') -Raw|ConvertFrom-Json)
+            Require ($reported.Count -eq 4 -and @($reported|Where-Object identityStatus -ne 'complete').Count -eq 0) 'Rendered child inflated report counts or made parent history ambiguous'
+            Require (@($timeline|Where-Object {$_.importanceArtifactsRoot -ne [IO.Path]::GetFullPath($env:UNLIMOTION_IMPORTANCE_ARTIFACTS_DIRECTORY)}).Count -eq 0) 'Configured external importance root was overridden'
         }
     }
+    # The unconfigured local default must also keep rendered children out of report input.
+    $env:TEST_EXECUTION_STUB_FAULT='none'
+    $env:TEST_EXECUTION_STUB_LOG=Join-Path $root 'timeline-default-importance'
+    Remove-Item Env:UNLIMOTION_IMPORTANCE_ARTIFACTS_DIRECTORY -ErrorAction SilentlyContinue
+    $result=Join-Path $root 'default-importance'
+    & pwsh -NoProfile -File $entry -ResultsRoot $result -DotnetCommand $stub -MainOutput $hostOutput -HeadlessOutput $hostOutput > (Join-Path $root 'default-importance.log') 2>&1
+    Require ($LASTEXITCODE -eq 0) 'Default external importance root failed'
+    $execution=Get-Content (Join-Path $result 'execution.json') -Raw|ConvertFrom-Json
+    Require ($execution.importanceArtifactsRoot -eq "$result.importance") 'Default importance root is not a sibling of ResultsRoot'
+    Require (@(Get-ChildItem $execution.importanceArtifactsRoot -Filter rendered-child.trx -Recurse).Count -eq 1) 'Default rendered evidence was lost during worker cleanup'
+    & pwsh -NoProfile -File $reporter -ResultsRoot $result -OutputRoot (Join-Path $root 'report-default-importance') *> $null
+    Require ($LASTEXITCODE -eq 0) 'Reporter rejected default external importance artifacts'
+    Require (@(Get-Content (Join-Path $root 'report-default-importance/main/tests.json') -Raw|ConvertFrom-Json).Count -eq 4) 'Default rendered child inflated report counts'
+    # An explicitly nested root must fail before writing any results.
+    $result=Join-Path $root 'nested-importance'
+    $env:UNLIMOTION_IMPORTANCE_ARTIFACTS_DIRECTORY=Join-Path $result 'main/importance'
+    & pwsh -NoProfile -File $entry -ResultsRoot $result -DotnetCommand $stub -MainOutput $hostOutput -HeadlessOutput $hostOutput > (Join-Path $root 'nested-importance.log') 2>&1
+    Require ($LASTEXITCODE -ne 0 -and !(Test-Path $result)) 'Nested importance root was accepted or changed report input'
     # A native launch failure in one project must not suppress the healthy project.
     $env:TEST_EXECUTION_STUB_FAULT='none'
     $env:TEST_EXECUTION_STUB_LOG=Join-Path $root 'timeline-launch-failure'
+    $env:UNLIMOTION_IMPORTANCE_ARTIFACTS_DIRECTORY=Join-Path $root 'importance-launch-failure'
     $result=Join-Path $root 'launch-failure'
     & pwsh -NoProfile -File $entry -ResultsRoot $result -DotnetCommand $stub -MainOutput (Join-Path $root 'missing-output') -HeadlessOutput $hostOutput > (Join-Path $root 'launch-failure.log') 2>&1
     Require ($LASTEXITCODE -ne 0) 'Native launch failure returned success'
@@ -110,5 +134,8 @@ try {
     $stage.exitCode=0; $stage | ConvertTo-Json -Depth 15 | Set-Content $stagePath
     & pwsh -NoProfile -File $reporter -ResultsRoot $result -OutputRoot (Join-Path $root 'report-hidden-failure') *> $null
     Require ($LASTEXITCODE -ne 0) 'Reporter hid a failed invocation'
-    Write-Output "PASS: planner, eleven failure/success scenarios, native launch failure, owned cancellation, inventory/TRX reconciliation and reporting; evidence: $root"
-} finally {Remove-Item Env:TEST_EXECUTION_STUB_FAULT,Env:TEST_EXECUTION_STUB_LOG -ErrorAction SilentlyContinue}
+    Write-Output "PASS: planner, eleven failure/success scenarios, external/default/nested artifact roots, native launch failure, owned cancellation, inventory/TRX reconciliation and reporting; evidence: $root"
+} finally {
+    Remove-Item Env:TEST_EXECUTION_STUB_FAULT,Env:TEST_EXECUTION_STUB_LOG -ErrorAction SilentlyContinue
+    $env:UNLIMOTION_IMPORTANCE_ARTIFACTS_DIRECTORY=$previousImportanceRoot
+}

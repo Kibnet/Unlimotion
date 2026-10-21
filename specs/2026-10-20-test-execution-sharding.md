@@ -251,6 +251,13 @@ Hypothesis/measurement/risks/tests определены; сохранён пол
 ## Approval
 Получено «Спеку подтверждаю» 2026-10-20. Фаза EXEC, повторное подтверждение в неизменном scope не требуется.
 
+### Delivery review, 2026-10-21
+Пользователь поручил «Влей в мейн»: push, PR и merge этой реализации разрешены. Перед публикацией интегрирован текущий main `1ed7e22b` без конфликтов; сохранён актуальный CI timeout 60 минут. Создан PR #327.
+
+Автоматический review выявил P1: coordinator переопределял внешний `UNLIMOTION_IMPORTANCE_ARTIFACTS_DIRECTORY`, помещая дочерние importance TRX внутрь ResultsRoot. Это делало parent identity неоднозначным для history и увеличивало report counts повторно; canonical UID reconciliation оставался корректным. Исторические report totals 1635/1612 относятся к замеру до этого исправления и не являются целевой статистикой исправленного reporter. Полные timings и равенство canonical 1513+66 cases сохраняют силу.
+
+Исправление сохраняет настроенный внешний root; локальный default — соседний `<ResultsRoot>.importance`, с указателем в execution.json. Явный вложенный root отклоняется до записи результатов. Fixture воспроизводит дочерний rendered TRX: RED — повторный учёт/ambiguous identity; GREEN — 4 canonical main records с complete identity, внешний root сохранён, default evidence переживает cleanup, вложенный root отклонён. Все eleven failure/success scenarios, launch failure, cancellation и reconciliation прошли: `%TEMP%/unlimotion-execution-contract-78c3bdb26ed24c8fafbfcd0b0de32db4`. Полная проверка интегрированного кода выполняется GitHub CI на финальном head PR перед merge; прежний локальный full run не выдаётся за проверку обновлённого main.
+
 ## Журнал действий агента
 | Фаза / событие | Решение | Evidence / остаток | Следующий шаг | Решение человека |
 | --- | --- | --- | --- | --- |

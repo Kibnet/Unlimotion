@@ -4,6 +4,7 @@ Runs all built Debug tests with two isolated main lanes, then Headless and the e
 .EXAMPLE
 ./scripts/ci/Invoke-TestExecution.ps1 -ResultsRoot artifacts/test-results/local-001
 Build both projects first. Use a fresh results directory. Ordinary dotnet test remains the serial fallback.
+Importance diagnostics retain their configured external root, or default to ResultsRoot.importance.
 #>
 [CmdletBinding()]
 param(
@@ -25,6 +26,16 @@ $PSNativeCommandUseErrorActionPreference=$false
 $repository=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $ResultsRoot=[IO.Path]::GetFullPath($ResultsRoot)
 $workingRoot=Join-Path $repository ('artifacts/test-workers/'+[Guid]::NewGuid().ToString('N'))
+$importanceArtifactsRoot=$env:UNLIMOTION_IMPORTANCE_ARTIFACTS_DIRECTORY
+if ([string]::IsNullOrWhiteSpace($importanceArtifactsRoot)) {
+    $importanceArtifactsRoot=[IO.Path]::TrimEndingDirectorySeparator($ResultsRoot)+'.importance'
+}
+$importanceArtifactsRoot=[IO.Path]::GetFullPath($importanceArtifactsRoot)
+$resultsPrefix=$ResultsRoot.TrimEnd([IO.Path]::DirectorySeparatorChar)+[IO.Path]::DirectorySeparatorChar
+if ($importanceArtifactsRoot.Equals($ResultsRoot,[StringComparison]::OrdinalIgnoreCase) -or
+    $importanceArtifactsRoot.StartsWith($resultsPrefix,[StringComparison]::OrdinalIgnoreCase)) {
+    throw 'Importance artifacts must stay outside ResultsRoot so rendered child TRXs do not inflate reports'
+}
 $owned=[Collections.Generic.List[object]]::new()
 $failures=[Collections.Generic.List[string]]::new()
 $metadata=@{}; $inventories=@{}
@@ -74,7 +85,7 @@ function Start-TestChild([string]$Project,[string]$Output,[string]$Directory,$Ex
     else {
         $info.Environment['UNLIMOTION_TEST_UID_DIRECTORY']=$Directory
         $info.Environment['UNLIMOTION_TEST_TRACE_DIRECTORY']=$Directory
-        $info.Environment['UNLIMOTION_IMPORTANCE_ARTIFACTS_DIRECTORY']=Join-Path $Directory 'importance'
+        $info.Environment['UNLIMOTION_IMPORTANCE_ARTIFACTS_DIRECTORY']=$importanceArtifactsRoot
         if (@($Expected).Count -eq 1 -and $Expected[0].freshProcess) {$info.Environment['UNLIMOTION_RENDERED_TEST_CHILD']='1'}
     }
     $invocation=$metadata[$Project] | ConvertTo-Json -Depth 15 | ConvertFrom-Json -AsHashtable
@@ -271,7 +282,7 @@ finally {
     }
     $watch.Stop()
     Save-Json ([ordered]@{schemaVersion=1;workers=$Workers;startedUtc=$started.ToString('o');finishedUtc=[DateTimeOffset]::UtcNow.ToString('o')
-        durationMs=$watch.Elapsed.TotalMilliseconds; errors=$failures.ToArray();workingRoot=$workingRoot}) (Join-Path $ResultsRoot 'execution.json')
+        durationMs=$watch.Elapsed.TotalMilliseconds; errors=$failures.ToArray();workingRoot=$workingRoot;importanceArtifactsRoot=$importanceArtifactsRoot}) (Join-Path $ResultsRoot 'execution.json')
 }
 if ($failures.Count) {$failures | Write-Error -ErrorAction Continue; exit 1}
 Write-Output "PASS: complete execution in $([Math]::Round($watch.Elapsed.TotalSeconds,2)) seconds; $ResultsRoot"

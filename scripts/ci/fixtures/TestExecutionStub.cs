@@ -50,11 +50,20 @@ new XDocument(new XElement(ns + "TestRun",
         new XElement(ns + "Counters", new XAttribute("total", selected.Length), new XAttribute("executed", selected.Length),
             new XAttribute("passed", failed ? 0 : selected.Length), new XAttribute("failed", failed ? selected.Length : 0)))))
     .Save(Path.Combine(directory, "results.trx"));
+// Model a rendered helper's child result, which must stay outside report input.
+var importanceRoot = Environment.GetEnvironmentVariable("UNLIMOTION_IMPORTANCE_ARTIFACTS_DIRECTORY")!;
+if (isAlpha)
+{
+    var childResults = Path.Combine(importanceRoot, Guid.NewGuid().ToString("N"), "results");
+    Directory.CreateDirectory(childResults);
+    File.Copy(Path.Combine(directory, "results.trx"), Path.Combine(childResults, "rendered-child.trx"));
+}
 File.WriteAllText(Path.Combine(directory, "stub-report.html"), "<html>stub</html>");
 File.WriteAllText(Path.Combine(logRoot, Environment.ProcessId + ".json"), JsonSerializer.Serialize(new
 {
     project, uids = selected.Select(test => test.uid), startedUtc = started, finishedUtc = DateTimeOffset.UtcNow,
     workingDirectory = Environment.CurrentDirectory,
+    importanceArtifactsRoot = importanceRoot,
     renderedChild = Environment.GetEnvironmentVariable("UNLIMOTION_RENDERED_TEST_CHILD") == "1"
 }));
 return exit;
