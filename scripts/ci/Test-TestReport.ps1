@@ -1,6 +1,6 @@
+param([string]$Reporter = (Join-Path $PSScriptRoot 'Write-TestReport.ps1'))
 $ErrorActionPreference = 'Stop'
 $root = Join-Path ([IO.Path]::GetTempPath()) ('unlimotion-report-contract-' + [Guid]::NewGuid().ToString('N'))
-$reporter = Join-Path $PSScriptRoot 'Write-TestReport.ps1'
 New-Item -ItemType Directory -Path $root | Out-Null
 function Assert-True($Condition, [string]$Message) { if (!$Condition) { throw $Message } }
 function Write-Fixture([string]$Name, [string]$Body, [switch]$NoHtml) {
@@ -36,6 +36,50 @@ Write-Fixture 'collision' ($trx.Replace('Theory(2)','Theory(1) &amp; | &lt;scrip
 Invoke-Report 'collision' 0
 $collisions = @(Get-Content -Raw (Join-Path $root 'collision-out/tests.json') | ConvertFrom-Json)
 Assert-True (@($collisions | Where-Object identityStatus -eq 'ambiguous').Count -eq 2) 'Colliding identities silently merged'
+Write-Fixture 'indexed-phases' $trx
+@(
+    @{kind='phase'; name='second-in-time'; testExecutionId='CONTEXT-ONE'; durationMs=9; outcome='completed'},
+    @{kind='test-lifecycle'; outcome='STARTED'; testExecutionId='context-one'; testName='THEORY(1) & | <SCRIPT>'; details=@{className='example.cases'}},
+    @{kind='phase'; name='first-in-time'; testExecutionId='context-one'; durationMs=2; outcome='completed'},
+    @{kind='phase'; name='unrelated'; testExecutionId='other'; durationMs=99; outcome='completed'},
+    @{kind='test-lifecycle'; outcome='started'; testExecutionId='context-two'; testName='Theory(2)'; details=@{className='Example.Cases'}}
+) | ForEach-Object {$_ | ConvertTo-Json -Compress} | Set-Content (Join-Path $root 'indexed-phases/main/diagnostics-fixture.jsonl')
+Invoke-Report 'indexed-phases' 0
+$indexed = @(Get-Content -Raw (Join-Path $root 'indexed-phases-out/tests.json') | ConvertFrom-Json)
+Assert-True (($indexed[0].phases.name -join ',') -ceq 'second-in-time,first-in-time') 'Phase order/case-insensitive context join changed'
+Assert-True ($indexed[0].diagnosticTestExecutionId -ceq 'context-one') 'Lifecycle context identity changed'
+Assert-True ($null -ne $indexed[1].phases -and $indexed[1].phases.Count -eq 0 -and $indexed[1].phasesMissingReason -eq 'This test has no explicit phase instrumentation') 'Matched test without phases lost empty-array semantics'
+Write-Fixture 'duplicate-start' $trx
+@(
+    @{kind='test-lifecycle'; outcome='started'; testExecutionId='first'; testName='Theory(2)'; details=@{className='Example.Cases'}},
+    @{kind='test-lifecycle'; outcome='started'; testExecutionId='last'; testName='THEORY(2)'; details=@{className='EXAMPLE.CASES'}},
+    @{kind='phase'; name='must-not-join'; testExecutionId='last'; durationMs=9; outcome='completed'}
+) | ForEach-Object {$_ | ConvertTo-Json -Compress} | Set-Content (Join-Path $root 'duplicate-start/main/diagnostics-fixture.jsonl')
+Invoke-Report 'duplicate-start' 0
+$duplicate = @(Get-Content -Raw (Join-Path $root 'duplicate-start-out/tests.json') | ConvertFrom-Json)
+Assert-True ($null -eq $duplicate[1].phases -and !$duplicate[1].diagnosticTestExecutionId) 'Duplicate lifecycle starts were silently resolved'
+
+# Characterize PowerShell -eq rather than assuming ordinal or current-culture keys.
+$originalCulture = [Globalization.CultureInfo]::CurrentCulture
+try {
+    foreach ($culture in @('en-US','ru-RU','tr-TR')) {
+        [Globalization.CultureInfo]::CurrentCulture = [Globalization.CultureInfo]::GetCultureInfo($culture)
+        foreach ($pair in @(@('I','i'), @('I', [string][char]0x131), @('É','é'), @('Й','й'), @("e$([char]0x301)",'é'))) {
+            Assert-True (([StringComparer]::InvariantCultureIgnoreCase.Equals($pair[0],$pair[1])) -eq ($pair[0] -eq $pair[1])) "Invariant comparison differs from PowerShell -eq in $culture"
+        }
+    }
+} finally { [Globalization.CultureInfo]::CurrentCulture = $originalCulture }
+$keyTrx = @'
+<TestRun xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010"><TestDefinitions><UnitTest id="a"><TestMethod className="Éxample|Cases" name="Theory"/></UnitTest><UnitTest id="b"><TestMethod className="Éxample" name="Cases|Theory"/></UnitTest></TestDefinitions><Results><UnitTestResult testId="a" executionId="one" testName="Theory" duration="00:00:00.001" outcome="Passed"/><UnitTestResult testId="b" executionId="two" testName="Cases|Theory" duration="00:00:00.001" outcome="Passed"/></Results><ResultSummary outcome="Completed"><Counters total="2" executed="2" passed="2" failed="0"/></ResultSummary></TestRun>
+'@
+Write-Fixture 'structured-unicode-keys' $keyTrx
+@(
+    @{kind='test-lifecycle'; outcome='started'; testExecutionId='unicode-one'; testName='Theory'; details=@{className='éxample|cases'}},
+    @{kind='test-lifecycle'; outcome='started'; testExecutionId='unicode-two'; testName='Cases|Theory'; details=@{className='éxample'}}
+) | ForEach-Object {$_ | ConvertTo-Json -Compress} | Set-Content (Join-Path $root 'structured-unicode-keys/main/diagnostics-fixture.jsonl')
+Invoke-Report 'structured-unicode-keys' 0
+$keys = @(Get-Content -Raw (Join-Path $root 'structured-unicode-keys-out/tests.json') | ConvertFrom-Json)
+Assert-True ($keys[0].diagnosticTestExecutionId -eq 'unicode-one' -and $keys[1].diagnosticTestExecutionId -eq 'unicode-two') 'Structured Unicode class/display keys collided or lost case matching'
 Write-Fixture 'no-html' $trx -NoHtml
 Invoke-Report 'no-html' 1
 Write-Fixture 'malformed' '<broken'
@@ -74,6 +118,16 @@ Write-Fixture 'crash-with-assertion' $trx
 Invoke-Report 'crash-with-assertion' 0 'failure'
 $run = Get-Content -Raw (Join-Path $root 'crash-with-assertion-out/run.json') | ConvertFrom-Json
 Assert-True ($run.projects[0].failed -eq 1 -and $run.projects[0].status -eq 'runner-failure' -and !$run.projects[0].telemetryComplete -and !$run.historyComparable) 'Assertion failure hid a runner crash or made it comparable'
+$emptyTrx='<TestRun xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010"><Results/><ResultSummary outcome="Completed"><Counters total="0" executed="0" passed="0" failed="0"/></ResultSummary></TestRun>'
+Write-Fixture 'zero-discovery' $emptyTrx
+'{"stage":"test","exitCode":8,"invocationId":"zero-discovery","finishedUtc":"2026-08-31T00:00:00Z"}' | Set-Content (Join-Path $root 'zero-discovery/main/stage-test.json')
+Invoke-Report 'zero-discovery' 0 'failure'
+$zero=Get-Content -Raw (Join-Path $root 'zero-discovery-out/run.json')|ConvertFrom-Json
+Assert-True ($zero.projects[0].status -eq 'zero-discovery' -and !$zero.projects[0].telemetryComplete -and !$zero.historyComparable) 'Zero discovery became a healthy comparable run'
+Write-Fixture 'empty-success' $emptyTrx
+Invoke-Report 'empty-success' 1
+$empty=Get-Content -Raw (Join-Path $root 'empty-success-out/run.json')|ConvertFrom-Json
+Assert-True ($empty.projects[0].status -ne 'passed' -and !$empty.projects[0].telemetryComplete) 'Empty successful invocation became a test pass'
 $fingerprints = @()
 foreach ($index in 1..4) {
     Invoke-Report 'mixed' 0

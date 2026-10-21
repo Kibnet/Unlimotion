@@ -125,14 +125,42 @@ foreach ($project in $Projects) {
     foreach ($group in @($tests | Group-Object { $_.executionId } | Where-Object Count -gt 1)) {
         foreach ($test in $group.Group) { $test.identityStatus = 'ambiguous' }
     }
+    # PowerShell string -eq uses invariant, case-insensitive comparison. Preserve
+    # that contract, duplicate starts and phase order without rescanning every trace.
+    $comparison = [StringComparer]::InvariantCultureIgnoreCase
+    $startsByClass = [Collections.Generic.Dictionary[string,object]]::new($comparison)
+    $phasesByContext = [Collections.Generic.Dictionary[string,object]]::new($comparison)
+    foreach ($entry in $traceEntries) {
+        if ($entry.kind -eq 'test-lifecycle' -and $entry.outcome -eq 'started' -and
+            $null -ne $entry.details.className -and $null -ne $entry.testName) {
+            $classKey = [string]$entry.details.className
+            $nameKey = [string]$entry.testName
+            if (!$startsByClass.ContainsKey($classKey)) {
+                $startsByClass[$classKey] = [Collections.Generic.Dictionary[string,object]]::new($comparison)
+            }
+            $names = $startsByClass[$classKey]
+            if (!$names.ContainsKey($nameKey)) { $names[$nameKey] = [Collections.Generic.List[object]]::new() }
+            $names[$nameKey].Add($entry)
+        }
+        if ($entry.kind -eq 'phase' -and $null -ne $entry.testExecutionId) {
+            $contextKey = [string]$entry.testExecutionId
+            if (!$phasesByContext.ContainsKey($contextKey)) {
+                $phasesByContext[$contextKey] = [Collections.Generic.List[object]]::new()
+            }
+            $phasesByContext[$contextKey].Add([ordered]@{name=$entry.name; durationMs=$entry.durationMs; outcome=$entry.outcome})
+        }
+    }
     foreach ($test in $tests) {
         # TUnit context IDs differ from TRX executionId. Join only a unique, complete
         # class/display identity via the lifecycle record; never guess a collision.
-        $starts = @($traceEntries | Where-Object {$_.kind -eq 'test-lifecycle' -and $_.outcome -eq 'started' -and $_.details.className -eq $test.className -and $_.testName -eq $test.displayName})
-        if ($test.identityStatus -eq 'complete' -and $starts.Count -eq 1 -and $starts[0].testExecutionId) {
+        $starts = $null
+        if ($startsByClass.ContainsKey($test.className) -and $startsByClass[$test.className].ContainsKey($test.displayName)) {
+            $starts = $startsByClass[$test.className][$test.displayName]
+        }
+        if ($test.identityStatus -eq 'complete' -and $null -ne $starts -and $starts.Count -eq 1 -and $starts[0].testExecutionId) {
             $contextId = $starts[0].testExecutionId
             $test['diagnosticTestExecutionId'] = $contextId
-            $test.phases = @($traceEntries | Where-Object {$_.kind -eq 'phase' -and $_.testExecutionId -eq $contextId} | ForEach-Object {[ordered]@{name=$_.name; durationMs=$_.durationMs; outcome=$_.outcome}})
+            $test.phases = if ($phasesByContext.ContainsKey($contextId)) { ,$phasesByContext[$contextId].ToArray() } else { ,@() }
             $test.phasesMissingReason = if ($test.phases.Count) {$null} else {'This test has no explicit phase instrumentation'}
         }
     }
@@ -140,6 +168,26 @@ foreach ($project in $Projects) {
     $passed = @($tests | Where-Object { $_.outcome -eq 'Passed' }).Count
     $failed = @($tests | Where-Object { $_.outcome -eq 'Failed' }).Count
     $testCompleted = $stages.ContainsKey('test') -and $stages.test.finishedUtc -and $invocation -and ![string]::IsNullOrWhiteSpace([string]$invocation.invocationId) -and $stages.test.invocationId -eq $invocation.invocationId
+    if ($stages.ContainsKey('test') -and $stages.test.executionSchemaVersion) {
+        try {
+            $execution=$stages.test
+            if ($execution.executionSchemaVersion -ne 1 -or $execution.inventoryComplete -ne $true -or @($execution.invocations).Count -eq 0) {throw 'Incomplete execution inventory'}
+            $seenInvocations=[Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+            $allowed=[IO.Path]::GetFullPath($inputDirectory)+[IO.Path]::DirectorySeparatorChar
+            foreach ($child in $execution.invocations) {
+                if (!$child.invocationId -or !$seenInvocations.Add($child.invocationId)) {throw 'Duplicate or missing invocation identity'}
+                $childRoot=[IO.Path]::GetFullPath((Join-Path $inputDirectory $child.directory))
+                if (!$childRoot.StartsWith($allowed,[StringComparison]::OrdinalIgnoreCase)) {throw 'Invocation path escapes project results'}
+                $childStage=Get-Content -Raw -LiteralPath (Join-Path $childRoot 'stage-test.json') | ConvertFrom-Json
+                $childManifest=Get-Content -Raw -LiteralPath (Join-Path $childRoot 'invocation-test.json') | ConvertFrom-Json
+                if ($childStage.invocationId -ne $child.invocationId -or $childManifest.invocationId -ne $child.invocationId -or
+                    $childStage.project -ne $project -or $childManifest.project -ne $project -or !$childStage.finishedUtc -or
+                    !(Test-InvocationArguments $childManifest.arguments) -or $null -eq $child.exitCode -or $childStage.exitCode -ne $child.exitCode -or
+                    $child.error -or $childStage.error) {throw 'Incomplete or contradictory child invocation'}
+                if ($execution.exitCode -eq 0 -and $childStage.exitCode -ne 0) {throw 'Successful aggregate hides a failed invocation'}
+            }
+        } catch {$testCompleted=$false; $errors.Add("${project}: invalid execution metadata: $($_.Exception.Message)")}
+    }
     if ($tests.Count -gt 0) { $status = if ($testCompleted) {if ($failed) {'test-failure'} elseif ($passed) {'passed'} else {'zero-discovery'}} else {'incomplete'} }
     foreach ($stage in @('restore','build','test')) {
         if ($stages.ContainsKey($stage) -and $stages[$stage].exitCode -ne 0) {

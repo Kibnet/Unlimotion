@@ -397,6 +397,19 @@ public sealed class GitStatusIndicatorHeadlessTests
             HeadlessRuntime.Dispatch(() => vm.GitStatus.ApplyDiagnostic(new("A", repositoryPath, retry, true)));
             await State(GitIndicatorState.Syncing);
             observer.Fail = false;
+            // The title edit also schedules a throttled autosave. Finish the fixture's
+            // write producers before the synthetic retry commit, otherwise a late save
+            // can legitimately make the repository Dirty again after that commit.
+            var pendingSaves = Task.WhenAll(HeadlessRuntime.Dispatch(() => vm.taskRepository!.Tasks.Items
+                .Select(task => task.SealPendingSaves()).ToArray()));
+            // Async storage continuations captured the Headless dispatcher. Pump it
+            // while waiting, as above for the original ordinary task save.
+            await UiAssert.TextEqualsAsync(() => HeadlessRuntime.Dispatch(() =>
+            {
+                Dispatcher.UIThread.RunJobs();
+                return pendingSaves.IsCompleted.ToString();
+            }), "True");
+            await pendingSaves;
             Commit(repositoryPath);
             HeadlessRuntime.Dispatch(() => vm.GitStatus.ApplyDiagnostic(new("A", repositoryPath, retry, false, BackupOperationResult.Success)));
             await State(GitIndicatorState.Idle);
@@ -431,6 +444,9 @@ public sealed class GitStatusIndicatorHeadlessTests
             {
                 Console.WriteLine(HeadlessRuntime.Dispatch(() => vm.GitStatus.Details));
                 Console.WriteLine("Observed: " + HeadlessRuntime.Dispatch(() => vm.GitStatus.LastKnown?.ToString() ?? "none"));
+                using var repository = new Repository(repositoryPath);
+                Console.WriteLine("Worktree: " + string.Join(", ", repository.RetrieveStatus()
+                    .Select(entry => $"{entry.FilePath}: {entry.State}")));
                 throw;
             }
         }

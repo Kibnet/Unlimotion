@@ -47,10 +47,11 @@ try {
     $workflow = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot '../../.github/workflows/tests.yml')
     if ($workflow -match 'continue-on-error|pull_request_target' -or $workflow -notmatch 'name: All tests' -or $workflow -notmatch 'contents: read') {throw 'Workflow gate/security contract changed'}
     foreach ($project in @('main','headless')) {
-        $expected="!cancelled() && steps.build-$project.outcome == 'success'"
+        $expected="steps.build-$project.outcome == 'success'"
         if (!$workflow.Contains($expected)) {throw "Test step own prerequisite missing: $project"}
     }
-    if ($workflow.IndexOf('name: Build Headless Tests') -gt $workflow.IndexOf('name: Run Unlimotion Tests')) {throw 'Headless build occurs too late'}
+    if ($workflow.IndexOf('name: Build Headless Tests') -gt $workflow.IndexOf('name: Run Complete Tests')) {throw 'Headless build occurs too late'}
+    if (!$workflow.Contains('!cancelled() && (steps.build-main') -or !$workflow.Contains('Invoke-TestExecution.ps1')) {throw 'Complete execution gate missing'}
     $invocation=Get-Content -Raw (Join-Path $existing 'invocation-test.json') | ConvertFrom-Json
     if(@($invocation.arguments | Where-Object {$_ -like '--results-directory=*'}).Count -ne 1 -or $invocation.arguments -contains '--results-directory'){throw 'Existing result path must use the attached option form'}
     Write-Output "PASS: 5 native failure-path cases, immutable rerun rejection and workflow contracts; evidence: $root"

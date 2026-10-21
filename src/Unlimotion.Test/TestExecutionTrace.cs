@@ -31,6 +31,7 @@ internal static class TestExecutionTrace
                 utc = DateTimeOffset.UtcNow, timestamp = Stopwatch.GetTimestamp(), frequency = Stopwatch.Frequency,
                 threadId = Environment.CurrentManagedThreadId, kind, name, outcome, durationMs, details
                 , testExecutionId = TestContext.Current?.Id,
+                testUid = TestContext.Current?.Metadata.TestDetails.Identity.TestId,
                 testName = TestContext.Current?.Metadata.DisplayName
             });
             File.AppendAllText(Path.Combine(directory, $"diagnostics-{Environment.ProcessId}.jsonl"), json + Environment.NewLine);

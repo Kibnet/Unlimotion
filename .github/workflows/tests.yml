@@ -78,17 +78,15 @@ jobs:
       shell: pwsh
       run: ./scripts/ci/Invoke-TestStage.ps1 -Stage build -Project headless -ResultsRoot $env:TEST_RESULTS_ROOT
 
-    - name: Run Unlimotion Tests
-      id: test-main
-      if: ${{ !cancelled() && steps.build-main.outcome == 'success' }}
+    - name: Run Complete Tests (isolated main workers and Headless UI)
+      id: test-execution
+      if: ${{ !cancelled() && (steps.build-main.outcome == 'success' || steps.build-headless.outcome == 'success') }}
       shell: pwsh
-      run: ./scripts/ci/Invoke-TestStage.ps1 -Stage test -Project main -ResultsRoot $env:TEST_RESULTS_ROOT
-
-    - name: Run Headless UI Tests
-      id: test-headless
-      if: ${{ !cancelled() && steps.build-headless.outcome == 'success' }}
-      shell: pwsh
-      run: ./scripts/ci/Invoke-TestStage.ps1 -Stage test -Project headless -ResultsRoot $env:TEST_RESULTS_ROOT
+      run: |
+        $projects = @()
+        if ('${{ steps.build-main.outcome }}' -eq 'success') { $projects += 'main' }
+        if ('${{ steps.build-headless.outcome }}' -eq 'success') { $projects += 'headless' }
+        ./scripts/ci/Invoke-TestExecution.ps1 -ResultsRoot $env:TEST_RESULTS_ROOT -Projects $projects
 
     - name: Summarize Test Results
       if: ${{ always() && steps.checkout.outcome == 'success' }}
@@ -106,8 +104,11 @@ jobs:
           ${{ env.TEST_RESULTS_ROOT }}/main/**/*.trx
           ${{ env.TEST_RESULTS_ROOT }}/main/**/*report.html
           ${{ env.TEST_RESULTS_ROOT }}/main/**/diagnostics-*.jsonl
-          ${{ env.TEST_RESULTS_ROOT }}/main/invocation-test.json
-          ${{ env.TEST_RESULTS_ROOT }}/main/stage-*.json
+          ${{ env.TEST_RESULTS_ROOT }}/*.json
+          ${{ env.TEST_RESULTS_ROOT }}/main/**/*.json
+          ${{ env.TEST_RESULTS_ROOT }}/main/**/*.jsonl
+          ${{ env.TEST_RESULTS_ROOT }}/main/**/*.log
+          ${{ env.TEST_RESULTS_ROOT }}/main/**/*.png
           ${{ env.TEST_ANALYSIS_ROOT }}/main/*.json
           ${{ env.TEST_ANALYSIS_ROOT }}/main/*.md
           ${{ env.UNLIMOTION_IMPORTANCE_ARTIFACTS_DIRECTORY }}/**
@@ -123,7 +124,9 @@ jobs:
           ${{ env.TEST_RESULTS_ROOT }}/headless/**/*.trx
           ${{ env.TEST_RESULTS_ROOT }}/headless/**/*report.html
           ${{ env.TEST_RESULTS_ROOT }}/headless/**/diagnostics-*.jsonl
-          ${{ env.TEST_RESULTS_ROOT }}/headless/invocation-test.json
-          ${{ env.TEST_RESULTS_ROOT }}/headless/stage-*.json
+          ${{ env.TEST_RESULTS_ROOT }}/*.json
+          ${{ env.TEST_RESULTS_ROOT }}/headless/**/*.json
+          ${{ env.TEST_RESULTS_ROOT }}/headless/**/*.jsonl
+          ${{ env.TEST_RESULTS_ROOT }}/headless/**/*.log
           ${{ env.TEST_ANALYSIS_ROOT }}/headless/*.json
           ${{ env.TEST_ANALYSIS_ROOT }}/headless/*.md

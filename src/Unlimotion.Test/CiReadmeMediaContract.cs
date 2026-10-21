@@ -19,8 +19,13 @@ internal static class CiReadmeMediaContract
             PlatformShellProjectContracts.GetRepositoryPath("tests/Unlimotion.UiTests.Headless/Tests/ReadmeDemoHeadlessTests.cs"));
 
         await Assert.That(workflow).Contains("all-tests:");
-        await Assert.That(workflow).Contains("./scripts/ci/Invoke-TestStage.ps1 -Stage test -Project headless");
-        await Assert.That(workflow).Contains("Run Headless UI Tests");
+        await Assert.That(workflow).Contains("./scripts/ci/Invoke-TestExecution.ps1 -ResultsRoot $env:TEST_RESULTS_ROOT -Projects $projects");
+        await Assert.That(workflow).Contains("$projects += 'headless'");
+        var executionScript = await File.ReadAllTextAsync(
+            PlatformShellProjectContracts.GetRepositoryPath("scripts/ci/Invoke-TestExecution.ps1"));
+        await Assert.That(executionScript).Contains("Wait-TestChild $headless");
+        await Assert.That(executionScript).Contains("Assert-TestExecutionReceipts");
+        await Assert.That(executionScript).Contains("'--maximum-parallel-tests','1'");
         await Assert.That(testStageScript).Contains("tests/Unlimotion.UiTests.Headless/Unlimotion.UiTests.Headless.csproj");
         await Assert.That(testStageScript).Contains("'--maximum-parallel-tests', '1'");
 

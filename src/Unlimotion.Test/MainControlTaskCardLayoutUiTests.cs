@@ -252,16 +252,19 @@ public class MainControlTaskCardLayoutUiTests
     }
 
     [Test]
+    [Unlimotion.Testing.FreshTestProcess]
     public Task CurrentTaskCard_ParentEmojiTrail_TitleInputUpdatesChildrenAndGrandchildrenBeforeSave() =>
         AssertTitleInputUpdatesDescendantsAsync("🧭", "🫶", string.Empty);
 
     [Test]
+    [Unlimotion.Testing.FreshTestProcess]
     public Task CurrentTaskCard_ExistingTaskWizardToJellyfish_UpdatesChildrenAndGrandchildrenBeforeSave() =>
         AssertTitleInputUpdatesDescendantsAsync("🧙‍♂️", "🪼", "jellyfish-");
 
     private static async Task AssertTitleInputUpdatesDescendantsAsync(
         string originalEmoji, string replacementEmoji, string capturePrefix)
     {
+        if (await RenderedTestProcess.RunIfNeededAsync()) return;
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(EmojiTitleTestAppBuilder));
         await session.DispatchAsync(async () =>
         {
@@ -1370,8 +1373,10 @@ public class MainControlTaskCardLayoutUiTests
     }
 
     [Test]
+    [Unlimotion.Testing.FreshTestProcess]
     public async Task CurrentTaskCard_TaskHistory_AdaptsAtThreeWidthsInBothThemes()
     {
+        if (await RenderedTestProcess.RunIfNeededAsync()) return;
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(RenderedTaskHistoryAppBuilder));
         await session.DispatchAsync(async () =>
         {
@@ -1472,8 +1477,10 @@ public class MainControlTaskCardLayoutUiTests
     }
 
     [Test]
+    [Unlimotion.Testing.FreshTestProcess]
     public async Task CurrentTaskCard_TaskHistory_InlineDetailsPreserveContextAndClose()
     {
+        if (await RenderedTestProcess.RunIfNeededAsync()) return;
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(RenderedTaskHistoryAppBuilder));
         await session.DispatchAsync(async () =>
         {
@@ -1571,8 +1578,10 @@ public class MainControlTaskCardLayoutUiTests
     }
 
     [Test]
+    [Unlimotion.Testing.FreshTestProcess]
     public async Task CurrentTaskCard_TaskHistory_StaysDockedWhileTaskAndHistoryScroll()
     {
+        if (await RenderedTestProcess.RunIfNeededAsync()) return;
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(RenderedTaskHistoryAppBuilder));
         await session.DispatchAsync(async () =>
         {
@@ -1668,8 +1677,10 @@ public class MainControlTaskCardLayoutUiTests
     }
 
     [Test]
+    [Unlimotion.Testing.FreshTestProcess]
     public async Task CurrentTaskCard_TaskHistory_HeaderAndContentHaveCleanChrome()
     {
+        if (await RenderedTestProcess.RunIfNeededAsync()) return;
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(RenderedTaskHistoryAppBuilder));
         await session.DispatchAsync(async () =>
         {
@@ -2936,6 +2947,12 @@ public class MainControlTaskCardLayoutUiTests
 
     private static void AssertDesktopPlanningGroupsStayCompactRow(Control root)
     {
+        // Widths can change during the preceding awaited assertions. Re-measure the
+        // actual panel extent before taking this synchronous geometry snapshot.
+        var planningPanel = root.GetVisualDescendants().OfType<WrapPanel>()
+            .Single(panel => panel.Classes.Contains("TaskPlanningGroups"));
+        CompletePlanningPanelLayout(planningPanel);
+
         var planningControls = PlanningControlAutomationIds
             .Select(automationId => FindControlByAutomationId<Control>(root, automationId))
             .ToArray();
@@ -3245,6 +3262,13 @@ public class MainControlTaskCardLayoutUiTests
 
     private static void AssertHorizontallyContained(Visual relativeTo, Control control)
     {
+        // Responsive group widths/margins can invalidate the WrapPanel while an
+        // awaited assertion yields. Complete its real layout before reading edges,
+        // just as for the desktop planning-row snapshot.
+        var planningPanel = control.GetVisualAncestors().OfType<WrapPanel>()
+            .FirstOrDefault(panel => panel.Classes.Contains("TaskPlanningGroups"));
+        if (planningPanel is not null) CompletePlanningPanelLayout(planningPanel);
+
         var leftEdge = GetLeftEdge(relativeTo, control);
         var rightEdge = GetRightEdge(relativeTo, control);
         var viewportWidth = ((Control)relativeTo).Bounds.Width;
@@ -3258,6 +3282,13 @@ public class MainControlTaskCardLayoutUiTests
                     $"{item.GetType().Name}:{AutomationProperties.GetAutomationId(item)} bounds={item.Bounds} desired={item.DesiredSize} width={item.Width} margin={item.Margin} left={GetLeftEdge(relativeTo, item):F1}" +
                     (item is ScrollViewer viewer ? $" offset={viewer.Offset} viewport={viewer.Viewport} extent={viewer.Extent}" : string.Empty))));
         }
+    }
+
+    private static void CompletePlanningPanelLayout(WrapPanel planningPanel)
+    {
+        planningPanel.InvalidateMeasure();
+        planningPanel.Measure(planningPanel.Bounds.Size);
+        planningPanel.Arrange(planningPanel.Bounds);
     }
 
     private static bool IsTemplatePartInsideInputControl(Control control)
@@ -3365,7 +3396,13 @@ public class MainControlTaskCardLayoutUiTests
                $"root={root.Bounds}; " +
                $"split={splitView?.Bounds}; open={splitView?.IsPaneOpen}; pane={paneLength}; " +
                $"scroll={scrollViewer?.Bounds}; " +
-               $"panel={panel?.Bounds}; compact={isCompact}.";
+               $"panel={panel?.Bounds}; compact={isCompact}. " +
+               "Planning: " + string.Join("; ", root.GetVisualDescendants().OfType<StackPanel>()
+                   .Where(control => control.Classes.Contains("TaskPlanningGroup"))
+                   .Select(control => $"width={control.Width}; bounds={control.Bounds}; desired={control.DesiredSize}; margin={control.Margin}; valid={control.IsMeasureValid}/{control.IsArrangeValid}; host={control.GetVisualParent()?.Bounds}")) +
+               "; hosts=" + string.Join("; ", root.GetVisualDescendants().OfType<WrapPanel>()
+                   .Where(control => control.Classes.Contains("TaskPlanningGroups"))
+                   .Select(control => $"orientation={control.Orientation}; item={control.ItemWidth}/{control.ItemHeight}; spacing={control.ItemSpacing}/{control.LineSpacing}; bounds={control.Bounds}"));
     }
 
     private sealed class FakeSystemCultureProvider : ILocalizationSystemCultureProvider

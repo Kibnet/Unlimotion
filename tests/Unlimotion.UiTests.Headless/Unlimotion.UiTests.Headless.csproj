@@ -15,6 +15,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\Infrastructure\TestInventoryHooks.cs" Link="Infrastructure\TestInventoryHooks.cs" />
     <ProjectReference Include="..\Unlimotion.AppAutomation.TestHost\Unlimotion.AppAutomation.TestHost.csproj" />
     <ProjectReference Include="..\Unlimotion.UiTests.Authoring\Unlimotion.UiTests.Authoring.csproj" />
     <ProjectReference Include="..\..\src\Unlimotion.Cli\Unlimotion.Cli.csproj" />

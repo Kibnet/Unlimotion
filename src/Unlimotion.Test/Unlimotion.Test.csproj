@@ -138,6 +138,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<Compile Include="..\..\tests\Infrastructure\TestInventoryHooks.cs" Link="TestInventoryHooks.cs" />
 		<ProjectReference Include="..\Unlimotion.Cli\Unlimotion.Cli.csproj" />
 		<ProjectReference Include="..\Unlimotion.Desktop\Unlimotion.Desktop.csproj" />
 		<ProjectReference Include="..\Unlimotion.FileStorage\Unlimotion.FileStorage.csproj" />

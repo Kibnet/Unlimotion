@@ -37,7 +37,7 @@ public class TaskTabEmojiFilterIsolationUiTests
     [Arguments(8)]
     public async Task EveryTab_FiltersItsActualResults_AndOwnsAllAndExclude(int index)
     {
-        if (await TaskTabEmojiFilterRenderedProcess.RunIfNeededAsync()) return;
+        if (await RenderedTestProcess.RunIfNeededAsync(TimeSpan.FromMinutes(3))) return;
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(EmojiTitleTestAppBuilder));
         await session.DispatchAsync(async () =>
         {
@@ -144,7 +144,7 @@ public class TaskTabEmojiFilterIsolationUiTests
     [Test]
     public async Task CatalogRefresh_KeepsSelectionsAndLocalHierarchy_ThenReconnectClearsThem()
     {
-        if (await TaskTabEmojiFilterRenderedProcess.RunIfNeededAsync()) return;
+        if (await RenderedTestProcess.RunIfNeededAsync(TimeSpan.FromMinutes(3))) return;
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(EmojiTitleTestAppBuilder));
         await session.DispatchAsync(async () =>
         {
@@ -235,7 +235,7 @@ public class TaskTabEmojiFilterIsolationUiTests
     [Arguments(true)]
     public async Task SwitchingTabs_DoesNotReuseTheOtherTabsEmojiSelection(bool exclude)
     {
-        if (await TaskTabEmojiFilterRenderedProcess.RunIfNeededAsync()) return;
+        if (await RenderedTestProcess.RunIfNeededAsync(TimeSpan.FromMinutes(3))) return;
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(EmojiTitleTestAppBuilder));
         await session.DispatchAsync(async () =>
         {
