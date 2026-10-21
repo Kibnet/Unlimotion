@@ -400,8 +400,16 @@ public sealed class GitStatusIndicatorHeadlessTests
             // The title edit also schedules a throttled autosave. Finish the fixture's
             // write producers before the synthetic retry commit, otherwise a late save
             // can legitimately make the repository Dirty again after that commit.
-            await Task.WhenAll(HeadlessRuntime.Dispatch(() => vm.taskRepository!.Tasks.Items
+            var pendingSaves = Task.WhenAll(HeadlessRuntime.Dispatch(() => vm.taskRepository!.Tasks.Items
                 .Select(task => task.SealPendingSaves()).ToArray()));
+            // Async storage continuations captured the Headless dispatcher. Pump it
+            // while waiting, as above for the original ordinary task save.
+            await UiAssert.TextEqualsAsync(() => HeadlessRuntime.Dispatch(() =>
+            {
+                Dispatcher.UIThread.RunJobs();
+                return pendingSaves.IsCompleted.ToString();
+            }), "True");
+            await pendingSaves;
             Commit(repositoryPath);
             HeadlessRuntime.Dispatch(() => vm.GitStatus.ApplyDiagnostic(new("A", repositoryPath, retry, false, BackupOperationResult.Success)));
             await State(GitIndicatorState.Idle);
