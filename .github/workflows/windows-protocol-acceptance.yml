@@ -1,0 +1,76 @@
+name: Windows installed protocol
+
+on:
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-protocol-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installed-protocol:
+    name: Install, update, URI activation, uninstall
+    runs-on: windows-2022
+    timeout-minutes: 25
+    env:
+      VELOPACK_VERSION: 0.0.1298
+      UNLIMOTION_PROTOCOL_INSTALL_ACCEPTANCE: '1'
+      UNLIMOTION_PROTOCOL_BASELINE_DIR: ${{ github.workspace }}\artifacts\protocol-baseline
+      UNLIMOTION_PROTOCOL_CANDIDATE_DIR: ${{ github.workspace }}\artifacts\protocol-candidate
+
+    steps:
+      - name: Checkout tested commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Prepare local NuGet feed
+        shell: pwsh
+        run: New-Item -ItemType Directory -Force artifacts/nuget-local | Out-Null
+
+      - name: Publish candidate for isolated installation
+        shell: pwsh
+        run: dotnet publish src/Unlimotion.Desktop/Unlimotion.Desktop.csproj -c Release -f net10.0 -r win-x64 -o artifacts/protocol-publish -p:PublishSingleFile=true --self-contained true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -p:Version=0.0.2
+
+      - name: Install pinned Velopack CLI
+        shell: pwsh
+        run: dotnet tool install --global vpk --version $env:VELOPACK_VERSION
+
+      - name: Pack baseline and candidate
+        shell: pwsh
+        run: |
+          vpk pack --packId Unlimotion --packVersion 0.0.1 --packDir artifacts/protocol-publish --outputDir "$env:UNLIMOTION_PROTOCOL_BASELINE_DIR" --channel win --runtime win-x64 --mainExe Unlimotion.Desktop.exe --packTitle Unlimotion --packAuthors Kibnet
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          vpk pack --packId Unlimotion --packVersion 0.0.2 --packDir artifacts/protocol-publish --outputDir "$env:UNLIMOTION_PROTOCOL_CANDIDATE_DIR" --channel win --runtime win-x64 --mainExe Unlimotion.Desktop.exe --packTitle Unlimotion --packAuthors Kibnet
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Install window video recorder dependency
+        shell: pwsh
+        run: choco install ffmpeg --yes --no-progress --limit-output
+
+      - name: Run actual installed protocol lifecycle
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force artifacts/protocol-results | Out-Null
+          git rev-parse HEAD | Set-Content artifacts/protocol-results/tested-commit.txt
+          dotnet run --project tests/Unlimotion.UiTests.FlaUI/Unlimotion.UiTests.FlaUI.csproj -c Release -- --treenode-filter "/*/*/InstalledTaskProtocolFlaUiTests/*" --maximum-parallel-tests 1 --minimum-expected-tests 1 --report-trx --output Detailed --results-directory="${{ github.workspace }}\artifacts\protocol-results"
+
+      - name: Upload installed protocol evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installed-protocol-${{ github.sha }}
+          retention-days: 14
+          path: |
+            artifacts/protocol-results
+            artifacts/deep-links/installed

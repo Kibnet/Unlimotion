@@ -26,7 +26,8 @@ jobs:
   all-tests:
     name: All tests
     runs-on: windows-latest
-    timeout-minutes: 30
+    # Serial core and Headless suites exceed 30 minutes together on hosted Windows.
+    timeout-minutes: 60
 
     steps:
     - name: Checkout
