@@ -2315,16 +2315,19 @@ namespace Unlimotion.ViewModel
                 GetRemoveTaskMessage(task),
                 async () =>
                 {
+                    if (!Settings.IsSourceAdmissionCurrent(admission)) return;
                     if (task.Parents?.Count > 0)
                     {
                         foreach (var parent in task.ParentsTasks.ToList())
                         {
+                            if (!Settings.IsSourceAdmissionCurrent(admission)) return;
                             await task.RemoveFunc.Invoke(parent);
                         }
                     }
                     else
                         await task.RemoveFunc.Invoke(null);
 
+                    if (Settings.IsSourceAdmissionCurrent(admission) && ReferenceEquals(CurrentTaskItem, task))
                         CurrentTaskItem = null;
                 });
         }
@@ -2605,38 +2608,44 @@ namespace Unlimotion.ViewModel
                 parent = null;
             }
 
-            TaskItemViewModel? firstCreated = null;
-
-            foreach (var node in nodes)
+            Settings.IsTaskOutlinePasteInProgress = true;
+            admission = Settings.CaptureSourceAdmission();
+            try
             {
-                var destinationParent = parent;
-                if (!string.IsNullOrWhiteSpace(capturedParentId))
+                TaskItemViewModel? firstCreated = null;
+
+                foreach (var node in nodes)
                 {
-                    destinationParent = FindTaskById(capturedParentId);
-                    if (destinationParent == null)
+                    var destinationParent = parent;
+                    if (!string.IsNullOrWhiteSpace(capturedParentId))
+                    {
+                        destinationParent = FindTaskById(capturedParentId);
+                        if (destinationParent == null)
+                        {
+                            ManagerWrapper?.ErrorToast(L10n.Get("PasteTaskOutlineDestinationUnavailable"));
+                            return;
+                        }
+                    }
+
+                    var created = await CreateTaskFromOutlineNode(node, destinationParent, repository!, admission);
+                    if (created == null)
                     {
                         ManagerWrapper?.ErrorToast(L10n.Get("PasteTaskOutlineDestinationUnavailable"));
                         return;
                     }
+                    firstCreated ??= created;
                 }
 
-                var created = await CreateTaskFromOutlineNode(node, destinationParent, repository!, admission);
-                if (created == null)
+                if (firstCreated == null)
                 {
-                    ManagerWrapper?.ErrorToast(L10n.Get("PasteTaskOutlineDestinationUnavailable"));
                     return;
                 }
-                firstCreated ??= created;
-            }
 
-            if (firstCreated == null)
-            {
-                return;
+                CurrentTaskItem = firstCreated;
+                SelectCurrentTask();
+                ExpandParentNodesForTask(firstCreated);
             }
-
-            CurrentTaskItem = firstCreated;
-            SelectCurrentTask();
-            ExpandParentNodesForTask(firstCreated);
+            finally { Settings.IsTaskOutlinePasteInProgress = false; }
         }
 
         private async Task<TaskItemViewModel?> CreateTaskFromOutlineNode(
@@ -2645,14 +2654,11 @@ namespace Unlimotion.ViewModel
             ITaskStorage repository,
             SourceAdmissionContext admission)
         {
-            if (!Settings.IsSourceAdmissionCurrent(admission) || !ReferenceEquals(repository, taskRepository))
+            if (!Settings.IsPasteAdmissionCurrent(admission) || !ReferenceEquals(repository, taskRepository))
                 return null;
             var created = parent == null
                 ? await repository.Add()
                 : await repository.AddChild(parent);
-            if (!Settings.IsSourceAdmissionCurrent(admission) || !ReferenceEquals(repository, taskRepository))
-                return null;
-
             var createdModel = created.Model;
             createdModel.Title = node.Title;
             if (!string.IsNullOrWhiteSpace(node.Description))
@@ -2674,7 +2680,7 @@ namespace Unlimotion.ViewModel
 
             var createdId = created.Id;
             var updated = await repository.Update(createdModel);
-            if (!Settings.IsSourceAdmissionCurrent(admission) || !ReferenceEquals(repository, taskRepository))
+            if (!Settings.IsPasteAdmissionCurrent(admission) || !ReferenceEquals(repository, taskRepository))
                 return null;
             created = updated?.Id == createdId
                 ? updated

@@ -185,7 +185,8 @@
 
                     <StackPanel Classes="FieldGroup">
                         <TextBlock Classes="FieldLabel" Text="{DynamicResource LanguageLabel}" />
-                        <ComboBox SelectedIndex="{Binding LanguageModeIndex, Mode=TwoWay}"
+                        <ComboBox AutomationProperties.AutomationId="SettingsLanguageSelector"
+                                  SelectedIndex="{Binding LanguageModeIndex, Mode=TwoWay}"
                                   ItemsSource="{Binding LanguageOptions}">
                             <ComboBox.ItemTemplate>
                                 <DataTemplate DataType="localization:LanguageOption">

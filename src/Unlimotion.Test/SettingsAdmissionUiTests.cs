@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Reactive;
 using System.Reactive.Threading.Tasks;
 using System.Threading;
@@ -18,6 +19,115 @@ namespace Unlimotion.Test;
 [ParallelLimiter<SharedUiStateParallelLimit>]
 public class SettingsAdmissionUiTests
 {
+    [Test]
+    public async Task CurrentTaskDeleteConfirmation_FromOldSource_DoesNotDeleteOrClearSelection()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            await using var fixture = new MainWindowViewModelFixture();
+            var vm = fixture.MainWindowViewModelTest;
+            await vm.Connect();
+            var task = vm.taskRepository!.Tasks.Lookup(MainWindowViewModelFixture.RootTask1Id).Value;
+            vm.CurrentTaskItem = task;
+            var removed = 0;
+            task.RemoveFunc = _ => { removed++; return Task.FromResult(true); };
+            Action? confirm = null;
+            ((NotificationManagerWrapperMock)vm.ManagerWrapper).AskHandler = yes => confirm = yes;
+            vm.Remove.Execute(null);
+            await Assert.That(SpinWait.SpinUntil(() => { Dispatcher.UIThread.RunJobs(); return confirm != null; }, 3000)).IsTrue();
+            vm.Settings.IsTaskSpaceSwitching = true;
+            vm.Settings.IsTaskSpaceSwitching = false;
+            confirm!();
+            Dispatcher.UIThread.RunJobs();
+            await Assert.That(removed).IsEqualTo(0);
+            await Assert.That(ReferenceEquals(vm.CurrentTaskItem, task)).IsTrue();
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task ChangingLanguage_DuringSync_KeepsMutationBlockedUntilSyncCompletes()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            await using var fixture = new MainWindowViewModelFixture();
+            var settings = fixture.MainWindowViewModelTest.Settings;
+            var language = settings.LanguageMode;
+            try
+            {
+                settings.SetBackupConnectionState(BackupStatusState.Syncing);
+                settings.LanguageMode = language == "ru" ? "en" : "ru";
+                await Assert.That(settings.BackupConnectionState).IsEqualTo(BackupStatusState.Syncing);
+                await Assert.That(settings.IsSourceMutationBlocked).IsTrue();
+                await Assert.That(settings.CanEditSourceSettings).IsFalse();
+                settings.SetBackupConnectionState(BackupStatusState.Connected);
+                await Assert.That(settings.IsSourceMutationBlocked).IsFalse();
+            }
+            finally { settings.SetBackupConnectionState(BackupStatusState.NotConfigured); settings.LanguageMode = language; }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task Paste_BusyDuringCreate_FinishesCreatedNodeAndBlocksSourceChanges()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            await using var fixture = new MainWindowViewModelFixture();
+            var vm = fixture.MainWindowViewModelTest;
+            await vm.Connect();
+            var inner = vm.taskRepository!;
+            var proxy = DispatchProxy.Create<ITaskStorage, HeldAddProxy>();
+            var held = (HeldAddProxy)(object)proxy;
+            held.Inner = inner;
+            vm.taskRepository = proxy;
+            vm.CurrentTaskItem = null;
+            vm.GetClipboardTextAsync = () => Task.FromResult<string?>("First node\nSecond node");
+            ((NotificationManagerWrapperMock)vm.ManagerWrapper).ConfirmTaskOutlinePasteHandler = _ => Task.FromResult(true);
+            var paste = vm.PasteTaskOutline();
+            try
+            {
+                await held.Created.Task.WaitAsync(TimeSpan.FromSeconds(10));
+                await Assert.That(vm.Settings.IsTaskOutlinePasteInProgress).IsTrue();
+                await Assert.That(vm.Settings.CanEditSourceSettings).IsFalse();
+                vm.Settings.IsTaskDataLoading = true;
+                held.Release.TrySetResult();
+                await paste;
+                var stored = await inner.TaskTreeManager.Storage.Load(held.CreatedId!);
+                await Assert.That(stored?.Title).IsEqualTo("First node");
+                await Assert.That(inner.Tasks.Items.Any(task => task.Title == "Second node")).IsFalse();
+                await Assert.That(vm.Settings.IsTaskOutlinePasteInProgress).IsFalse();
+            }
+            finally
+            {
+                held.Release.TrySetResult();
+                vm.Settings.IsTaskDataLoading = false;
+                vm.taskRepository = inner;
+            }
+        }, CancellationToken.None);
+    }
+
+    public class HeldAddProxy : DispatchProxy
+    {
+        public ITaskStorage Inner { get; set; } = null!;
+        public TaskCompletionSource Created { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public string? CreatedId { get; private set; }
+        protected override object? Invoke(MethodInfo? method, object?[]? args)
+        {
+            var result = method!.Invoke(Inner, args);
+            return method.Name == nameof(ITaskStorage.Add) ? HoldAsync((Task<TaskItemViewModel>)result!) : result;
+        }
+        private async Task<TaskItemViewModel> HoldAsync(Task<TaskItemViewModel> pending)
+        {
+            var task = await pending;
+            CreatedId = task.Id;
+            Created.TrySetResult();
+            await Release.Task;
+            return task;
+        }
+    }
     [Test]
     public async Task GlobalTaskCreationCommands_RejectDirectExecutionDuringLoading()
     {

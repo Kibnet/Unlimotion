@@ -1269,7 +1269,8 @@ public partial class SettingsViewModel : IDisposable
         RefreshLanguageOptions();
         RefreshBackupAuthMode();
         RefreshStorageStatusText();
-        RefreshBackupState();
+        if (IsBackupBusy) RefreshBackupStatusText();
+        else RefreshBackupState();
         RefreshUpdateStatusText();
     }
 

@@ -11,8 +11,11 @@ public partial class SettingsViewModel
     [AlsoNotifyFor(nameof(IsSourceMutationBlocked), nameof(CanEditSourceSettings), nameof(SourceBusyStatusText))]
     public bool IsTaskDataLoading { get; set; }
 
+    [AlsoNotifyFor(nameof(IsSourceMutationBlocked), nameof(CanEditSourceSettings), nameof(SourceBusyStatusText))]
+    public bool IsTaskOutlinePasteInProgress { get; set; }
+
     public bool IsSourceMutationBlocked => IsTaskDataLoading || IsTaskSpaceSwitching ||
-        IsStorageBusy || IsBackupBusy || IsTaskSpaceRecoveryRequired;
+        IsStorageBusy || IsBackupBusy || IsTaskSpaceRecoveryRequired || IsTaskOutlinePasteInProgress;
     public bool CanEditSourceSettings => !IsSourceMutationBlocked;
     [AlsoNotifyFor(nameof(SourceBusyStatusText))]
     public string? SourceOperationStatusText { get; set; }
@@ -25,6 +28,11 @@ public partial class SettingsViewModel
         _configuration["TaskSources:ActiveSourceId"]);
     public bool IsSourceAdmissionCurrent(SourceAdmissionContext context) =>
         context == CaptureSourceAdmission() && !IsSourceMutationBlocked;
+
+    public bool IsPasteAdmissionCurrent(SourceAdmissionContext context) =>
+        context == CaptureSourceAdmission() && IsTaskOutlinePasteInProgress &&
+        !IsTaskDataLoading && !IsTaskSpaceSwitching && !IsStorageBusy &&
+        !IsBackupBusy && !IsTaskSpaceRecoveryRequired;
 
     public ICommand GuardSourceCommand(ICommand command, Func<bool>? availability = null) =>
         new AdmissionGuardedCommand(command,
@@ -43,6 +51,7 @@ public partial class SettingsViewModel
     private void OnIsTaskSpaceRecoveryRequiredChanged() => InvalidateSourceAdmission();
     private void OnIsStorageBusyChanged() => InvalidateSourceAdmission();
     private void OnIsBackupBusyChanged() => InvalidateSourceAdmission();
+    private void OnIsTaskOutlinePasteInProgressChanged() => InvalidateSourceAdmission();
 }
 
 public readonly record struct SourceAdmissionContext(long Revision, string? TaskPath, string? TaskUrl,

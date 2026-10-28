@@ -127,6 +127,42 @@ public class MainScreenLoadingUiTests
         }, CancellationToken.None);
     }
 
+    [Test]
+    public async Task SettingsLanguageChange_DuringSync_KeepsSourceControlsDisabled()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            using var context = TestMainWindowContext.Create(TimeSpan.Zero);
+            var vm = context.MainWindowViewModel;
+            var screen = new MainScreen { DataContext = vm };
+            var window = CreateWindow(screen);
+            var language = vm.Settings.LanguageMode;
+            window.Show();
+            try
+            {
+                Click(window, FindControlByAutomationId<Button>(screen, "GlobalSettingsButton"));
+                vm.Settings.SetBackupConnectionState(BackupStatusState.Syncing);
+                Dispatcher.UIThread.RunJobs();
+                var selector = FindControlByAutomationId<ComboBox>(screen, "SettingsLanguageSelector");
+                await Assert.That(selector.IsEffectivelyEnabled).IsTrue();
+                var previous = selector.SelectedIndex;
+                selector.SelectedIndex = previous == 1 ? 2 : 1;
+                Dispatcher.UIThread.RunJobs();
+                await Assert.That(selector.SelectedIndex).IsNotEqualTo(previous);
+                await Assert.That(vm.Settings.IsBackupBusy).IsTrue();
+                await Assert.That(FindControlByAutomationId<Border>(screen, "SettingsStorageSection").IsEffectivelyEnabled).IsFalse();
+                await Assert.That(FindControlByAutomationId<Border>(screen, "SettingsBusyStatus").IsEffectivelyVisible).IsTrue();
+            }
+            finally
+            {
+                vm.Settings.SetBackupConnectionState(BackupStatusState.NotConfigured);
+                vm.Settings.LanguageMode = language;
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
     private static void Click(Window window, Control control)
     {
         var point = control.TranslatePoint(new Point(control.Bounds.Width / 2, control.Bounds.Height / 2), window)
@@ -501,6 +537,7 @@ public class MainScreenLoadingUiTests
 
         public void Dispose()
         {
+            MainWindowViewModel.Dispose();
             _configurationDisposable?.Dispose();
 
             if (File.Exists(_configPath))
