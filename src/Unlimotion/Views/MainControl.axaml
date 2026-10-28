@@ -900,11 +900,15 @@
                     </ComboBox.ItemTemplate>
                 </ComboBox>
                 <Button x:Name="GlobalSettingsButton"
-                        MinWidth="32" Height="32" Padding="8,2" Content="⚙"
+                        Classes="TaskAccentOutlineButton"
+                        Width="36" Height="36" Padding="6"
                         Command="{Binding OpenSettingsCommand}"
                         ToolTip.Tip="{DynamicResource Settings}"
                         AutomationProperties.Name="{DynamicResource Settings}"
-                        AutomationProperties.AutomationId="GlobalSettingsButton"/>
+                        AutomationProperties.AutomationId="GlobalSettingsButton">
+                    <PathIcon Width="20" Height="20"
+                              Data="F0 M19.14,12.94 C19.18,12.63 19.2,12.32 19.2,12 C19.2,11.68 19.18,11.37 19.13,11.06 L21.16,9.48 C21.34,9.34 21.39,9.08 21.27,8.87 L19.35,5.55 C19.23,5.34 18.98,5.27 18.76,5.34 L16.37,6.3 C15.88,5.92 15.34,5.61 14.75,5.37 L14.39,2.83 C14.35,2.59 14.15,2.42 13.91,2.42 L10.07,2.42 C9.83,2.42 9.63,2.59 9.59,2.83 L9.23,5.37 C8.64,5.61 8.1,5.93 7.61,6.3 L5.22,5.34 C5,5.26 4.75,5.34 4.63,5.55 L2.72,8.87 C2.6,9.08 2.64,9.34 2.83,9.48 L4.85,11.06 C4.8,11.37 4.78,11.69 4.78,12 C4.78,12.31 4.8,12.63 4.85,12.94 L2.83,14.52 C2.64,14.66 2.6,14.92 2.72,15.13 L4.64,18.45 C4.76,18.66 5.01,18.73 5.23,18.66 L7.62,17.7 C8.11,18.08 8.65,18.39 9.24,18.63 L9.6,21.17 C9.64,21.41 9.84,21.58 10.08,21.58 L13.92,21.58 C14.16,21.58 14.36,21.41 14.4,21.17 L14.76,18.63 C15.35,18.39 15.89,18.07 16.38,17.7 L18.77,18.66 C18.99,18.74 19.24,18.66 19.36,18.45 L21.28,15.13 C21.4,14.92 21.35,14.66 21.17,14.52 Z M12,15.5 C10.07,15.5 8.5,13.93 8.5,12 C8.5,10.07 10.07,8.5 12,8.5 C13.93,8.5 15.5,10.07 15.5,12 C15.5,13.93 13.93,15.5 12,15.5 Z"/>
+                </Button>
                 <DropDownButton Classes="TaskCreateMenuButton TaskAccentOutlineButton TaskIconOnlyDropDownButton"
                                 Content="➕"
                                 IsEnabled="{Binding Settings.CanEditSourceSettings}"

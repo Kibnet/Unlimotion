@@ -94,6 +94,8 @@ public class MainScreenLoadingUiTests
                 SetTasksLoading(vm, true);
                 Dispatcher.UIThread.RunJobs();
                 var settingsButton = FindControlByAutomationId<Button>(view, "GlobalSettingsButton");
+                await Assert.That(settingsButton.Content is PathIcon).IsTrue();
+                await Assert.That(settingsButton.IsEffectivelyEnabled).IsTrue();
                 Click(window, settingsButton);
                 var settingsOverlay = FindControlByAutomationId<Grid>(view, "GlobalSettingsOverlay");
                 await Assert.That(settingsOverlay.IsEffectivelyVisible).IsTrue();
@@ -214,7 +216,9 @@ public class MainScreenLoadingUiTests
     [Arguments(1440, true, 1d)]
     public async Task SettingsDuringLoading_FitsWindowAndKeepsCloseReachable(int width, bool dark, double scale)
     {
-        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        var builder = Environment.GetEnvironmentVariable("UNLIMOTION_RENDER_SETTINGS_ICON") == "1"
+            ? typeof(EmojiTitleTestAppBuilder) : typeof(App);
+        await using var session = SafeHeadlessUnitTestSession.StartNew(builder);
         await session.DispatchAsync(async () =>
         {
             using var context = TestMainWindowContext.Create(TimeSpan.Zero);
