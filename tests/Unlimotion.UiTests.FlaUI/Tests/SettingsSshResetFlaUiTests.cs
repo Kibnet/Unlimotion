@@ -139,21 +139,7 @@ public sealed class SettingsSshResetFlaUiTests
         var details = session.MainWindow.FindFirstDescendant(session.ConditionFactory.ByName("↔️"));
         if (details?.Patterns.Toggle.PatternOrDefault is { } toggle &&
             toggle.ToggleState.Value == global::FlaUI.Core.Definitions.ToggleState.Off) toggle.Toggle();
-        var settingsTab = session.MainWindow.FindFirstDescendant(session.ConditionFactory.ByAutomationId("SettingsTabItem"));
-        if (settingsTab != null) settingsTab.AsTabItem().Select();
-        else
-        {
-            Find(session, "MainTabsOverflowButton").Patterns.Invoke.Pattern.Invoke();
-            await WaitUntil(() => session.MainWindow.Automation.GetDesktop()
-                .FindAllChildren(session.ConditionFactory.ByProcessId(session.MainWindow.Properties.ProcessId.Value))
-                .Any(root => root.FindFirstDescendant(session.ConditionFactory.ByAutomationId("MainTabsOverflowSettingsTabItem")) != null));
-            var menu = session.MainWindow.Automation.GetDesktop()
-                .FindAllChildren(session.ConditionFactory.ByProcessId(session.MainWindow.Properties.ProcessId.Value))
-                .Select(root => root.FindFirstDescendant(session.ConditionFactory.ByAutomationId("MainTabsOverflowSettingsTabItem")))
-                .First(e => e != null)!;
-            if (menu.Patterns.Invoke.PatternOrDefault is { } invoke) invoke.Invoke();
-            else global::AppAutomation.FlaUI.Input.DesktopPointer.Click(menu);
-        }
+        Find(session, "GlobalSettingsButton").Patterns.Invoke.Pattern.Invoke();
         var scroll = Find(session, "SettingsRoot").FindAllDescendants().FirstOrDefault(e => e.Patterns.Scroll.IsSupported &&
             e.Patterns.Scroll.Pattern.VerticallyScrollable.Value);
         scroll?.Patterns.Scroll.Pattern.SetScrollPercent(-1, 75);

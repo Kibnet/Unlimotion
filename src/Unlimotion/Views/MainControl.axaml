@@ -887,7 +887,7 @@
                 <ComboBox Width="170"
                           ItemsSource="{Binding Settings.TaskSpaces}"
                           SelectedItem="{Binding Settings.HeaderTaskSpace, Mode=TwoWay}"
-                          IsEnabled="{Binding !Settings.IsTaskSpaceSwitching}"
+                          IsEnabled="{Binding Settings.CanEditSourceSettings}"
                           ToolTip.Tip="{DynamicResource TaskSpaceSelectorHint}"
                           AutomationProperties.AutomationId="TaskSpaceSelector">
                     <ComboBox.ItemTemplate>
@@ -899,8 +899,15 @@
                         </DataTemplate>
                     </ComboBox.ItemTemplate>
                 </ComboBox>
+                <Button x:Name="GlobalSettingsButton"
+                        MinWidth="32" Height="32" Padding="8,2" Content="⚙"
+                        Command="{Binding OpenSettingsCommand}"
+                        ToolTip.Tip="{DynamicResource Settings}"
+                        AutomationProperties.Name="{DynamicResource Settings}"
+                        AutomationProperties.AutomationId="GlobalSettingsButton"/>
                 <DropDownButton Classes="TaskCreateMenuButton TaskAccentOutlineButton TaskIconOnlyDropDownButton"
                                 Content="➕"
+                                IsEnabled="{Binding Settings.CanEditSourceSettings}"
                                 ToolTip.Tip="{DynamicResource CreateTaskMenuTip}"
                                 AutomationProperties.Name="{DynamicResource CreateTaskMenuTip}"
                                 AutomationProperties.AutomationId="GlobalTaskCreateMenuButton">
@@ -1889,11 +1896,6 @@
                              AutomationProperties.AutomationId="RoadmapTabItem">
                         <views:GraphControl DataContext="{Binding Graph}"/>
                     </TabItem>
-                    <!--Settings-->
-                    <TabItem Header="{DynamicResource Settings}" IsSelected="{Binding SettingsMode, Mode=OneWayToSource}"
-                             AutomationProperties.AutomationId="SettingsTabItem">
-                        <views:SettingsControl DataContext="{Binding Settings}"/>
-                    </TabItem>
                 </TabControl>
                 <Button x:Name="MainTabsOverflowButton"
                         Classes="MainTabsOverflowButton"
@@ -2682,6 +2684,30 @@
                 </Grid>
             </SplitView.Pane>
         </SplitView>
+                <Grid Grid.Row="1" Panel.ZIndex="89" x:Name="TasksLoadingOverlay"
+                      IsVisible="{Binding IsTasksLoading}"
+                      AutomationProperties.AutomationId="TasksLoadingOverlay">
+                    <Border Background="#66000000"/>
+                    <Border MaxWidth="260"
+                            Padding="20"
+                            CornerRadius="14"
+                            Background="#F2FFFFFF"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center">
+                        <StackPanel Spacing="12">
+                            <unlimotion:SeamlessLoadingIndicator Width="160"
+                                                                  Height="72"
+                                                                  IsVisible="{Binding IsTasksLoading}"
+                                                                  HorizontalAlignment="Center"
+                                                                  AutomationProperties.AutomationId="TasksLoadingSpinner"/>
+                            <TextBlock Text="{DynamicResource LoadingTasks}"
+                                       Foreground="Black"
+                                       FontWeight="SemiBold"
+                                       HorizontalAlignment="Center"
+                                       TextAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
         <Grid Grid.Row="1"
               Panel.ZIndex="90"
               IsVisible="{Binding Settings.IsTaskSpaceSwitching}"
@@ -2694,7 +2720,7 @@
                                                       Height="80"
                                                       IsVisible="{Binding Settings.IsTaskSpaceSwitching}"
                                                       AutomationProperties.AutomationId="TaskSpaceSwitchProgress"/>
-                <TextBlock Text="{DynamicResource TaskSpaceSwitching}"
+                <TextBlock Text="{Binding Settings.SourceBusyStatusText}"
                            HorizontalAlignment="Center"/>
             </StackPanel>
         </Grid>

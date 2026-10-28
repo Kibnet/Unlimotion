@@ -33,7 +33,7 @@ namespace Unlimotion.ViewModel
     }
 
     [AddINotifyPropertyChangedInterface]
-    public class MainWindowViewModel : DisposableList
+    public partial class MainWindowViewModel : DisposableList
     {
         public bool IsInitialized { get; private set; }
         public GitStatusViewModel GitStatus { get; private set; } = new();
@@ -118,7 +118,9 @@ namespace Unlimotion.ViewModel
             _getTaskStorage = getTaskStorage;
             _taskTreeExpansionStatePath = taskTreeExpansionStatePath;
             Settings = settings ?? new SettingsViewModel(_configuration);
+            Settings.AddToDispose(this);
             Settings.GitStatus = GitStatus;
+            InitializeSettingsScreen();
             Graph = graph ?? new GraphViewModel();
             CurrentAllTasksItems = EmptyTaskWrappers;
             UnlockedItems = EmptyTaskWrappers;
@@ -455,6 +457,7 @@ namespace Unlimotion.ViewModel
         {
             Create = ReactiveCommand.CreateFromTask(async () =>
             {
+                if (Settings.IsSourceMutationBlocked) return;
                 var newTask = await taskRepository!.Add();
                 CurrentTaskItem = newTask;
                 SelectCurrentTask();
@@ -463,7 +466,8 @@ namespace Unlimotion.ViewModel
                     RequestTitleFocusForCurrentTask();
                 }
 
-            }).AddToDisposeAndReturn(connectionDisposableList);
+            }, Settings.WhenAnyValue(settings => settings.IsSourceMutationBlocked).Select(blocked => !blocked))
+                .AddToDisposeAndReturn(connectionDisposableList);
             CreateSibling = ReactiveCommand.CreateFromTask<bool>(async isBlocked =>
             {
                 await CreateSiblingTaskAsync(isBlocked);
@@ -479,7 +483,7 @@ namespace Unlimotion.ViewModel
 
             CreateInner = ReactiveCommand.CreateFromTask(async () =>
             {
-                if (CurrentTaskItem == null)
+                if (Settings.IsSourceMutationBlocked || CurrentTaskItem == null)
                     return;
                 if (string.IsNullOrWhiteSpace(CurrentTaskItem.Title))
                     return;
@@ -511,7 +515,7 @@ namespace Unlimotion.ViewModel
             Remove = ReactiveCommand.CreateFromTask(async () => await RemoveTaskItem(CurrentTaskItem));
             CompleteCurrentTaskCommand = ReactiveCommand.CreateFromTask(async () =>
             {
-                if (CurrentTaskItem == null)
+                if (Settings.IsSourceMutationBlocked || CurrentTaskItem == null)
                 {
                     return;
                 }
@@ -521,7 +525,8 @@ namespace Unlimotion.ViewModel
                 .Select(task => task is null
                     ? Observable.Return(false)
                     : task.WhenAnyValue(item => item.CanChangeTaskStatus))
-                .Switch()).AddToDisposeAndReturn(connectionDisposableList);
+                .Switch().CombineLatest(Settings.WhenAnyValue(settings => settings.IsSourceMutationBlocked),
+                    (canChange, blocked) => canChange && !blocked)).AddToDisposeAndReturn(connectionDisposableList);
             ExpandCurrentNestedCommand = ReactiveCommand.Create(() =>
                 ExecuteTreeCommandAction?.Invoke(TreeCommandKind.ExpandCurrentNested))
                 .AddToDisposeAndReturn(connectionDisposableList);
@@ -552,6 +557,8 @@ namespace Unlimotion.ViewModel
             PasteTaskOutlineCommand = ReactiveCommand.CreateFromTask(async () =>
                 await PasteTaskOutline(CurrentTaskItem))
                 .AddToDisposeAndReturn(connectionDisposableList);
+
+            GuardTaskMutationCommands();
 
             //Select CurrentTaskItem from all tabs
             this.WhenAnyValue(m => m.CurrentAllTasksItem)
@@ -671,6 +678,7 @@ namespace Unlimotion.ViewModel
 
         private async Task<TaskItemViewModel?> CreateSiblingTaskAsync(bool isBlocked = false)
         {
+            if (Settings.IsSourceMutationBlocked) return null;
             if (CurrentTaskItem == null)
             {
                 SelectCurrentTask();
@@ -2270,12 +2278,15 @@ namespace Unlimotion.ViewModel
 
         private async void RemoveTask(TaskWrapperViewModel task)
         {
+            if (Settings.IsSourceMutationBlocked) return;
+            var admission = Settings.CaptureSourceAdmission();
             if (task.TaskItem.RemoveRequiresConfirmation(task.Parent?.TaskItem.Id))
             {
                 ManagerWrapper.Ask(L10n.Get("RemoveTaskHeader"),
                     GetRemoveTaskMessage(task.TaskItem),
                     async () =>
                     {
+                        if (!Settings.IsSourceAdmissionCurrent(admission)) return;
                         if (await task.TaskItem.RemoveFunc.Invoke(task.Parent?.TaskItem))
                         {
                             CurrentTaskItem = null;
@@ -2293,6 +2304,8 @@ namespace Unlimotion.ViewModel
 
         private async Task RemoveTaskItem(TaskItemViewModel? task)
         {
+            if (Settings.IsSourceMutationBlocked) return;
+            var admission = Settings.CaptureSourceAdmission();
             if (task == null)
             {
                 return;
@@ -2318,6 +2331,8 @@ namespace Unlimotion.ViewModel
 
         public void RemoveSelectedWrappers(IEnumerable<TaskWrapperViewModel>? wrappers)
         {
+            if (Settings.IsSourceMutationBlocked) return;
+            var admission = Settings.CaptureSourceAdmission();
             var orderedWrappers = wrappers
                 .NormalizeForDeleteBatch()
                 .OrderByDescending(static wrapper => wrapper.GetWrapperDepth())
@@ -2337,7 +2352,11 @@ namespace Unlimotion.ViewModel
             ManagerWrapper.Ask(
                 L10n.Get("RemoveTasksHeader"),
                 GetRemoveTasksMessage(orderedWrappers),
-                async () => await RemoveWrappersInternalAsync(orderedWrappers));
+                async () =>
+                {
+                    if (!Settings.IsSourceAdmissionCurrent(admission)) return;
+                    await RemoveWrappersInternalAsync(orderedWrappers);
+                });
         }
 
         private static string GetRemoveTaskMessage(TaskItemViewModel task)
@@ -2540,6 +2559,9 @@ namespace Unlimotion.ViewModel
 
         public async Task PasteTaskOutline(TaskItemViewModel? destination = null)
         {
+            if (Settings.IsSourceMutationBlocked) return;
+            var admission = Settings.CaptureSourceAdmission();
+            var repository = taskRepository;
             if (taskRepository == null)
             {
                 ManagerWrapper?.ErrorToast(L10n.Get("TaskStorageNotConfigured"));
@@ -2553,6 +2575,7 @@ namespace Unlimotion.ViewModel
             }
 
             var outline = await GetClipboardTextAsync();
+            if (!Settings.IsSourceAdmissionCurrent(admission) || !ReferenceEquals(repository, taskRepository)) return;
             var nodes = TaskOutlineClipboardService.ParseOutline(outline);
             if (nodes.Count == 0)
             {
@@ -2566,6 +2589,7 @@ namespace Unlimotion.ViewModel
             {
                 return;
             }
+            if (!Settings.IsSourceAdmissionCurrent(admission) || !ReferenceEquals(repository, taskRepository)) return;
 
             if (!string.IsNullOrWhiteSpace(capturedParentId))
             {
@@ -2596,7 +2620,12 @@ namespace Unlimotion.ViewModel
                     }
                 }
 
-                var created = await CreateTaskFromOutlineNode(node, destinationParent);
+                var created = await CreateTaskFromOutlineNode(node, destinationParent, repository!, admission);
+                if (created == null)
+                {
+                    ManagerWrapper?.ErrorToast(L10n.Get("PasteTaskOutlineDestinationUnavailable"));
+                    return;
+                }
                 firstCreated ??= created;
             }
 
@@ -2610,13 +2639,19 @@ namespace Unlimotion.ViewModel
             ExpandParentNodesForTask(firstCreated);
         }
 
-        private async Task<TaskItemViewModel> CreateTaskFromOutlineNode(
+        private async Task<TaskItemViewModel?> CreateTaskFromOutlineNode(
             TaskOutlineNode node,
-            TaskItemViewModel? parent)
+            TaskItemViewModel? parent,
+            ITaskStorage repository,
+            SourceAdmissionContext admission)
         {
+            if (!Settings.IsSourceAdmissionCurrent(admission) || !ReferenceEquals(repository, taskRepository))
+                return null;
             var created = parent == null
-                ? await taskRepository!.Add()
-                : await taskRepository!.AddChild(parent);
+                ? await repository.Add()
+                : await repository.AddChild(parent);
+            if (!Settings.IsSourceAdmissionCurrent(admission) || !ReferenceEquals(repository, taskRepository))
+                return null;
 
             var createdModel = created.Model;
             createdModel.Title = node.Title;
@@ -2638,14 +2673,16 @@ namespace Unlimotion.ViewModel
             }
 
             var createdId = created.Id;
-            var updated = await taskRepository.Update(createdModel);
+            var updated = await repository.Update(createdModel);
+            if (!Settings.IsSourceAdmissionCurrent(admission) || !ReferenceEquals(repository, taskRepository))
+                return null;
             created = updated?.Id == createdId
                 ? updated
                 : FindTaskById(createdId) ?? created;
 
             foreach (var child in node.Children)
             {
-                await CreateTaskFromOutlineNode(child, created);
+                if (await CreateTaskFromOutlineNode(child, created, repository, admission) == null) return null;
             }
 
             return created;

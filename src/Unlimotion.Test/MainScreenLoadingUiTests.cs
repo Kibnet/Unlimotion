@@ -1,13 +1,19 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows.Input;
+using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
+using Avalonia.Input.Raw;
+using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Microsoft.Extensions.Configuration;
@@ -25,6 +31,195 @@ namespace Unlimotion.Test;
 [ParallelLimiter<SharedUiStateParallelLimit>]
 public class MainScreenLoadingUiTests
 {
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task SourceCommands_RejectDirectExecutionWhileLoadingOrSwitching(bool switching)
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            using var context = TestMainWindowContext.Create(TimeSpan.Zero);
+            var settings = context.MainWindowViewModel.Settings;
+            var events = new ConcurrentQueue<string>();
+            using var factory = new SettingsViewModelTests.RecordingTaskStorageFactory(
+                Path.Combine(Path.GetTempPath(), $"source-guard-{Guid.NewGuid():N}"), events);
+            using var commands = SettingsViewModelTests.ConfigureAppSettingsCommands(settings,
+                context.Configuration, new SettingsViewModelTests.FakeRemoteBackupService(), factory);
+            if (switching) settings.IsTaskSpaceSwitching = true;
+            else SetTasksLoading(context.MainWindowViewModel, true);
+            try
+            {
+                foreach (var command in new ICommand?[]
+                {
+                    settings.AddTaskSpaceCommand, settings.SwitchTaskSpaceCommand,
+                    settings.RenameTaskSpaceCommand, settings.RemoveTaskSpaceCommand,
+                    settings.ConnectCommand, settings.SignOutCommand, settings.CloneCommand,
+                    settings.PullCommand, settings.PushCommand, settings.SyncNowCommand,
+                    settings.MigrateCommand, settings.BackupCommand, settings.ResaveCommand,
+                    settings.BrowseTaskStoragePathCommand, settings.BrowseSshKeyStoragePathCommand,
+                    settings.ResetSshKeyStoragePathCommand, settings.GenerateSshKeyCommand,
+                    settings.RefreshGitMetadataCommand, settings.RefreshSshKeysCommand,
+                    settings.SwitchRemoteToHttpCommand, settings.SwitchRemoteToSshCommand
+                })
+                {
+                    await Assert.That(command).IsNotNull();
+                    await Assert.That(command!.CanExecute(null)).IsFalse();
+                    command.Execute(null);
+                }
+                Dispatcher.UIThread.RunJobs();
+                await Assert.That(events.Count).IsEqualTo(0);
+            }
+            finally
+            {
+                settings.IsTaskSpaceSwitching = false;
+                SetTasksLoading(context.MainWindowViewModel, false);
+            }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task SettingsButton_OpensSeparateScreenDuringLoading_AndCloseReturnsToLoading()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            using var context = TestMainWindowContext.Create(TimeSpan.Zero);
+            var vm = context.MainWindowViewModel;
+            var view = new MainScreen { DataContext = vm };
+            var window = CreateWindow(view);
+            window.Show();
+            try
+            {
+                SetTasksLoading(vm, true);
+                Dispatcher.UIThread.RunJobs();
+                var settingsButton = FindControlByAutomationId<Button>(view, "GlobalSettingsButton");
+                Click(window, settingsButton);
+                var settingsOverlay = FindControlByAutomationId<Grid>(view, "GlobalSettingsOverlay");
+                await Assert.That(settingsOverlay.IsEffectivelyVisible).IsTrue();
+                await Assert.That(FindControlByAutomationId<Border>(view, "SettingsBusyStatus").IsEffectivelyVisible).IsTrue();
+                await Assert.That(FindControlByAutomationId<Border>(view, "SettingsStorageSection").IsEffectivelyEnabled).IsFalse();
+                await Assert.That(FindControlByAutomationId<Border>(view, "SettingsAppearanceSection").IsEffectivelyEnabled).IsTrue();
+                window.KeyPress(Key.F1, RawInputModifiers.None, PhysicalKey.F1, null);
+                await Assert.That(FindControlByAutomationId<Grid>(view, "SettingsHotkeyHelpOverlayHost").IsVisible).IsTrue();
+                vm.Settings.IsTaskSpaceRecoveryRequired = true;
+                Dispatcher.UIThread.RunJobs();
+                await Assert.That(settingsOverlay.IsEffectivelyVisible).IsFalse();
+                await Assert.That(FindControlByAutomationId<Grid>(view, "SettingsHotkeyHelpOverlayHost").IsVisible).IsFalse();
+                window.KeyPress(Key.F1, RawInputModifiers.None, PhysicalKey.F1, null);
+                await Assert.That(FindControlByAutomationId<Grid>(view, "HotkeyHelpOverlayHost").IsVisible).IsFalse();
+                vm.Settings.IsTaskSpaceRecoveryRequired = false;
+                Click(window, settingsButton);
+                window.KeyPress(Key.F1, RawInputModifiers.None, PhysicalKey.F1, null);
+                window.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null);
+                await Assert.That(settingsOverlay.IsEffectivelyVisible).IsTrue();
+                await Assert.That(FindControlByAutomationId<Grid>(view, "SettingsHotkeyHelpOverlayHost").IsVisible).IsFalse();
+                Click(window, FindControlByAutomationId<Button>(view, "GlobalSettingsCloseButton"));
+                await Assert.That(settingsOverlay.IsEffectivelyVisible).IsFalse();
+                await Assert.That(FindControlByAutomationId<Grid>(view, "TasksLoadingOverlay").IsEffectivelyVisible).IsTrue();
+            }
+            finally
+            {
+                vm.Settings.IsTaskSpaceRecoveryRequired = false;
+                SetTasksLoading(vm, false);
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    private static void Click(Window window, Control control)
+    {
+        var point = control.TranslatePoint(new Point(control.Bounds.Width / 2, control.Bounds.Height / 2), window)
+            ?? throw new InvalidOperationException("Control is not in the window.");
+        window.MouseDown(point, MouseButton.Left);
+        window.MouseUp(point, MouseButton.Left);
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    [Test]
+    public async Task ExistingHelp_IsDismissedWhenRecoveryOrPickerTakesInput()
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            using var context = TestMainWindowContext.Create(TimeSpan.Zero);
+            var vm = context.MainWindowViewModel;
+            var screen = new MainScreen { DataContext = vm };
+            var window = CreateWindow(screen);
+            window.Show();
+            try
+            {
+                FindControlByAutomationId<Button>(screen, "GlobalSettingsButton").Focus();
+                window.KeyPress(Key.F1, RawInputModifiers.None, PhysicalKey.F1, null);
+                var help = FindControlByAutomationId<Grid>(screen, "HotkeyHelpOverlayHost");
+                await Assert.That(help.IsVisible).IsTrue();
+                vm.Settings.IsTaskSpaceRecoveryRequired = true;
+                Dispatcher.UIThread.RunJobs();
+                await Assert.That(help.IsVisible).IsFalse();
+                vm.Settings.IsTaskSpaceRecoveryRequired = false;
+                FindControlByAutomationId<Button>(screen, "GlobalSettingsButton").Focus();
+                window.KeyPress(Key.F1, RawInputModifiers.None, PhysicalKey.F1, null);
+                await Assert.That(help.IsVisible).IsTrue();
+                using (vm.BeginSettingsPicker())
+                {
+                    Dispatcher.UIThread.RunJobs();
+                    await Assert.That(help.IsVisible).IsFalse();
+                    vm.OpenSettings();
+                    await Assert.That(vm.IsSettingsOpen).IsFalse();
+                }
+            }
+            finally { vm.Settings.IsTaskSpaceRecoveryRequired = false; window.Close(); }
+        }, CancellationToken.None);
+    }
+
+    [Test]
+    [Arguments(320, false, 1d)]
+    [Arguments(680, true, 1.5d)]
+    [Arguments(1440, true, 1d)]
+    public async Task SettingsDuringLoading_FitsWindowAndKeepsCloseReachable(int width, bool dark, double scale)
+    {
+        await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
+        await session.DispatchAsync(async () =>
+        {
+            using var context = TestMainWindowContext.Create(TimeSpan.Zero);
+            var vm = context.MainWindowViewModel;
+            var previousTheme = Application.Current!.RequestedThemeVariant;
+            var previousFontSize = Application.Current.Resources["AppFontSize"];
+            Application.Current.RequestedThemeVariant = dark ? ThemeVariant.Dark : ThemeVariant.Light;
+            Application.Current.Resources["AppFontSize"] = 12d * scale;
+            var screen = new MainScreen { DataContext = vm };
+            var window = CreateWindow(screen);
+            window.Width = width;
+            window.Show();
+            try
+            {
+                SetTasksLoading(vm, true);
+                Dispatcher.UIThread.RunJobs();
+                var settingsButton = FindControlByAutomationId<Button>(screen, "GlobalSettingsButton");
+                var buttonPoint = settingsButton.TranslatePoint(default, window)!.Value;
+                await Assert.That(buttonPoint.X >= 0 && buttonPoint.X + settingsButton.Bounds.Width <= width).IsTrue();
+                SaveConnectFrame(window, $"settings-{width}-before-click");
+                Click(window, settingsButton);
+                SaveConnectFrame(window, $"settings-{width}-after-click");
+                await Assert.That(vm.IsSettingsOpen).IsTrue();
+                var close = FindControlByAutomationId<Button>(screen, "GlobalSettingsCloseButton");
+                var closePoint = close.TranslatePoint(default, window)!.Value;
+                await Assert.That(closePoint.X >= 0 && closePoint.X + close.Bounds.Width <= width).IsTrue();
+                await Assert.That(FindControlByAutomationId<Border>(screen, "SettingsBusyStatus").IsEffectivelyVisible).IsTrue();
+                SaveConnectFrame(window, $"settings-{width}-{(dark ? "dark" : "light")}-{scale * 100:0}");
+                Click(window, close);
+                await Assert.That(FindControlByAutomationId<Grid>(screen, "TasksLoadingOverlay").IsEffectivelyVisible).IsTrue();
+            }
+            finally
+            {
+                SetTasksLoading(vm, false);
+                window.Close();
+                Application.Current.RequestedThemeVariant = previousTheme;
+                Application.Current.Resources["AppFontSize"] = previousFontSize;
+            }
+        }, CancellationToken.None);
+    }
+
     [Test]
     [Arguments(false)]
     [Arguments(true)]
@@ -54,7 +249,7 @@ public class MainScreenLoadingUiTests
             var window = CreateWindow(view);
             window.Show();
             Dispatcher.UIThread.RunJobs();
-            FindControlByAutomationId<TabItem>(view, "SettingsTabItem").IsSelected = true;
+            Click(window, FindControlByAutomationId<Button>(view, "GlobalSettingsButton"));
             Dispatcher.UIThread.RunJobs();
             var connectButton = FindControlByAutomationId<Button>(view, "ConnectLocalStorageButton");
             var overlay = FindControlByAutomationId<Grid>(view, "TaskSpaceSwitchOverlay");
@@ -153,7 +348,7 @@ public class MainScreenLoadingUiTests
         await using var session = SafeHeadlessUnitTestSession.StartNew(typeof(App));
         await session.DispatchAsync(async () =>
         {
-            using var context = TestMainWindowContext.Create(TimeSpan.FromSeconds(2));
+            using var context = TestMainWindowContext.Create(TimeSpan.FromSeconds(5));
             Window? window = null;
 
             try
@@ -186,6 +381,12 @@ public class MainScreenLoadingUiTests
                           !connectTask.IsCompleted,
                     timeoutMilliseconds: 2000);
                 await Assert.That(stayedResponsive).IsTrue();
+
+                Click(window, FindControlByAutomationId<Button>(view, "GlobalSettingsButton"));
+                await Assert.That(FindControlByAutomationId<Grid>(view, "GlobalSettingsOverlay").IsEffectivelyVisible).IsTrue();
+                await Assert.That(connectTask.IsCompleted).IsFalse();
+                Click(window, FindControlByAutomationId<Button>(view, "GlobalSettingsCloseButton"));
+                await Assert.That(overlay.IsEffectivelyVisible).IsTrue();
 
                 await connectTask;
 

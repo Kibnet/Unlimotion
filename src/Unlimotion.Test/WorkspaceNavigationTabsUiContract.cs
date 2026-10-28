@@ -27,8 +27,7 @@ internal static class WorkspaceNavigationTabsUiContract
         "CompletedTabItem",
         "ArchivedTabItem",
         "LastOpenedTabItem",
-        "RoadmapTabItem",
-        "SettingsTabItem"
+        "RoadmapTabItem"
     ];
 
     public static async Task<WorkspaceNavigationTabsScenarioResult> AssertWorkspaceNavigationTabsScenarioAsync()

@@ -42,6 +42,48 @@ public sealed class TaskSpacesFlaUiTests
 
     [Test]
     [NotInParallel("DesktopUi")]
+    public void Settings_are_accessible_during_task_space_switch()
+    {
+        var session = _session ?? throw new InvalidOperationException("Desktop session was not initialized.");
+        var evidenceHandshake = TaskSpaceEvidenceHandshake.TryCreate();
+        Exception? failure = null;
+        try
+        {
+            evidenceHandshake?.SignalReadyAndWaitForScenario();
+        WaitUntilTaskVisible(session, UnlimotionAutomationScenarioData.TaskSpacesSpaceATitle);
+        var selector = FindTaskSpaceCombo(session, "TaskSpaceSelector");
+        selector.Expand();
+        WaitUntil(() => selector.Items.SingleOrDefault(item => item.Name == "Space B"),
+            item => item != null, "Space B is absent from the selector.");
+        DesktopPointer.ClickAsync(() => selector.Items.Single(item => item.Name == "Space B"))
+            .GetAwaiter().GetResult();
+        var page = new MainWindowPage(new FlaUiControlResolver(session.MainWindow, session.ConditionFactory));
+        var settingsButton = session.MainWindow.FindFirstDescendant(
+            session.ConditionFactory.ByAutomationId("GlobalSettingsButton"))
+            ?? throw new InvalidOperationException("Global settings button is absent.");
+        DesktopPointer.Click(settingsButton);
+        Capture(session, "settings-native-pending.png");
+        WaitUntil(() => session.MainWindow.FindFirstDescendant(
+                session.ConditionFactory.ByAutomationId("SettingsBusyStatus")),
+            status => status is { IsOffscreen: false }, "Settings did not expose the current operation.");
+        var connect = session.MainWindow.FindFirstDescendant(
+            session.ConditionFactory.ByAutomationId("ConnectLocalStorageButton"))
+            ?? throw new InvalidOperationException("Connect is absent from Settings.");
+        if (connect.IsEnabled) throw new InvalidOperationException("Connect remained enabled during a source switch.");
+        Capture(session, "settings-during-switch.png");
+        if (evidenceHandshake != null) Thread.Sleep(TimeSpan.FromSeconds(2));
+        page.ClickButton(static current => current.GlobalSettingsCloseButton);
+        WaitUntil(() => IsTaskSpaceOperationIdle(session), idle => idle,
+            "Switch did not finish after closing Settings.", TimeSpan.FromSeconds(45));
+        WaitUntilTaskVisible(session, UnlimotionAutomationScenarioData.TaskSpacesSpaceBTitle);
+        }
+        catch (Exception error) { failure = error; throw; }
+        finally { evidenceHandshake?.SignalCompleteAndWaitForRecorder(failure); }
+
+    }
+
+    [Test]
+    [NotInParallel("DesktopUi")]
     public void Task_spaces_switch_A_B_A_and_emit_visual_evidence()
     {
         var session = _session ?? throw new InvalidOperationException("Desktop session was not initialized.");
@@ -123,7 +165,7 @@ public sealed class TaskSpacesFlaUiTests
     {
         var page = new MainWindowPage(
             new FlaUiControlResolver(session.MainWindow, session.ConditionFactory));
-        page.SelectTabItem(static currentPage => currentPage.SettingsTabItem, timeoutMs: 10_000);
+        page.ClickButton(static currentPage => currentPage.GlobalSettingsButton);
         WaitUntil(
             () => session.MainWindow.FindFirstDescendant(
                     session.ConditionFactory.ByAutomationId("TaskSpacesList"))

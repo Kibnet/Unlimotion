@@ -341,6 +341,7 @@ public class App : Application
             }
 
             ConfirmAndRun(
+                settings,
                 L10n.Get("TaskSpaceRemoveConfirmTitle"),
                 L10n.Format("TaskSpaceRemoveConfirmMessage", selected.DisplayName),
                 async () =>
@@ -578,6 +579,7 @@ public class App : Application
         settings.MigrateCommand = ReactiveCommand.CreateFromTask(async () =>
         {
             ConfirmAndRun(
+                settings,
                 L10n.Get("MigrateConfirmHeader"),
                 L10n.Get("MigrateConfirmMessage"),
                 async () =>
@@ -598,7 +600,7 @@ public class App : Application
                     await serverTaskStorage.TaskTreeManager.Storage.BulkInsert(tasks);
                     _notificationManager?.SuccessToast(L10n.Get("MigrateLocalTasksSuccess"));
                 },
-                ex => _notificationManager?.ErrorToast(L10n.Format("MigrateLocalTasksFailed", ex.Message)));
+                ex => _notificationManager?.ErrorToast(L10n.Format("MigrateLocalTasksFailed", ex.Message)), ownBusy: true);
 
             await Task.CompletedTask;
         });
@@ -606,6 +608,7 @@ public class App : Application
         settings.BackupCommand = ReactiveCommand.CreateFromTask(async () =>
         {
             ConfirmAndRun(
+                settings,
                 L10n.Get("BackupConfirmHeader"),
                 L10n.Get("BackupConfirmMessage"),
                 async () =>
@@ -635,7 +638,7 @@ public class App : Application
 
                     _notificationManager?.SuccessToast(L10n.Get("ServerTasksCopiedToLocal"));
                 },
-                ex => _notificationManager?.ErrorToast(L10n.Format("CopyServerTasksFailed", ex.Message)));
+                ex => _notificationManager?.ErrorToast(L10n.Format("CopyServerTasksFailed", ex.Message)), ownBusy: true);
 
             await Task.CompletedTask;
         });
@@ -643,6 +646,7 @@ public class App : Application
         settings.ResaveCommand = ReactiveCommand.CreateFromTask(async () =>
         {
             ConfirmAndRun(
+                settings,
                 L10n.Get("ResaveConfirmHeader"),
                 L10n.Get("ResaveConfirmMessage"),
                 async () =>
@@ -658,7 +662,7 @@ public class App : Application
                     _notificationManager?.SuccessToast(L10n.Get("AllTasksResaved"));
                     await Task.CompletedTask;
                 },
-                ex => _notificationManager?.ErrorToast(L10n.Format("ResaveTasksFailed", ex.Message)));
+                ex => _notificationManager?.ErrorToast(L10n.Format("ResaveTasksFailed", ex.Message)), ownBusy: true);
 
             await Task.CompletedTask;
         });
@@ -666,19 +670,22 @@ public class App : Application
         settings.BrowseTaskStoragePathCommand = ReactiveCommand.CreateFromTask(async param =>
         {
             if (_dialogs == null) return;
+            var admission = settings.CaptureSourceAdmission();
             try
             {
-                var path = await _dialogs.ShowOpenFolderDialogAsync(
+                var path = await ShowSettingsFolderPickerAsync(
                     L10n.Get("FolderPickerDataFolder"),
                     settings.TaskStoragePath);
-                if (!string.IsNullOrWhiteSpace(path))
+                if (!string.IsNullOrWhiteSpace(path) && settings.IsSourceAdmissionCurrent(admission))
                 {
                     await PrepareFileStoragePathAsync(path);
+                    if (!settings.IsSourceAdmissionCurrent(admission)) return;
                     settings.TaskStoragePath = path;
                 }
             }
             catch (Exception ex)
             {
+                if (!settings.IsSourceAdmissionCurrent(admission)) return;
                 settings.SetStorageConnectionState(SettingsConnectionState.Error);
                 var hint = OperatingSystem.IsAndroid() ? L10n.Get("AndroidAllFilesHint") : string.Empty;
                 _notificationManager?.ErrorToast(L10n.Format("ConnectStorageFailed", ex.Message, hint));
@@ -687,11 +694,13 @@ public class App : Application
 
         settings.CloneCommand = ReactiveCommand.CreateFromTask(async () =>
         {
+            var admission = settings.CaptureSourceAdmission();
             try
             {
                 var preview = await RunBackupOperationAsync(
                     "PreviewGitRepositoryConnection",
                     () => _backupService?.PreviewConnectRepository());
+                if (!settings.IsSourceAdmissionCurrent(admission)) return;
                 if (preview?.RequiresConfirmation == true)
                 {
                     settings.SetBackupConnectionState(
@@ -707,8 +716,8 @@ public class App : Application
                     _notificationManager.Ask(
                         L10n.Get("BackupMergeConfirmHeader"),
                         L10n.Get("BackupMergeConfirmMessage"),
-                        () => _ = ConnectBackupRepositoryAsync(settings, allowMergeWithNonEmptyRemote: true),
-                        () => settings.SetBackupConnectionState(BackupStatusState.NotConfigured, L10n.Get("RepositoryConnectCanceled")));
+                        () => { if (settings.IsSourceAdmissionCurrent(admission)) _ = ConnectBackupRepositoryAsync(settings, allowMergeWithNonEmptyRemote: true); },
+                        () => { if (settings.IsSourceAdmissionCurrent(admission)) settings.SetBackupConnectionState(BackupStatusState.NotConfigured, L10n.Get("RepositoryConnectCanceled")); });
                     return;
                 }
 
@@ -716,6 +725,7 @@ public class App : Application
             }
             catch (Exception ex)
             {
+                if (!settings.IsSourceAdmissionCurrent(admission)) return;
                 settings.ReloadGitMetadata();
                 if (settings.IsConflictResolutionMode)
                 {
@@ -859,11 +869,12 @@ public class App : Application
         settings.BrowseSshKeyStoragePathCommand = ReactiveCommand.CreateFromTask(async () =>
         {
             if (_dialogs == null) return;
+            var admission = settings.CaptureSourceAdmission();
 
-            var path = await _dialogs.ShowOpenFolderDialogAsync(
+            var path = await ShowSettingsFolderPickerAsync(
                 L10n.Get("FolderPickerSshKeyStoragePath"),
                 settings.SshKeyStoragePath);
-            if (!string.IsNullOrWhiteSpace(path))
+            if (!string.IsNullOrWhiteSpace(path) && settings.IsSourceAdmissionCurrent(admission))
             {
                 settings.SshKeyStoragePath = path;
                 settings.ReloadGitMetadata();
@@ -880,6 +891,8 @@ public class App : Application
                 return;
             }
 
+            settings.SourceOperationStatusText = L10n.Get("SettingsSourceOperationInProgress");
+            settings.IsTaskSpaceSwitching = true;
             try
             {
                 var publicKeyPath = await RunBackupOperationAsync(
@@ -893,6 +906,11 @@ public class App : Application
             catch (Exception ex)
             {
                 _notificationManager?.ErrorToast(L10n.Format("SshKeyCreateFailed", ex.Message));
+            }
+            finally
+            {
+                settings.IsTaskSpaceSwitching = false;
+                settings.SourceOperationStatusText = null;
             }
         });
 
@@ -925,6 +943,31 @@ public class App : Application
         settings.CheckForUpdatesCommand = ReactiveCommand.CreateFromTask(() => settings.CheckForUpdatesAsync());
         settings.DownloadUpdateCommand = ReactiveCommand.CreateFromTask(() => settings.DownloadUpdateAsync());
         settings.ApplyUpdateCommand = ReactiveCommand.CreateFromTask(() => settings.ApplyUpdateAsync());
+
+        settings.AddTaskSpaceCommand = settings.GuardSourceCommand(settings.AddTaskSpaceCommand!);
+        settings.SwitchTaskSpaceCommand = settings.GuardSourceCommand(settings.SwitchTaskSpaceCommand!);
+        settings.RenameTaskSpaceCommand = settings.GuardSourceCommand(settings.RenameTaskSpaceCommand!);
+        settings.RemoveTaskSpaceCommand = settings.GuardSourceCommand(settings.RemoveTaskSpaceCommand!, () => settings.CanRemoveTaskSpace);
+        settings.ConnectCommand = settings.GuardSourceCommand(settings.ConnectCommand!, () => settings.CanConnectStorage);
+        settings.SignOutCommand = settings.GuardSourceCommand(settings.SignOutCommand!, () => settings.CanSignOut);
+        settings.SyncNowCommand = settings.GuardSourceCommand(settings.SyncNowCommand!, () => settings.CanSyncRepository);
+        settings.CloneCommand = settings.GuardSourceCommand(settings.CloneCommand!, () => settings.CanConnectRepository);
+        settings.PullCommand = settings.GuardSourceCommand(settings.PullCommand!, () => settings.CanSyncRepository);
+        settings.PushCommand = settings.GuardSourceCommand(settings.PushCommand!, () => settings.CanSyncRepository);
+        settings.MigrateCommand = settings.GuardSourceCommand(settings.MigrateCommand!, () => settings.CanRunServerMaintenance);
+        settings.BackupCommand = settings.GuardSourceCommand(settings.BackupCommand!, () => settings.CanRunServerMaintenance);
+        settings.ResaveCommand = settings.GuardSourceCommand(settings.ResaveCommand!, () => settings.CanRunResave);
+        settings.BrowseTaskStoragePathCommand = settings.GuardSourceCommand(settings.BrowseTaskStoragePathCommand!);
+        settings.BrowseSshKeyStoragePathCommand = settings.GuardSourceCommand(settings.BrowseSshKeyStoragePathCommand!);
+        settings.GenerateSshKeyCommand = settings.GuardSourceCommand(settings.GenerateSshKeyCommand!);
+        settings.RefreshGitMetadataCommand = settings.GuardSourceCommand(settings.RefreshGitMetadataCommand!);
+        settings.RefreshSshKeysCommand = settings.GuardSourceCommand(settings.RefreshSshKeysCommand!);
+    }
+
+    private async Task<string> ShowSettingsFolderPickerAsync(string title, string? directory)
+    {
+        using var ownership = _mainWindowViewModel?.BeginSettingsPicker();
+        return await _dialogs!.ShowOpenFolderDialogAsync(title, directory);
     }
 
     private void EnterConflictResolutionMode(SettingsViewModel settings)
@@ -1428,14 +1471,34 @@ public class App : Application
     }
 
     private void ConfirmAndRun(
+        SettingsViewModel settings,
         string header,
         string message,
         Func<Task> action,
-        Action<Exception>? onError = null)
+        Action<Exception>? onError = null,
+        bool ownBusy = false)
     {
+        var admission = settings.CaptureSourceAdmission();
         void Run()
         {
-            _ = ExecuteConfirmedActionAsync(action, onError);
+            if (!settings.IsSourceAdmissionCurrent(admission)) return;
+            _ = ExecuteConfirmedActionAsync(async () =>
+            {
+                if (ownBusy)
+                {
+                    settings.SourceOperationStatusText = L10n.Get("SettingsSourceOperationInProgress");
+                    settings.IsTaskSpaceSwitching = true;
+                }
+                try { await action(); }
+                finally
+                {
+                    if (ownBusy)
+                    {
+                        settings.IsTaskSpaceSwitching = false;
+                        settings.SourceOperationStatusText = null;
+                    }
+                }
+            }, onError);
         }
 
         if (_notificationManager == null)

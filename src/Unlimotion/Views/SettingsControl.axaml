@@ -87,7 +87,7 @@
 
             <Border Classes="SettingsSection"
                     AutomationProperties.AutomationId="TaskSpacesSection">
-                <StackPanel IsEnabled="{Binding !IsTaskSpaceSwitching}">
+                <StackPanel IsEnabled="{Binding CanEditSourceSettings}">
                     <TextBlock Classes="SectionTitle" Text="{DynamicResource TaskSpacesTitle}" />
                     <TextBlock Classes="SectionHint" Text="{DynamicResource TaskSpacesHint}" />
 
@@ -177,7 +177,8 @@
                 </StackPanel>
             </Border>
 
-            <Border Classes="SettingsSection">
+            <Border Classes="SettingsSection"
+                    AutomationProperties.AutomationId="SettingsAppearanceSection">
                 <StackPanel>
                     <TextBlock Classes="SectionTitle" Text="{DynamicResource AppearanceTitle}" />
                     <TextBlock Classes="SectionHint" Text="{DynamicResource AppearanceHint}" />
@@ -310,7 +311,8 @@
             </Border>
 
             <Border Classes="SettingsSection"
-                    IsEnabled="{Binding !IsTaskSpaceSwitching}">
+                    AutomationProperties.AutomationId="SettingsStorageSection"
+                    IsEnabled="{Binding CanEditSourceSettings}">
                 <StackPanel>
                     <TextBlock Classes="SectionTitle" Text="{DynamicResource StorageTitle}" />
                     <TextBlock Classes="SectionHint" Text="{DynamicResource StorageHint}" />
@@ -382,7 +384,7 @@
             </Border>
 
             <Border Classes="SettingsSection"
-                    IsEnabled="{Binding !IsTaskSpaceSwitching}">
+                    IsEnabled="{Binding CanEditSourceSettings}">
                 <StackPanel>
                     <TextBlock Classes="SectionTitle" Text="{DynamicResource BackupTitle}" />
                     <TextBlock Classes="SectionHint" Text="{DynamicResource BackupHint}" />
@@ -574,7 +576,7 @@
             </Border>
 
             <Border Classes="SettingsSection"
-                    IsEnabled="{Binding !IsTaskSpaceSwitching}">
+                    IsEnabled="{Binding CanEditSourceSettings}">
                 <StackPanel>
                     <ToggleButton IsChecked="{Binding ShowAdvancedBackupSettings}"
                                   Content="{DynamicResource ShowAdvancedBackupSettings}" />
@@ -621,7 +623,7 @@
             </Border>
 
             <Border Classes="SettingsSection"
-                    IsEnabled="{Binding !IsTaskSpaceSwitching}">
+                    IsEnabled="{Binding CanEditSourceSettings}">
                 <StackPanel>
                     <ToggleButton IsChecked="{Binding ShowServiceActions}"
                                   Content="{DynamicResource ShowServiceActions}" />

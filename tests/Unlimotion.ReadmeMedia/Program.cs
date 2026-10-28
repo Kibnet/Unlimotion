@@ -43,7 +43,7 @@ internal static class Program
         new("archived", "archived.png", static page => page.ArchivedTabItem, "Archived", 900),
         new("last-opened", "last-opened.png", static page => page.LastOpenedTabItem, "Last Opened", 900),
         new("roadmap", "roadmap.png", static page => page.RoadmapTabItem, "Roadmap", 5000),
-        new("settings", "settings.png", static page => page.SettingsTabItem, "Settings", 1100)
+        new("settings", "settings.png", null, "Settings", 1100)
     ];
 
     private static readonly IReadOnlyList<string> GeneratedFileNames =
@@ -1002,10 +1002,10 @@ internal static class Program
 
             foreach (var step in CaptureSteps)
             {
-                if (!string.Equals(step.Key, "all-tasks", StringComparison.Ordinal))
-                {
-                    page.SelectTabItem(step.Selector, timeoutMs: 10_000);
-                }
+                if (string.Equals(step.Key, "settings", StringComparison.Ordinal))
+                    page.ClickButton(static ui => ui.GlobalSettingsButton);
+                else if (!string.Equals(step.Key, "all-tasks", StringComparison.Ordinal))
+                    page.SelectTabItem(step.Selector!, timeoutMs: 10_000);
 
                 if (string.Equals(step.Key, "roadmap", StringComparison.Ordinal))
                 {
@@ -1258,9 +1258,14 @@ internal static class Program
         FlaUI.Core.Conditions.ConditionFactory conditionFactory,
         ReadmeCaptureStep step)
     {
+        if (string.Equals(step.Key, "settings", StringComparison.Ordinal))
+        {
+            page.ClickButton(static ui => ui.GlobalSettingsButton);
+            return;
+        }
         try
         {
-            page.SelectTabItem(step.Selector, timeoutMs: 10_000);
+            page.SelectTabItem(step.Selector!, timeoutMs: 10_000);
             return;
         }
         catch (FlaUI.Core.Exceptions.ElementNotAvailableException)
@@ -1282,7 +1287,6 @@ internal static class Program
         var tabAutomationId = stepKey switch
         {
             "roadmap" => "RoadmapTabItem",
-            "settings" => "SettingsTabItem",
             _ => null
         };
 
@@ -1908,7 +1912,7 @@ internal static class Program
     private sealed record ReadmeCaptureStep(
         string Key,
         string FileName,
-        Expression<Func<MainWindowPage, ITabItemControl>> Selector,
+        Expression<Func<MainWindowPage, ITabItemControl>>? Selector,
         string DisplayName,
         int DelayAfterSelectMs);
 
