@@ -17,6 +17,7 @@ namespace Unlimotion.Test
         public int ConfirmationCount { get; private set; }
         public int TaskOutlinePasteConfirmationCount { get; private set; }
         public Func<string, string, Task<bool>>? ConfirmHandler { get; set; }
+        public Action<Action>? AskHandler { get; set; }
         public Func<TaskOutlinePastePreview, Task<bool>>? ConfirmTaskOutlinePasteHandler { get; set; }
         public List<string> ErrorMessages { get; } = new();
         public List<string> SuccessMessages { get; } = new();
@@ -26,6 +27,12 @@ namespace Unlimotion.Test
             AskCount++;
             LastAskHeader = header;
             LastAskMessage = message;
+
+            if (AskHandler != null)
+            {
+                AskHandler(yesAction);
+                return;
+            }
 
             if (AskResult)
             {
@@ -75,6 +82,7 @@ namespace Unlimotion.Test
             ConfirmationCount = 0;
             TaskOutlinePasteConfirmationCount = 0;
             ConfirmHandler = null;
+            AskHandler = null;
             ConfirmTaskOutlinePasteHandler = null;
             ErrorMessages.Clear();
             SuccessMessages.Clear();

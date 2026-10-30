@@ -1906,35 +1906,34 @@ public class MainControlTreeCommandsUiTests
                 var vm = fixture.MainWindowViewModelTest;
                 await vm.Connect();
 
-                var view = new MainControl { DataContext = vm };
-                window = CreateWindow(view);
+                var screen = new MainScreen { DataContext = vm };
+                window = CreateWindow(screen);
                 window.Width = 720;
                 window.Height = 560;
                 window.Show();
                 Dispatcher.UIThread.RunJobs();
 
-                var overlayHost = FindControlByAutomationId<Grid>(view, "HotkeyHelpOverlayHost");
+                var overlayHost = FindControlByAutomationId<Grid>(screen, "SettingsHotkeyHelpOverlayHost");
                 await Assert.That(overlayHost.IsVisible).IsFalse();
 
-                var settingsTab = FindControlByAutomationId<TabItem>(view, "SettingsTabItem");
-                settingsTab.IsSelected = true;
+                vm.OpenSettings();
                 Dispatcher.UIThread.RunJobs();
 
-                var showHotkeysButton = FindControlByAutomationId<Button>(view, "SettingsShowHotkeysButton");
+                var showHotkeysButton = FindControlByAutomationId<Button>(screen, "SettingsShowHotkeysButton");
                 await Assert.That(showHotkeysButton.Content?.ToString()).IsEqualTo(L10n.Get("ShowHotkeys"));
 
                 InvokeButtonClick(showHotkeysButton);
                 Dispatcher.UIThread.RunJobs();
 
-                await Assert.That(view.IsHotkeyHelpVisible).IsTrue();
+                await Assert.That(overlayHost.IsEffectivelyVisible).IsTrue();
                 await Assert.That(overlayHost.IsVisible).IsTrue();
-                await AssertHotkeyHelpPanelContent(view);
+                await Assert.That(FindControlByAutomationId<Border>(overlayHost, "HotkeyPanel").IsEffectivelyVisible).IsTrue();
 
-                var closeButton = FindControlByAutomationId<Button>(view, "HotkeyHelpCloseButton");
+                var closeButton = FindControlByAutomationId<Button>(overlayHost, "HotkeyHelpCloseButton");
                 InvokeButtonClick(closeButton);
                 Dispatcher.UIThread.RunJobs();
 
-                await Assert.That(view.IsHotkeyHelpVisible).IsFalse();
+                await Assert.That(overlayHost.IsEffectivelyVisible).IsFalse();
                 await Assert.That(overlayHost.IsVisible).IsFalse();
             }
             finally

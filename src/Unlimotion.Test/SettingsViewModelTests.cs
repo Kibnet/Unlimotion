@@ -61,6 +61,18 @@ public class SettingsViewModelTests : IDisposable
     }
 
     [Test]
+    public async System.Threading.Tasks.Task DisposedSettings_StopReceivingLanguageChanges()
+    {
+        var localization = new LocalizationService();
+        var settings = new SettingsViewModel(CreateConfiguration(), localizationService: localization);
+        localization.SetLanguage(LocalizationService.RussianLanguage);
+        var version = settings.LanguageOptionsVersion;
+        settings.Dispose();
+        localization.SetLanguage(LocalizationService.EnglishLanguage);
+        await Assert.That(settings.LanguageOptionsVersion).IsEqualTo(version);
+    }
+
+    [Test]
     public async System.Threading.Tasks.Task ThemeMode_PersistsChoiceAndCompatibilityShimReflectsSelection()
     {
         IConfigurationRoot configuration = CreateConfiguration();
@@ -1992,11 +2004,15 @@ public class SettingsViewModelTests : IDisposable
         SettingsViewModel settings,
         IConfiguration configuration,
         IRemoteBackupService backupService,
-        ITaskStorageFactory storageFactory)
+        ITaskStorageFactory storageFactory,
+        IDialogs? dialogs = null)
     {
         var appType = typeof(App);
         var app = new App();
         app.ConfigureRuntimeForTests(configuration, backupService, storageFactory);
+        if (dialogs != null)
+            (appType.GetField("_dialogs", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingFieldException(nameof(App), "_dialogs")).SetValue(app, dialogs);
 
         var setupSettingsCommands = appType.GetMethod(
                                         "SetupSettingsCommands",

@@ -1,4 +1,5 @@
 using System;
+using System.Reactive.Linq;
 using System.Threading.Tasks;
 using ReactiveUI;
 using Unlimotion.ViewModel.Localization;
@@ -15,7 +16,7 @@ public static class SettingsRemoteConnectionTypeCommands
     {
         async Task SwitchRemoteConnectionTypeAsync(BackupAuthMode targetMode)
         {
-            if (backupService == null || string.IsNullOrWhiteSpace(settings.GitRemoteName))
+            if (settings.IsSourceMutationBlocked || !settings.CanSwitchRemoteConnectionType || backupService == null || string.IsNullOrWhiteSpace(settings.GitRemoteName))
             {
                 return;
             }
@@ -50,14 +51,16 @@ public static class SettingsRemoteConnectionTypeCommands
             }
         }
 
+        var admission = settings.WhenAnyValue(model => model.CanSwitchRemoteConnectionType,
+            model => model.IsSourceMutationBlocked, (canSwitch, blocked) => canSwitch && !blocked);
         settings.SwitchRemoteConnectionTypeCommand = ReactiveCommand.CreateFromTask<string?>(targetType =>
             SwitchRemoteConnectionTypeAsync(
                 string.Equals(targetType, "SSH", StringComparison.OrdinalIgnoreCase)
                     ? BackupAuthMode.Ssh
-                    : BackupAuthMode.Token));
+                    : BackupAuthMode.Token), admission);
         settings.SwitchRemoteToHttpCommand = ReactiveCommand.CreateFromTask(() =>
-            SwitchRemoteConnectionTypeAsync(BackupAuthMode.Token));
+            SwitchRemoteConnectionTypeAsync(BackupAuthMode.Token), admission);
         settings.SwitchRemoteToSshCommand = ReactiveCommand.CreateFromTask(() =>
-            SwitchRemoteConnectionTypeAsync(BackupAuthMode.Ssh));
+            SwitchRemoteConnectionTypeAsync(BackupAuthMode.Ssh), admission);
     }
 }

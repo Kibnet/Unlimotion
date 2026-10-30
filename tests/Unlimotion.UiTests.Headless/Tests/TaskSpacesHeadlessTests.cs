@@ -41,7 +41,7 @@ public sealed class TaskSpacesHeadlessTests
         await Assert.That(GetOnlyTaskTitle(vm)).IsEqualTo(
             UnlimotionAutomationScenarioData.TaskSpacesSpaceATitle);
 
-        Page.SelectTabItem(static page => page.SettingsTabItem, timeoutMs: 10_000);
+        Page.ClickButton(static page => page.GlobalSettingsButton);
         await Assert.That(Page.TaskSpacesSection.AutomationId).IsEqualTo("TaskSpacesSection");
         await Assert.That(Page.TaskSpacesList.AutomationId).IsEqualTo("TaskSpacesList");
         await Assert.That(Page.AddTaskSpaceButton.AutomationId).IsEqualTo("AddTaskSpaceButton");

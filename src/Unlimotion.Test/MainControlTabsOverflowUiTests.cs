@@ -33,8 +33,7 @@ public class MainControlTabsOverflowUiTests
         "CompletedTabItem",
         "ArchivedTabItem",
         "LastOpenedTabItem",
-        "RoadmapTabItem",
-        "SettingsTabItem"
+        "RoadmapTabItem"
     ];
 
     [Test]
@@ -83,11 +82,11 @@ public class MainControlTabsOverflowUiTests
                     768,
                     detailsAreOpen: true);
                 window = createdWindow;
-                SelectTab(view, "SettingsTabItem");
+                SelectTab(view, "RoadmapTabItem");
 
                 var tabs = GetMainTabItems(view);
                 var visibleTabs = tabs.Where(IsVisibleAndArranged).ToArray();
-                var selectedTab = FindMainTabItem(view, "SettingsTabItem");
+                var selectedTab = FindMainTabItem(view, "RoadmapTabItem");
                 var overflowButton = FindControlByAutomationId<Button>(view, "MainTabsOverflowButton");
                 var visibleControls = visibleTabs.Cast<Control>().Append(overflowButton).ToArray();
 
@@ -121,12 +120,12 @@ public class MainControlTabsOverflowUiTests
             {
                 var (view, createdWindow) = await CreateArrangedMainControlAsync(fixture, 760, 760);
                 window = createdWindow;
-                SelectTab(view, "SettingsTabItem");
+                SelectTab(view, "RoadmapTabItem");
 
                 var tabs = GetMainTabItems(view);
                 var visibleTabs = tabs.Where(IsVisibleAndArranged).ToArray();
                 var hiddenTabs = tabs.Where(tab => !tab.IsVisible).ToArray();
-                var selectedTab = FindMainTabItem(view, "SettingsTabItem");
+                var selectedTab = FindMainTabItem(view, "RoadmapTabItem");
                 var overflowButton = FindControlByAutomationId<Button>(view, "MainTabsOverflowButton");
 
                 await Assert.That(IsVisibleAndArranged(overflowButton)).IsTrue();
@@ -161,11 +160,11 @@ public class MainControlTabsOverflowUiTests
             {
                 var (view, createdWindow) = await CreateArrangedMainControlAsync(fixture, 360, 760);
                 window = createdWindow;
-                SelectTab(view, "SettingsTabItem");
+                SelectTab(view, "RoadmapTabItem");
 
                 var tabs = GetMainTabItems(view);
                 var hiddenTabs = tabs.Where(tab => !tab.IsVisible).ToArray();
-                var selectedTab = FindMainTabItem(view, "SettingsTabItem");
+                var selectedTab = FindMainTabItem(view, "RoadmapTabItem");
                 var overflowButton = FindControlByAutomationId<Button>(view, "MainTabsOverflowButton");
 
                 await Assert.That(IsVisibleAndArranged(overflowButton)).IsTrue();
@@ -234,15 +233,15 @@ public class MainControlTabsOverflowUiTests
                 var (view, createdWindow) = await CreateArrangedMainControlAsync(fixture, 420, 760);
                 window = createdWindow;
 
-                await SelectOverflowItemAsync(window, view, "SettingsTabItem");
+                await SelectOverflowItemAsync(window, view, "RoadmapTabItem");
                 RunLayoutJobs();
 
-                var selectedTab = FindMainTabItem(view, "SettingsTabItem");
-                var settingsRoot = FindControlByAutomationId<Control>(view, "SettingsRoot");
+                var selectedTab = FindMainTabItem(view, "RoadmapTabItem");
+                var roadmapRoot = FindControlByAutomationId<Control>(view, "RoadmapRoot");
 
                 await Assert.That(selectedTab.IsSelected).IsTrue();
                 await Assert.That(IsVisibleAndArranged(selectedTab)).IsTrue();
-                await Assert.That(IsVisibleAndArranged(settingsRoot)).IsTrue();
+                await Assert.That(IsVisibleAndArranged(roadmapRoot)).IsTrue();
             }
             finally
             {
@@ -325,7 +324,7 @@ public class MainControlTabsOverflowUiTests
             {
                 var (view, createdWindow) = await CreateArrangedMainControlAsync(fixture, 360, 760);
                 window = createdWindow;
-                SelectTab(view, "SettingsTabItem");
+                SelectTab(view, "RoadmapTabItem");
 
                 await Assert.That(GetMainTabItems(view).Any(tab => !tab.IsVisible)).IsTrue();
 

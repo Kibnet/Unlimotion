@@ -495,6 +495,9 @@ namespace Unlimotion.Test
 
             _ = await TestHelpers.CreateAndReturnNewTaskItem(mainWindowVM.CreateInner, taskRepository);
 
+            await Assert.That(await TestHelpers.WaitUntilAsync(
+                () => mainWindowVM.TitleFocusRequestVersion == focusVersionBefore + 1,
+                TimeSpan.FromSeconds(5))).IsTrue();
             await Assert.That(mainWindowVM.TitleFocusRequestVersion).IsEqualTo(focusVersionBefore + 1);
             await Assert.That(mainWindowVM.DetailsAreOpen).IsTrue();
         }

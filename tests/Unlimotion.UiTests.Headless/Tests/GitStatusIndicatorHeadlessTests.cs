@@ -83,7 +83,7 @@ public sealed class GitStatusIndicatorHeadlessTests
             HeadlessRuntime.Dispatch(() => { window.Width = 800; window.Height = 600; });
             HeadlessRuntime.Dispatch(() => window.GetVisualDescendants().OfType<ToggleButton>()
                 .Single(control => control.Content?.ToString() == "↔️").IsChecked = true);
-            page.SelectTabItem(static p => p.SettingsTabItem, timeoutMs: 10_000);
+            page.ClickButton(static p => p.GlobalSettingsButton);
             var indicator = HeadlessRuntime.Dispatch(() => window.GetVisualDescendants().OfType<Button>()
                 .Single(control => AutomationProperties.GetAutomationId(control) == "GitStatusIndicator"));
             var information = HeadlessRuntime.Dispatch(() => window.GetVisualDescendants().OfType<TextBlock>()
@@ -231,7 +231,7 @@ public sealed class GitStatusIndicatorHeadlessTests
         await Assert.That(HeadlessRuntime.Dispatch(() => vm.Settings.GitBackupEnabled)).IsTrue();
         await Assert.That(HeadlessRuntime.Dispatch(() => vm.GitStatus.SettingsInformation)).IsEqualTo(Localization.Get("GitIndicatorServer"));
         var page = new MainWindowPage(new HeadlessControlResolver(window));
-        page.SelectTabItem(static p => p.SettingsTabItem, timeoutMs: 10_000);
+        page.ClickButton(static p => p.GlobalSettingsButton);
         HeadlessRuntime.Dispatch(() =>
         {
             window.UpdateLayout();

@@ -15,7 +15,7 @@ using L10n = Unlimotion.ViewModel.Localization.Localization;
 namespace Unlimotion.ViewModel;
 
 [AddINotifyPropertyChangedInterface]
-public class SettingsViewModel
+public partial class SettingsViewModel : IDisposable
 {
     private const string ClientSettingsSectionName = "ClientSettings";
     private const string ClientLoginKey = "Login";
@@ -114,7 +114,7 @@ public class SettingsViewModel
 
         _localization.SetLanguage(_appearanceSettings.GetSection(AppearanceSettings.LanguageKey).Get<string>());
         NewTaskSpaceName = _localization.Get("TaskSpacesDefaultName");
-        _localization.CultureChanged += (_, __) => RefreshLocalizedText();
+        _localization.CultureChanged += OnCultureChanged;
 
         _themeMode = AppearanceSettings.ParseThemeMode(
             _appearanceSettings.GetSection(AppearanceSettings.ThemeKey).Get<string>());
@@ -166,6 +166,10 @@ public class SettingsViewModel
         RefreshStorageSelectionState();
         RefreshLocalizedText();
     }
+
+    private void OnCultureChanged(object? sender, EventArgs args) => RefreshLocalizedText();
+
+    public void Dispose() => _localization.CultureChanged -= OnCultureChanged;
 
     // Commands - set externally from App.axaml.cs
     public ICommand? ConnectCommand { get; set; }
@@ -239,6 +243,7 @@ public class SettingsViewModel
 
     public string NewTaskSpaceName { get; set; } = "New space";
 
+    [AlsoNotifyFor(nameof(IsSourceMutationBlocked), nameof(CanEditSourceSettings), nameof(SourceBusyStatusText))]
     public bool IsTaskSpaceSwitching
     {
         get => _isTaskSpaceSwitching;
@@ -246,9 +251,9 @@ public class SettingsViewModel
         {
             if (_isTaskSpaceSwitching == value) return;
             _isTaskSpaceSwitching = value;
-            _resetSshKeyStoragePathCommand.NotifyAvailabilityChanged();
         }
     }
+    [AlsoNotifyFor(nameof(IsSourceMutationBlocked), nameof(CanEditSourceSettings), nameof(SourceBusyStatusText))]
     public bool IsTaskSpaceRecoveryRequired { get; set; }
     public string TaskSpaceRecoveryMessage { get; set; } = string.Empty;
     public bool CanRemoveTaskSpace { get; private set; }
@@ -834,7 +839,7 @@ public class SettingsViewModel
     {
         public event EventHandler? CanExecuteChanged;
         public bool CanExecute(object? parameter) =>
-            !owner.IsTaskSpaceSwitching && !string.IsNullOrWhiteSpace(owner.SshKeyStoragePath);
+            !owner.IsSourceMutationBlocked && !string.IsNullOrWhiteSpace(owner.SshKeyStoragePath);
         public void Execute(object? parameter)
         {
             if (CanExecute(parameter)) owner.SshKeyStoragePath = string.Empty;
@@ -897,8 +902,10 @@ public class SettingsViewModel
 
     public bool CanSignOut { get; private set; }
 
+    [AlsoNotifyFor(nameof(IsSourceMutationBlocked), nameof(CanEditSourceSettings), nameof(SourceBusyStatusText))]
     public bool IsStorageBusy { get; private set; }
 
+    [AlsoNotifyFor(nameof(IsSourceMutationBlocked), nameof(CanEditSourceSettings), nameof(SourceBusyStatusText))]
     public bool IsBackupBusy { get; private set; }
 
     public bool CanConnectStorage { get; private set; }
@@ -1262,7 +1269,8 @@ public class SettingsViewModel
         RefreshLanguageOptions();
         RefreshBackupAuthMode();
         RefreshStorageStatusText();
-        RefreshBackupState();
+        if (IsBackupBusy) RefreshBackupStatusText();
+        else RefreshBackupState();
         RefreshUpdateStatusText();
     }
 
@@ -1494,10 +1502,10 @@ public class SettingsViewModel
     {
         IsLocalStorageSelected = !IsServerMode;
         IsServerStorageSelected = IsServerMode;
-        CanSignOut = IsServerMode && StorageConnectionState == SettingsConnectionState.Connected;
+        CanSignOut = !IsSourceMutationBlocked && IsServerMode && StorageConnectionState == SettingsConnectionState.Connected;
         CanRunServerMaintenance = CanSignOut;
-        CanRunResave = !IsStorageBusy && !string.IsNullOrWhiteSpace(TaskStoragePath);
-        CanConnectStorage = !IsStorageBusy && (IsServerMode
+        CanRunResave = !IsSourceMutationBlocked && !string.IsNullOrWhiteSpace(TaskStoragePath);
+        CanConnectStorage = !IsSourceMutationBlocked && (IsServerMode
             ? !string.IsNullOrWhiteSpace(ServerStorageUrl) &&
               !string.IsNullOrWhiteSpace(Login) &&
               !string.IsNullOrWhiteSpace(Password)
@@ -1625,14 +1633,14 @@ public class SettingsViewModel
         var hasReadySshAuth = IsSshAuthSelected &&
                               !string.IsNullOrWhiteSpace(SelectedSshPublicKeyPath);
 
-        CanConnectRepository = !IsBackupBusy &&
+        CanConnectRepository = !IsSourceMutationBlocked &&
                                !IsConflictResolutionMode &&
                                hasRemoteUrl &&
                                (hasReadyTokenAuth || hasReadySshAuth);
-        CanSyncRepository = !IsBackupBusy &&
+        CanSyncRepository = !IsSourceMutationBlocked &&
                             !IsConflictResolutionMode &&
                             hasReadySyncTarget;
-        CanSwitchRemoteConnectionType = !IsBackupBusy &&
+        CanSwitchRemoteConnectionType = !IsSourceMutationBlocked &&
                                         !IsConflictResolutionMode &&
                                         !string.IsNullOrWhiteSpace(GitRemoteName) &&
                                         Remotes.Any(remote => string.Equals(remote, GitRemoteName, StringComparison.Ordinal));
@@ -1653,7 +1661,7 @@ public class SettingsViewModel
 
     private void RefreshTaskSpaceActionAvailability()
     {
-        CanRemoveTaskSpace = SelectedTaskSpace != null &&
+        CanRemoveTaskSpace = !IsSourceMutationBlocked && SelectedTaskSpace != null &&
                              TaskSpaces.Count > 1 &&
                              !IsTaskSpaceRemovalBlockedByConflict(SelectedTaskSpace.SourceId);
     }

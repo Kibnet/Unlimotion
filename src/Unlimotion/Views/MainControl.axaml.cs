@@ -236,9 +236,7 @@ namespace Unlimotion.Views
         private void GitStatusSettings_OnClick(object? sender, RoutedEventArgs e)
         {
             this.FindControl<Button>("GitStatusIndicator")?.Flyout?.Hide();
-            var settingsTab = this.GetVisualDescendants().OfType<TabItem>()
-                .FirstOrDefault(tab => AutomationProperties.GetAutomationId(tab) == "SettingsTabItem");
-            if (settingsTab != null) settingsTab.IsSelected = true;
+            if (DataContext is MainWindowViewModel vm) vm.OpenSettings();
         }
 
         private void MainControl_OnAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
@@ -1159,6 +1157,14 @@ namespace Unlimotion.Views
                 return;
             }
 
+            if (DataContext is MainWindowViewModel vm && vm.Settings.IsSourceMutationBlocked &&
+                TryGetTreeCommandHotkey(e, out var blockedKind) &&
+                blockedKind is TreeCommandKind.DeleteSelection or TreeCommandKind.PasteOutline)
+            {
+                e.Handled = true;
+                return;
+            }
+
             if (TryHandleHotkeyHelpKey(e))
             {
                 return;
@@ -1214,11 +1220,14 @@ namespace Unlimotion.Views
 
         private void TopLevel_OnKeyDown(object? sender, KeyEventArgs e)
         {
+            if (DataContext is MainWindowViewModel vm && vm.IsSettingsOpen) return;
             TryHandleHotkeyHelpKey(e);
         }
 
         internal bool TryHandleHotkeyHelpKey(KeyEventArgs e)
         {
+            if (DataContext is MainWindowViewModel vm &&
+                (vm.IsSettingsDialogOpen || vm.IsSettingsPickerOpen || vm.Settings.IsTaskSpaceRecoveryRequired)) return false;
             if (e.Handled)
             {
                 return false;

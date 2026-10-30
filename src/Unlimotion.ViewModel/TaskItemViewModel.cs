@@ -87,7 +87,7 @@ namespace Unlimotion.ViewModel
         private bool _deferredAutosave;
         private bool _requiresStatusReadBack;
         public bool IsTaskOperationBusy => Volatile.Read(ref _statusOperationCount) > 0 || _isReloading;
-        public bool CanChangeTaskStatus => !IsTaskOperationBusy && !_isMissingFromStorage &&
+        public bool CanChangeTaskStatus => MainWindow?.Settings.IsSourceMutationBlocked != true && !IsTaskOperationBusy && !_isMissingFromStorage &&
             !_requiresStatusReadBack && _acceptingSaves;
         public bool CanReloadTask => !IsTaskOperationBusy && !_isMissingFromStorage && _acceptingSaves;
         public bool IsMissingFromStorage => _isMissingFromStorage;
@@ -210,6 +210,7 @@ namespace Unlimotion.ViewModel
             deferredCommandLifetime.AddToDispose(this);
             SaveItemCommand = ReactiveCommand.CreateFromTask(async () =>
             {
+                if (MainWindow?.Settings.IsSourceMutationBlocked == true) return;
                 if (_isMissingFromStorage) return;
                 if (_isReloading)
                 {
@@ -225,9 +226,25 @@ namespace Unlimotion.ViewModel
                     : TaskItemSnapshot.Clone(Model);
                 await taskStorage.Update(snapshot);
                 MarkEditableRevisionPersisted(revision, pendingEditor?.Fields ?? PendingTaskField.None);
-            });
+            }, ObserveSourceAdmission());
             var saveExceptionSubscription = SaveItemCommand.ThrownExceptions
                 .Subscribe(new ObservableExceptionHandler(NotificationManager));
+            ObserveProperty(nameof(MainWindow), static task => task.MainWindow)
+                .Select(owner => owner is null ? Observable.Return(false) :
+                    owner.Settings.WhenAnyValue(settings => settings.IsSourceMutationBlocked))
+                .Switch()
+                .Subscribe(blocked =>
+                {
+                    NotifyTaskOperationState();
+                    if (blocked) return;
+                    lock (_pendingSavesLock)
+                    {
+                        if (!_deferredAutosave || !CanAutosave || _isDisposed ||
+                            MainWindow?.taskRepository?.Tasks.Items.Contains(this) != true) return;
+                        _deferredAutosave = false;
+                        ExecuteSaveCommand();
+                    }
+                }).AddToDispose(this);
             ReloadTaskCommand = ReactiveCommand.CreateFromTask(async () => { await ReloadTaskAsync(); },
                 ObserveProperty(nameof(CanReloadTask), static task => task.CanReloadTask));
             ReloadTaskCommand.AddToDispose(this);
@@ -613,6 +630,12 @@ namespace Unlimotion.ViewModel
             }
         }
 
+        private IObservable<bool> ObserveSourceAdmission() =>
+            ObserveProperty(nameof(MainWindow), static task => task.MainWindow)
+                .Select(owner => owner is null ? Observable.Return(true) :
+                    owner.Settings.WhenAnyValue(settings => settings.IsSourceMutationBlocked).Select(blocked => !blocked))
+                .Switch();
+
         public ICommand ArchiveCommand
         {
             get => GetOrCreateCommand(ref archiveCommand, () => ReactiveCommand.CreateFromTask(
@@ -628,11 +651,13 @@ namespace Unlimotion.ViewModel
         {
             get => GetOrCreateCommand(ref addCompletionCriterionCommand, () => ReactiveCommand.Create(() =>
             {
+                if (MainWindow?.Settings.IsSourceMutationBlocked == true) return;
                 var criterion = new TaskCompletionCriterion();
                 CompletionCriteria.Add(criterion);
                 RequestCompletionCriterionFocus(criterion);
             }, ObserveProperty(nameof(Status), static task => task.Status)
-                .Select(status => status != DomainTaskStatus.Completed),
+                .Select(status => status != DomainTaskStatus.Completed)
+                .CombineLatest(ObserveSourceAdmission(), (canEdit, admitted) => canEdit && admitted),
                 RxSchedulers.MainThreadScheduler));
             set { lock (commandInitializationLock) addCompletionCriterionCommand = value; }
         }
@@ -641,9 +666,10 @@ namespace Unlimotion.ViewModel
         {
             get => GetOrCreateCommand(ref removeCompletionCriterionCommand, () => ReactiveCommand.Create<TaskCompletionCriterion>(criterion =>
             {
-                if (criterion != null) CompletionCriteria.Remove(criterion);
+                if (MainWindow?.Settings.IsSourceMutationBlocked != true && criterion != null) CompletionCriteria.Remove(criterion);
             }, ObserveProperty(nameof(Status), static task => task.Status)
-                .Select(status => status != DomainTaskStatus.Completed),
+                .Select(status => status != DomainTaskStatus.Completed)
+                .CombineLatest(ObserveSourceAdmission(), (canEdit, admitted) => canEdit && admitted),
                 RxSchedulers.MainThreadScheduler));
             set { lock (commandInitializationLock) removeCompletionCriterionCommand = value; }
         }
@@ -815,9 +841,10 @@ namespace Unlimotion.ViewModel
         {
             get => GetOrCreateCommand(ref unblockCommand, () => ReactiveCommand.Create<TaskItemViewModel, Unit>(task =>
             {
+                if (MainWindow?.Settings.IsSourceMutationBlocked == true) return Unit.Default;
                 _taskStorage.Unblock(this, task);
                 return Unit.Default;
-            }));
+            }, ObserveSourceAdmission()));
             set { lock (commandInitializationLock) unblockCommand = value; }
         }
 
@@ -825,29 +852,35 @@ namespace Unlimotion.ViewModel
         {
             get => GetOrCreateCommand(ref deleteParentChildRelationCommand, () => ReactiveCommand.Create<TaskItemViewModel, Unit>(task =>
             {
+                if (MainWindow?.Settings.IsSourceMutationBlocked == true) return Unit.Default;
                 _taskStorage.RemoveParentChildConnection(this, task);
                 return Unit.Default;
-            }));
+            }, ObserveSourceAdmission()));
             set { lock (commandInitializationLock) deleteParentChildRelationCommand = value; }
         }
         
         public async Task CopyInto(TaskItemViewModel destination)
         {
+            if (MainWindow?.Settings.IsSourceMutationBlocked == true) return;
             await _taskStorage.CopyInto(this, [destination]);
         }
 
         public async Task MoveInto(TaskItemViewModel destination, TaskItemViewModel? source)
         {
+            if (MainWindow?.Settings.IsSourceMutationBlocked == true) return;
             await _taskStorage.MoveInto(this, [destination], source);
         }
 
         public async Task<TaskItemViewModel> CloneInto(TaskItemViewModel destination)
         {
+            if (MainWindow?.Settings.IsSourceMutationBlocked == true)
+                throw new InvalidOperationException(L10n.Get("SettingsSourceOperationInProgress"));
             return await CloneFunc.Invoke(destination);
         }
 
         public Task<bool> BlockBy(TaskItemViewModel blocker)
         {
+            if (MainWindow?.Settings.IsSourceMutationBlocked == true) return Task.FromResult(false);
             return _taskStorage.Block(this, blocker);
         }
 
@@ -1011,6 +1044,7 @@ namespace Unlimotion.ViewModel
         
         private Task ExecuteTrackedArchiveCommandAsync()
         {
+            if (MainWindow?.Settings.IsSourceMutationBlocked == true) return Task.CompletedTask;
             var producerCompletion = new TaskCompletionSource(
                 TaskCreationOptions.RunContinuationsAsynchronously);
             lock (_pendingSavesLock)
@@ -1425,6 +1459,12 @@ namespace Unlimotion.ViewModel
                     return;
                 }
 
+                if (MainWindow?.Settings.IsSourceMutationBlocked == true)
+                {
+                    _deferredAutosave = HasPendingEditableChanges;
+                    return;
+                }
+
                 // Admission and producer registration can be separated by a reload click.
                 // Recheck under the same boundary used to capture already-running saves.
                 if (_isReloading || _requiresStatusReadBack)
@@ -1682,7 +1722,8 @@ namespace Unlimotion.ViewModel
             Task<TaskOperationResult> transitionTask;
             lock (_pendingSavesLock)
             {
-                if (!_acceptingSaves || _isReloading || _isMissingFromStorage || _requiresStatusReadBack ||
+                if (MainWindow?.Settings.IsSourceMutationBlocked == true ||
+                    !_acceptingSaves || _isReloading || _isMissingFromStorage || _requiresStatusReadBack ||
                     Volatile.Read(ref _statusOperationCount) > 0)
                 {
                     return Task.FromResult(TaskOperationResult.Denied(

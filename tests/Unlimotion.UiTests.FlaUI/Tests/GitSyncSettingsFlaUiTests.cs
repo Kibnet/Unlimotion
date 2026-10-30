@@ -57,25 +57,7 @@ public sealed class GitSyncSettingsFlaUiTests
             throw new InvalidOperationException("Task details toggle missing");
         detailsToggle.Patterns.Toggle.Pattern.Toggle();
         var page = new MainWindowPage(new FlaUiControlResolver(session.MainWindow, session.ConditionFactory));
-        if (Find("SettingsTabItem") is { } settingsTab) settingsTab.AsTabItem().Select();
-        else
-        {
-            (Find("MainTabsOverflowButton") ?? throw new InvalidOperationException("Tabs overflow missing"))
-                .Patterns.Invoke.Pattern.Invoke();
-            var deadline = DateTime.UtcNow.AddSeconds(10);
-            AutomationElement? settingsMenu = null;
-            while (settingsMenu == null && DateTime.UtcNow < deadline)
-            {
-                settingsMenu = session.MainWindow.Automation.GetDesktop()
-                    .FindAllChildren(session.ConditionFactory.ByProcessId(session.MainWindow.Properties.ProcessId.Value))
-                    .Select(root => root.FindFirstDescendant(session.ConditionFactory.ByAutomationId("MainTabsOverflowSettingsTabItem")))
-                    .FirstOrDefault(element => element != null);
-                if (settingsMenu == null) await Task.Delay(200);
-            }
-            var menu = settingsMenu ?? throw new InvalidOperationException("Settings overflow menu missing");
-            if (menu.Patterns.Invoke.PatternOrDefault is { } invoke) invoke.Invoke();
-            else DesktopPointer.Click(menu);
-        }
+        page.ClickButton(static p => p.GlobalSettingsButton);
         page.SetChecked(static p => p.BackupAutoCheckBox, false);
         var checkbox = Find("BackupAutoCheckBox") ?? throw new InvalidOperationException("Git checkbox missing");
         checkbox.Focus();

@@ -686,4 +686,6 @@ ID: {1}</value></data>
   <data name="EmojiFiltersNone" xml:space="preserve"><value>none</value></data>
   <data name="EmojiFiltersSourcePreview" xml:space="preserve"><value>Show: {0} · Exclude: {1}</value></data>
   <data name="UndoEmojiFilterCopy" xml:space="preserve"><value>Undo</value></data>
+  <data name="SettingsSourceBusyHint" xml:space="preserve"><value>Source settings will become available when the current operation finishes.</value></data>
+  <data name="SettingsSourceOperationInProgress" xml:space="preserve"><value>A source operation is in progress.</value></data>
 </root>

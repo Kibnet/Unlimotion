@@ -40,7 +40,9 @@ namespace Unlimotion.Views
 
         private void ShowHotkeysButton_OnClick(object? sender, RoutedEventArgs e)
         {
-            this.FindParent<MainControl>()?.ShowHotkeyHelp();
+            var screen = this.FindParent<MainScreen>();
+            if (screen != null) screen.ShowSettingsHotkeyHelp();
+            else this.FindParent<MainControl>()?.ShowHotkeyHelp();
             e.Handled = true;
         }
     }

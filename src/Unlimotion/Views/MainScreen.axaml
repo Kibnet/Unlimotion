@@ -15,7 +15,7 @@
         <viewModel:MainWindowViewModel/>
     </Design.DataContext>
     <Panel>
-        <dialogHostAvalonia:DialogHost CloseOnClickAway="True" Identifier="Ask">
+        <dialogHostAvalonia:DialogHost CloseOnClickAway="True" Identifier="Ask" IsOpen="{Binding IsSettingsDialogOpen, Mode=TwoWay}">
             <dialogHostAvalonia:DialogHost.DataTemplates>
                 <DataTemplate DataType="unlimotion:AskViewModel">
 
@@ -101,28 +101,41 @@
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
-                <Grid x:Name="TasksLoadingOverlay"
-                      IsVisible="{Binding IsTasksLoading}"
-                      AutomationProperties.AutomationId="TasksLoadingOverlay">
-                    <Border Background="#66000000"/>
-                    <Border MaxWidth="260"
-                            Padding="20"
-                            CornerRadius="14"
-                            Background="#F2FFFFFF"
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Center">
-                        <StackPanel Spacing="12">
-                            <unlimotion:SeamlessLoadingIndicator Width="160"
-                                                                  Height="72"
-                                                                  IsVisible="{Binding IsTasksLoading}"
-                                                                  HorizontalAlignment="Center"
-                                                                  AutomationProperties.AutomationId="TasksLoadingSpinner"/>
-                            <TextBlock Text="{DynamicResource LoadingTasks}"
-                                       Foreground="Black"
-                                       FontWeight="SemiBold"
-                                       HorizontalAlignment="Center"
-                                       TextAlignment="Center"/>
-                        </StackPanel>
+                <Grid Panel.ZIndex="110"
+                      IsVisible="{Binding IsSettingsOpen}"
+                      Background="#99000000"
+                      AutomationProperties.AutomationId="GlobalSettingsOverlay">
+                    <Border Width="1040" MaxWidth="{Binding $parent[Panel].Bounds.Width}"
+                            MaxHeight="760" Margin="24" Padding="16" CornerRadius="12"
+                            HorizontalAlignment="Center" VerticalAlignment="Center"
+                            Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
+                            BorderBrush="{DynamicResource ThemeBorderLowBrush}" BorderThickness="1">
+                        <Grid RowDefinitions="Auto,Auto,*" RowSpacing="8">
+                            <Button x:Name="GlobalSettingsCloseButton" Grid.Row="0" HorizontalAlignment="Right" Padding="8,2" Content="×"
+                                    Command="{Binding CloseSettingsCommand}"
+                                    AutomationProperties.Name="{DynamicResource Close}"
+                                    AutomationProperties.AutomationId="GlobalSettingsCloseButton"/>
+                            <Border Grid.Row="1" IsVisible="{Binding Settings.IsSourceMutationBlocked}"
+                                    AutomationProperties.ControlTypeOverride="Group"
+                                    AutomationProperties.IsControlElementOverride="True"
+                                    AutomationProperties.Name="{Binding Settings.SourceBusyStatusText}"
+                                    AutomationProperties.AutomationId="SettingsBusyStatus">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="{Binding Settings.SourceBusyStatusText}" TextWrapping="Wrap"/>
+                                    <TextBlock Text="{DynamicResource SettingsSourceBusyHint}" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Border>
+                            <views:SettingsControl Grid.Row="2" DataContext="{Binding Settings}"/>
+                        </Grid>
+                    </Border>
+                </Grid>
+                <Grid x:Name="SettingsHotkeyHelpOverlayHost" Panel.ZIndex="120"
+                      IsVisible="False" Focusable="True" Background="#66000000"
+                      AutomationProperties.AutomationId="SettingsHotkeyHelpOverlayHost">
+                    <Border HorizontalAlignment="Right" VerticalAlignment="Top" Margin="8"
+                            MaxWidth="560" MaxHeight="{Binding $parent[Grid].Bounds.Height}"
+                            CornerRadius="6" Background="{DynamicResource SystemControlBackgroundAltHighBrush}">
+                        <views:HotkeyHelpPanel x:Name="SettingsHotkeyHelpPanel"/>
                     </Border>
                 </Grid>
 
