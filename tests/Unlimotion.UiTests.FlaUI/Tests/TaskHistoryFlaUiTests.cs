@@ -40,8 +40,11 @@ public sealed class TaskHistoryFlaUiTests
         session.MainWindow.Patterns.Window.Pattern.SetWindowVisualState(WindowVisualState.Normal);
         InPhysicalCoordinates(() =>
         {
-            session.MainWindow.Patterns.Transform.Pattern.Resize(2700, 1800);
-            session.MainWindow.Patterns.Transform.Pattern.Move(0, 0);
+            if (!SystemParametersInfo(0x0030, 0, out var area, 0))
+                throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+            session.MainWindow.Patterns.Transform.Pattern.Resize(
+                Math.Min(2700, area.Right - area.Left), Math.Min(1800, area.Bottom - area.Top));
+            session.MainWindow.Patterns.Transform.Pattern.Move(area.Left, area.Top);
             return true;
         });
         session.MainWindow.Focus();
@@ -196,6 +199,13 @@ public sealed class TaskHistoryFlaUiTests
 
     [DllImport("user32.dll")]
     private static extern IntPtr SetThreadDpiAwarenessContext(IntPtr value);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct WorkArea { public int Left, Top, Right, Bottom; }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SystemParametersInfo(uint action, uint parameter, out WorkArea area, uint flags);
 
     private static T InPhysicalCoordinates<T>(Func<T> action)
     {

@@ -33,17 +33,17 @@ Before/after videos and inspected PNG/TRX evidence are retained in the local-onl
 `20261110-exec` evidence bundle; they are not embedded in this repository:
 
 - `before-native/history-flow.mp4`: failing reproduction on the original product.
-- `after-native4/history-flow.mp4`: passing native scenario after the fix.
+- `delivery-native1/history-flow.mp4`: passing native scenario after the fix.
 - Both videos: 2672x1722, 15 FPS, no audio; automated UI input.
 - `after-headless4/`: rendered screenshots, observations and child test results.
-- `after-native4/`: native screenshots, observations and test results.
+- `delivery-native1/`: native screenshots, observations and test results.
 
 ## Review, risks and rollback
 
 Scoped self-review: PASS. Selection is cleared synchronously with source/empty
 guards, without disabling input or consuming routed events. The original shared
 template and neighboring panel retain their behavior. Test-only DPI contexts are
-restored after placement/capture, and rendered sessions use the existing isolated
+restored after placement/capture, and native window size is bounded by the desktop work area, and rendered sessions use the existing isolated
 child-process pattern. Fixture failures encountered during authoring were fixed
 and the affected tests rerun successfully.
 
