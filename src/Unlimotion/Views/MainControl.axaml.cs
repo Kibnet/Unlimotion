@@ -1562,6 +1562,13 @@ namespace Unlimotion.Views
             TaskHistory.Dispose();
         }
 
+        private void TaskHistoryEntries_OnSelectionChanged(object? sender, SelectionChangedEventArgs e)
+        {
+            // Keep the virtualized list and its nested actions, without a selected commit.
+            if (sender is ListBox list && ReferenceEquals(e.Source, list) && list.SelectedItems is { Count: > 0 })
+                list.UnselectAll();
+        }
+
         private async void TaskHistoryRefreshButton_OnClick(object? sender, RoutedEventArgs e)
         {
             CloseTaskHistoryDetails();

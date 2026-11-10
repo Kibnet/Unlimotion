@@ -2564,6 +2564,7 @@
                                             AutomationProperties.IsControlElementOverride="True"
                                             AutomationProperties.AutomationId="CurrentTaskStatusHistorySection">
                                         <Expander x:Name="TaskHistoryExpander"
+                                                  MinHeight="28"
                                                   Header="{DynamicResource TaskHistory}"
                                                   Classes="TaskStatusHistoryExpander"
                                                   behavior:SmoothHistoryScroll.IsEnabled="True"
@@ -2622,6 +2623,7 @@
                                                                  IsVisible="{Binding TaskHistory.IsLoading, ElementName=mainControl}"
                                                                  AutomationProperties.AutomationId="TaskHistoryProgressBar"/>
                                                     <ListBox Grid.Row="2" Classes="HistoryEntries"
+                                                             SelectionChanged="TaskHistoryEntries_OnSelectionChanged"
                                                              ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                                                              ItemsSource="{Binding TaskHistory.Entries, ElementName=mainControl}"
                                                              AutomationProperties.AutomationId="TaskHistoryItems">
