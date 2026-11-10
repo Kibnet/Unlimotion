@@ -5,6 +5,11 @@ using FlaUI.Core.Definitions;
 using FlaUI.UIA3;
 using LibGit2Sharp;
 using System.Text.Json.Nodes;
+using System.Diagnostics;
+using System.Globalization;
+using System.Runtime.InteropServices;
+using FlaUI.Core.Input;
+using FlaUI.Core.WindowsAPI;
 using TUnit.Assertions;
 using TUnit.Core;
 using Unlimotion.AppAutomation.TestHost;
@@ -32,8 +37,21 @@ public sealed class TaskHistoryFlaUiTests
         var referencedTask = CreateHistory(taskStoragePath, currentTaskPath);
 
         using var session = DesktopAppSession.Launch(options);
-        session.MainWindow.Patterns.Window.Pattern.SetWindowVisualState(WindowVisualState.Maximized);
+        session.MainWindow.Patterns.Window.Pattern.SetWindowVisualState(WindowVisualState.Normal);
+        InPhysicalCoordinates(() =>
+        {
+            if (!SystemParametersInfo(0x0030, 0, out var area, 0))
+                throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+            session.MainWindow.Patterns.Transform.Pattern.Resize(
+                Math.Min(2700, area.Right - area.Left), Math.Min(1800, area.Bottom - area.Top));
+            session.MainWindow.Patterns.Transform.Pattern.Move(area.Left, area.Top);
+            return true;
+        });
         session.MainWindow.Focus();
+        var evidenceDirectory = Path.GetFullPath(Environment.GetEnvironmentVariable("UNLIMOTION_HISTORY_NATIVE_EVIDENCE")
+            ?? Path.Combine(Directory.GetCurrentDirectory(), "artifacts", "ui-evidence", "task-history"));
+        Directory.CreateDirectory(evidenceDirectory);
+        using var recording = WindowRecording.Start(session.MainWindow, evidenceDirectory);
 
         var detailsToggle = Find(session, "DetailsPaneToggleButton")?.AsToggleButton()
             ?? throw new InvalidOperationException("The details-pane toggle was not exposed.");
@@ -70,6 +88,23 @@ public sealed class TaskHistoryFlaUiTests
             ?? throw new InvalidOperationException("The task-details scroll pattern was not exposed.");
         await Assert.That(expander.IsOffscreen).IsFalse();
         await Assert.That(historyItems.IsOffscreen).IsFalse();
+        var commitRow = await WaitUntil(
+            () => historyItems.FindFirstDescendant(condition => condition.ByControlType(ControlType.ListItem)),
+            element => element is { IsOffscreen: false }, "A visible commit row was not exposed.");
+        var rowBounds = commitRow!.BoundingRectangle;
+        Mouse.Click(new System.Drawing.Point((int)rowBounds.Left + 12, (int)rowBounds.Top + 12));
+        await Task.Delay(150);
+        var selectedAfterPointer = SelectedCommitCount();
+        var windowBounds = session.MainWindow.BoundingRectangle;
+        Mouse.MoveTo((int)windowBounds.Left + 5, (int)windowBounds.Top + 5);
+        Screenshot(session, Path.Combine(evidenceDirectory, "after-pointer.png"));
+        Keyboard.Press(VirtualKeyShort.DOWN);
+        Keyboard.Release(VirtualKeyShort.DOWN);
+        await Task.Delay(150);
+        var selectedAfterKeyboard = SelectedCommitCount();
+
+        int SelectedCommitCount() => historyItems.FindAllDescendants(condition => condition.ByControlType(ControlType.ListItem))
+            .Count(item => item.Patterns.SelectionItem.Pattern.IsSelected.Value);
         var historyBounds = expander.BoundingRectangle;
         if (scrollPattern.VerticalScrollPercent >= 0)
         {
@@ -129,11 +164,7 @@ public sealed class TaskHistoryFlaUiTests
             element => element is not null,
             "The long-value details button was not exposed.");
         showDetails!.Patterns.ScrollItem.PatternOrDefault?.ScrollIntoView();
-        var evidenceDirectory = Path.Combine(
-            Directory.GetCurrentDirectory(), "artifacts", "ui-evidence", "task-history");
-        Directory.CreateDirectory(evidenceDirectory);
-        using (var historyScreenshot = session.MainWindow.Capture())
-            historyScreenshot.Save(Path.Combine(evidenceDirectory, "history-list.png"));
+        Screenshot(session, Path.Combine(evidenceDirectory, "history-list.png"));
         showDetails.AsButton().Invoke();
         var detailPanel = await WaitUntil(
             () => session.MainWindow.FindAllDescendants(session.ConditionFactory.ByAutomationId("TaskHistoryDetailsPanel"))
@@ -143,8 +174,7 @@ public sealed class TaskHistoryFlaUiTests
         await Assert.That(detailPanel).IsNotNull();
         await Assert.That(detailPanel!.FindAllDescendants()
             .Any(element => element.Properties.Name.ValueOrDefault == new string('h', 460))).IsTrue();
-        using var screenshot = session.MainWindow.Capture();
-        screenshot.Save(Path.Combine(evidenceDirectory, "full-value.png"));
+        Screenshot(session, Path.Combine(evidenceDirectory, "full-value.png"));
         var collapse = detailPanel.FindFirstDescendant(session.ConditionFactory.ByAutomationId("TaskHistoryCloseDetailsButton"));
         await Assert.That(collapse).IsNotNull();
         collapse!.AsButton().Invoke();
@@ -152,6 +182,74 @@ public sealed class TaskHistoryFlaUiTests
             () => FindText(historyItems, new string('h', 460)),
             element => element is null || element.IsOffscreen,
             "The full text remained visible after collapsing the row.");
+        expander.Patterns.ExpandCollapse.Pattern.Collapse();
+        await Task.Delay(250);
+        var collapsedHeight = InPhysicalCoordinates(() => expander.BoundingRectangle.Height);
+        var dpi = GetDpiForWindow(session.MainWindow.Properties.NativeWindowHandle.Value);
+        Screenshot(session, Path.Combine(evidenceDirectory, "collapsed.png"));
+        File.WriteAllText(Path.Combine(evidenceDirectory, "observations.json"),
+            System.Text.Json.JsonSerializer.Serialize(new { selectedAfterPointer, selectedAfterKeyboard, collapsedHeight, dpi }));
+        await Assert.That(selectedAfterPointer).IsEqualTo(0);
+        await Assert.That(selectedAfterKeyboard).IsEqualTo(0);
+        await Assert.That((double)collapsedHeight).IsLessThanOrEqualTo(28d * dpi / 96 + 1);
+    }
+
+    [DllImport("user32.dll")]
+    private static extern uint GetDpiForWindow(IntPtr window);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr SetThreadDpiAwarenessContext(IntPtr value);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct WorkArea { public int Left, Top, Right, Bottom; }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SystemParametersInfo(uint action, uint parameter, out WorkArea area, uint flags);
+
+    private static T InPhysicalCoordinates<T>(Func<T> action)
+    {
+        var previous = SetThreadDpiAwarenessContext(new IntPtr(-4));
+        try { return action(); }
+        finally { SetThreadDpiAwarenessContext(previous); }
+    }
+
+    private static void Screenshot(DesktopAppSession session, string path) => InPhysicalCoordinates(() =>
+    {
+        using var capture = session.MainWindow.Capture();
+        capture.Save(path);
+        return true;
+    });
+
+    // Opt-in capture of this fixture window only; ordinary UI runs need no ffmpeg.
+    private sealed class WindowRecording(Process process, Task<string> errors, string logPath) : IDisposable
+    {
+        public static WindowRecording? Start(AutomationElement window, string directory)
+        {
+            var ffmpeg = Environment.GetEnvironmentVariable("UNLIMOTION_HISTORY_FFMPEG");
+            if (string.IsNullOrWhiteSpace(ffmpeg)) return null;
+            var bounds = InPhysicalCoordinates(() => window.BoundingRectangle);
+            var start = new ProcessStartInfo(ffmpeg) { UseShellExecute = false, CreateNoWindow = true,
+                RedirectStandardInput = true, RedirectStandardError = true };
+            foreach (var argument in new[] { "-y", "-f", "gdigrab", "-framerate", "15", "-draw_mouse", "0",
+                "-offset_x", ((int)bounds.Left).ToString(CultureInfo.InvariantCulture),
+                "-offset_y", ((int)bounds.Top).ToString(CultureInfo.InvariantCulture),
+                "-video_size", $"{(int)bounds.Width}x{(int)bounds.Height}", "-i", "desktop", "-an",
+                "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2", "-c:v", "libx264", "-preset", "ultrafast",
+                "-pix_fmt", "yuv420p", Path.Combine(directory, "history-flow.mp4") }) start.ArgumentList.Add(argument);
+            var process = Process.Start(start) ?? throw new InvalidOperationException("Cannot start window recorder.");
+            return new WindowRecording(process, process.StandardError.ReadToEndAsync(), Path.Combine(directory, "video.log"));
+        }
+
+        public void Dispose()
+        {
+            if (!process.HasExited) { process.StandardInput.WriteLine("q"); process.StandardInput.Flush(); }
+            if (!process.WaitForExit(15_000)) { process.Kill(); process.WaitForExit(); }
+            File.WriteAllText(logPath, errors.GetAwaiter().GetResult());
+            var exitCode = process.ExitCode;
+            process.Dispose();
+            if (exitCode != 0) throw new InvalidOperationException($"Window recorder failed ({exitCode}); {logPath}");
+        }
     }
 
     private static (string Id, string Title) CreateHistory(string taskStoragePath, string currentTaskPath)
